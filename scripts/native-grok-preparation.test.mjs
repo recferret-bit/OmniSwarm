@@ -14,7 +14,7 @@ test('Grok pin distinguishes the public snapshot from installed CLI provenance a
 });
 test('Grok workspace and lock overlays preserve every upstream dependency block',()=>{
   const manifest='# Auto-generated workspace root. Prefer editing per-crate Cargo.toml files.\n[workspace]\nmembers = [\n "existing",\n]\n';
-  assert.match(overlayManifest(manifest),/"freightchain-review"/);
+  assert.match(overlayManifest(manifest),/"omniswarm-review"/);
   assert.throws(()=>overlayManifest(overlayManifest(manifest)));
   const lock=NATIVE_DEPENDENCIES.map((name)=>`[[package]]\nname = "${name}"\nversion = "${name==='sha2'?'0.10.9':'1.0.0'}"\nsource = "registry+https://invalid.test/index"\nchecksum = "fixture"\n`).join('\n');
   const result=overlayLock(lock);
@@ -23,8 +23,8 @@ test('Grok workspace and lock overlays preserve every upstream dependency block'
   assert.throws(()=>overlayLock('missing dependency blocks'));
 });
 test('Grok derived source admits only declared files, not arbitrary build/config inputs',()=>{
-  validateExtras(['freightchain-review/src/lib.rs',AUTH_MODULE]);
-  for(const name of ['.cargo/config.toml','freightchain-review/build.rs','crates/codegen/xai-grok-login/src/foreign.rs']){
+  validateExtras(['omniswarm-review/src/lib.rs',AUTH_MODULE]);
+  for(const name of ['.cargo/config.toml','omniswarm-review/build.rs','crates/codegen/xai-grok-login/src/foreign.rs']){
     assert.throws(()=>validateExtras([name]),/grok_untracked_source_input/);
   }
 });
@@ -32,7 +32,7 @@ test('Grok native patch anchors fail closed and routing facade has no caller-con
   assert.throws(()=>overlaySource(LOGIN_MANAGER,'changed upstream source'),/grok_overlay_anchor_changed/);
   assert.throws(()=>overlaySource('unapproved.rs','source'),/grok_overlay_path_rejected/);
   const facade=overlaySource(ROUTING,'// fixture upstream\n');
-  assert.match(facade,/freightchain_text_review_headers\(\)/);
+  assert.match(facade,/omniswarm_text_review_headers\(\)/);
   assert.match(facade,/CLI_CHAT_PROXY_BASE_URL_DEFAULT/);
   assert.ok(!facade.includes('Bearer '));
 });

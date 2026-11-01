@@ -45,10 +45,10 @@ export async function setupGrokDocker() {
     const fd = openPrivateOutput(RECEIPT);
     try { fs.writeFileSync(fd, JSON.stringify(receipt, null, 2)); } finally { fs.closeSync(fd); }
     let volume;
-    try { volume = await grokDockerControl(['volume', 'inspect', GROK_AUTH_VOLUME, '--format', '{{index .Labels "freightchain.grok.isolated"}}']); }
+    try { volume = await grokDockerControl(['volume', 'inspect', GROK_AUTH_VOLUME, '--format', '{{index .Labels "omniswarm.grok.isolated"}}']); }
     catch {
       await grokDockerControl(['volume', 'create', '--label', `${GROK_DOCKER_LABEL}=auth-v1`, GROK_AUTH_VOLUME]);
-      volume = await grokDockerControl(['volume', 'inspect', GROK_AUTH_VOLUME, '--format', '{{index .Labels "freightchain.grok.isolated"}}']);
+      volume = await grokDockerControl(['volume', 'inspect', GROK_AUTH_VOLUME, '--format', '{{index .Labels "omniswarm.grok.isolated"}}']);
     }
     if (volume !== 'auth-v1') throw new ConnectorError('grok_docker_auth_volume_rejected');
     await grokDockerControl(['run', '--rm', '--pull=never', '--network', 'none', '--user', '0:0', '--cap-drop', 'ALL', '--cap-add', 'CHOWN', '--cap-add', 'FOWNER', '--security-opt', 'no-new-privileges', '--read-only',

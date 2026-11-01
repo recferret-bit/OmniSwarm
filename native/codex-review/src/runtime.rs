@@ -68,7 +68,7 @@ impl ReviewRuntime {
             passthrough_image_store(),
             thread_store_from_config(config, None),
             None,
-            "freightchain-native-review".to_owned(),
+            "omniswarm-native-review".to_owned(),
             None,
             None,
         );

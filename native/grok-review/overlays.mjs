@@ -14,23 +14,23 @@ export const MDM = 'crates/codegen/xai-grok-config/src/macos_managed.rs';
 export const ERROR_MODULE = 'crates/codegen/xai-grok-sampler/src/review_error.rs';
 
 export function overlaySource(name, source) {
-  return '// Modified by Freight Chain for bounded text review; see freightchain-review/NOTICE.\n'+transformSource(name,source);
+  return '// Modified by OmniSwarm for bounded text review; see omniswarm-review/NOTICE.\n'+transformSource(name,source);
 }
 
 function transformSource(name, source) {
   if(name===LOGIN_CONFIG){
-    return `${source}\n// Freight Chain: apply one already-validated snapshot without implicit disk reads.\nimpl GrokComConfig {\n    pub fn from_text_review_snapshot(value: &toml::Value) -> Result<Self, toml::de::Error> {\n        let expanded = expand_auth_alias(value);\n        let mut config = match expanded.get("grok_com_config") {\n            Some(section) => GrokComConfigSection::deserialize(section.clone())?.merge_over(Self::default())?,\n            None => Self::default(),\n        };\n        config.force_login_team_uuid = resolve_force_login_team(None, force_login_team_from_env(), config.force_login_team_uuid.take());\n        Ok(config)\n    }\n}\n`;
+    return `${source}\n// OmniSwarm: apply one already-validated snapshot without implicit disk reads.\nimpl GrokComConfig {\n    pub fn from_text_review_snapshot(value: &toml::Value) -> Result<Self, toml::de::Error> {\n        let expanded = expand_auth_alias(value);\n        let mut config = match expanded.get("grok_com_config") {\n            Some(section) => GrokComConfigSection::deserialize(section.clone())?.merge_over(Self::default())?,\n            None => Self::default(),\n        };\n        config.force_login_team_uuid = resolve_force_login_team(None, force_login_team_from_env(), config.force_login_team_uuid.take());\n        Ok(config)\n    }\n}\n`;
   }
   if(name===CONFIG_LIB){
-    return `${source}\n// Freight Chain: forced MDM is unsupported by the initial bounded profile.\npub fn freightchain_text_review_mdm_present() -> bool {\n    macos_managed::text_review_forced_policy_present()\n}\n`;
+    return `${source}\n// OmniSwarm: forced MDM is unsupported by the initial bounded profile.\npub fn omniswarm_text_review_mdm_present() -> bool {\n    macos_managed::text_review_forced_policy_present()\n}\n`;
   }
   if(name===MDM){
-    return `${source}\n// Freight Chain: inspect only the forced bit, never coerce malformed policy to absent.\n#[cfg(target_os = "macos")]\npub(crate) fn text_review_forced_policy_present() -> bool {\n    use core_foundation::base::TCFType;\n    use core_foundation::string::{CFString, CFStringRef};\n    #[link(name = "CoreFoundation", kind = "framework")]\n    unsafe extern "C" { fn CFPreferencesAppValueIsForced(key: CFStringRef, application_id: CFStringRef) -> u8; }\n    let key = CFString::new(REQUIREMENTS_KEY);\n    let app = CFString::new(MANAGED_PREFERENCES_DOMAIN);\n    unsafe { CFPreferencesAppValueIsForced(key.as_concrete_TypeRef(), app.as_concrete_TypeRef()) != 0 }\n}\n#[cfg(not(target_os = "macos"))]\npub(crate) fn text_review_forced_policy_present() -> bool { false }\n`;
+    return `${source}\n// OmniSwarm: inspect only the forced bit, never coerce malformed policy to absent.\n#[cfg(target_os = "macos")]\npub(crate) fn text_review_forced_policy_present() -> bool {\n    use core_foundation::base::TCFType;\n    use core_foundation::string::{CFString, CFStringRef};\n    #[link(name = "CoreFoundation", kind = "framework")]\n    unsafe extern "C" { fn CFPreferencesAppValueIsForced(key: CFStringRef, application_id: CFStringRef) -> u8; }\n    let key = CFString::new(REQUIREMENTS_KEY);\n    let app = CFString::new(MANAGED_PREFERENCES_DOMAIN);\n    unsafe { CFPreferencesAppValueIsForced(key.as_concrete_TypeRef(), app.as_concrete_TypeRef()) != 0 }\n}\n#[cfg(not(target_os = "macos"))]\npub(crate) fn text_review_forced_policy_present() -> bool { false }\n`;
   }
   if(name===LOGIN_MANAGER){
     source=replaceOnce(source,'pub struct AuthManager {\n','pub struct AuthManager {\n    text_review_cached_only: bool,\n');
     source=replaceOnce(source,'            inner: RwLock::new(inner),','            text_review_cached_only: false,\n            inner: RwLock::new(inner),');
-    return `${source}\n// Freight Chain cached-only review adaptation; see retained overlay notice.\n#[path = "manager/text_review.rs"]\nmod text_review;\n`;
+    return `${source}\n// OmniSwarm cached-only review adaptation; see retained overlay notice.\n#[path = "manager/text_review.rs"]\nmod text_review;\n`;
   }
   if(name===LOGIN_RESOLVER){
     return replaceOnce(source,
@@ -38,7 +38,7 @@ function transformSource(name, source) {
       '        Box::pin(async move {\n            if self.0.is_text_review_cached_only() {\n                return;\n            }\n            if !ActiveAuthBackend::default().is_xai_authority() {');
   }
   if(name===ROUTING){
-    return `${source}\n// Freight Chain fixed-route facade: no arbitrary headers, URLs or auth values.\npub fn freightchain_text_review_headers() -> IndexMap<String, String> {\n    let mut headers = IndexMap::new();\n    inject_url_derived_headers(&mut headers, None, xai_grok_login::CLI_CHAT_PROXY_BASE_URL_DEFAULT);\n    headers\n}\n`;
+    return `${source}\n// OmniSwarm fixed-route facade: no arbitrary headers, URLs or auth values.\npub fn omniswarm_text_review_headers() -> IndexMap<String, String> {\n    let mut headers = IndexMap::new();\n    inject_url_derived_headers(&mut headers, None, xai_grok_login::CLI_CHAT_PROXY_BASE_URL_DEFAULT);\n    headers\n}\n`;
   }
   if(name===SAMPLER_CLIENT){
     // A missing resolver credential must fail before sending, not retry anonymously.
@@ -62,7 +62,7 @@ function transformSource(name, source) {
     // Bounded in-memory classification only; no provider text or header logging.
     source=source.slice(0,errorStart)
       +'        if !status.is_success() {\n'
-      +'            use freightchain_review_error::{Diagnostic, MAX_ERROR_BYTES};\n'
+      +'            use omniswarm_review_error::{Diagnostic, MAX_ERROR_BYTES};\n'
       +'            let diagnostic = if response.content_length().is_some_and(|size| size > MAX_ERROR_BYTES as u64) {\n'
       +'                Diagnostic::category("oversized_body")\n'
       +'            } else {\n'
@@ -77,7 +77,7 @@ function transformSource(name, source) {
       +'                                }\n'
       +'                                bytes.extend_from_slice(&chunk);\n'
       +'                            }\n'
-      +'                            Ok(None) => return freightchain_review_error::classify(&bytes),\n'
+      +'                            Ok(None) => return omniswarm_review_error::classify(&bytes),\n'
       +'                            Err(_) => return Diagnostic::category("body_unavailable"),\n'
       +'                        }\n'
       +'                    }\n'
@@ -110,7 +110,7 @@ function transformSource(name, source) {
       +'            });\n'
       +'            std::future::ready(Some(result))\n'
       +'        }).map(move |result| {')
-      +'\n// Freight Chain bounded error classifier; no raw diagnostic output.\n#[path = "review_error.rs"]\npub mod freightchain_review_error;\n';
+      +'\n// OmniSwarm bounded error classifier; no raw diagnostic output.\n#[path = "review_error.rs"]\npub mod omniswarm_review_error;\n';
   }
   throw new Error('grok_overlay_path_rejected');
 }

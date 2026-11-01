@@ -9,7 +9,7 @@ const HERE=path.dirname(fileURLToPath(import.meta.url));
 const ROOT=path.resolve(HERE,'../../..');
 const BUILD=path.resolve(HERE,'../.cache/grok-build');
 const SOURCE=path.resolve(HERE,`../.cache/grok-${PIN}`);
-const BINARY=path.join(BUILD,'target/debug/freightchain-grok-review');
+const BINARY=path.join(BUILD,'target/debug/omniswarm-grok-review');
 export const GATES=Object.freeze(['native','binary','node','docker']);
 export function matchesAdmission(receipt,identity){
   return receipt?.version===1&&receipt.admission===true&&receipt.sourceCommit===PIN&&receipt.sourceRevision===SOURCE_REVISION
@@ -36,8 +36,8 @@ export async function admit(){
   for(const key of ['HOME','USER','PATH','LANG','LC_ALL','TMPDIR','DOCKER_CONTEXT','DOCKER_HOST','DOCKER_CONFIG','DOCKER_TLS_VERIFY','DOCKER_CERT_PATH'])if(typeof process.env[key]==='string')testEnv[key]=process.env[key];
   const node=[process.execPath,'--test','--test-concurrency=1','--test-reporter=tap'];
   const gates=[
-    ['native',['rustup','run','stable','cargo','test','--locked','-p','freightchain-grok-review'],SOURCE,env],
-    ['binary',['rustup','run','stable','cargo','build','--locked','-p','freightchain-grok-review','--bin','freightchain-grok-review'],SOURCE,env],
+    ['native',['rustup','run','stable','cargo','test','--locked','-p','omniswarm-grok-review'],SOURCE,env],
+    ['binary',['rustup','run','stable','cargo','build','--locked','-p','omniswarm-grok-review','--bin','omniswarm-grok-review'],SOURCE,env],
     ['node',[...node,...fs.readdirSync(scripts).filter((name)=>name.endsWith('.test.mjs')).sort().map((name)=>path.join(scripts,name))],ROOT,testEnv],
     ['docker',[...node,...['worker-isolation','terminal-relay','terminal-model-connector','static-cli-review','grok-docker'].map((name)=>path.join(scripts,`${name}.docker.mjs`))],ROOT,testEnv],
   ];

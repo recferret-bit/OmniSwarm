@@ -1,4 +1,4 @@
-//! Freight Chain adaptation: no provider text is returned, logged or persisted.
+//! OmniSwarm adaptation: no provider text is returned, logged or persisted.
 use serde::Serialize;
 use serde_json::Value;
 
@@ -56,13 +56,13 @@ impl Diagnostic {
     pub fn tag(self) -> String {
         // Only canonical static strings enter the native error-code field.
         format!(
-            "freightchain-review:{}",
+            "omniswarm-review:{}",
             serde_json::to_string(&self).unwrap_or_default()
         )
     }
 
     pub fn from_tag(tag: &str) -> Option<Self> {
-        let text = tag.strip_prefix("freightchain-review:")?;
+        let text = tag.strip_prefix("omniswarm-review:")?;
         if text.len() > 256 {
             return None;
         }

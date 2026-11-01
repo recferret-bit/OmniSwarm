@@ -615,7 +615,7 @@ async function gitleaksConfig() {
   if (fs.existsSync('/opt/audit-scanners/gitleaks.toml')) return '/opt/audit-scanners/gitleaks.toml';
   const ver = (spawnSync('gitleaks', ['version'], { encoding: 'utf8' }).stdout || '').trim();
   if (!/^\d+\.\d+\.\d+$/.test(ver)) return '';
-  const dir = path.join(process.env.HOME || '/tmp', '.cache', 'freightchain-audit');
+  const dir = path.join(process.env.HOME || '/tmp', '.cache', 'omniswarm-audit');
   const file = path.join(dir, `gitleaks-${ver}.toml`);
   if (fs.existsSync(file) && fs.statSync(file).size > 1000) return file;
   fs.mkdirSync(dir, { recursive: true });

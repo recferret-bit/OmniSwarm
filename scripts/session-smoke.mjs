@@ -33,7 +33,7 @@ export async function qualifyAgentSessions({ out, agents = Object.keys(MODELS), 
   const results = [];
   try {
     docker(['image', 'inspect', IMAGE]);
-    docker(['run', '--detach', '--pull=never', '--name', container, '--label', `freightchain.audit.smoke=${container}`, '--network', 'none', '--user', '10001:10001', '--read-only', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges', '--memory', '128m', '--pids-limit', '64', '--cpus', '1', '--mount', `type=bind,src=${source},dst=/work/src,readonly`, IMAGE, 'node', '-e', 'setInterval(() => {}, 1000)']);
+    docker(['run', '--detach', '--pull=never', '--name', container, '--label', `omniswarm.audit.smoke=${container}`, '--network', 'none', '--user', '10001:10001', '--read-only', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges', '--memory', '128m', '--pids-limit', '64', '--cpus', '1', '--mount', `type=bind,src=${source},dst=/work/src,readonly`, IMAGE, 'node', '-e', 'setInterval(() => {}, 1000)']);
     owned = true;
     for (const agent of agents) {
       const reportDir = path.join(root, agent);
@@ -66,7 +66,7 @@ export async function qualifyAgentSessions({ out, agents = Object.keys(MODELS), 
     }
   } finally {
     if (owned) {
-      const label = docker(['inspect', container, '--format', '{{index .Config.Labels "freightchain.audit.smoke"}}']).trim();
+      const label = docker(['inspect', container, '--format', '{{index .Config.Labels "omniswarm.audit.smoke"}}']).trim();
       if (label !== container) throw new Error('Qualification container ownership mismatch');
       docker(['rm', '--force', container]);
     }

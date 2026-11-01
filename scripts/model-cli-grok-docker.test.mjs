@@ -49,9 +49,9 @@ test('Grok Docker provisions private networks, fixed proxy, read-only auth and l
   const calls = [];
   const control = async (args) => {
     calls.push(args);
-    if (args[0] === 'image') return JSON.stringify({ Id: image, Config: { Labels: { 'freightchain.grok.source': GROK_SOURCE } } });
+    if (args[0] === 'image') return JSON.stringify({ Id: image, Config: { Labels: { 'omniswarm.grok.source': GROK_SOURCE } } });
     if (args[0] === 'volume') return 'auth-v1';
-    if (args.includes('inspect')) return calls.find((call) => call[0] === 'network' && call[1] === 'create').find((arg) => arg.startsWith('freightchain.grok.isolated=')).split('=')[1];
+    if (args.includes('inspect')) return calls.find((call) => call[0] === 'network' && call[1] === 'create').find((arg) => arg.startsWith('omniswarm.grok.isolated=')).split('=')[1];
     return '';
   };
   const runtime = await prepareGrokDocker({ model: 'grok-4.7', control, receipt: { image } });
@@ -76,7 +76,7 @@ test('Grok Docker refuses unprepared or foreign auth before provisioning a job',
   let calls = 0;
   await assert.rejects(prepareGrokDocker({ model: '--invalid', control: () => { calls++; } }), /requested_model_rejected/);
   assert.equal(calls, 0);
-  const control = async (args) => args[0] === 'image' ? JSON.stringify({ Id: image, Config: { Labels: { 'freightchain.grok.source': GROK_SOURCE } } }) : 'foreign';
+  const control = async (args) => args[0] === 'image' ? JSON.stringify({ Id: image, Config: { Labels: { 'omniswarm.grok.source': GROK_SOURCE } } }) : 'foreign';
   await assert.rejects(prepareGrokDocker({ control, receipt: { image } }), /grok_docker_auth_volume_rejected/);
 });
 test('Grok Docker retains cleanup failures and a journal write failure cannot prevent teardown', async (t) => {
@@ -84,9 +84,9 @@ test('Grok Docker retains cleanup failures and a journal write failure cannot pr
     let label;
     const removed = [];
     const control = async (args) => {
-      if (args[0] === 'image') return JSON.stringify({ Id: image, Config: { Labels: { 'freightchain.grok.source': GROK_SOURCE } } });
+      if (args[0] === 'image') return JSON.stringify({ Id: image, Config: { Labels: { 'omniswarm.grok.source': GROK_SOURCE } } });
       if (args[0] === 'volume') return 'auth-v1';
-      if (args[0] === 'network' && args[1] === 'create') label = args.find((arg) => arg.startsWith('freightchain.grok.isolated=')).split('=')[1];
+      if (args[0] === 'network' && args[1] === 'create') label = args.find((arg) => arg.startsWith('omniswarm.grok.isolated=')).split('=')[1];
       if (args.includes('inspect')) return label;
       if (args[0] === 'rm' || args[0] === 'network' && args[1] === 'rm') {
         removed.push(args.at(-1));

@@ -1,4 +1,4 @@
-# SolSwarm ACP runtime
+# OmniSwarm ACP runtime
 
 Run `./bin/audit setup-agents` (or `npm run setup`) from the repository root. This installs exact lockfile dependencies locally with lifecycle scripts disabled; it does not install global CLIs or change authentication.
 

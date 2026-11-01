@@ -1,13 +1,13 @@
-use freightchain_grok_review::contract::parse_request;
-use freightchain_grok_review::runtime::{ReviewRuntime, conversation};
-use freightchain_grok_review::{GateError, REVIEW_INSTRUCTION};
+use omniswarm_grok_review::contract::parse_request;
+use omniswarm_grok_review::runtime::{ReviewRuntime, conversation};
+use omniswarm_grok_review::{GateError, REVIEW_INSTRUCTION};
 use serde_json::json;
 use sha2::{Digest, Sha256};
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 use xai_grok_sampler::{ApiBackend, SamplerConfig};
 
-fn input() -> freightchain_grok_review::contract::ReviewRequest {
+fn input() -> omniswarm_grok_review::contract::ReviewRequest {
     let code = "export const label = 'inert';\n";
     parse_request(
         &serde_json::to_vec(&json!({

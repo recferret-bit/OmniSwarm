@@ -1,11 +1,11 @@
 {
-  "name": "solswarm",
+  "name": "omniswarm",
   "version": "1.0.0",
-  "description": "Multi-Agent Security Review Suite — AI audit swarm for Solana, NEAR, Rust, TypeScript, and Web3 systems",
+  "description": "Multichain multi-agent security review suite for Solana, NEAR, Rust, Python, TypeScript, and Web3 systems",
   "type": "module",
   "main": "scripts/docker-agent-orchestrator.mjs",
   "bin": {
-    "solswarm": "./bin/audit",
+    "omniswarm": "./bin/audit",
     "audit": "./bin/audit"
   },
   "scripts": {

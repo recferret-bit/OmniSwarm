@@ -8,7 +8,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const CACHE = path.resolve(HERE, '../.cache');
 const ROOT = path.resolve(HERE, '../../..');
 const WORKSPACE = path.join(CACHE, `codex-${PIN}/codex-rs`);
-const BINARY = path.join(CACHE, 'target/debug/freightchain-codex-review');
+const BINARY = path.join(CACHE, 'target/debug/omniswarm-codex-review');
 const RECEIPT = path.join(CACHE, 'runtime-admission.json');
 export const ADMISSION_GATES = Object.freeze(['native', 'router', 'binary', 'node', 'docker']);
 export function gateWasExecuted(name, text) {
@@ -52,9 +52,9 @@ export async function admitNative() {
     if (typeof process.env[key] === 'string') testEnv[key] = process.env[key];
   }
   const gates = [
-    ['native', ['rustup','run','stable','cargo','test','--locked','-p','freightchain-codex-review'], WORKSPACE, env],
+    ['native', ['rustup','run','stable','cargo','test','--locked','-p','omniswarm-codex-review'], WORKSPACE, env],
     ['router', ['rustup','run','stable','cargo','test','--locked','-p','codex-core','--lib','tools::spec_plan::tests::allowed_tools_filter_sources_before_code_mode_and_discovery','--','--exact'], WORKSPACE, {...env,RUST_MIN_STACK:'8388608'}],
-    ['binary', ['rustup','run','stable','cargo','build','--locked','-p','freightchain-codex-review','--bin','freightchain-codex-review'], WORKSPACE, env],
+    ['binary', ['rustup','run','stable','cargo','build','--locked','-p','omniswarm-codex-review','--bin','omniswarm-codex-review'], WORKSPACE, env],
     ['node', [...node,'--test-reporter=tap',...fs.readdirSync(scripts).filter((name) => name.endsWith('.test.mjs')).sort().map((name) => path.join(scripts,name))], ROOT, testEnv],
     ['docker', [...node,'--test-reporter=tap',...['worker-isolation','terminal-relay','terminal-model-connector','static-cli-review','grok-docker'].map((name) => path.join(scripts,`${name}.docker.mjs`))], ROOT, testEnv],
   ];

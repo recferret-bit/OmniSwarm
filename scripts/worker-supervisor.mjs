@@ -70,15 +70,15 @@ async function requireDocker(args, options) {
 
 function security(image, name, label, runtime) {
   if (!IMAGE.test(image)) throw new Error('review runtime requires an immutable image identity');
-  const args = ['--pull=never', '--name', name, '--label', `freightchain.review.job=${label}`, '--network', 'none', '--ipc', 'private', '--user', '10001:10001', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges', '--read-only', '--pids-limit', '64', '--memory', '128m', '--cpus', '1', '--log-driver', 'json-file', '--log-opt', 'max-size=1m', '--log-opt', 'max-file=1', '--tmpfs', '/tmp:rw,noexec,nosuid,nodev,size=16m,mode=1777', '--env', 'HOME=/home/reviewer', '--entrypoint', '/usr/local/bin/node', '--tmpfs', '/home/reviewer:rw,noexec,nosuid,nodev,size=8m,uid=10001,gid=10001,mode=700'];
+  const args = ['--pull=never', '--name', name, '--label', `omniswarm.review.job=${label}`, '--network', 'none', '--ipc', 'private', '--user', '10001:10001', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges', '--read-only', '--pids-limit', '64', '--memory', '128m', '--cpus', '1', '--log-driver', 'json-file', '--log-opt', 'max-size=1m', '--log-opt', 'max-file=1', '--tmpfs', '/tmp:rw,noexec,nosuid,nodev,size=16m,mode=1777', '--env', 'HOME=/home/reviewer', '--entrypoint', '/usr/local/bin/node', '--tmpfs', '/home/reviewer:rw,noexec,nosuid,nodev,size=8m,uid=10001,gid=10001,mode=700'];
   for (const file of RUNTIME_FILES) args.push('--mount', `type=bind,src=${path.join(runtime.snapshot, file)},dst=/trusted/${file},readonly`);
   return args;
 }
 
 async function removeOwned(type, name, label) {
   const result = await docker(type === 'volume'
-    ? ['volume', 'inspect', name, '--format', '{{index .Labels "freightchain.review.job"}}']
-    : ['inspect', name, '--format', '{{index .Config.Labels "freightchain.review.job"}}']);
+    ? ['volume', 'inspect', name, '--format', '{{index .Labels "omniswarm.review.job"}}']
+    : ['inspect', name, '--format', '{{index .Config.Labels "omniswarm.review.job"}}']);
   if (result.code !== 0) {
     if (/no such (container|object|volume)/i.test(result.stderr)) return;
     throw new Error('Docker cleanup could not be verified');
@@ -178,7 +178,7 @@ async function runIsolated(snapshot, job, { fixture = 'probe', image = REVIEW_IM
     const imageKeys = (await requireDocker(['image', 'inspect', image, '--format', '{{range .Config.Env}}{{println (index (split . "=") 0)}}{{end}}'])).stdout.trim().split(/\s+/).filter(Boolean);
     if (imageKeys.some((k) => !allowedEnv.has(k))) throw new Error('runtime image environment rejected');
     if (cancelled.aborted) { transition(job, 'cancelled'); return outcome; }
-    await requireDocker(['volume', 'create', '--driver', 'local', '--opt', 'type=tmpfs', '--opt', 'device=tmpfs', '--opt', 'o=size=16m,uid=10001,gid=10001,mode=0700,noexec,nosuid,nodev', '--label', `freightchain.review.job=${label}`, volume]);
+    await requireDocker(['volume', 'create', '--driver', 'local', '--opt', 'type=tmpfs', '--opt', 'device=tmpfs', '--opt', 'o=size=16m,uid=10001,gid=10001,mode=0700,noexec,nosuid,nodev', '--label', `omniswarm.review.job=${label}`, volume]);
     const out = ['--mount', `type=volume,src=${volume},dst=/out`];
     const inputMount = ['--mount', `type=bind,src=${input},dst=/input,readonly`];
     await requireDocker(['run', '--detach', ...security(image, collector, label, runtime), '--mount', `type=volume,src=${volume},dst=/out,readonly`, ...inputMount, image, '/trusted/worker-runtime.mjs', 'hold']);

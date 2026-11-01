@@ -120,7 +120,7 @@ export async function runReviewSession(options, { launch = buildSessionLaunch, p
       });
       try {
         phase = 'initializing';
-        const init = await currentRpc.request('initialize', { protocolVersion: 1, clientInfo: { name: 'freightchain-audit', version: '1.0.0' }, clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false } });
+        const init = await currentRpc.request('initialize', { protocolVersion: 1, clientInfo: { name: 'omniswarm-audit', version: '1.0.0' }, clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false } });
         if (init.protocolVersion !== 1) throw new SessionError('protocol_error');
         resumeCapable = init.agentCapabilities?.loadSession === true;
         const agentInfo = init.agentInfo || (typeof init._meta?.agentVersion === 'string' ? { name: identity.agent, version: init._meta.agentVersion.slice(0, 128) } : {});

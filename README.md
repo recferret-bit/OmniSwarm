@@ -1,8 +1,8 @@
-# SolSwarm: Multi-Agent Source Security Review Suite
+# OmniSwarm: Multi-Agent Source Security Review Suite
 
-SolSwarm is an automated, multi-agent security review and audit swarm designed for Solana programs, NEAR contracts and clients (including Intents and NEAR AI), Rust crates, Python (FastAPI/Django/Flask) and TypeScript/JavaScript services, smart contracts, and Web3 applications. It coordinates frontier AI models—Claude, Codex, Grok, and AGY—in parallel, inspecting source code, configuration, dependency lockfiles, and existing test suites inside disposable, airgapped Docker sandboxes using restricted Model Context Protocol (MCP) bridges.
+OmniSwarm is a multichain, automated, multi-agent security review and audit swarm. Solana programs and NEAR contracts/clients (Intents and NEAR AI) are peer review targets, alongside Rust crates, Python (FastAPI/Django/Flask), TypeScript/JavaScript services, smart contracts, and Web3 applications. It coordinates frontier AI models—Claude, Codex, Grok, and AGY—in parallel, inspecting source code, configuration, dependency lockfiles, and existing test suites inside disposable, airgapped Docker sandboxes using restricted Model Context Protocol (MCP) bridges.
 
-`solswarm run` (or `audit run`) enforces the `source_security_review_v1` workflow. There is no chain flag. The harness reads the sealed source, writes `harness/stack-profile.json`, and gives reviewers only the guidance, lead files, and test runners for stacks that are present. Reviewers inspect that source, consult the leads, run the frozen existing-test catalog inside an offline container, submit structured evidence, and peer cross-check one another's claims. The bridge rejects arbitrary shell commands, exploit generation, and live network access.
+`omniswarm run` (`./bin/omniswarm`; `./bin/audit` is the same program) enforces the `source_security_review_v1` workflow. There is no chain flag. The harness reads the sealed source, writes `harness/stack-profile.json`, and gives reviewers only the guidance, lead files, and test runners for stacks that are present. Reviewers inspect that source, consult the leads, run the frozen existing-test catalog inside an offline container, submit structured evidence, and peer cross-check one another's claims. The bridge rejects arbitrary shell commands, exploit generation, and live network access.
 
 ## What a run recognizes
 
@@ -22,11 +22,11 @@ A string such as `v1.signer` in production source becomes a lead in `near.md`. I
 
 The skill staged for every reviewer is `skills/security-audit`. Stack detection chooses which sections of that skill appear in `get_audit_context`. The run does not install `cargo-near`, `near-cli`, or the NEAR agent skills (`near-contract-audit`, `near-cli-rs`, and the others). `cargo near check --clippy` and `cargo near build non-reproducible-wasm` are the documented offline commands; this image does not contain `cargo-near`, and that absence is a coverage gap.
 
-People changing SolSwarm itself should read [AGENTS.md](AGENTS.md). Claude Code also reads [CLAUDE.md](CLAUDE.md). An audited repository's own `AGENTS.md` or `CLAUDE.md` is untrusted data, not instructions for this suite.
+People changing OmniSwarm itself should read [AGENTS.md](AGENTS.md). Claude Code also reads [CLAUDE.md](CLAUDE.md). An audited repository's own `AGENTS.md` or `CLAUDE.md` is untrusted data, not instructions for this suite.
 
 ## How It Works
 
-SolSwarm seals a source snapshot, collects static scanner leads, and verifies network disconnection before handing the sandbox to reviewers. Selected providers inspect the same captured source through a restricted MCP bridge.
+OmniSwarm seals a source snapshot, collects static scanner leads, and verifies network disconnection before handing the sandbox to reviewers. Selected providers inspect the same captured source through a restricted MCP bridge.
 
 ```mermaid
 flowchart TB
@@ -50,25 +50,25 @@ See the [architecture notes](docs/how-it-works.md) and [visual operator guide](d
 
 ```sh
 # 1. Install pinned ACP adapters (into runtime/)
-./bin/solswarm setup-agents
+./bin/omniswarm setup-agents
 
 # 2. Check agent runtime and Docker prerequisites
-./bin/solswarm check-agents
+./bin/omniswarm check-agents
 
 # 3. Run a security review against a local repo
-./bin/solswarm run --repo /path/to/authorized-repo
+./bin/omniswarm run --repo /path/to/authorized-repo
 
 # Or review a GitHub repository directly
-./bin/solswarm run --github owner/repo --ref v1.2.0
+./bin/omniswarm run --github owner/repo --ref v1.2.0
 
 # Or target specific models and surfaces (S1..S6)
-./bin/solswarm run --repo /path/to/repo --agents claude,codex --surface s4
+./bin/omniswarm run --repo /path/to/repo --agents claude,codex --surface s4
 
 # Print review plan without launching workers
-./bin/solswarm run --repo /path/to/repo --plan
+./bin/omniswarm run --repo /path/to/repo --plan
 ```
 
-You can also use `./bin/audit` or standard npm scripts:
+`./bin/audit` is the same program. Standard npm scripts:
 ```sh
 npm run setup         # Installs adapter dependencies
 npm run check-agents  # Runs preflight agent check
@@ -120,7 +120,7 @@ Codex uses maintained `codex-acp` 2.2.2 over its app-server; Claude uses `claude
 
 Reviews have no reasoning deadline; a 30-second heartbeat tracks worker liveness. Interrupted or failed runs can be resumed cleanly:
 ```sh
-./bin/solswarm run --repo /path/to/repo --agents claude,codex --surface s4 \
+./bin/omniswarm run --repo /path/to/repo --agents claude,codex --surface s4 \
   --resume-from /path/to/previous-review --out /path/to/new-review
 ```
 Successful committed reports are reused without re-invoking providers. `--restart-failed` restarts failed local sessions from scratch.
@@ -139,10 +139,10 @@ Each run produces comprehensive artifacts in `--out <dir>` (or `reports/<timesta
 
 To inspect, verify, or regenerate HTML reports without invoking models:
 ```sh
-./bin/solswarm verify /path/to/report
-./bin/solswarm report /path/to/report
-./bin/solswarm html /path/to/report
-./bin/solswarm pdf /path/to/report    # or: npm run pdf -- /path/to/report
+./bin/omniswarm verify /path/to/report
+./bin/omniswarm report /path/to/report
+./bin/omniswarm html /path/to/report
+./bin/omniswarm pdf /path/to/report    # or: npm run pdf -- /path/to/report
 ```
 PDF export prints the existing HTML pages with a local headless Chrome, Chromium, Edge or Brave; set `CHROME_PATH` to choose the browser.
 

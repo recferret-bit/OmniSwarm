@@ -10,7 +10,7 @@ export const GROK_SOURCE = PIN;
 export const GROK_SOURCE_REVISION = SOURCE_REVISION;
 export const DEFAULT_GROK_MODEL = 'grok-4.7';
 const CACHE=fileURLToPath(new URL('../native/.cache/grok-build/',import.meta.url));
-const BINARY=path.join(CACHE,'target/debug/freightchain-grok-review');
+const BINARY=path.join(CACHE,'target/debug/omniswarm-grok-review');
 const REASONS=new Set([
   'grok_input_contract_rejected','grok_output_contract_rejected','grok_configuration_rejected',
   'grok_subscription_auth_required','grok_runtime_failed','grok_execution_event_rejected','grok_deadline_exceeded',

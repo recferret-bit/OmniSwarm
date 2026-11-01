@@ -13,8 +13,8 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const CACHE = path.resolve(HERE,'../.cache');
 const SOURCE = path.join(CACHE,`grok-${PIN}`);
 const BUILD = path.join(CACHE,'grok-build');
-const MEMBER = 'freightchain-review';
-const PACKAGE = 'freightchain-grok-review';
+const MEMBER = 'omniswarm-review';
+const PACKAGE = 'omniswarm-grok-review';
 const INPUTS = {
   'Cargo.toml':'Cargo.toml',
   'NOTICE':'NOTICE',

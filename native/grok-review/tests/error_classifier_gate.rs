@@ -1,5 +1,5 @@
 use serde_json::json;
-use xai_grok_sampler::client::freightchain_review_error::{Diagnostic, MAX_ERROR_BYTES, classify};
+use xai_grok_sampler::client::omniswarm_review_error::{Diagnostic, MAX_ERROR_BYTES, classify};
 
 #[test]
 fn structured_parameters_are_allowlisted_and_provider_payloads_are_never_reflected() {
@@ -41,18 +41,18 @@ fn malformed_oversized_nested_and_forged_diagnostics_fail_closed() {
     );
     assert_eq!(classify(br#"{"diagnostic":{"category":"invalid_parameter","parameter":"tools"},"message":"dummy-private-value"}"#).category, "unclassified");
     assert!(
-        Diagnostic::from_tag(r#"freightchain-review:{"category":"dummy","parameter":null}"#)
+        Diagnostic::from_tag(r#"omniswarm-review:{"category":"dummy","parameter":null}"#)
             .is_none()
     );
     assert!(
         Diagnostic::from_tag(
-            r#"freightchain-review:{"category":"invalid_parameter","parameter":"dummy"}"#
+            r#"omniswarm-review:{"category":"invalid_parameter","parameter":"dummy"}"#
         )
         .is_none()
     );
     assert!(
         Diagnostic::from_tag(
-            r#"freightchain-review:{"category":"unclassified","parameter":null,"message":"dummy"}"#
+            r#"omniswarm-review:{"category":"unclassified","parameter":null,"message":"dummy"}"#
         )
         .is_none()
     );

@@ -34,7 +34,7 @@ fn native_cli_check_reads_only_the_dummy_store_and_emits_no_diagnostics() {
     let file = home.path().join("auth.json");
     let before = std::fs::read(&file).unwrap();
     let metadata = std::fs::metadata(&file).unwrap();
-    let output = Command::new(env!("CARGO_BIN_EXE_freightchain-grok-review"))
+    let output = Command::new(env!("CARGO_BIN_EXE_omniswarm-grok-review"))
         .args(["--check", "--model", "fixture-model"])
         .env_clear()
         .env("HOME", home.path())
@@ -62,7 +62,7 @@ fn native_cli_check_reads_only_the_dummy_store_and_emits_no_diagnostics() {
 #[test]
 fn native_cli_rejects_execution_and_environment_overrides_without_auth_side_effects() {
     let home = tempfile::tempdir().unwrap();
-    let output = Command::new(env!("CARGO_BIN_EXE_freightchain-grok-review"))
+    let output = Command::new(env!("CARGO_BIN_EXE_omniswarm-grok-review"))
         .args(["--check", "--model", "fixture-model"])
         .env_clear()
         .env("HOME", home.path())
@@ -81,7 +81,7 @@ fn native_cli_rejects_execution_and_environment_overrides_without_auth_side_effe
 fn missing_grok_home_is_not_created_during_preflight() {
     let home = tempfile::tempdir().unwrap();
     let missing = home.path().join("missing");
-    let output = Command::new(env!("CARGO_BIN_EXE_freightchain-grok-review"))
+    let output = Command::new(env!("CARGO_BIN_EXE_omniswarm-grok-review"))
         .args(["--check", "--model", "fixture-model"])
         .env_clear()
         .env("HOME", home.path())

@@ -10,9 +10,9 @@ import { nativeIdentity } from '../native/grok-review/build.mjs';
 import { REVIEW_IMAGE, createSnapshot, disposeSnapshot } from './worker-isolation.mjs';
 import { openPrivateOutput } from '../native/codex-review/build.mjs';
 
-export const GROK_AUTH_VOLUME = 'freightchain-grok-isolated-auth-v1';
-export const GROK_DOCKER_IMAGE = 'freightchain-grok-review:isolated';
-export const GROK_DOCKER_LABEL = 'freightchain.grok.isolated';
+export const GROK_AUTH_VOLUME = 'omniswarm-grok-isolated-auth-v1';
+export const GROK_DOCKER_IMAGE = 'omniswarm-grok-review:isolated';
+export const GROK_DOCKER_LABEL = 'omniswarm.grok.isolated';
 const RECEIPT = fileURLToPath(new URL('../native/.cache/grok-docker/runtime.json', import.meta.url));
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const SESSIONS = fileURLToPath(new URL('../native/.cache/grok-docker/sessions/', import.meta.url));
@@ -83,7 +83,7 @@ export async function prepareGrokDocker({ model = DEFAULT_GROK_MODEL, checkOnly 
     const errors = [];
     for (const [type, name] of [...owned].reverse()) {
       try {
-        const format = type === 'network' ? '{{index .Labels "freightchain.grok.isolated"}}' : '{{index .Config.Labels "freightchain.grok.isolated"}}';
+        const format = type === 'network' ? '{{index .Labels "omniswarm.grok.isolated"}}' : '{{index .Config.Labels "omniswarm.grok.isolated"}}';
         const owner = await control([...(type === 'network' ? ['network'] : []), 'inspect', name, '--format', format]);
         if (owner !== label) throw new Error('owner changed');
         await control(type === 'network' ? ['network', 'rm', name] : ['rm', '--force', name]);
@@ -97,9 +97,9 @@ export async function prepareGrokDocker({ model = DEFAULT_GROK_MODEL, checkOnly 
   };
   try {
     const image = JSON.parse(await control(['image', 'inspect', receipt.image, '--format', '{{json .}}'], { signal }));
-    if (image.Id !== receipt.image || image.Config?.Labels?.['freightchain.grok.source'] !== GROK_SOURCE) throw new ConnectorError('grok_docker_image_rejected');
+    if (image.Id !== receipt.image || image.Config?.Labels?.['omniswarm.grok.source'] !== GROK_SOURCE) throw new ConnectorError('grok_docker_image_rejected');
     // Never create an anonymous empty volume during inference: require explicit setup/login.
-    if (await control(['volume', 'inspect', GROK_AUTH_VOLUME, '--format', '{{index .Labels "freightchain.grok.isolated"}}'], { signal }) !== 'auth-v1') throw new ConnectorError('grok_docker_auth_volume_rejected');
+    if (await control(['volume', 'inspect', GROK_AUTH_VOLUME, '--format', '{{index .Labels "omniswarm.grok.isolated"}}'], { signal }) !== 'auth-v1') throw new ConnectorError('grok_docker_auth_volume_rejected');
     snapshot = createSnapshot(HERE, { only: ['grok-docker-egress.mjs'] });
     for (const [name, internal] of [[names.network, true], [names.external, false]]) {
       owned.push(['network', name]);

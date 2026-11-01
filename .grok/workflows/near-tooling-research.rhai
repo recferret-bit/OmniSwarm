@@ -1,7 +1,7 @@
 let meta = #{
     name: "near-tooling-research",
     description: "Three-pass parallel research of current NEAR contract, test, AI, and intents tooling",
-    when_to_use: "Before extending a security harness from Solana-only coverage to NEAR Protocol.",
+    when_to_use: "When refreshing NEAR contract, test, AI, and Intents tooling for the OmniSwarm multichain harness.",
     phases: [
         #{ title: "Survey", detail: "Five domains in parallel from primary docs" },
         #{ title: "Revise", detail: "Each domain corrects and fills the previous pass" },

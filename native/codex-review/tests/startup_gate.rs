@@ -7,7 +7,7 @@ use core_test_support::responses;
 use core_test_support::test_codex::run_test_with_large_stack;
 use core_test_support::test_codex::test_codex;
 use core_test_support::wait_for_event;
-use freightchain_codex_review::policy::review_start_options;
+use omniswarm_codex_review::policy::review_start_options;
 
 #[test]
 fn real_native_runtime_advertises_no_tools_and_rejects_a_fabricated_call() -> anyhow::Result<()> {

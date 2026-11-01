@@ -13,8 +13,8 @@ test('native source pin and metadata cannot claim runtime admission', () => {
   assert.equal(pin.stage, 'policy_and_contract_gates');
 });
 test('source inputs reject untracked and ignored files outside the exact overlay', () => {
-  validateSourceExtras(['codex-rs/freightchain-review/Cargo.toml', 'codex-rs/freightchain-review/src/lib.rs']);
-  for (const name of ['.cargo/config.toml', 'codex-rs/.cargo/config.toml', 'codex-rs/freightchain-review/build.rs', 'codex-rs/core/untracked.rs']) {
+  validateSourceExtras(['codex-rs/omniswarm-review/Cargo.toml', 'codex-rs/omniswarm-review/src/lib.rs']);
+  for (const name of ['.cargo/config.toml', 'codex-rs/.cargo/config.toml', 'codex-rs/omniswarm-review/build.rs', 'codex-rs/core/untracked.rs']) {
     assert.throws(() => validateSourceExtras([name]), /native_cached_untracked_input/);
   }
 });
@@ -52,7 +52,7 @@ test('native and existing source-review instructions are byte-equivalent', () =>
 test('workspace overlay is narrowly anchored and does not update dependencies', () => {
   const original = '[workspace]\nmembers = [\n    "core",\n]\n';
   const overlay = overlayManifest(original);
-  assert.equal(overlay, '[workspace]\nmembers = [\n    "freightchain-review",\n    "core",\n]\n');
+  assert.equal(overlay, '[workspace]\nmembers = [\n    "omniswarm-review",\n    "core",\n]\n');
   assert.throws(() => overlayManifest(overlay));
   assert.throws(() => overlayManifest('different workspace'));
 });
@@ -61,9 +61,9 @@ test('lock overlay only adds the native package with pinned existing versions', 
   const lock = names.map((name) => `[[package]]\nname = "${name}"\nversion = "${name === 'sha2' ? '0.10.9' : '1.0.0'}"\n`).join('\n');
   const overlay = overlayLock(lock);
   assert.ok(overlay.includes('name = "codex-core"'));
-  assert.ok(overlay.indexOf('name = "freightchain-codex-review"') < overlay.indexOf('name = "serde"'));
+  assert.ok(overlay.indexOf('name = "omniswarm-codex-review"') < overlay.indexOf('name = "serde"'));
   assert.ok(overlay.includes('name = "sha2"\nversion = "0.10.9"'));
-  assert.equal(overlay.split('name = "freightchain-codex-review"').length, 2);
+  assert.equal(overlay.split('name = "omniswarm-codex-review"').length, 2);
   assert.throws(() => overlayLock(overlay));
   assert.throws(() => overlayLock('missing upstream packages'));
   assert.equal(withoutNativeEntry(overlay).trimEnd(), lock.trimEnd());

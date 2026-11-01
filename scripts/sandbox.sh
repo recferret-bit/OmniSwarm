@@ -158,7 +158,7 @@ elif ! docker build -t audit-sandbox:local -f "$AUDIT_ROOT/docker/sandbox.Docker
   note_blocked "The sandbox image failed to build. See harness/sandbox-run/image.log."
 fi
 
-OSV_CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/freightchain-audit/osv"
+OSV_CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/omniswarm-audit/osv"
 OSV_MOUNTS=()
 TOOLS_DIR=""
 
@@ -197,7 +197,7 @@ prefetch_tools() {
   case "$ver" in
     ''|*[!0-9.]*) return 1 ;;
   esac
-  cache="${XDG_CACHE_HOME:-$HOME/.cache}/freightchain-audit/platform-tools/${ver}"
+  cache="${XDG_CACHE_HOME:-$HOME/.cache}/omniswarm-audit/platform-tools/${ver}"
   if find "$cache/.cache/solana" -type d -name platform-tools -print -quit 2>/dev/null | grep -q .; then
     printf '%s' "$cache"
     return 0

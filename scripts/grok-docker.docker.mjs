@@ -19,7 +19,7 @@ test('Grok Docker keeps the inference process and credentials inside its private
     await grokDockerControl(['image', 'rm', fixture]);
     fs.rmSync(root, { recursive: true, force: true });
   });
-  fs.writeFileSync(path.join(root, 'Dockerfile'), `FROM ${REVIEW_IMAGE}\nCOPY broker.mjs /trusted/broker.mjs\nLABEL freightchain.grok.source="${GROK_SOURCE}"\nENTRYPOINT ["/usr/local/bin/node","/trusted/broker.mjs"]\n`);
+  fs.writeFileSync(path.join(root, 'Dockerfile'), `FROM ${REVIEW_IMAGE}\nCOPY broker.mjs /trusted/broker.mjs\nLABEL omniswarm.grok.source="${GROK_SOURCE}"\nENTRYPOINT ["/usr/local/bin/node","/trusted/broker.mjs"]\n`);
   fs.writeFileSync(path.join(root, 'broker.mjs'), `
 import fs from 'node:fs';
 import readline from 'node:readline';

@@ -1,4 +1,4 @@
-//! Freight Chain review-only adaptation of the pinned native auth manager.
+//! OmniSwarm review-only adaptation of the pinned native auth manager.
 //! Only cached first-party login is supported; normal CLI owns refresh/login.
 use std::io::Read;
 use std::os::unix::fs::{MetadataExt, OpenOptionsExt};

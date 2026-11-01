@@ -3,7 +3,7 @@ pub mod contract;
 pub mod config;
 pub mod runtime;
 pub mod routing;
-pub use xai_grok_sampler::client::freightchain_review_error::Diagnostic as ProviderDiagnostic;
+pub use xai_grok_sampler::client::omniswarm_review_error::Diagnostic as ProviderDiagnostic;
 
 pub const SOURCE_COMMIT: &str = "2bdd1d6a6369de0e8c68132ea4539e9abd9e14a8";
 pub const SOURCE_REVISION: &str = "559751fdcec02d413e4c57c8832ab275e4f44980";

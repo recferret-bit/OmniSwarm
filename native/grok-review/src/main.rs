@@ -2,10 +2,10 @@ use std::io::Write;
 use std::process::ExitCode;
 use std::time::Duration;
 
-use freightchain_grok_review::config::{load_auth, sampler_config};
-use freightchain_grok_review::contract::parse_request;
-use freightchain_grok_review::runtime::{ReviewRuntime, valid_model};
-use freightchain_grok_review::{FRAME_BYTES, GateError, SOURCE_COMMIT, SOURCE_REVISION};
+use omniswarm_grok_review::config::{load_auth, sampler_config};
+use omniswarm_grok_review::contract::parse_request;
+use omniswarm_grok_review::runtime::{ReviewRuntime, valid_model};
+use omniswarm_grok_review::{FRAME_BYTES, GateError, SOURCE_COMMIT, SOURCE_REVISION};
 use serde_json::json;
 use tokio::io::AsyncBufReadExt;
 

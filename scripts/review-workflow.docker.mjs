@@ -34,7 +34,7 @@ test('real Docker enforces offline existing tests, manifest binding and unlimite
   const label = crypto.randomUUID();
   t.after(() => {
     for (const container of containers) {
-      const owner = docker(['inspect', '--format', '{{index .Config.Labels "freightchain.review.fixture"}}', container]);
+      const owner = docker(['inspect', '--format', '{{index .Config.Labels "omniswarm.review.fixture"}}', container]);
       assert.equal(owner, label);
       docker(['rm', '--force', container]);
     }
@@ -42,7 +42,7 @@ test('real Docker enforces offline existing tests, manifest binding and unlimite
   });
   const start = network => {
     const container = `source-review-${crypto.randomUUID()}`;
-    const args = ['run', '--detach', '--pull=never', '--name', container, '--label', `freightchain.review.fixture=${label}`, '--network', network, '--user', '10001:10001', '--read-only', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges', '--pids-limit', '128', '--memory', '256m', '--tmpfs', '/tmp:mode=1777', '--tmpfs', '/work:mode=1777', '--tmpfs', '/out:mode=1777', '--mount', `type=bind,src=${source},dst=/src,readonly`, '--env', 'SANDBOX_REVIEW_ONLY=1', '--env', 'SANDBOX_BUDGET_MS=1000', '--env', 'SANDBOX_HOLD=1'];
+    const args = ['run', '--detach', '--pull=never', '--name', container, '--label', `omniswarm.review.fixture=${label}`, '--network', network, '--user', '10001:10001', '--read-only', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges', '--pids-limit', '128', '--memory', '256m', '--tmpfs', '/tmp:mode=1777', '--tmpfs', '/work:mode=1777', '--tmpfs', '/out:mode=1777', '--mount', `type=bind,src=${source},dst=/src,readonly`, '--env', 'SANDBOX_REVIEW_ONLY=1', '--env', 'SANDBOX_BUDGET_MS=1000', '--env', 'SANDBOX_HOLD=1'];
     for (const file of ['sandbox-inside.mjs', 'sandbox-lib.mjs']) args.push('--mount', `type=bind,src=${path.join(scripts, file)},dst=/opt/audit/${file},readonly`);
     docker([...args, REVIEW_IMAGE, 'node', '/opt/audit/sandbox-inside.mjs']);
     containers.push(container);

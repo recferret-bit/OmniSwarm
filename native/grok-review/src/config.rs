@@ -118,7 +118,7 @@ pub fn load_auth() -> Result<Arc<AuthManager>, GateError> {
     {
         return Err(GateError::Configuration);
     }
-    if xai_grok_config::freightchain_text_review_mdm_present() {
+    if xai_grok_config::omniswarm_text_review_mdm_present() {
         return Err(GateError::Configuration);
     }
     let mut merged = toml::Value::Table(Default::default());
@@ -168,9 +168,9 @@ pub fn sampler_config(model: &str, auth: Arc<AuthManager>) -> Result<SamplerConf
         max_completion_tokens: Some(8192),
         max_request_bytes: std::num::NonZeroU64::new(1024 * 1024),
         client_version: Some(xai_grok_version::VERSION.to_owned()),
-        client_identifier: Some("freightchain-grok-review".to_owned()),
+        client_identifier: Some("omniswarm-grok-review".to_owned()),
         origin_client: Some(OriginClientInfo {
-            product: "freightchain-grok-review".to_owned(),
+            product: "omniswarm-grok-review".to_owned(),
             version: Some(env!("CARGO_PKG_VERSION").to_owned()),
         }),
         ..Default::default()

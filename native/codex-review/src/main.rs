@@ -3,14 +3,14 @@ use std::process::ExitCode;
 use std::time::Duration;
 
 use codex_core::config::find_codex_home;
-use freightchain_codex_review::FRAME_BYTES;
-use freightchain_codex_review::GateError;
-use freightchain_codex_review::SOURCE_COMMIT;
-use freightchain_codex_review::contract::parse_request;
-use freightchain_codex_review::runtime::ReviewRuntime;
-use freightchain_codex_review::runtime_config::load_configuration;
-use freightchain_codex_review::runtime_config::load_native_auth;
-use freightchain_codex_review::runtime_config::valid_model;
+use omniswarm_codex_review::FRAME_BYTES;
+use omniswarm_codex_review::GateError;
+use omniswarm_codex_review::SOURCE_COMMIT;
+use omniswarm_codex_review::contract::parse_request;
+use omniswarm_codex_review::runtime::ReviewRuntime;
+use omniswarm_codex_review::runtime_config::load_configuration;
+use omniswarm_codex_review::runtime_config::load_native_auth;
+use omniswarm_codex_review::runtime_config::valid_model;
 use serde_json::json;
 use tokio::io::AsyncBufReadExt;
 
