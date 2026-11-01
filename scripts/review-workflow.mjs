@@ -1,6 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { tomlFacts, cargoManifestFacts, cargoInfo, isNearCargo } from './cargo-manifest.mjs';
+import { isProductionPath } from './stack-detect.mjs';
 
 export const REVIEW_WORKFLOW = 'source_security_review_v1';
 export const REVIEW_TOOLS = new Set(['get_audit_context', 'get_review_plan', 'list_files', 'read_file', 'search_code', 'list_existing_tests', 'run_existing_tests', 'submit_audit_report', 'submit_crosscheck_report']);
@@ -38,13 +40,16 @@ export function buildExistingTestCatalog(snapshot, manifest) {
   const tests = [];
   const coverageGaps = [];
   const nearContractDirs = [];
+  const unresolvedCargoDirs = [];
   for (const file of manifest.files) {
     if (path.posix.basename(file.path) !== 'Cargo.toml' || VENDORED_MANIFEST.test(file.path)) continue;
-    if (/(?:^|\/)(?:tests?|fixtures?|examples?|docs?|scripts?)\//.test(file.path)) continue;
-    let text = '';
-    try { text = fs.readFileSync(path.join(snapshot, file.path), 'utf8'); } catch { continue; }
-    if (/(?:^|\n)\s*near-sdk\s*=/.test(text)) nearContractDirs.push(path.posix.dirname(file.path));
+    if (!isProductionPath(file.path)) continue;
+    let info;
+    try { info = cargoInfo(snapshot, path.join(snapshot, file.path)); } catch { unresolvedCargoDirs.push(path.posix.dirname(file.path)); continue; }
+    if (info.error) unresolvedCargoDirs.push(path.posix.dirname(file.path));
+    if (isNearCargo(info, true)) nearContractDirs.push(path.posix.dirname(file.path));
   }
+  if (nearContractDirs.length) coverageGaps.push('NEAR build verification unavailable: cargo-near and the WASM target are not provisioned; clippy and WASM compilation were not run.');
   for (const file of manifest.files) {
     const cwd = path.posix.dirname(file.path);
     const name = path.posix.basename(file.path);
@@ -62,8 +67,11 @@ export function buildExistingTestCatalog(snapshot, manifest) {
       let text = '';
       try { text = fs.readFileSync(path.join(snapshot, file.path), 'utf8'); } catch { text = ''; }
       if (/\[(?:package|workspace)\]/.test(text)) {
-        const selfNear = /(?:^|\n)\s*near-sdk\s*=/.test(text);
+        const info = cargoInfo(snapshot, path.join(snapshot, file.path));
+        const selfNear = isNearCargo(info, true);
+        if (info.error) { coverageGaps.push(`Cargo manifest in ${cwd} could not be parsed; tests are not catalogued.`); continue; }
         const workspace = /^\s*\[workspace\]/m.test(text);
+        if (workspace && unresolvedCargoDirs.some(dir => cwd === '.' || dir.startsWith(`${cwd}/`))) { coverageGaps.push(`Cargo workspace in ${cwd} contains an unresolved manifest; tests are not catalogued.`); continue; }
         const containsNear = workspace && nearContractDirs.some((dir) => cwd === '.' ? dir !== '.' : dir.startsWith(`${cwd}/`));
         if (selfNear || containsNear) coverageGaps.push(`NEAR contract tests in ${cwd} are a local-sandbox coverage gap. cargo test can start near-sandbox or deploy to testnet and is not run offline.`);
         else kind = 'cargo';
@@ -100,6 +108,10 @@ export function selectExistingTest(catalog, id, sourceDigest) {
 // Fixed trusted program. No model-provided executable, arguments, code, env or URL.
 export const EXISTING_TEST_RUNNER = `
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto'),{spawn,spawnSync}=require('node:child_process');
+${tomlFacts.toString()}
+${cargoManifestFacts.toString()}
+${cargoInfo.toString()}
+${isNearCargo.toString()}
 (async()=>{
  let input='';for await(const chunk of process.stdin)input+=chunk;
  const entry=JSON.parse(input),root='/work/src';
@@ -144,9 +156,10 @@ const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypt
    const toml=fs.readFileSync(manifest,'utf8');
    if(!/\\bcrate-type\\s*=\\s*\\[[^\\]]*"cdylib"/.test(toml))continue;
    const dir=path.dirname(manifest);
-   const hasAnchor=[dir,path.dirname(dir),path.dirname(path.dirname(dir))].some(d=>d.startsWith(root)&&fs.existsSync(path.join(d,'Anchor.toml')));
-   // near-sdk crates are WASM contracts. They continue here unless the same manifest is also Solana.
-   if(!hasAnchor&&!/(?:anchor-lang|solana-program|solana-cpi|solana-sdk|solana-zk|pinocchio|target_os\\s*=\\s*"solana")/.test(toml))continue;
+   const info=cargoInfo(root,manifest);
+   if(info.error||isNearCargo(info,true))continue;
+   const solanaPackages=new Set(['anchor-lang','solana-program','solana-cpi','solana-sdk','solana-zk','pinocchio']);
+   if(!info.dependencies.some(d=>solanaPackages.has(d.package)&&/(?:^|\\.)dependencies$/.test(d.group)))continue;
    const lib=(toml.match(/\\[lib\\][\\s\\S]*?\\bname\\s*=\\s*"([^"]+)"/)?.[1]||toml.match(/\\[package\\][\\s\\S]*?\\bname\\s*=\\s*"([^"]+)"/)?.[1]||'').replace(/-/g,'_');
    programs.push({manifest,dir,lib});
   }

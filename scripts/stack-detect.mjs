@@ -5,6 +5,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { cargoInfo, isNearCargo } from './cargo-manifest.mjs';
 
 const SKIP_DIRS = new Set([
   'node_modules', 'target', 'dist', 'build', '.git', 'vendor', 'coverage', '.next',
@@ -111,7 +112,7 @@ export function detectEcosystems(targetRoot) {
       const text = read(file);
       if (/anchor-lang|solana-program|solana-sdk|pinocchio/.test(text)) solana.marks.push(rel);
       // docs.near.org/tools/sdk: the only official contract SDK is near-sdk-rs, crate near-sdk.
-      if (/(?:^|\n)\s*near-sdk\s*=/.test(text)) markNear(rel, ['contract']);
+      if (isNearCargo(cargoInfo(root, file))) markNear(rel, ['contract']);
     } else if (name === 'Anchor.toml') solana.marks.push(rel);
 
     if (ext === '.py') {

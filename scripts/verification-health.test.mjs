@@ -115,3 +115,11 @@ test('a failed suite gap carries its counts, dominant cause and capture truncati
   assert.equal(f.check().state, 'incomplete');
   assert.match(f.check().gaps.join('\n'), /capture limit \(10 bytes omitted\)/);
 });
+
+
+test('missing NEAR clippy and WASM verification stays an explicit health gap', t => {
+  const f = fixture(t);
+  f.data['harness/existing-tests.json'].coverageGaps = ['NEAR build verification unavailable: cargo-near and the WASM target are not provisioned; clippy and WASM compilation were not run.'];
+  assert.equal(f.check().state, 'incomplete');
+  assert.match(f.check().gaps.join('\n'), /NEAR build verification unavailable/);
+});

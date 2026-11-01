@@ -12,6 +12,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { cargoInfo, isNearCargo, nearReleaseEvidence } from './cargo-manifest.mjs';
 import { scannerEvidence } from './scanner-evidence.mjs';
 import { analyzeStackAndPlans, renderReviewPlansMarkdown } from './audit-plans.mjs';
 import { analyseNodeDeps, analysePythonDeps, isProductionPath } from './stack-detect.mjs';
@@ -88,13 +89,13 @@ const NEAR_CONTRACT_PATTERNS = [
   { id: 'init-ignore-state', cls: 'migration', re: /#\[\s*init\s*\(\s*ignore_state\s*\)\s*\]/g,
     note: 'Migration runs against existing state. Confirm it is access-controlled and does not reset balances.' },
   { id: 'promise-call', cls: 'cross-contract', re: /\bPromise::new\s*\(|\.then\s*\(/g,
-    note: 'Cross-contract call. The callback must be #[private], handle success and failure, and commit outcome-dependent state in the callback.' },
-  { id: 'promise-result', cls: 'cross-contract', re: /\benv::promise_result\s*\(|\bPromiseResult::/g,
-    note: 'Callback result. Confirm failure settles without panicking and refunds stay bounded.' },
+    note: 'Cross-contract call. The callback must be #[private]. Check gas/input bounds, receipt invariants, one-time settlement and recovery if the callback itself fails. Commit outcome-dependent state only after success.' },
+  { id: 'promise-result', cls: 'cross-contract', re: /\benv::promise_result(?:_checked)?\s*\(|\bPromiseResult::|#\[\s*callback_(?:result|unwrap)\b/g,
+    note: 'Callback result. Bound result bytes before parsing; malformed results must settle without panicking. Check callback gas and recovery; refunds stay bounded.' },
   { id: 'ft-entry', cls: 'NEP-141', re: /\bfn\s+ft_(?:transfer(?:_call)?|on_transfer|resolve_transfer)\s*\(/g,
-    note: 'Fungible-token entry. Confirm one yoctoNEAR on transfers, a predecessor check on ft_on_transfer, and a private ft_resolve_transfer.' },
+    note: 'Fungible-token entry. Confirm one yoctoNEAR on transfers, a predecessor check on ft_on_transfer, unused-amount returns, and a private ft_resolve_transfer with refunds capped by the original transfer and receiver balance.' },
   { id: 'unchecked-arith', cls: 'arithmetic', re: /\bwrapping_(?:add|sub|mul)\s*\(|\bunchecked_(?:add|sub|mul)\s*\(/g,
-    note: 'Wraps silently. Release builds need overflow-checks = true, or a checked operation.' },
+    note: 'Explicit wrapping/unchecked operations are not made safe by overflow-checks. Verify intent and use checked arithmetic for amounts.' },
   { id: 'lossy-cast', cls: 'arithmetic', re: /\bas\s+(?:u8|u16|u32|u64|i8|i16|i32|i64)\b/g,
     note: 'Narrowing cast truncates. Confirm the value is range-checked first.' },
   { id: 'panic-path', cls: 'availability', re: /\.unwrap\s*\(\s*\)|\.expect\s*\(|\bpanic!\s*\(/g,
@@ -702,20 +703,15 @@ function solanaVersions(root, marks) {
 
 function nearVersions(root, contract) {
   if (!contract) return ['No near-sdk manifest in this mark set. Contract version and overflow-checks are not applied.'];
-  const deps = new Map();
-  let overflow = false;
-  let profile = false;
+  const lines = [];
   walk(root, (file) => {
     if (path.basename(file) !== 'Cargo.toml' || !isProductionPath(rel(root, file))) return;
-    const text = readText(file) || '';
-    for (const m of text.matchAll(/^\s*(near-sdk)\s*=\s*(?:"([^"]+)"|\{[^}]*?version\s*=\s*"([^"]+)")/gm)) deps.set(m[1], m[2] || m[3]);
-    if (/^\s*\[profile\.release\]/m.test(text)) profile = true;
-    if (/overflow-checks\s*=\s*true/.test(text)) overflow = true;
+    const info = cargoInfo(root, file);
+    if (!isNearCargo(info)) return;
+    const versions = info.dependencies.filter(d => d.package === 'near-sdk').map(d => d.version || 'unresolved');
+    lines.push(`${rel(root, file)}: near-sdk ${versions.join(', ')}.`, nearReleaseEvidence(root, file));
   });
-  return [
-    `Versions in use: ${[...deps].map(([k, v]) => `${k} ${v}`).join(', ') || 'none declared'}.`,
-    overflow ? 'Release profile sets overflow-checks = true.' : `LEAD: no manifest sets overflow-checks = true${profile ? ' ([profile.release] present without it)' : ' (no [profile.release])'}. Release builds then wrap on overflow unless every operation is checked_*.`,
-  ];
+  return lines.length ? lines : ['LEAD: NEAR manifest evidence could not be resolved.'];
 }
 
 function writeNear(root, eco) {

@@ -346,6 +346,7 @@ if ! docker run -d --name "$SBX" \
   -v "$SCRIPT_DIR/audit-plans.mjs:/opt/audit/audit-plans.mjs:ro" \
   -v "$SCRIPT_DIR/scanner-evidence.mjs:/opt/audit/scanner-evidence.mjs:ro" \
   -v "$SCRIPT_DIR/stack-detect.mjs:/opt/audit/stack-detect.mjs:ro" \
+  -v "$SCRIPT_DIR/cargo-manifest.mjs:/opt/audit/cargo-manifest.mjs:ro" \
   ${OSV_MOUNTS[@]+"${OSV_MOUNTS[@]}"} \
   ${TOOLS_DIR:+-v "$TOOLS_DIR/.cache/solana:/opt/platform-tools:ro"} \
   ${POCS:+-v "$POCS:/pocs:ro"} \

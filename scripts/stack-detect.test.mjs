@@ -97,3 +97,9 @@ test('Node manifests without a lockfile, with git sources or open ranges are a c
   assert.equal(ok.unresolved, 0);
   assert.equal(analyseNodeDeps(tree(t, { 'x/y.py': '' })).applicable, false);
 });
+
+test('NEAR guidance includes callback receipt failure and bounded FT settlement', t => {
+  const root = tree(t, { 'Cargo.toml': '[package]\nname="c"\n[dependencies.near-sdk]\nversion="5.29.0"' });
+  const guidance = renderSurfaceSkillGuidance('S3', analyzeStackAndPlans(root));
+  for (const check of ['callback receipt itself fails', 'bound result bytes', 'settle once', 'receiver balance', 'stuck operations']) assert.ok(guidance.includes(check), check);
+});

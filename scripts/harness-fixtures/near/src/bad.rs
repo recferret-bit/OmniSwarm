@@ -29,3 +29,8 @@ pub fn ft_resolve_transfer(sender: AccountId, amount: U128) -> U128 {
 pub fn draw() -> Vec<u8> {
     env::random_seed()
 }
+
+// Callback deserialization can fail even when the preceding call succeeds.
+pub fn callback(#[callback_result] result: Result<U128, PromiseError>) {
+    let _ = env::promise_result_checked(0, 4096);
+}

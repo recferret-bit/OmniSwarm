@@ -134,3 +134,28 @@ test('a Python project with tests gets a fixed, hash-bound pytest entry and no c
   assert.deepEqual(selected.args, ['-m', 'pytest', '-p', 'no:cacheprovider', '-q', '--tb=line']);
   assert.equal(selected.timeoutMs, 1800000);
 });
+
+test('SBF discovery excludes NEAR even under Anchor and preserves actual Solana crates', async () => {
+  const { default: vm } = await import('node:vm');
+  const { EXISTING_TEST_RUNNER } = await import('./review-workflow.mjs');
+  const manifest = dep => '[package]\nname="contract"\nversion="0.1.0"\n[lib]\ncrate-type=["cdylib"]\n' + dep;
+  const files = {
+    '/work/src/Anchor.toml': '',
+    '/work/src/Cargo.toml': '[workspace]\nmembers=["near","solana"]\n[workspace.dependencies]\nsdk={package="near-sdk",version="5.29.0"}',
+    '/work/src/near/Cargo.toml': manifest('[dependencies]\nsdk.workspace=true'),
+    '/work/src/solana/Cargo.toml': manifest('[dependencies]\nanchor-lang="0.30.1"'),
+  };
+  const dirs = { '/work/src': ['Anchor.toml', 'Cargo.toml', 'near', 'solana'], '/work/src/near': ['Cargo.toml'], '/work/src/solana': ['Cargo.toml'] };
+  const fakeFs = {
+    existsSync: p => p in files || p in dirs || p === '/opt/platform-tools/rust/bin/cargo', realpathSync: p => p,
+    readFileSync: p => { if (!(p in files)) throw Error('missing'); return files[p]; },
+    readdirSync: p => (dirs[p] || []).map(name => ({ name, isSymbolicLink: () => false, isDirectory: () => path.join(p, name) in dirs, isFile: () => path.join(p, name) in files })),
+  };
+  const builds = [];
+  const process = { env: {}, stdin: (async function* () { yield JSON.stringify({ files: [], cwd: '.', command: 'bash', args: ['./test.sh'], timeoutMs: 900000 }); })(), stderr: { write() {} } };
+  await vm.runInNewContext(EXISTING_TEST_RUNNER, {
+    require: name => name === 'node:fs' ? fakeFs : name === 'node:path' ? path : name === 'node:crypto' ? {} : { spawnSync: (command, args) => { builds.push(args.at(-1)); return { status: 1, stderr: 'inert mock' }; } },
+    process, console: { error() {} }, setTimeout, clearTimeout,
+  });
+  assert.deepEqual(builds, ['/work/src/solana/Cargo.toml']);
+});
