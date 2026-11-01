@@ -10,7 +10,6 @@ set -euo pipefail
 # Commands:
 #   run     --repo <path> | --github <url> [options]   Run the multi-agent quorum review
 #   verify  [<report-dir>]                             Quorum adjudication + scoring on a report dir
-#   pocs    --repo <path> | --github <url> [options]   Run proof-of-concept tests against a target
 #   html    [<report-dir>]                             Regenerate report.html and findings-by-model.html
 #   report  [<report-dir>]                             Show findings and risk scores
 
@@ -23,11 +22,11 @@ COMMAND="${1:-help}"
 shift || true
 
 ARG_REPO="" ARG_GITHUB="" ARG_REF="" ARG_WORKDIR="" ARG_CLEAN=0
-SURFACE="all" OUT_DIR="" AGENTS="claude,grok,agy,codex" POCS_DIR="" POSITIONAL=()
+SURFACE="all" OUT_DIR="" AGENTS="claude,grok,agy,codex" POSITIONAL=()
 MODEL_ALL="" MODELS_CSV="" MODEL_CLAUDE="" MODEL_GROK="" MODEL_AGY="" MODEL_CODEX="" PLAN=0
 RPC="" RESUME_FROM="" TEST_ARTIFACTS="" RESTART_FAILED=0
 
-# Flags shared by `run` and `pocs`; anything else is a positional argument.
+# Flags for `run`; anything else is a positional argument.
 parse_flags() {
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -50,7 +49,6 @@ parse_flags() {
       --test-artifacts) TEST_ARTIFACTS="${2:?--test-artifacts needs a Cargo target directory}"; shift 2 ;;
       --restart-failed) RESTART_FAILED=1; shift ;;
       --rpc) RPC="${2:?--rpc needs an https URL}"; shift 2 ;;
-      --pocs) POCS_DIR="${2:?--pocs needs a path}"; shift 2 ;;
       -*) die "unknown option: $1 (see 'audit help')" ;;
       *) POSITIONAL+=("$1"); shift ;;
     esac
@@ -134,20 +132,6 @@ case "$COMMAND" in
     node "$AUDIT_ROOT/scripts/verify-and-adjudicate.mjs" "$(report_dir_arg "${1:-}")"
     ;;
 
-  pocs|test)
-    parse_flags "$@"
-    [ -z "$TEST_ARTIFACTS" ] || die "--test-artifacts is only for 'audit run'"
-    [ "$RESTART_FAILED" -eq 0 ] || die "--restart-failed is only for 'audit run'"
-    [ "$PLAN" -eq 0 ] || die "--plan is only for 'audit run'"
-    [ -z "$RESUME_FROM" ] || die "--resume-from is only for 'audit run'"
-    trap cleanup_target EXIT
-    resolve_target
-    arm_cleanup
-    POCS_DIR="${POCS_DIR:-$AUDIT_ROOT/pocs}"
-    bash "$AUDIT_ROOT/scripts/run-pocs.sh" --target "$TARGET_DIR" --name "$TARGET_NAME" --pocs "$POCS_DIR"
-    report_kept_clone
-    ;;
-
   html|web)
     node "$AUDIT_ROOT/scripts/generate-html-report.mjs" "$(report_dir_arg "${1:-}")"
     ;;
@@ -183,8 +167,6 @@ Usage:
       Install the lockfile-pinned ACP runtime locally; no global tools or account login.
   audit check-agents [--live [--agents <list>] [--out <empty-dir>]]
       Check Docker, CLIs and pinned adapters. --live explicitly runs inert inference, bridge access and saved-session recovery checks.
-  audit pocs  (--repo <path> | --github <url>) [--pocs <dir>] [options]
-      Refuse Node/TypeScript PoCs on the host. Existing Rust checks run in the sandbox; command failures are errors, not reproduction evidence.
   audit verify [<report-dir>]    Validate and score model claims on an existing report directory
   audit report [<report-dir>]    Show findings and risk scores
   audit html   [<report-dir>]    Regenerate report.html and findings-by-model.html
@@ -197,7 +179,7 @@ Usage:
   audit connect-terminal --provider <claude|codex-native|grok-native|grok-docker> --model <requested-model> --socket <owner-only-path>
   audit grok-docker setup | login
 
-Options (run, pocs):
+Options (run):
   --ref <branch|tag|sha>   --github only: revision to check out (default: the default branch)
   --workdir <dir>          --github only: clone base directory (default: $AUDIT_TMP or /tmp/audit-targets)
   --clean                  --github only: delete the clone when the run ends (default: keep it)
@@ -213,8 +195,6 @@ Options (run):
                            precedence: --model-<vendor>, then --models, then --model, then the default
   --resume-from <report>   continue saved source-review sessions with matching workflow, source, reviewers, models and assignments
   --plan                   print the agent and model table and exit before the harness
-Options (pocs):
-  --pocs <dir>             directory with the PoC files (default: pocs)
 
 Surfaces:
   s1, auth     Identity & access control

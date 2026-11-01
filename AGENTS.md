@@ -66,7 +66,6 @@ The skill tells reviewers how to inspect a target. It does not authorize new too
 - Do not send a `near-sdk` crate through the Solana SBF compile.
 - Leads are regex hits. A hit is not a finding until a reviewer cites the control in source.
 - Existing-test output is evidence about that suite. A pass is not a safety certificate. A missing scanner or a skipped NEAR `cargo test` stays a coverage gap.
-- The legacy `pocs` command is outside `audit run`. Reviewers must not invoke it.
 
 ## Layout
 
@@ -83,7 +82,7 @@ The skill tells reviewers how to inspect a target. It does not authorize new too
 | `reports/` | Local run output. Gitignored. Do not commit it |
 | `runtime/node_modules/` | Installed adapters. Gitignored |
 
-`reports/` and `pocs/` (except `pocs/status.json`) are local. Do not clean someone else's report directory unless asked.
+`reports/` is local. Do not clean someone else's report directory unless asked.
 
 ## Tests and edits
 

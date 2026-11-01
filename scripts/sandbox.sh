@@ -13,8 +13,6 @@ LIB="$SCRIPT_DIR/sandbox-lib.mjs"
 TARGET=""
 OUT=""
 RPC=""
-POCS=""
-POCS_ONLY=0
 REVIEW_ONLY=0
 HOLD_FILE=""
 READY_FILE=""
@@ -25,7 +23,6 @@ while [[ $# -gt 0 ]]; do
     --target) TARGET="$2"; shift 2 ;;
     --out) OUT="$2"; shift 2 ;;
     --rpc) RPC="$2"; shift 2 ;;
-    --pocs) POCS="$2"; POCS_ONLY=1; shift 2 ;;
     --hold-file) HOLD_FILE="$2"; shift 2 ;;
     --ready-file) READY_FILE="$2"; shift 2 ;;
     *) echo "sandbox: unknown option $1" >&2; exit 2 ;;
@@ -34,9 +31,8 @@ done
 
 [ -n "$TARGET" ] && [ -d "$TARGET" ] || { echo "sandbox: --target <dir> is required" >&2; exit 2; }
 [ -n "$OUT" ] || { echo "sandbox: --out <dir> is required" >&2; exit 2; }
-[ -z "$POCS" ] || [ -d "$POCS" ] || { echo "sandbox: --pocs directory not found" >&2; exit 2; }
 
-[ "$REVIEW_ONLY" -eq 0 ] || { [ -z "$RPC" ] && [ "$POCS_ONLY" -eq 0 ]; } || { echo "source security review excludes RPC comparisons and PoCs" >&2; exit 2; }
+[ "$REVIEW_ONLY" -eq 0 ] || [ -z "$RPC" ] || { echo "source security review excludes RPC comparisons" >&2; exit 2; }
 
 OUT="$(cd "$OUT" && pwd -P)"
 HARNESS="$OUT/harness"
@@ -168,31 +164,29 @@ TOOLS_DIR=""
 
 # Host downloads the extra OSV databases. The seed is only the lockfiles.
 # The target container never gets a route to the OSV API.
-if [ "$POCS_ONLY" -eq 0 ]; then
-  mkdir -p "$RUN/osv-seed" "$OSV_CACHE"
-  SEEDED="$(node "$LIB" osv-seed "$RUN/plan.json" "$STAGE/src" "$RUN/osv-seed" 2>/dev/null || echo 0)"
-  if [ "${SEEDED:-0}" != "0" ]; then
-    docker run --rm --name "$OSVFETCH" \
-      --cap-drop ALL \
-      --security-opt no-new-privileges \
-      --pids-limit 128 \
-      --memory 1g \
-      -e XDG_CACHE_HOME=/cache \
-      -v "$OSV_CACHE":/cache \
-      -v "$RUN/osv-seed":/seed:ro \
-      --entrypoint osv-scanner \
-      audit-sandbox:local \
-      scan source --download-offline-databases --offline -r /seed \
-      >"$RUN/osv-prefetch.log" 2>&1 || true
-  fi
-  if [ -d "$OSV_CACHE/osv-scalibr" ]; then
-    for dir in "$OSV_CACHE/osv-scalibr"/*; do
-      [ -d "$dir" ] || continue
-      base="$(basename "$dir")"
-      case "$base" in crates.io|npm) continue ;; esac
-      OSV_MOUNTS+=(-v "$dir:/opt/osv-cache/osv-scalibr/$base:ro")
-    done
-  fi
+mkdir -p "$RUN/osv-seed" "$OSV_CACHE"
+SEEDED="$(node "$LIB" osv-seed "$RUN/plan.json" "$STAGE/src" "$RUN/osv-seed" 2>/dev/null || echo 0)"
+if [ "${SEEDED:-0}" != "0" ]; then
+  docker run --rm --name "$OSVFETCH" \
+    --cap-drop ALL \
+    --security-opt no-new-privileges \
+    --pids-limit 128 \
+    --memory 1g \
+    -e XDG_CACHE_HOME=/cache \
+    -v "$OSV_CACHE":/cache \
+    -v "$RUN/osv-seed":/seed:ro \
+    --entrypoint osv-scanner \
+    audit-sandbox:local \
+    scan source --download-offline-databases --offline -r /seed \
+    >"$RUN/osv-prefetch.log" 2>&1 || true
+fi
+if [ -d "$OSV_CACHE/osv-scalibr" ]; then
+  for dir in "$OSV_CACHE/osv-scalibr"/*; do
+    [ -d "$dir" ] || continue
+    base="$(basename "$dir")"
+    case "$base" in crates.io|npm) continue ;; esac
+    OSV_MOUNTS+=(-v "$dir:/opt/osv-cache/osv-scalibr/$base:ro")
+  done
 fi
 
 # Platform-tools are fetched by the Solana Foundation image on the host
@@ -237,7 +231,7 @@ prefetch_tools() {
   return 1
 }
 
-if [ "$POCS_ONLY" -eq 0 ] && [ "$REVIEW_ONLY" -eq 0 ]; then
+if [ "$REVIEW_ONLY" -eq 0 ]; then
   SOLANA_EARLY="$(node "$LIB" solana "$RUN/plan.json" 2>/dev/null || true)"
   if [ -n "$SOLANA_EARLY" ]; then
     TOOLS_DIR="$(prefetch_tools "${SOLANA_EARLY%%$'\t'*}" || true)"
@@ -280,7 +274,7 @@ export no_proxy="$NO_PROXY"
 export GIT_TERMINAL_PROMPT=0
 
 ZAP_PENDING=0
-if [ "$POCS_ONLY" -eq 0 ] && [ "$REVIEW_ONLY" -eq 0 ] && node -e 'const r=JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8")); process.exit(r.some(c=>c.id==="zap"&&c.result==="pending")?0:1)' "$RUN/assess.json"; then
+if [ "$REVIEW_ONLY" -eq 0 ] && node -e 'const r=JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8")); process.exit(r.some(c=>c.id==="zap"&&c.result==="pending")?0:1)' "$RUN/assess.json"; then
   ZAP_PENDING=1
   docker pull ghcr.io/zaproxy/zaproxy:stable >"$RUN/zap-pull.log" 2>&1 &
   ZAP_PULL=$!
@@ -325,7 +319,6 @@ if ! docker run -d --name "$SBX" \
   ${TOOLS_DIR:+-e SOLANA_PLATFORM_TOOLS_DIR=/opt/platform-tools} \
   -e SANDBOX_OUT=/out \
   -e SANDBOX_BUDGET_MS="$BUDGET_MS" \
-  -e SANDBOX_POCS="$POCS_ONLY" \
   -e SANDBOX_REVIEW_ONLY="$REVIEW_ONLY" \
   -e SANDBOX_HOLD="${HOLD_FILE:+1}" \
   -e SANDBOX_FAST="${SANDBOX_FAST:-0}" \
@@ -349,7 +342,6 @@ if ! docker run -d --name "$SBX" \
   -v "$SCRIPT_DIR/cargo-manifest.mjs:/opt/audit/cargo-manifest.mjs:ro" \
   ${OSV_MOUNTS[@]+"${OSV_MOUNTS[@]}"} \
   ${TOOLS_DIR:+-v "$TOOLS_DIR/.cache/solana:/opt/platform-tools:ro"} \
-  ${POCS:+-v "$POCS:/pocs:ro"} \
   audit-sandbox:local \
   node /opt/audit/sandbox-inside.mjs >"$RUN/container.id" 2>"$RUN/container.log"; then
   note_blocked "The sandbox container did not start. See harness/sandbox-run/container.log."
@@ -405,7 +397,7 @@ elif [ "$ZAP_PENDING" -eq 1 ] && [ "$SEEN" -eq 0 ]; then
 fi
 
 SOLANA_LINE=""
-if [ "$POCS_ONLY" -eq 0 ] && [ "$REVIEW_ONLY" -eq 0 ] && [ "${SANDBOX_FAST:-0}" != "1" ]; then
+if [ "$REVIEW_ONLY" -eq 0 ] && [ "${SANDBOX_FAST:-0}" != "1" ]; then
   SOLANA_LINE="$(node "$LIB" solana "$RUN/plan.json" 2>/dev/null || true)"
 fi
 if [ -n "$SOLANA_LINE" ]; then
@@ -473,7 +465,7 @@ if [ -n "$SOLANA_LINE" ]; then
 fi
 
 # The host sends this request. The URL is the one the user passed. The container never sees it.
-if [ -n "$RPC" ] && [ "$POCS_ONLY" -eq 0 ]; then
+if [ -n "$RPC" ]; then
   if RPC_URL="$(node "$LIB" rpc "$RPC" 2>/dev/null)"; then
     if node "$LIB" compare "$RPC_URL" "$STAGE/src" "$RUN/sbf-out" >"$RUN/deployed.json" 2>"$RUN/deployed.err"; then
       CMP="$(node -e 'const o=JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8")); process.stdout.write(o.result+"\n"+o.detail)' "$RUN/deployed.json")"

@@ -348,19 +348,16 @@ test('both skill copies stay identical and describe incomplete reviews', () => {
   assert.ok(evals.evals.every((e) => e.prompt.includes('do not run commands')));
 });
 
-test('host PoC refusal executes no Node or TypeScript file', (t) => {
-  const f = fixture(t);
-  const pocs = path.join(f.dir, 'pocs');
-  fs.mkdirSync(pocs);
-  fs.writeFileSync(path.join(pocs, 'ordinary.test.mjs'), '// inert fixture\n');
-  fs.writeFileSync(path.join(pocs, 'ordinary.spec.ts'), '// inert fixture\n');
-  const r = spawnSync('bash', [path.join(scripts, 'run-pocs.sh'), '--target', f.dir, '--pocs', pocs], { encoding: 'utf8', timeout: 5000 });
-  assert.equal(r.status, 2);
-  assert.match(r.stdout, /BLOCKED: Node/);
-  assert.match(r.stdout, /BLOCKED: TypeScript/);
-  assert.doesNotMatch(r.stdout, /REPRODUCED/);
-  const source = fs.readFileSync(path.join(scripts, 'run-pocs.sh'), 'utf8');
-  assert.doesNotMatch(source, /&& node --test|npx --no-install/);
+test('legacy PoC entry points are unavailable', () => {
+  for (const command of ['pocs', 'test']) {
+    const result = spawnSync('bash', [path.join(root, 'bin/audit'), command], { encoding: 'utf8' });
+    assert.notEqual(result.status, 0);
+  }
+  const help = spawnSync('bash', [path.join(root, 'bin/audit'), 'help'], { encoding: 'utf8' });
+  assert.doesNotMatch(help.stdout, /audit pocs|--pocs/);
+  const sandbox = spawnSync('bash', [path.join(scripts, 'sandbox.sh'), '--pocs', root], { encoding: 'utf8' });
+  assert.notEqual(sandbox.status, 0);
+  assert.match(sandbox.stderr, /unknown/);
 });
 
 test('host launchers do not supply permission-bypass flags', () => {

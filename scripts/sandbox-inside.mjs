@@ -455,62 +455,6 @@ async function maybeServe(tree) {
   try { process.kill(-child.pid, 'SIGTERM'); } catch { child.kill('SIGTERM'); }
 }
 
-function listRs(dir, depth = 0, out = []) {
-  if (depth > 4 || out.length >= 8) return out;
-  let ents = [];
-  try { ents = fs.readdirSync(dir, { withFileTypes: true }); } catch { return out; }
-  for (const ent of ents) {
-    if (ent.isSymbolicLink()) continue;
-    const p = path.join(dir, ent.name);
-    if (ent.isDirectory()) listRs(p, depth + 1, out);
-    else if (ent.isFile() && ent.name.endsWith('.rs')) out.push(p);
-  }
-  return out;
-}
-
-function packageDir() {
-  const candidates = ['/work/src'];
-  try {
-    for (const ent of fs.readdirSync('/work/src', { withFileTypes: true })) {
-      if (ent.isDirectory() && !ent.isSymbolicLink()) candidates.push(path.join('/work/src', ent.name));
-    }
-  } catch { /* the copy failed */ }
-  for (const dir of candidates) {
-    try {
-      const text = fs.readFileSync(path.join(dir, 'Cargo.toml'), 'utf8');
-      if (/^\[package\]/m.test(text) && fs.existsSync(path.join(dir, 'Cargo.lock'))) return dir;
-    } catch { /* not a package */ }
-  }
-  return null;
-}
-
-async function runPocs() {
-  const pkg = packageDir();
-  const files = listRs('/pocs');
-  if (!pkg) {
-    put('cargo-test', 'impossible', 'No Cargo package with a Cargo.lock, so the Rust PoCs were not fetched or run.');
-    return;
-  }
-  if (!files.length) {
-    put('cargo-test', 'impossible', 'No .rs PoC files.');
-    return;
-  }
-  for (const file of files) {
-    const text = fs.readFileSync(file, 'utf8');
-    const base = path.basename(file, '.rs').replace(/[^A-Za-z0-9_]/g, '_').slice(0, 40) || 'poc';
-    const name = `audit_${base}`;
-    if (!text.includes('#[test]')) {
-      put(`poc:${path.basename(file)}`, 'impossible', 'The file has no #[test], so it was not executed.');
-      continue;
-    }
-    fs.mkdirSync(path.join(pkg, 'tests'), { recursive: true });
-    fs.copyFileSync(file, path.join(pkg, 'tests', `${name}.rs`));
-    const res = await run('cargo', ['test', '--locked', '--test', name], { cwd: pkg, timeoutMs: 10 * 60 * 1000, env: CARGO_ENV });
-    log('cargo-test', res);
-    put(`poc:${path.basename(file)}`, res.code === 0 ? 'ran' : 'failed', brief(res));
-  }
-}
-
 // A Python project (dependency manifest in the directory or an ancestor) that has pytest-style tests.
 function hasPythonTests(root) {
   let tests = false, projects = false;
@@ -546,12 +490,6 @@ async function main() {
     process.env.CARGO_TARGET_DIR = '/work/target';
     process.env.CARGO_HOME = '/work/cargo';
     process.env.CARGO_NET_OFFLINE = 'true';
-  }
-  if (reviewOnly && process.env.SANDBOX_POCS === '1') throw new Error('Source review excludes PoCs');
-  if (process.env.SANDBOX_POCS === '1') {
-    await runPocs();
-    save('rust pocs');
-    return;
   }
   const tree = plan('/work/src');
   if (reviewOnly && tree.cargoLocks.items.length && process.env.SANDBOX_FAST !== '1') {
@@ -627,7 +565,6 @@ async function main() {
   publish('checks.done', { ready: true, timestamp: new Date().toISOString() });
   if (process.env.SANDBOX_HOLD === '1') {
     fs.mkdirSync(path.join(outDir, 'auditors'), { recursive: true });
-    fs.mkdirSync(path.join(outDir, 'pocs'), { recursive: true });
     fs.mkdirSync(path.join(outDir, 'crosscheck'), { recursive: true });
     // The preparation budget ends at checks.done; reviewers have no deadline.
     while (!fs.existsSync(path.join(outDir, 'sandbox.release'))) {
