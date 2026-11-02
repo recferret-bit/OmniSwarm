@@ -101,6 +101,7 @@ export function resolveRunConfig({ flags = {}, root = ROOT, explicitConfig = fla
   };
   if (!Number.isInteger(merged.passes) || merged.passes < 1 || merged.passes > 5) throw new ConfigError('passes must be 1–5');
   if (!Number.isInteger(merged.toolBudget) || merged.toolBudget < 5 || merged.toolBudget > 200) throw new ConfigError('tool budget must be 5–200');
+  if (merged.debate?.rounds > 3) throw new ConfigError('debate_rounds_max_3');
   const check = validate('run-config', merged);
   if (!check.ok) throw new ConfigError(`invalid run configuration: ${check.errors[0]}`);
 
