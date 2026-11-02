@@ -23,7 +23,7 @@
 |---|---|---|---|
 | 01 | defi | Unstoppable DeFi | no |
 | 02 | thesis | Investment Thesis | no |
-| 03 | privacy | Privacy & Private AI | later (NEAR AI Cloud TEE reviewer, OD-15) |
+| 03 | privacy | Privacy & Private AI | **stretch (`H+`, OD-15 owner-confirmed):** one `nearai:` TEE reviewer with an attestation "Verified" panel (W03-22, W07-22, W14-25); enter only if the checks are green by D12 |
 | 04 | business | Autonomous Business | optional add-on (paid service: caps, ledger, kill switch) |
 | 05 | swarms | AI Swarms | partial (OD-02) |
 | **06** | **security** | **AI Security & Defense** | **primary** |

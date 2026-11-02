@@ -6,10 +6,10 @@
 > | Set | Issues | Units |
 > |---|---|---|
 > | **H** must | 274 | **191.5** |
-> | H+ stretch | 29 | 17.0 |
-> | Total planned | 303 | 208.5 |
+> | H+ stretch | 32 | 19.0 |
+> | Total planned | 306 | 210.5 |
 >
-> Per wave (H units): W00 11.5 · W01 14.5 · W02 9.5 · W03 11.5 · W04 10.5 · W05 8.0 · W06 19.0 · W07 13.5 · W08 16.5 · W09 13.0 · W10 10.5 · W11 16.0 · W12 13.0 · W13 11.5 · W14 13.0.
+> Per wave (H units): W00 11.5 · W01 14.5 · W02 9.5 · W03 11.5 (+1.0 H+ W03-22) · W04 10.5 · W05 8.0 · W06 19.0 · W07 13.5 · W08 16.5 · W09 13.0 · W10 10.5 · W11 16.0 · W12 13.0 · W13 11.5 · W14 13.0.
 
 ## 1. Pace check (read this first)
 
@@ -22,7 +22,7 @@
 ## 2. What ships (the demo judges see)
 
 1. `git clone && ./bin/audit demo` — no keys, no Docker needed for the bundled fixture (OD-10): 4 scripted reviewers, per-model reports, two debate rounds, a judge, the general review, report v2 in the browser.
-2. A local mixed run by the owner on a real repo: `--preset local-subscriptions` (claude, codex, grok, agy CLIs) **+** `key:zai:glm-5.3` **+** `openrouter:qwen/qwen3.8-max`, each with exactly 2 passes × 40 tool calls, per-model reports under `reviewers/`, cross-check, debate, general review.
+2. A local mixed run by the owner on a real repo: `--preset local-subscriptions` (claude, codex, grok, agy CLIs) **+** `key:zai:glm-5.3` **+** `openrouter:qwen/qwen3.8-max-0902`, each with exactly 2 passes × 40 tool calls, per-model reports under `reviewers/`, cross-check, debate, general review.
 3. The hosted testnet flow at `https://<domain>`: connect NEAR wallet → paste a GitHub URL → sign (NEP-413) → pay 1 testnet NEAR to `review-registry` → watch reviewers/passes/rounds live → open the report → attestation on the explorer.
 4. Track 06: `GET /api/guard/verdict` + `@omniswarm/guard` + the prompt-injection attack log + the function-call key explanation.
 5. Evidence: the golden-eval table (debate vs union vs majority vote), the dogfood report of `review-registry` (its in-sandbox `cargo test` shows as a coverage gap by design; W10's host-side `npm run test:contract` result is cited next to it), the baseline diff link.
@@ -38,7 +38,7 @@
 | D6 | 11-06 | W08 lands → open **W09**; W10 testnet deploy (owner signs) | `wave-08`: signed request accepted on the mock chain |
 | D7 | 11-07 | W02, W05 land; W03 lands late D7 → open **W04**, **W06**, **W07**; W10 lands → open **W13** | GLM + Qwen + scripted run end-to-end |
 | D8 | 11-08 | W06 debate core; W07 sections on fixtures; W09 worker + publish; W12 stack up with TLS | — |
-| D9 | 11-09 | W04 lands; W09 lands; W11 switches to the real API; owner picks OD-04's third model | Hosted cost per run measured (W12) |
+| D9 | 11-09 | W04 lands; W09 lands; W11 switches to the real API | Hosted cost per run measured (W12) |
 | **D10** | **11-10** | **GATE** (§3a) | gate passes or drop order |
 | D11 | 11-11 | W06 adjudication + general review + golden eval (live eval needs owner keys); W13 attack demo | — |
 | D12 | 11-12 | W06, W07, W13 land; **W14** opens; dogfood run | `wave-06`, `wave-07`, `wave-13` |
@@ -50,7 +50,7 @@
 
 - [ ] Hosted testnet: login → sign → pay → queue → a review with the **scripted** preset → report published → `attest` tx visible on the explorer, in < 10 min.
 - [ ] Same flow with the **hosted** preset on a small public repo completes, cost recorded in `usage.json`.
-- [ ] Local: `--reviewers cli:claude:opus,key:zai:glm-5.3,openrouter:qwen/qwen3.8-max --passes 2 --tool-budget 40` produces three `reviewers/<id>/` reports with `usage.json` showing exactly 2 passes each.
+- [ ] Local: `--reviewers cli:claude:opus,key:zai:glm-5.3,openrouter:qwen/qwen3.8-max-0902 --passes 2 --tool-budget 40` produces three `reviewers/<id>/` reports with `usage.json` showing exactly 2 passes each.
 - [ ] Debate round 1 + 2 run on scripted reviewers in CI; citation checker discards a planted fake citation.
 - [ ] R-01, R-02, R-04 regression tests green.
 
@@ -73,7 +73,7 @@ Runners: Claude Code sub-agents in worktrees for engine and intake; codex / grok
 
 > **OD-17** (recommended): pre-demote steps 1–3 to `H+` on D3, before the D4 calibration, for about one day of buffer.
 
-1. All `H+` rows (17 units).
+1. All `H+` rows (19 units, including the NEAR AI Cloud TEE reviewer W03-22 / W07-22 / W14-25 and the Agent Market listing W14-21).
 2. W02 medium/low rows except R-01, R-02, R-04, R-09 (keep the security-track story honest).
 3. W07: PDF pages and the accessibility pass; keep sections 05/06 and per-reviewer pages.
 4. W06: live golden eval → offline scripted eval only, README says "live eval pending"; OD-14 defaults to `--debate-rounds 1`.
@@ -90,13 +90,13 @@ Never dropped: W00, the W01 registry, the W03 families (cli/key/openrouter/scrip
 | By | Task |
 |---|---|
 | D3 | Accept or change OD-01..OD-16 (`docs/spec/DECISIONS.md`); run the baseline tag command from W00-14 (`git tag pre-hackathon 94551b9 && git push origin pre-hackathon`) |
-| D4 | Provide the remote host (OD-13), a domain + DNS for `<domain>`, `api.<domain>`, `reports.<domain>` |
+| **D3–D4** | **Provision the remote host (OD-13: none yet)** — a Docker VM, ≥ 8 vCPU / 32 GB / 200 GB — and a domain with DNS for `<domain>` and `reports.<domain>` (`api.` is served under `<domain>/api`). No domain by D6 → W12-19 fallback (free subdomain) |
 | D4 | Keys in the host's `/etc/omniswarm/providers.env`: `ZAI_API_KEY` (pay-as-you-go, not the Coding Plan), `OPENROUTER_API_KEY`, optional `ANTHROPIC_API_KEY`; a GitHub token (public read) |
 | D6 | Create and fund `review-registry.<you>.testnet` and the operator key; run W10's deploy script |
-| D9 | Pick OD-04's third hosted model |
+| D4 | Provider keys for the `hosted` preset (OD-04): Z.ai pay-as-you-go, OpenRouter (set a monthly spend limit; opus, gpt-6.1-sol, grok-4.7, gemini-4-argon, qwen3.8-max-0902 all go through it); optional `NEARAI_API_KEY` credits for W03-22 (cloud.near.ai) |
 | D11 | Run the live golden eval with your local subscriptions (`OMNI_LIVE=1 npm run eval:golden`) |
 | D13 | Record the video from W14's storyboard; create the **mainnet** payout account |
-| D14 | Make the repo public, tag `hackathon-submission`, post on X (@NEARProtocol, #NEARHackathon, video), submit the form (tracks per OD-01) by 20:00 UTC |
+| D14 | Make the repo public, tag `hackathon-submission`, post on X (@NEARProtocol, #NEARHackathon, video), submit the form (tracks per OD-01: `security`, `agents`, `open`; `privacy` only if W14-25 is green) by 20:00 UTC |
 
 ## 7. Risks
 
@@ -104,7 +104,7 @@ Never dropped: W00, the W01 registry, the W03 families (cli/key/openrouter/scrip
 |---|---|---|
 | Pace below 2 units/agent/day | Critical path slips past D14 | Calibration on D4; drop order; W06 challenge-only fallback |
 | Provider ToS for a paid service on personal subscriptions | Account suspension | OD-04: hosted preset uses API keys only |
-| Hosted review cost exceeds the testnet price | Demo burns money | `--max-cost-usd`, round-robin assignment, measured on D9; allow-list mode for judges' repos |
+| Hosted review cost exceeds the testnet price (six API reviewers incl. Opus at $4/$20 per M tokens; cap 25 USD/run until W12-18 measures) | Demo burns money | `--max-cost-usd`, round-robin assignment, measured on D9; allow-list mode for judges' repos |
 | Screener has no Docker | README fails reproducibility | OD-10 no-Docker demo on bundled fixtures |
 | Debate does not beat majority vote | Weak claim | OD-14: ship what the eval supports and say so |
 | Target code tampering (R-01/R-02/R-04) found by a judge | Security-track credibility | W02 lands before any hosted run (D7) |

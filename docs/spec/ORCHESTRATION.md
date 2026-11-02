@@ -31,15 +31,17 @@ A **reviewer** is one model in one family. Its spec string:
 |---|---|---|---|---|---|
 | `cli` | 1 — local vendor subscriptions | `claude`, `codex`, `grok`, `agy`, `claude-zai` | existing ACP / native sessions (`agent-session.mjs`) | the CLI's own login; `claude-zai` maps `ZAI_API_KEY` (Coding Plan) to `ANTHROPIC_AUTH_TOKEN` + `ANTHROPIC_BASE_URL=https://api.z.ai/api/anthropic` | `cli:claude:opus`, `cli:claude-zai:glm-5.3` |
 | `key` | 2 — direct API keys | `zai`, `anthropic`, `openai`, `xai`, `google` | OmniSwarm tool loop (`provider-openai-compat.mjs`, `provider-anthropic.mjs`) wrapped as an ACP agent (`api-acp-agent.mjs`) | `ZAI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `XAI_API_KEY`, `GEMINI_API_KEY` | `key:zai:glm-5.3` |
-| `openrouter` | 3 — OpenRouter | any OpenRouter slug | same tool loop, base `https://openrouter.ai/api/v1` | `OPENROUTER_API_KEY` | `openrouter:qwen/qwen3.8-max` |
+| `openrouter` | 3 — OpenRouter | any OpenRouter slug | same tool loop, base `https://openrouter.ai/api/v1` | `OPENROUTER_API_KEY` | `openrouter:qwen/qwen3.8-max-0902` |
+| `nearai` (`H+`, OD-15) | NEAR AI Cloud TEE models | `nearai` | same tool loop, base `https://cloud-api.near.ai/v1`, plus attestation check with a fresh nonce | `NEARAI_API_KEY` | `nearai:<tee-model>` |
 | `scripted` | demo / simulation, no LLM | `baseline`, `paranoid`, `lazy`, `wrong` (fixture strategies) | in-process scripted agent | none | `scripted:baseline` |
 
 - **Reviewer id** = slug of the spec (`key-zai-glm-5-3`, `openrouter-qwen-qwen3-8-max`), unique per run; `#label` overrides it. Slashes are allowed in the model part and never reach a path (fixes R-17a).
 - **Vendor** is derived (`anthropic`, `openai`, `xai`, `google`, `zai`, `alibaba`, `scripted`). Peer filtering and judge-conflict rules use the **vendor**, so `cli:claude:opus` and `openrouter:anthropic/claude-opus-5.5` count as the same vendor (fixes R-17c).
 - **Combining approaches:** any mix in one run, e.g. the owner's default local preset:
-  `--reviewers cli:claude:opus,cli:codex:gpt-6.1-sol,cli:grok:grok-4.7,cli:agy:gemini-4-argon-high,openrouter:qwen/qwen3.8-max,key:zai:glm-5.3`
+  `--reviewers cli:claude:opus,cli:codex:gpt-6.1-sol,cli:grok:grok-4.7,cli:agy:gemini-4-argon-high,openrouter:qwen/qwen3.8-max-0902,key:zai:glm-5.3`
+- **Hosted preset (OD-04, owner-confirmed):** `key:zai:glm-5.3`, `openrouter:qwen/qwen3.8-max-0902`, `openrouter:anthropic/claude-opus-5.5`, `openrouter:openai/gpt-6.1-sol`, `openrouter:x-ai/grok-4.7`, `openrouter:google/gemini-4-argon`; orchestrator `openrouter:anthropic/claude-opus-5.5`, alternate judge `openrouter:openai/gpt-6.1-sol`; `--assign round-robin --passes 2 --tool-budget 30 --max-cost-usd 25`.
 - **Config file:** `omniswarm.config.json` (or `--config path`) holds `reviewers`, `orchestrator`, `passes`, `toolBudget`, `debate`, `presets`; flags override it. Schema: `shared/schemas/run-config.schema.json`. Presets: `local-subscriptions`, `api-only`, `mixed`, `hosted` (OD-04), `demo` (all `scripted`).
-- **Defaults** (verified 2026-11-02, keep in config, not code): Claude `opus`, Codex `gpt-6.1-sol`, Grok `grok-4.7`, AGY `gemini-4-argon-high`, Z.ai `glm-5.3` (thinking always on; `reasoning_effort: high`), OpenRouter Qwen `qwen/qwen3.8-max` (alt `qwen/qwen3-coder-next`).
+- **Defaults** (verified 2026-11-02, keep in config, not code): Claude `opus`, Codex `gpt-6.1-sol`, Grok `grok-4.7`, AGY `gemini-4-argon-high`, Z.ai `glm-5.3` (thinking always on; `reasoning_effort: high`), OpenRouter Qwen `qwen/qwen3.8-max-0902` (alt `qwen/qwen3-coder-next`).
 - **Assignment:** `--assign matrix` (default when reviewers ≤ 8): every reviewer reviews every selected surface, so each per-model report covers the whole repo. `--assign round-robin` keeps today's behaviour for cost control (fixes R-17d).
 
 ### 1.1 Key policy (changes a documented rule)

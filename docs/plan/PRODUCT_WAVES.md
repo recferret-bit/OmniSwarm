@@ -39,7 +39,7 @@
 | **W00** | Foundation | Spine | Layout, schemas, AGENTS/CLAUDE amendment, baseline tags, CI green, the engine test suite self-contained (257/258 → all green without `runtime/`) | — |
 | **W01** | Reviewer Registry | Engine | `./bin/audit run --reviewers cli:claude:opus,cli:codex:gpt-6.1-sol,cli:grok:grok-4.7,cli:agy:gemini-4-argon-high --plan` prints a reviewer × surface matrix; reviewer ids replace the 4 hard-coded adapter names in ~15 places; mid-run crash no longer yields a "finalized" report | W00 |
 | **W02** | Sandbox Hardening | Engine | Target tests can no longer replace the bridge's `node`, rewrite the tree reviewers read, or write host control files; each fix has a regression fixture | W01 |
-| **W03** | API Reviewers | Engine | `--reviewers key:zai:glm-5.3,openrouter:qwen/qwen3.8-max,scripted:baseline` runs GLM and Qwen through OmniSwarm's own tool loop against the same MCP bridge; `cli:claude-zai:glm-5.3` runs GLM through Claude Code; `scripted:*` runs with no LLM | W01 |
+| **W03** | API Reviewers | Engine | `--reviewers key:zai:glm-5.3,openrouter:qwen/qwen3.8-max-0902,scripted:baseline` runs GLM and Qwen through OmniSwarm's own tool loop against the same MCP bridge; `cli:claude-zai:glm-5.3` runs GLM through Claude Code; `scripted:*` runs with no LLM | W01 |
 | **W04** | Iteration Budget & Passes | Engine | `--passes 2 --tool-budget 40`: every reviewer, of every family, runs exactly 2 passes, each capped at 40 bridge tool calls, then is forced to submit; `usage.json` shows calls, tokens, cost and stop reason | W02, W03 |
 | **W05** | Per-Reviewer Reports | Engine | After a run, `reports/<run>/reviewers/<reviewer-id>/report.{json,md,html}` exists for each model, grouped by family and vendor, and `reviewers/index.json` lists them | W01 |
 | **W06** | Orchestrator & Debate | Engine | `--orchestrator recommended` (or a spec) clusters findings, runs anonymized challenge/defend rounds with citation checks, adjudicates with a cross-family judge and writes `general-review.{json,md}`; golden eval shows it against union and majority-vote baselines | W02, W03, W05 |
@@ -70,7 +70,7 @@ flowchart LR
 
 **Spine:** W00 → W01. After W01 the engine splits into W02 ‖ W03 ‖ W05; the service tracks (W08, W10, W11, W12) start right after W00 and do not wait for the engine.
 
-**Critical path:** W00 (3.0 units) → W01 (5.5) → W03 (5.5) → W06 (6.5) → W14 (3.0) = **23.5 units** of chained issues; it fits D2 → D14 only at ≥ 2 units per agent per day ([`HACKATHON_CUT.md`](./HACKATHON_CUT.md) §1 has the pace check and calibration). The hosted path W00 (3.0) → W08 (9.0) → W09 (6.0) → D10 gate = 18 units runs beside it. Totals: 303 issues, **H = 191.5 units**, H+ = 17.
+**Critical path:** W00 (3.0 units) → W01 (5.5) → W03 (5.5) → W06 (6.5) → W14 (3.0) = **23.5 units** of chained issues; it fits D2 → D14 only at ≥ 2 units per agent per day ([`HACKATHON_CUT.md`](./HACKATHON_CUT.md) §1 has the pace check and calibration). The hosted path W00 (3.0) → W08 (9.0) → W09 (6.0) → D10 gate = 18 units runs beside it. Totals: 306 issues, **H = 191.5 units**, H+ = 19.
 
 **Soft dependencies** (a hook that lights up when the other wave lands, with a stub until then):
 - W07 renders debate and general-review sections from `shared/schemas/` fixtures until W06 lands; W06's e2e re-renders through W07.
@@ -117,7 +117,7 @@ Every wave file has: header (track, tag, check command, depends on, owned paths,
 
 ## 6. Hackathon
 
-The cut, the calendar, the D10 gate and the drop order are in [`HACKATHON_CUT.md`](./HACKATHON_CUT.md). Track choice is in [`../hackathon/TRACKS.md`](../hackathon/TRACKS.md): **06 `security`** (primary), **07 `agents`**, **13 `open`**, with **05 `swarms`** only if W10's per-reviewer sub-accounts land (OD-02).
+The cut, the calendar, the D10 gate and the drop order are in [`HACKATHON_CUT.md`](./HACKATHON_CUT.md). Track choice is in [`../hackathon/TRACKS.md`](../hackathon/TRACKS.md): **06 `security`** (primary), **07 `agents`**, **13 `open`** (owner-confirmed, OD-01), with **03 `privacy`** as a stretch if the NEAR AI Cloud TEE reviewer's attestation check is green (OD-15) and **05 `swarms`** only if W10's per-reviewer sub-accounts land (OD-02).
 
 ## 7. Wave development pipeline
 
