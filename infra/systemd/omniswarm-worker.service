@@ -1,0 +1,16 @@
+[Unit]
+Description=OmniSwarm review worker
+After=docker.service omniswarm-api.service
+
+[Service]
+Type=simple
+User=omniswarm
+WorkingDirectory=/srv/omniswarm/current
+Environment=DATABASE_URL=postgres://omniswarm@127.0.0.1:5432/omniswarm
+Environment=WORKER_CONCURRENCY=1
+ExecStart=/usr/bin/node backend/intake/src/server.ts
+Restart=on-failure
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

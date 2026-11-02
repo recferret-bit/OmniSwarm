@@ -1,0 +1,15 @@
+[Unit]
+Description=OmniSwarm intake API
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+User=omniswarm
+WorkingDirectory=/srv/omniswarm/current
+ExecStart=/usr/bin/node backend/intake/src/server.ts
+Restart=on-failure
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
