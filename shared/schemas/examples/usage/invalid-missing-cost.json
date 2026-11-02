@@ -1,0 +1,13 @@
+{
+  "passes": [
+    {
+      "k": 1,
+      "calls": 31,
+      "tokensIn": 120000,
+      "tokensOut": 8000,
+      "stop": "submitted",
+      "startedAt": "2026-11-05T12:00:00Z",
+      "endedAt": "2026-11-05T12:04:10Z"
+    }
+  ]
+}

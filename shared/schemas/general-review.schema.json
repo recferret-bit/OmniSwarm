@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://omniswarm.dev/schemas/general-review.schema.json",
+  "title": "general-review",
+  "description": "general-review.json written by the orchestrator. riskPosture never says secure; the disclaimer is a fixed sentence. ORCHESTRATION section 4.4.",
+  "type": "object",
+  "required": ["executiveSummary", "riskPosture", "topFindings", "coverage", "openDisagreements", "contributions", "methodology", "disclaimer"],
+  "additionalProperties": false,
+  "properties": {
+    "executiveSummary": { "type": "string", "minLength": 1 },
+    "riskPosture": { "enum": ["critical-exposure", "high-risk", "moderate", "low-observed"] },
+    "topFindings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["clusterId", "title", "severity", "finalStatus"],
+        "additionalProperties": false,
+        "properties": {
+          "clusterId": { "type": "string", "minLength": 1 },
+          "title": { "type": "string", "minLength": 1 },
+          "severity": { "enum": ["critical", "high", "medium", "low", "info"] },
+          "finalStatus": { "enum": ["CONFIRMED", "LIKELY", "DISPUTED", "REFUTED", "INSUFFICIENT_EVIDENCE"] },
+          "location": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "coverage": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["surface", "covered", "gaps"],
+        "additionalProperties": false,
+        "properties": {
+          "surface": { "type": "string", "pattern": "^S[1-6]$" },
+          "covered": { "type": "boolean" },
+          "gaps": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "openDisagreements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["clusterId", "summary"],
+        "additionalProperties": false,
+        "properties": {
+          "clusterId": { "type": "string", "minLength": 1 },
+          "summary": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "contributions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["reviewerId", "uniqueConfirmed", "refuted", "toolCalls", "costUsd"],
+        "additionalProperties": false,
+        "properties": {
+          "reviewerId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,80}$" },
+          "uniqueConfirmed": { "type": "integer", "minimum": 0 },
+          "refuted": { "type": "integer", "minimum": 0 },
+          "toolCalls": { "type": "integer", "minimum": 0 },
+          "costUsd": { "type": "number", "minimum": 0 }
+        }
+      }
+    },
+    "methodology": {
+      "type": "object",
+      "required": ["reviewers", "orchestrator", "passes", "toolBudget", "debateRounds"],
+      "additionalProperties": false,
+      "properties": {
+        "reviewers": { "type": "array", "items": { "type": "string" } },
+        "orchestrator": { "type": "string", "minLength": 1 },
+        "passes": { "type": "integer", "minimum": 1 },
+        "toolBudget": { "type": "integer", "minimum": 1 },
+        "debateRounds": { "type": "integer", "minimum": 0, "maximum": 3 },
+        "judgeAssignment": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "disclaimer": { "const": "Model agreement and passing checks do not certify security." }
+  }
+}

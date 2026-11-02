@@ -1,0 +1,39 @@
+{
+  "reviewer": {
+    "id": "cli-claude-opus",
+    "family": "cli",
+    "provider": "claude",
+    "vendor": "anthropic",
+    "model": "opus"
+  },
+  "surfaces": [
+    "S1"
+  ],
+  "findings": [
+    {
+      "title": "Unchecked vault authority",
+      "surface": "S1",
+      "severity": "high",
+      "confidence": "probable",
+      "location": [
+        "/etc/passwd"
+      ],
+      "impact": "Any signer can withdraw.",
+      "preconditions": "",
+      "analysis": "The vault field uses UncheckedAccount without constraints at src/lib.rs:4.",
+      "validation": "Read the accounts struct; no has_one or address constraint.",
+      "attack": [],
+      "poc": "",
+      "fix": "Add has_one = authority to the Vault account constraint."
+    }
+  ],
+  "verified_safe": [
+    {
+      "control": "Signer check on withdraw",
+      "how_attacked": "Called withdraw without the authority signature.",
+      "holds": true,
+      "evidence": "src/lib.rs:21 requires Signer<'info>",
+      "provenance": "model_assertion"
+    }
+  ]
+}

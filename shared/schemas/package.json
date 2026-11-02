@@ -1,0 +1,14 @@
+{
+  "name": "@omniswarm/schemas",
+  "version": "0.1.0",
+  "description": "JSON Schemas (draft 2020-12 subset) and a dependency-free validator for the OmniSwarm cross-track contract",
+  "type": "module",
+  "private": true,
+  "main": "index.mjs",
+  "exports": {
+    ".": "./index.mjs",
+    "./canonical-message": "./canonical-message.mjs",
+    "./*.schema.json": "./*.schema.json"
+  },
+  "license": "MIT"
+}

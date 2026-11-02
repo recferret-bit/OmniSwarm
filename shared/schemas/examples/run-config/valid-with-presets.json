@@ -1,0 +1,7 @@
+{
+  "reviewers": ["cli:claude:opus"],
+  "presets": {
+    "demo": { "reviewers": ["scripted:baseline"], "orchestrator": "scripted:judge", "passes": 1 },
+    "hosted": { "reviewers": ["key:zai:glm-5.3", "openrouter:qwen/qwen3.8-max-0902"], "assign": "round-robin", "maxCostUsd": 25 }
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "ok": true,
+  "network": "testnet",
+  "queueDepth": 0,
+  "workers": 1
+}

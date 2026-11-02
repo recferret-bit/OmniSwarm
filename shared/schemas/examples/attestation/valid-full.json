@@ -1,0 +1,8 @@
+{
+  "requestHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "reportSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "reportUri": "https://reports.example.org/3f2b8c1e/index.json",
+  "deployed": "vault.alice.testnet",
+  "codeHash": "9mZ3dQe1",
+  "maxSeverity": "high"
+}

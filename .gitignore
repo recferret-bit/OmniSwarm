@@ -15,3 +15,9 @@ Thumbs.db
 # One directory per `audit run`: auditors, harness, and Docker build products.
 reports/*
 !reports/.gitkeep
+
+# Per-worktree isolation (tools/worktree-env.mjs)
+.env.worktree
+
+# Golden eval run output (W06)
+eval/runs/

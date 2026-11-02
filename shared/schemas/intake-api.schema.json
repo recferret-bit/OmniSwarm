@@ -1,0 +1,251 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://omniswarm.dev/schemas/intake-api.schema.json",
+  "title": "intake-api",
+  "description": "Request and response DTOs of every intake endpoint (INTAKE section 4). Validate one with validate('intake-api#<def>', value). Examples are named valid-<def>--<label>.json.",
+  "$defs": {
+    "account-id": { "type": "string", "pattern": "^[a-z0-9._-]{2,64}$" },
+    "network": { "enum": ["testnet", "mainnet"] },
+    "sha256-hex": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "commit-sha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "repo": { "type": "string", "pattern": "^[A-Za-z0-9-]{1,39}/[A-Za-z0-9._-]{1,100}$" },
+    "yocto": { "type": "string", "pattern": "^(0|[1-9][0-9]{0,38})$" },
+    "nonce": { "type": "string", "pattern": "^[A-Za-z0-9+/]{43}=$" },
+    "uuid": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "timestamp": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:.]+Z$" },
+    "status": { "enum": ["awaiting_payment", "queued", "running", "publishing", "done", "failed", "refunded"] },
+    "severity": { "enum": ["critical", "high", "medium", "low", "info", "none"] },
+    "error-code": {
+      "enum": [
+        "VALIDATION_ERROR", "REPO_INVALID", "REPO_NOT_FOUND", "REPO_PRIVATE", "REPO_ARCHIVED", "REPO_TOO_LARGE", "REPO_DENIED",
+        "QUEUE_FULL", "NONCE_EXPIRED", "NONCE_USED", "NONCE_UNKNOWN", "SIG_INVALID", "KEY_NOT_FULL_ACCESS", "ACCOUNT_MISMATCH", "MESSAGE_INVALID",
+        "PAYMENT_NOT_FOUND", "PAYMENT_MISMATCH", "TX_ALREADY_USED", "ACTIVE_REQUEST_EXISTS", "RATE_LIMITED",
+        "UNAUTHORIZED", "FORBIDDEN", "NOT_FOUND", "CHAIN_UNAVAILABLE", "GITHUB_UNAVAILABLE", "INTERNAL"
+      ]
+    },
+    "error-response": {
+      "type": "object",
+      "required": ["error"],
+      "additionalProperties": false,
+      "properties": {
+        "error": {
+          "type": "object",
+          "required": ["code", "message", "retryable"],
+          "additionalProperties": false,
+          "properties": {
+            "code": { "$ref": "#/$defs/error-code" },
+            "message": { "type": "string", "minLength": 1, "maxLength": 2000 },
+            "retryable": { "type": "boolean" }
+          }
+        }
+      }
+    },
+    "challenge-request": { "type": "object", "additionalProperties": false },
+    "challenge-response": {
+      "type": "object",
+      "required": ["nonce", "expiresAt"],
+      "additionalProperties": false,
+      "properties": { "nonce": { "$ref": "#/$defs/nonce" }, "expiresAt": { "$ref": "#/$defs/timestamp" } }
+    },
+    "quote-request": {
+      "type": "object",
+      "required": ["repoUrl", "network"],
+      "additionalProperties": false,
+      "properties": {
+        "repoUrl": { "type": "string", "minLength": 1, "maxLength": 300 },
+        "network": { "$ref": "#/$defs/network" },
+        "ref": { "type": "string", "minLength": 1, "maxLength": 200 }
+      }
+    },
+    "quote-response": {
+      "type": "object",
+      "required": ["normalizedRepo", "commitSha", "priceYocto", "contractId", "queueDepth", "preset", "etaMinutes"],
+      "additionalProperties": false,
+      "properties": {
+        "normalizedRepo": { "$ref": "#/$defs/repo" },
+        "commitSha": { "$ref": "#/$defs/commit-sha" },
+        "priceYocto": { "$ref": "#/$defs/yocto" },
+        "contractId": { "$ref": "#/$defs/account-id" },
+        "queueDepth": { "type": "integer", "minimum": 0 },
+        "preset": { "type": "string", "pattern": "^[a-z0-9-]{1,40}$" },
+        "etaMinutes": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "create-request-body": {
+      "type": "object",
+      "required": ["accountId", "publicKey", "signature", "message", "nonce"],
+      "additionalProperties": false,
+      "properties": {
+        "accountId": { "$ref": "#/$defs/account-id" },
+        "publicKey": { "type": "string", "pattern": "^ed25519:[1-9A-HJ-NP-Za-km-z]{32,64}$" },
+        "signature": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "message": { "type": "string", "minLength": 1, "maxLength": 4096 },
+        "nonce": { "$ref": "#/$defs/nonce" }
+      }
+    },
+    "create-request-response": {
+      "type": "object",
+      "required": ["requestId", "requestHash", "priceYocto", "contractId"],
+      "additionalProperties": false,
+      "properties": {
+        "requestId": { "$ref": "#/$defs/uuid" },
+        "requestHash": { "$ref": "#/$defs/sha256-hex" },
+        "priceYocto": { "$ref": "#/$defs/yocto" },
+        "contractId": { "$ref": "#/$defs/account-id" }
+      }
+    },
+    "payment-request": {
+      "type": "object",
+      "required": ["txHash"],
+      "additionalProperties": false,
+      "properties": { "txHash": { "type": "string", "pattern": "^[1-9A-HJ-NP-Za-km-z]{43,44}$" } }
+    },
+    "payment-response": {
+      "type": "object",
+      "required": ["status", "position"],
+      "additionalProperties": false,
+      "properties": { "status": { "const": "queued" }, "position": { "type": "integer", "minimum": 0 } }
+    },
+    "progress": {
+      "type": "object",
+      "required": ["phase"],
+      "additionalProperties": false,
+      "properties": {
+        "phase": { "type": "string", "minLength": 1 },
+        "reviewer": { "type": "string" },
+        "pass": { "type": "integer", "minimum": 1 },
+        "percent": { "type": "number", "minimum": 0, "maximum": 100 }
+      }
+    },
+    "request-status-response": {
+      "type": "object",
+      "required": ["status", "createdAt"],
+      "additionalProperties": false,
+      "properties": {
+        "status": { "$ref": "#/$defs/status" },
+        "progress": { "$ref": "#/$defs/progress" },
+        "reportUrl": { "type": "string", "pattern": "^https://[^\\s]+$" },
+        "reportSha256": { "$ref": "#/$defs/sha256-hex" },
+        "attestTx": { "type": "string", "minLength": 1 },
+        "refundTx": { "type": "string", "minLength": 1 },
+        "createdAt": { "$ref": "#/$defs/timestamp" }
+      }
+    },
+    "progress-event": {
+      "type": "object",
+      "required": ["status", "at"],
+      "additionalProperties": false,
+      "properties": {
+        "status": { "$ref": "#/$defs/status" },
+        "progress": { "$ref": "#/$defs/progress" },
+        "at": { "$ref": "#/$defs/timestamp" }
+      }
+    },
+    "request-list-response": {
+      "type": "object",
+      "required": ["requests"],
+      "additionalProperties": false,
+      "properties": {
+        "requests": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["requestId", "repo", "status", "createdAt"],
+            "additionalProperties": false,
+            "properties": {
+              "requestId": { "$ref": "#/$defs/uuid" },
+              "repo": { "$ref": "#/$defs/repo" },
+              "status": { "$ref": "#/$defs/status" },
+              "createdAt": { "$ref": "#/$defs/timestamp" }
+            }
+          }
+        }
+      }
+    },
+    "report-index-response": {
+      "type": "object",
+      "required": ["requestId", "reportUrl", "reportSha256"],
+      "additionalProperties": false,
+      "properties": {
+        "requestId": { "$ref": "#/$defs/uuid" },
+        "reportUrl": { "type": "string", "pattern": "^https://[^\\s]+$" },
+        "reportSha256": { "$ref": "#/$defs/sha256-hex" },
+        "reviewers": { "type": "array", "items": { "type": "string" } },
+        "generalReviewUrl": { "type": "string", "pattern": "^https://[^\\s]+$" },
+        "attestation": { "$ref": "attestation.schema.json" }
+      }
+    },
+    "guard-verdict-response": {
+      "type": "object",
+      "required": ["verdict", "reasons", "signals"],
+      "additionalProperties": false,
+      "properties": {
+        "verdict": { "enum": ["allow", "warn", "block"] },
+        "reasons": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "signals": { "type": "object" },
+        "attestation": { "$ref": "attestation.schema.json" }
+      }
+    },
+    "guard-report-request": {
+      "type": "object",
+      "required": ["account", "evidenceUrl", "reason"],
+      "additionalProperties": false,
+      "properties": {
+        "account": { "$ref": "#/$defs/account-id" },
+        "evidenceUrl": { "type": "string", "pattern": "^https://[^\\s]+$", "maxLength": 2000 },
+        "reason": { "type": "string", "minLength": 1, "maxLength": 2000 }
+      }
+    },
+    "guard-report-response": {
+      "type": "object",
+      "required": ["queued"],
+      "additionalProperties": false,
+      "properties": { "queued": { "const": true } }
+    },
+    "ledger-response": {
+      "type": "object",
+      "required": ["entries"],
+      "additionalProperties": false,
+      "properties": {
+        "entries": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["requestId", "status", "priceYocto", "modelCostUsd"],
+            "additionalProperties": false,
+            "properties": {
+              "requestId": { "$ref": "#/$defs/uuid" },
+              "status": { "$ref": "#/$defs/status" },
+              "priceYocto": { "$ref": "#/$defs/yocto" },
+              "modelCostUsd": { "type": "number", "minimum": 0 },
+              "refundTx": { "type": "string", "minLength": 1 }
+            }
+          }
+        }
+      }
+    },
+    "health-response": {
+      "type": "object",
+      "required": ["ok", "network", "queueDepth", "workers", "chain"],
+      "additionalProperties": false,
+      "properties": {
+        "ok": { "type": "boolean" },
+        "network": { "$ref": "#/$defs/network" },
+        "queueDepth": { "type": "integer", "minimum": 0 },
+        "workers": { "type": "integer", "minimum": 0 },
+        "chain": {
+          "type": "object",
+          "required": ["rpc", "contract"],
+          "additionalProperties": false,
+          "properties": { "rpc": { "type": "boolean" }, "contract": { "type": "boolean" } }
+        }
+      }
+    },
+    "admin-refund-response": {
+      "type": "object",
+      "required": ["refundTx"],
+      "additionalProperties": false,
+      "properties": { "refundTx": { "type": "string", "minLength": 1 } }
+    }
+  }
+}

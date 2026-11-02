@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": "QUEUE_FULL",
+    "message": "The review queue is full; try later.",
+    "retryable": true
+  }
+}

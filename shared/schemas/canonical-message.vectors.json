@@ -1,0 +1,31 @@
+{
+  "note": "Shared by W08 (server) and W11 (client). `message` is the canonical string, `hash` its SHA-256 (hex). Computed with Node crypto, independent of the module under test.",
+  "vectors": [
+    {
+      "input": {
+        "account": "alice.testnet",
+        "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "deployed": null,
+        "network": "testnet",
+        "nonce": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        "preset": "hosted",
+        "repo": "near/near-sdk-rs"
+      },
+      "message": "{\"account\":\"alice.testnet\",\"commit\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"deployed\":null,\"network\":\"testnet\",\"nonce\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\",\"preset\":\"hosted\",\"repo\":\"near/near-sdk-rs\",\"v\":1}",
+      "hash": "39f8107ad62b689b4f0862aa6f55dbe32ff0fe72a1adac9bb1a8297baef4aa37"
+    },
+    {
+      "input": {
+        "account": "alice.testnet",
+        "commit": "0123456789abcdef0123456789abcdef01234567",
+        "deployed": "vault.alice.testnet",
+        "network": "mainnet",
+        "nonce": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=",
+        "preset": "demo",
+        "repo": "owner/re\"po-ü"
+      },
+      "message": "{\"account\":\"alice.testnet\",\"commit\":\"0123456789abcdef0123456789abcdef01234567\",\"deployed\":\"vault.alice.testnet\",\"network\":\"mainnet\",\"nonce\":\"BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=\",\"preset\":\"demo\",\"repo\":\"owner/re\\\"po-ü\",\"v\":1}",
+      "hash": "5d3dc7b247023c2b27db3abdd3bed50f03d6c73194f7bb46173889f68f39f927"
+    }
+  ]
+}

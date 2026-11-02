@@ -1,0 +1,16 @@
+{
+  "reviewer": {
+    "id": "key-zai-glm-5-3",
+    "family": "key",
+    "provider": "zai",
+    "vendor": "zai",
+    "model": "glm-5.3",
+    "keyFingerprint": "ab12cd34"
+  },
+  "surfaces": [
+    "S1",
+    "S2"
+  ],
+  "findings": [],
+  "verified_safe": []
+}

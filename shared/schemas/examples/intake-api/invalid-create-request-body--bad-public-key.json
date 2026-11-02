@@ -1,0 +1,7 @@
+{
+  "accountId": "alice.testnet",
+  "publicKey": "rsa:abc",
+  "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+  "message": "{\"account\":\"alice.testnet\",\"v\":1}",
+  "nonce": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+}

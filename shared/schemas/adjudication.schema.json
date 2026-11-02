@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://omniswarm.dev/schemas/adjudication.schema.json",
+  "title": "adjudication",
+  "description": "One cluster's judgement in debate/adjudication.json. A single-source finding is never dropped without a valid refuting citation. ORCHESTRATION section 4.3.",
+  "type": "object",
+  "required": ["clusterId", "finalStatus", "severity", "judge", "rationale", "validArguments", "discardedArguments"],
+  "additionalProperties": false,
+  "properties": {
+    "clusterId": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "finalStatus": { "enum": ["CONFIRMED", "LIKELY", "DISPUTED", "REFUTED", "INSUFFICIENT_EVIDENCE"] },
+    "severity": { "enum": ["critical", "high", "medium", "low", "info"] },
+    "severityReason": { "type": "string", "minLength": 1 },
+    "judge": {
+      "type": "object",
+      "required": ["reviewerId", "vendor", "alternate"],
+      "additionalProperties": false,
+      "properties": {
+        "reviewerId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,80}$" },
+        "vendor": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+        "alternate": { "type": "boolean" }
+      }
+    },
+    "rationale": { "type": "string", "minLength": 1 },
+    "validArguments": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "discardedArguments": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+  }
+}

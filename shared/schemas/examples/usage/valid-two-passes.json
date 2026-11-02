@@ -1,0 +1,24 @@
+{
+  "passes": [
+    {
+      "k": 1,
+      "calls": 31,
+      "tokensIn": 120000,
+      "tokensOut": 8000,
+      "cost": 0.42,
+      "stop": "submitted",
+      "startedAt": "2026-11-05T12:00:00Z",
+      "endedAt": "2026-11-05T12:04:10Z"
+    },
+    {
+      "k": 2,
+      "calls": 43,
+      "tokensIn": 120000,
+      "tokensOut": 8000,
+      "cost": 0.42,
+      "stop": "budget",
+      "startedAt": "2026-11-05T12:00:00Z",
+      "endedAt": "2026-11-05T12:04:10Z"
+    }
+  ]
+}

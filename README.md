@@ -167,6 +167,17 @@ npm run check
 - [ACP runtime](runtime/README.md)
 - [AGENTS.md](AGENTS.md) for any coding agent editing this repository
 - [CLAUDE.md](CLAUDE.md) for Claude Code sessions in this repository
+- [RULES.md](RULES.md) for the review round written as swarm rules (v0)
+
+## Hackathon baseline
+
+Stub, filled in by W14. For the NEAR hackathon, the baseline is every commit up to `94551b9` (2026-10-17), the last commit before work resumed on 2026-10-19. Everything since then is the hackathon work.
+
+- Baseline tag: `pre-hackathon` (points at `94551b9`; created by the owner, see `docs/plan/checks/w00-check.md`).
+- Final tag: `hackathon-submission` (created at the end of the hackathon).
+- Hackathon work: [`pre-hackathon...hackathon-submission`](https://github.com/recferret-bit/OmniSwarm/compare/pre-hackathon...hackathon-submission) (available once both tags are pushed).
+
+The plan is in [`docs/plan/PRODUCT_WAVES.md`](docs/plan/PRODUCT_WAVES.md). The review boundary does not move: the offline review engine in `scripts/`, `docker/`, `native/` and `skills/` is separate from the service tracks (`backend/`, `contracts/`, `frontend/`, `infra/`, `packages/`).
 
 ## License
 

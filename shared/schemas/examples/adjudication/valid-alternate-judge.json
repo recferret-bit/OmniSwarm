@@ -1,0 +1,16 @@
+{
+  "clusterId": "c-001",
+  "finalStatus": "DISPUTED",
+  "severity": "high",
+  "judge": {
+    "reviewerId": "openrouter-openai-gpt-6-1-sol",
+    "vendor": "openai",
+    "alternate": true
+  },
+  "rationale": "Evidence holds and one independent reviewer upheld it.",
+  "validArguments": [
+    "Reviewer A quotes the unconstrained field."
+  ],
+  "discardedArguments": [],
+  "severityReason": "Exploit needs an unusual deployment."
+}

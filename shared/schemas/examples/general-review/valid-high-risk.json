@@ -1,0 +1,53 @@
+{
+  "executiveSummary": "One high-severity access-control gap was confirmed in the vault.",
+  "riskPosture": "high-risk",
+  "topFindings": [
+    {
+      "clusterId": "c-001",
+      "title": "Unchecked vault authority",
+      "severity": "high",
+      "finalStatus": "CONFIRMED",
+      "location": [
+        "src/lib.rs:4"
+      ]
+    }
+  ],
+  "coverage": [
+    {
+      "surface": "S1",
+      "covered": true,
+      "gaps": []
+    },
+    {
+      "surface": "S5",
+      "covered": false,
+      "gaps": [
+        "cargo audit unavailable offline"
+      ]
+    }
+  ],
+  "openDisagreements": [],
+  "contributions": [
+    {
+      "reviewerId": "cli-claude-opus",
+      "uniqueConfirmed": 1,
+      "refuted": 0,
+      "toolCalls": 74,
+      "costUsd": 0
+    }
+  ],
+  "methodology": {
+    "reviewers": [
+      "cli:claude:opus",
+      "key:zai:glm-5.3"
+    ],
+    "orchestrator": "cli:claude:opus",
+    "passes": 2,
+    "toolBudget": 40,
+    "debateRounds": 2,
+    "judgeAssignment": [
+      "c-001: cli-claude-opus"
+    ]
+  },
+  "disclaimer": "Model agreement and passing checks do not certify security."
+}

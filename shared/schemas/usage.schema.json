@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://omniswarm.dev/schemas/usage.schema.json",
+  "title": "usage",
+  "description": "reviewers/<id>/usage.json: one row per pass with calls, tokens, cost and stop reason. ORCHESTRATION section 3.",
+  "type": "object",
+  "required": ["passes"],
+  "additionalProperties": false,
+  "properties": {
+    "passes": { "type": "array", "items": { "$ref": "#/$defs/pass" } }
+  },
+  "$defs": {
+    "pass": {
+      "type": "object",
+      "required": ["k", "calls", "tokensIn", "tokensOut", "cost", "stop", "startedAt", "endedAt"],
+      "additionalProperties": false,
+      "properties": {
+        "k": { "type": "integer", "minimum": 1 },
+        "calls": { "type": "integer", "minimum": 0 },
+        "tokensIn": { "type": "integer", "minimum": 0 },
+        "tokensOut": { "type": "integer", "minimum": 0 },
+        "cost": { "type": "number", "minimum": 0 },
+        "stop": { "enum": ["submitted", "budget", "cost", "error"] },
+        "startedAt": { "type": "string", "minLength": 1 },
+        "endedAt": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}
