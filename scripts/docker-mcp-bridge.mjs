@@ -19,6 +19,7 @@ import { validateSubmissionIdentity } from './audit-submission.mjs';
 import { REVIEW_TOOLS } from './review-workflow.mjs';
 import { bridgeRole } from './bridge-tools-registry.mjs';
 import { BridgeError, scrubProviderEnv } from './bridge-tools-common.mjs';
+import { attachBudget } from './bridge-budget.mjs';
 
 // Helpers that lived here before the per-role split stay importable from this module.
 export { boundedCapture, execInContainer, normalizeCitation } from './bridge-tools-common.mjs';
@@ -47,6 +48,8 @@ export function parseBridgeArgs(argv) {
     identityFile: '',
     reviewersFile: '',
     demoHost: '',
+    pass: 1,
+    toolBudget: 0,
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -61,6 +64,8 @@ export function parseBridgeArgs(argv) {
     else if (a === '--identity-file') opts.identityFile = argv[++i] || '';
     else if (a === '--reviewers-file') opts.reviewersFile = argv[++i] || '';
     else if (a === '--demo-host') opts.demoHost = argv[++i] || '';
+    else if (a === '--pass') opts.pass = Number(argv[++i]) || 1;
+    else if (a === '--tool-budget') opts.toolBudget = Number(argv[++i]) || 0;
   }
   if (opts.demoHost) {
     const bundled = fs.realpathSync(path.join(path.dirname(fileURLToPath(import.meta.url)), 'demo-fixture'));
@@ -99,7 +104,11 @@ export async function callBridgeTool(ctx, name, args = {}) {
   const handler = bridgeRole(ctx.role).handlers[name];
   if (typeof handler !== 'function') throw new Error(`Tool ${name} is unavailable in the ${ctx.role || 'auditor'} bridge role`);
   // Single hook for budget counters and per-role gates (W04, W06). It runs before any tool side effect.
-  if (typeof ctx.beforeCall === 'function') await ctx.beforeCall(ctx, name);
+  if (typeof ctx.beforeCall === 'function') {
+    ctx.pendingArgs = args;
+    const verdict = await ctx.beforeCall(ctx, name);
+    if (verdict?.text) return verdict.text;
+  }
 
   if (ctx.submissionIdentity) {
     const file = `harness/bridge-${ctx.submissionIdentity.name}.json`;
@@ -139,7 +148,7 @@ export async function handleRpcMessage(ctx, msg) {
     if (method === 'tools/list') return { jsonrpc: '2.0', id, result: { tools: toolDefinitions(ctx.role) } };
     if (method === 'tools/call') {
       try {
-        if (ctx.finalizeOnly && !['submit_audit_report', 'submit_crosscheck_report'].includes(params?.name)) {
+        if (ctx.finalizeOnly && !ctx.budget && !['submit_audit_report', 'submit_crosscheck_report'].includes(params?.name)) {
           throw new Error('Report finalization only: inspection is disabled. Submit supported findings and disclose coverage gaps.');
         }
         const text = await callBridgeTool(ctx, params?.name, params?.arguments || {});
@@ -199,5 +208,5 @@ function startStdioServer(ctx) {
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   scrubProviderEnv();
-  startStdioServer(parseBridgeArgs(process.argv.slice(2)));
+  startStdioServer(attachBudget(parseBridgeArgs(process.argv.slice(2))));
 }

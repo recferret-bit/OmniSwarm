@@ -2,8 +2,13 @@
 // Offline presence check for key, openrouter, claude-zai and scripted reviewers.
 // Prints one row and never prints a key value. Exit 0 when every named reviewer is present.
 import { resolveExecutable } from './agent-launch.mjs';
+import { claudeMaxTurnsSupport } from './provider-cli.mjs';
 import { families } from './reviewer-families.mjs';
 import { parseReviewerSpec } from './reviewer-registry.mjs';
+
+export function claudeMaxTurnsLine(env = process.env) {
+  return claudeMaxTurnsSupport(env) ? 'claude --max-turns: supported' : 'claude --max-turns: not supported (bridge gate only)';
+}
 
 export function checkReviewerRow(spec, env = process.env) {
   const reviewer = typeof spec === 'string' ? parseReviewerSpec(spec) : spec;
@@ -42,6 +47,7 @@ function main() {
   }
   const rows = specs.map((spec) => checkReviewerRow(spec));
   for (const row of rows) process.stdout.write(`${row.line}\n`);
+  process.stdout.write(`${claudeMaxTurnsLine()}\n`);
   process.exit(rows.every((row) => row.ok) ? 0 : 1);
 }
 

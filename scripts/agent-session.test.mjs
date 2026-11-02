@@ -70,6 +70,56 @@ function fixture(t, mode = 'success') {
   return { root, options, support, state, workspace: path.join(options.directory, 'workspace') };
 }
 
+test('a pass that never submits gets one correction and then a budget cancel', async t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'audit-budget-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const executable = path.join(root, 'fixture.mjs');
+  fs.writeFileSync(executable, `
+import fs from 'node:fs';
+import readline from 'node:readline';
+const mode = process.argv[2];
+const send = msg => process.stdout.write(JSON.stringify({jsonrpc:'2.0',...msg})+'\\n');
+const sid = 'budget-session';
+let prompts = 0;
+readline.createInterface({input:process.stdin}).on('line', line => {
+  const msg = JSON.parse(line);
+  if (msg.method === 'initialize') send({id:msg.id,result:{protocolVersion:1,agentCapabilities:{loadSession:true}}});
+  else if (msg.method === 'session/new') send({id:msg.id,result:{sessionId:sid}});
+  else if (msg.method === 'session/cancel') fs.appendFileSync('events.txt', 'cancel\\n');
+  else if (msg.method === 'session/prompt') {
+    prompts += 1;
+    fs.appendFileSync('prompts.txt', msg.params.prompt[0].text + '\\n');
+    if (prompts === 1) {
+      send({method:'session/update',params:{sessionId:sid,update:{sessionUpdate:'tool_call',toolCallId:'a',title:'read_file'}}});
+      send({method:'session/update',params:{sessionId:sid,update:{sessionUpdate:'tool_call',toolCallId:'b',title:'read_file'}}});
+    } else if (mode === 'submit') {
+      send({method:'session/update',params:{sessionId:sid,update:{sessionUpdate:'tool_call',toolCallId:'c',title:'submit_audit_report'}}});
+    }
+    send({id:msg.id,result:{stopReason:'end_turn'}});
+  }
+});
+`);
+  const support = {
+    heartbeatMs: 30_000,
+    preflight: async () => ({ state: 'ready', tools: ['read_file', 'submit_audit_report'] }),
+    launch: ({ workDir }) => ({ invocation: { executable: process.execPath, args: [executable, 'ignore'], cwd: workDir, env: process.env }, mcpServers: [{}], transport: 'inert_acp_fixture' }),
+  };
+  const options = { directory: path.join(root, 'session'), identity, bridgeArgs: [], prompt: 'Review the surface.', budgets: { toolBudget: 2, passes: 1, maxCostUsd: null } };
+  const ignored = await runReviewSession(options, support);
+  assert.equal(ignored.stop, 'budget');
+  const prompts = fs.readFileSync(path.join(root, 'session', 'workspace', 'prompts.txt'), 'utf8').trim().split('\n');
+  assert.equal(prompts.length, 2);
+  assert.match(prompts[1], /Call submit_audit_report now/);
+  assert.match(fs.readFileSync(path.join(root, 'session', 'workspace', 'events.txt'), 'utf8'), /cancel/);
+  const submitting = {
+    ...support,
+    launch: ({ workDir }) => ({ invocation: { executable: process.execPath, args: [executable, 'submit'], cwd: workDir, env: process.env }, mcpServers: [{}], transport: 'inert_acp_fixture' }),
+  };
+  const handedIn = await runReviewSession({ ...options, directory: path.join(root, 'session-2') }, submitting);
+  assert.equal(handedIn.code, 0);
+  assert.equal(handedIn.stop, 'submitted');
+});
+
 test('ACP session records completion and can load the exact saved conversation', async t => {
   const f = fixture(t);
   const first = await runReviewSession(f.options, f.support);

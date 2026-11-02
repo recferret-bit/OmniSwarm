@@ -35,16 +35,25 @@ async function submit(callTool, findings, verified, summary) {
   });
 }
 
-export async function runStrategy(name, { callTool, fixtureRoot = DEMO_FIXTURE, surface = 'S1' } = {}) {
+export function passFromBrief(brief) {
+  const match = /Pass (\d+)/.exec(String(brief || ''));
+  return match ? Number(match[1]) : 1;
+}
+
+export async function runStrategy(name, { callTool, fixtureRoot = DEMO_FIXTURE, surface = 'S1', pass = 1 } = {}) {
   if (name === 'judge') return judgeAnswer(surface, fixtureRoot);
   const answers = readJson(path.join(fixtureRoot, 'answers', `${name}.json`));
   if (name === 'lazy') {
-    await callTool('read_file', { path: answers.read || 'src/lib.rs' });
-    await submit(callTool, [], [], answers.markdown_summary || 'Read one file and submitted no findings.');
+    const file = answers.read || 'src/lib.rs';
+    for (let i = 0; i < 30; i++) {
+      const text = await callTool('read_file', { path: file });
+      if (String(text).includes('budget exhausted') || String(text).includes('budget_exhausted')) break;
+    }
+    await submit(callTool, [], [], answers.markdown_summary || 'Read until the budget and submitted.');
     return { submitted: true, findings: 0 };
   }
   const want = String(surface || 'S1').toUpperCase();
-  const findings = (answers.findings || []).filter((finding) => String(finding.surface || '').toUpperCase() === want);
+  const findings = (answers.findings || []).filter((finding) => String(finding.surface || '').toUpperCase() === want && !(pass >= 2 && finding.selfVerifyDrop));
   await readCitations(callTool, findings);
   await submit(callTool, findings, answers.verified_safe || [], answers.markdown_summary);
   return { submitted: true, findings: findings.length };

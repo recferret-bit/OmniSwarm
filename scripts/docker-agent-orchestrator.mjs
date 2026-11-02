@@ -39,6 +39,8 @@ import { commitSubmission } from './audit-submission.mjs';
 import { runtimeAdapter, sessionEnvironment } from './agent-session-launch.mjs';
 import { REVIEW_WORKFLOW, REVIEW_SCOPE, buildExistingTestCatalog } from './review-workflow.mjs';
 import { SURFACES } from './orchestrator-surfaces.mjs';
+import { archivePassSubmission } from './review-passes.mjs';
+import { renderBrief } from './review-briefs.mjs';
 import { families } from './reviewer-families.mjs';
 import { withKeyFingerprint } from './reviewer-env.mjs';
 import { reviewersOfMeta } from './reviewer-registry.mjs';
@@ -158,7 +160,7 @@ export function buildAuditorPrompt({ targetName, auditorName, surface, reportDir
     `You are security auditor "${auditorName}" performing an authorized source security review of "${targetName}" inside a one-shot Docker container using the \`security-audit\` skill.`,
     `Assigned Surface: ${surface.code} — ${surface.name}`,
     `Focus Areas: ${surface.focus}`,
-    'There is no runner time limit; the operator sets a per-pass tool budget. Take the time needed to inspect this surface and submit a supported report. Runner heartbeats keep the session observable during long reasoning; they are not requests to rush or finish.',
+    'Each pass has a fixed tool budget. At the limit, inspection stops and you have 3 calls to submit. A pass that submits is complete; a pass that never submits is incomplete. Heartbeats are not requests to rush.',
     '',
     REVIEW_SCOPE,
     'CRITICAL RULES:',
@@ -181,7 +183,7 @@ function buildCrosscheckPrompt({ targetName, agent, claims }) {
   return [
     `You are peer security reviewer "${agent}" performing a cross-check of findings reported by other models on "${targetName}" inside the one-shot Docker container using the \`security-audit\` skill.`,
     REVIEW_SCOPE,
-    'There is no runner time limit; the operator sets a per-pass tool budget. Take the time needed to review every assigned claim; disclose coverage gaps and never invent missing verdicts.',
+    'Each pass has a fixed tool budget. At the limit, inspection stops and you have 3 calls to submit. Disclose coverage gaps and never invent missing verdicts.',
     '1. Use `audit_docker` MCP tools (`get_review_plan`, `read_file`, `search_code`, `list_existing_tests`, `run_existing_tests`) to inspect the cited `file:line` locations under `/work/src`.',
     '2. Double-check scope/role guards, DB locks, bot/economy invariants, and API response DTOs (for example, if a claim states an API returns an enumeration oracle like "user already registered" or leaks fields, verify the exact DTO/error in source).',
     '3. For EVERY assigned claim ID below, decide a verdict: "upheld", "partial", or "refuted", with `reason` and relative `file:line` `evidence` citations.',
@@ -339,7 +341,7 @@ export async function runOrchestratedAudit(request, options = {}) {
       catch { console.error(`     [${name}] heartbeat record could not be saved; review continues.`); }
     },
   });
-  const execute = async ({ name, agent, role, surface, prompt, assignment, logFile }) => {
+  const execute = async ({ name, agent, role, surface, prompt, assignment, logFile, pass, toolBudget, resumePass = false }) => {
     if (sandboxFailure) throw sandboxFailure;
     const reviewer = reviewerById.get(agent);
     const identity = { name, agent, role, workflow: REVIEW_WORKFLOW, model: request.models[agent], family: reviewer.family, provider: reviewer.provider, sourceDigest, assignmentDigest: digest(assignment), ...(surface ? { surface } : {}) };
@@ -389,7 +391,9 @@ export async function runOrchestratedAudit(request, options = {}) {
         commitSubmission(output, name, identity, previous.report.payload, previous.report.summary);
       }
     }
+    if (resumePass && fs.existsSync(path.join(directory, 'state.json'))) resuming = true;
     const bridgeArgs = ['--docker-bin', dockerBin, '--container', session.container, '--report-dir', output, '--role', role, '--agent', agent, '--identity-file', identityFile, '--reviewers-file', path.join(output, 'harness', 'reviewers.json')];
+    if (pass) bridgeArgs.push('--pass', String(pass), '--tool-budget', String(toolBudget || 40));
     const transport = families.has(reviewer.family) ? families.get(reviewer.family).transport : undefined;
     // Cross-check reviewers span every surface, so their context and plans must too (R-06).
     bridgeArgs.push(...(role === 'auditor' ? ['--auditor', name, '--surface', surface] : ['--surface', 'ALL']));
@@ -450,8 +454,15 @@ export async function runOrchestratedAudit(request, options = {}) {
         job.state = 'running';
         saveWorkers();
         console.log(`  -> [${job.name}] (${job.adapter} @ ${job.requestedModel}) auditing ${job.surface.code} (${job.surface.name})...`);
-        let prompt = buildAuditorPrompt({ targetName: request.name, auditorName: job.name, surface: job.surface, reportDir: output });
-        const res = await execute({ name: job.name, agent: job.adapter, role: 'auditor', surface: job.surface.code, prompt, assignment: job.surface, logFile });
+        const prompt = buildAuditorPrompt({ targetName: request.name, auditorName: job.name, surface: job.surface, reportDir: output });
+        const passCount = Number(budgets?.passes) || 1;
+        let res;
+        for (let pass = 1; pass <= passCount; pass++) {
+          if (pass > 1) archivePassSubmission(output, job.name, pass - 1);
+          const brief = budgets ? renderBrief({ pass, passes: passCount, toolBudget: budgets.toolBudget }) : '';
+          res = await execute({ name: job.name, agent: job.adapter, role: 'auditor', surface: job.surface.code, prompt: `${prompt}\n${brief}`, assignment: job.surface, logFile, ...(budgets ? { pass, toolBudget: budgets.toolBudget, resumePass: pass > 1 } : {}) });
+        }
+        job.passesCompleted = passCount;
         if (sandboxFailure) res.failure = { reason: 'sandbox_unavailable', message: FAILURE_MESSAGES.sandbox_unavailable };
         job.sessionId = res.sessionId;
         job.sessionDirectory = res.directory;

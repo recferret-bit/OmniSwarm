@@ -109,7 +109,8 @@ test('reviews have no deadline and only explicit finalization restricts inspecti
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'audit-session-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const prompt = buildAuditorPrompt({ targetName: 'inert', auditorName: 'grok-s6-client', surface: { code: 'S6' }, reportDir: root });
-  assert.match(prompt, /no runner time limit/);
+  assert.match(prompt, /fixed tool budget/);
+  assert.doesNotMatch(prompt, /no runner time limit/);
   assert.doesNotMatch(prompt, /Time budget:|final 300|inspection tools then stop/);
   assert.match(prompt, /surface is absent, submit an empty findings array/);
   assert.match(prompt, /Do not search the host/);

@@ -15,6 +15,8 @@
     "toolBudget": { "type": "integer", "minimum": 5, "maximum": 200 },
     "debate": { "$ref": "#/$defs/debate" },
     "maxCostUsd": { "type": "number", "minimum": 0 },
+    "grace": { "const": 3 },
+    "prices": { "$ref": "#/$defs/prices" },
     "presets": {
       "type": "object",
       "additionalProperties": { "$ref": "#/$defs/preset" }
@@ -35,6 +37,21 @@
         "rounds": { "type": "integer", "minimum": 1, "maximum": 3 },
         "toolBudget": { "type": "integer", "minimum": 1, "maximum": 100 },
         "maxClusters": { "type": "integer", "minimum": 1, "maximum": 500 }
+      }
+    },
+    "prices": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "object",
+          "required": ["inPerMTok", "outPerMTok"],
+          "additionalProperties": false,
+          "properties": {
+            "inPerMTok": { "type": "number", "minimum": 0 },
+            "outPerMTok": { "type": "number", "minimum": 0 }
+          }
+        }
       }
     },
     "preset": {

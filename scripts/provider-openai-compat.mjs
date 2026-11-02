@@ -34,6 +34,21 @@ export function presetFor(provider) {
   return preset;
 }
 
+// A provider that omits usage.cost is priced from omniswarm.config.json prices.<provider>.<model>.
+export function applyPrice(entry, { prices, provider, model } = {}) {
+  const prompt = Number(entry.prompt_tokens) || 0;
+  const completion = Number(entry.completion_tokens) || 0;
+  if (entry.cost != null && entry.cost !== '' && Number.isFinite(Number(entry.cost))) {
+    return { prompt_tokens: prompt, completion_tokens: completion, cost: Number(entry.cost), costSource: 'reported' };
+  }
+  const rate = prices?.[provider]?.[model] || prices?.[provider]?.[entry.model];
+  if (!rate || !Number.isFinite(Number(rate.inPerMTok)) || !Number.isFinite(Number(rate.outPerMTok))) {
+    return { prompt_tokens: prompt, completion_tokens: completion, cost: 0, costSource: 'none' };
+  }
+  const cost = (prompt * Number(rate.inPerMTok) + completion * Number(rate.outPerMTok)) / 1_000_000;
+  return { prompt_tokens: prompt, completion_tokens: completion, cost, costSource: 'estimated' };
+}
+
 export function modelMatches(requested, served) {
   if (typeof served !== 'string' || !served) return true;
   if (served === requested) return true;
@@ -67,7 +82,7 @@ function scrubBody(body) {
 export async function runToolLoop({
   baseUrl, apiKey, model, headers = {}, extraBody = {}, tools = [], callTool, brief, maxTurns = 40,
   provider = 'zai', env = process.env, fetchImpl, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
-  random = Math.random, transcriptPath, timeoutMs = Number(env.OMNI_API_TIMEOUT_MS) || 300_000,
+  random = Math.random, transcriptPath, timeoutMs = Number(env.OMNI_API_TIMEOUT_MS) || 300_000, maxCostUsd = null, prices = null,
 } = {}) {
   if (!baseUrl || !model || typeof callTool !== 'function') throw new Error('runToolLoop needs baseUrl, model and callTool');
   if (!fetchImpl && env.OMNI_HTTP_REPLAY) resetReplayTurns();
@@ -124,20 +139,20 @@ export async function runToolLoop({
     turns += 1;
     servedModel = typeof payload?.model === 'string' ? payload.model : servedModel;
     if (payload?.usage && typeof payload.usage === 'object') {
-      usage.push({
-        prompt_tokens: Number(payload.usage.prompt_tokens) || 0,
-        completion_tokens: Number(payload.usage.completion_tokens) || 0,
-        ...(payload.usage.cost != null ? { cost: Number(payload.usage.cost) } : {}),
-      });
+      usage.push(applyPrice({ ...payload.usage, model: payload.model }, { prices, provider, model }));
     }
     writeTranscript({ turn, status: response.status, model: servedModel, request: scrubBody(body) });
     if (!modelMatches(model, servedModel)) {
       return { stop: 'error', failure: 'model_mismatch', turns, usage, servedModel, transcriptPath: transcriptPath || null };
     }
+    const spent = usage.reduce((total, row) => total + (Number(row.cost) || 0), 0);
+    if (maxCostUsd != null && spent >= maxCostUsd) {
+      return { stop: 'cost', turns, usage, servedModel, transcriptPath: transcriptPath || null, cost: spent };
+    }
     const message = payload?.choices?.[0]?.message || {};
     const calls = Array.isArray(message.tool_calls) ? message.tool_calls.map(parseToolCall) : [];
     messages.push({ role: 'assistant', content: message.content ?? null, ...(calls.length ? { tool_calls: message.tool_calls } : {}) });
-    if (!calls.length) return { stop: 'no_tools', turns, usage, servedModel, transcriptPath: transcriptPath || null };
+    if (!calls.length) return { stop: turn === maxTurns ? 'budget' : 'no_tools', turns, usage, servedModel, transcriptPath: transcriptPath || null };
     let submitted = false;
     for (const call of calls) {
       let text;
@@ -148,5 +163,5 @@ export async function runToolLoop({
     }
     if (submitted) return { stop: 'submitted', turns, usage, servedModel, transcriptPath: transcriptPath || null };
   }
-  return { stop: 'max_turns', turns, usage, servedModel, transcriptPath: transcriptPath || null };
+  return { stop: 'budget', turns, usage, servedModel, transcriptPath: transcriptPath || null };
 }

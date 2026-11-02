@@ -3,6 +3,7 @@ import path from 'node:path';
 import { AgentRpc, SessionError } from './agent-rpc.mjs';
 import { openSessionStore } from './agent-session-store.mjs';
 import { buildSessionLaunch } from './agent-session-launch.mjs';
+import { GRACE } from './bridge-budget.mjs';
 import { families } from './reviewer-families.mjs';
 import { classifyAuditFailure } from './audit-process.mjs';
 
@@ -55,7 +56,7 @@ export async function preflightBridge(server, { cwd, env, signal, expectedRole }
 // behind native-acp-agent; the coordinator never parses their terminal prose.
 export async function runReviewSession(options, { launch = buildSessionLaunch, preflight = preflightBridge, heartbeatMs = 30_000, maxRecoveries = 1 } = {}) {
   if (!Number.isSafeInteger(heartbeatMs) || heartbeatMs < 10 || heartbeatMs > 2_147_483_647 || !Number.isInteger(maxRecoveries) || maxRecoveries < 0 || maxRecoveries > 2) throw new SessionError('setup_error');
-  const { directory, identity, bridgeArgs, prompt, signal, onProgress = () => {}, legacyConversationId, env = process.env, logFile } = options;
+  const { directory, identity, bridgeArgs, prompt, signal, onProgress = () => {}, legacyConversationId, env = process.env, logFile, budgets, prices } = options;
   const store = openSessionStore(directory, identity);
   const started = Date.now();
   let lastAgent = null;
@@ -85,12 +86,15 @@ export async function runReviewSession(options, { launch = buildSessionLaunch, p
   signal?.addEventListener('abort', abort, { once: true });
   try {
     if (signal?.aborted) throw new SessionError('cancelled');
-    const spec = launch({ agent: identity.agent, family: identity.family, provider: identity.provider, model: identity.model, workDir: store.workspace, bridgeArgs, legacyConversationId, env });
+    const spec = launch({ agent: identity.agent, family: identity.family, provider: identity.provider, model: identity.model, workDir: store.workspace, bridgeArgs, legacyConversationId, env, toolBudget: budgets?.toolBudget, maxTurns: budgets ? budgets.toolBudget + 3 : undefined, maxCostUsd: budgets?.maxCostUsd, prices });
     const bridge = await preflight(spec.mcpServers[0], { cwd: store.workspace, env: spec.bridgeEnv || spec.invocation.env, signal, expectedRole: identity.role });
     store.save('bridge_ready', { bridge, transport: spec.transport });
     for (;;) {
       let resumeCapable = false;
       let refused = null;
+      let toolCalls = 0;
+      let submitted = false;
+      let budgetCancel = false;
       const attempt = totalRecoveries;
       currentRpc = new AgentRpc(spec.invocation, {
         logFile: logFile ? attempt ? `${logFile}.recovery-${attempt}` : logFile : undefined,
@@ -115,6 +119,15 @@ export async function runReviewSession(options, { launch = buildSessionLaunch, p
           if (update?.sessionUpdate === 'config_option_update') {
             const value = modelValue(update.configOptions);
             if (value && activeModel && value !== activeModel) throw new SessionError('model_changed');
+          }
+          if (update?.sessionUpdate === 'tool_call') {
+            toolCalls += 1;
+            const title = String(update.title || '');
+            if (title.includes('submit_audit_report') || title.includes('submit_crosscheck_report')) submitted = true;
+            if (budgets && !submitted && toolCalls > budgets.toolBudget + GRACE) {
+              budgetCancel = true;
+              try { currentRpc.notify('session/cancel', { sessionId }); } catch { /* the prompt result records the stop */ }
+            }
           }
           if (['tool_call', 'tool_call_update', 'plan'].includes(update?.sessionUpdate)) store.save(phase, { activity: update.sessionUpdate });
         },
@@ -155,6 +168,26 @@ export async function runReviewSession(options, { launch = buildSessionLaunch, p
           store.save('running', { event: 'refusal_corrected' });
           text = refusalCorrection(refused);
         }
+        // One chance to hand in the report. A second empty ending, or more than N+3 calls, cancels the pass.
+        let providerStop = null;
+        try { providerStop = JSON.parse(fs.readFileSync(path.join(store.workspace, 'api-session.json'), 'utf8')).stop || null; } catch { /* cli sessions have no api-session file */ }
+        if (providerStop === 'cost') {
+          const exit = await currentRpc.close();
+          phase = 'completed';
+          store.save(phase, { stop: 'cost', stopReason: result.stopReason, completedAt: new Date().toISOString() });
+          return { code: 0, observedExitCode: exit.code, processSignal: exit.signal, elapsedMs: Date.now() - started, sessionId, directory, transport: spec.transport, stop: 'cost', stopReason: result.stopReason, recoveryAttempts: totalRecoveries };
+        }
+        if (budgets && result.stopReason === 'end_turn' && !submitted && !budgetCancel) {
+          store.save('running', { event: 'submit_now' });
+          result = await currentRpc.request('session/prompt', { sessionId, prompt: [{ type: 'text', text: 'Budget exhausted. Call submit_audit_report now.' }] }, null);
+        }
+        if (budgets && !submitted && (budgetCancel || result.stopReason === 'end_turn' || result.stopReason === 'cancelled')) {
+          try { currentRpc.notify('session/cancel', { sessionId }); } catch { /* already cancelled */ }
+          const exit = await currentRpc.close();
+          phase = 'completed';
+          store.save(phase, { stop: 'budget', stopReason: 'cancelled', completedAt: new Date().toISOString() });
+          return { code: 0, observedExitCode: exit.code, processSignal: exit.signal, elapsedMs: Date.now() - started, sessionId, directory, transport: spec.transport, stop: 'budget', stopReason: 'cancelled', recoveryAttempts: totalRecoveries };
+        }
         // A loaded conversation can replay old errors, and a review can quote them.
         // Only the current RPC failure/stop status controls whether this turn succeeded.
         if (result.stopReason === 'cancelled' || signal?.aborted) throw new SessionError('cancelled');
@@ -163,8 +196,9 @@ export async function runReviewSession(options, { launch = buildSessionLaunch, p
         const exit = await currentRpc.close();
         if (exit.code != null && exit.code !== 0) throw new SessionError('process_error');
         phase = 'completed';
-        store.save(phase, { stopReason: result.stopReason, completedAt: new Date().toISOString() });
-        return { code: 0, observedExitCode: exit.code, processSignal: exit.signal, elapsedMs: Date.now() - started, sessionId, directory, transport: spec.transport, stopReason: result.stopReason, recoveryAttempts: totalRecoveries };
+        const stop = budgets ? 'submitted' : undefined;
+        store.save(phase, { stopReason: result.stopReason, ...(stop ? { stop } : {}), completedAt: new Date().toISOString() });
+        return { code: 0, observedExitCode: exit.code, processSignal: exit.signal, elapsedMs: Date.now() - started, sessionId, directory, transport: spec.transport, stop, stopReason: result.stopReason, recoveryAttempts: totalRecoveries };
       } catch (error) {
         const failure = classifyAuditFailure({ code: 1, rpcError: error.reason === 'provider_error' ? error.message : undefined });
         const reason = signal?.aborted ? 'cancelled' : error.reason === 'provider_error' && ['provider_policy', 'usage_limit', 'auth_required', 'mcp_unavailable'].includes(failure.reason) ? failure.reason : error.reason || 'process_error';

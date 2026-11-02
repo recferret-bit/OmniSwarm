@@ -1,6 +1,7 @@
 // The `cli` family: local vendor subscriptions driven through ACP or native sessions
 // (ORCHESTRATION section 1). The per-adapter launch branches that used to sit in
 // buildSessionLaunch live here, keyed by provider. No key or endpoint enters these processes.
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -9,6 +10,18 @@ import { SessionError } from './agent-rpc.mjs';
 import { writeReportFile } from './report-contract.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
+const maxTurnsCache = new Map();
+
+// One local --help probe. A missing binary or a help text without the flag means the bridge gate is the limit.
+export function claudeMaxTurnsSupport(env = process.env) {
+  const cli = resolveExecutable('claude', env);
+  if (!cli) return false;
+  if (maxTurnsCache.has(cli)) return maxTurnsCache.get(cli);
+  const help = spawnSync(cli, ['--help'], { encoding: 'utf8', timeout: 4000, env: sessionEnvironment(env) });
+  const supported = /--max-turns\b/.test(`${help.stdout || ''}\n${help.stderr || ''}`);
+  maxTurnsCache.set(cli, supported);
+  return supported;
+}
 const RUNTIME = path.resolve(HERE, '../runtime');
 export const ADAPTER_PINS = { codex: '2.2.2', claude: '0.92.0' };
 
@@ -61,7 +74,7 @@ const launchers = {
       extraArgs: { 'strict-mcp-config': '', 'disable-slash-commands': '' },
     } } };
   },
-  grok({ model, cli, workDir, environment, invocation }) {
+  grok({ model, cli, workDir, environment, invocation, toolBudget }) {
     const profile = path.join(workDir, 'audit-agent.md');
     writeReportFile(workDir, path.basename(profile), '---\nname: audit\ndescription: Review only through the supplied audit MCP bridge\ntools: ["mcp__audit_docker__*"]\ndiscoverSkills: false\nagentsMd: false\n---\nUse only the assigned audit_docker MCP server.\n');
     // Keep the existing official login in place; isolate config, plugins, hooks,
@@ -73,7 +86,7 @@ const launchers = {
     fs.mkdirSync(environment.GROK_HOME, { recursive: true, mode: 0o700 });
     environment.GROK_SUBAGENTS = '0';
     invocation.executable = cli;
-    invocation.args = ['agent', '--no-leader', '--model', model, '--agent-profile', profile, 'stdio'];
+    invocation.args = ['agent', '--no-leader', '--model', model, ...(toolBudget ? ['--max-turns', String(toolBudget + 3)] : []), '--agent-profile', profile, 'stdio'];
   },
   agy({ model, cli, workDir, invocation, mcpServers, legacyConversationId, provider }) {
     const configFile = 'native-launch.json';
@@ -83,7 +96,7 @@ const launchers = {
 };
 
 // reviewer: {provider, model}; ctx: {workDir, bridgeArgs, legacyConversationId, env, runtimeAdapter}
-function launch(reviewer, { workDir, bridgeArgs, legacyConversationId, env = process.env, runtimeAdapter: adapterFor = runtimeAdapter }) {
+function launch(reviewer, { workDir, bridgeArgs, legacyConversationId, env = process.env, runtimeAdapter: adapterFor = runtimeAdapter, toolBudget }) {
   const requested = reviewer.provider;
   const provider = requested === 'claude-zai' ? 'claude' : requested;
   const cli = resolveExecutable(provider, env);
@@ -93,7 +106,7 @@ function launch(reviewer, { workDir, bridgeArgs, legacyConversationId, env = pro
   const environment = sessionEnvironment(env);
   const mcpServers = [{ name: 'audit_docker', command: process.execPath, args: [BRIDGE, ...bridgeArgs], env: [] }];
   const invocation = { executable: process.execPath, args: [], cwd: workDir, env: environment };
-  const sessionMeta = launchers[provider]({ model: reviewer.model, provider, cli, workDir, environment, invocation, mcpServers, legacyConversationId, adapterFor }) || {};
+  const sessionMeta = launchers[provider]({ model: reviewer.model, provider, cli, workDir, environment, invocation, mcpServers, legacyConversationId, adapterFor, toolBudget }) || {};
   if (requested === 'claude-zai') {
     if (typeof env.ZAI_API_KEY !== 'string' || !env.ZAI_API_KEY) throw new SessionError('setup_error', 'ZAI_API_KEY missing');
     delete sessionMeta.claudeCode?.options?.settings?.forceLoginMethod;
@@ -103,6 +116,9 @@ function launch(reviewer, { workDir, bridgeArgs, legacyConversationId, env = pro
     environment.ANTHROPIC_DEFAULT_SONNET_MODEL = reviewer.model;
     environment.ANTHROPIC_DEFAULT_HAIKU_MODEL = 'glm-5.3-flash';
     environment.API_TIMEOUT_MS = '3000000';
+  }
+  if ((requested === 'claude' || requested === 'claude-zai') && toolBudget && sessionMeta.claudeCode && claudeMaxTurnsSupport(env)) {
+    sessionMeta.claudeCode.options.extraArgs['max-turns'] = String(toolBudget + 3);
   }
   return { invocation, mcpServers, sessionMeta, transport: MAINTAINED[provider] ? 'maintained_acp' : provider === 'grok' ? 'native_acp' : 'native_cli_acp_adapter' };
 }
