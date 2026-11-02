@@ -155,7 +155,7 @@ export function buildAuditorPrompt({ targetName, auditorName, surface, reportDir
     `You are security auditor "${auditorName}" performing an authorized source security review of "${targetName}" inside a one-shot Docker container using the \`security-audit\` skill.`,
     `Assigned Surface: ${surface.code} — ${surface.name}`,
     `Focus Areas: ${surface.focus}`,
-    'There is no runner time limit. Take the time needed to inspect this surface and submit a supported report. Runner heartbeats keep the session observable during long reasoning; they are not requests to rush or finish.',
+    'There is no runner time limit; the operator sets a per-pass tool budget. Take the time needed to inspect this surface and submit a supported report. Runner heartbeats keep the session observable during long reasoning; they are not requests to rush or finish.',
     '',
     REVIEW_SCOPE,
     'CRITICAL RULES:',
@@ -178,7 +178,7 @@ function buildCrosscheckPrompt({ targetName, agent, claims }) {
   return [
     `You are peer security reviewer "${agent}" performing a cross-check of findings reported by other models on "${targetName}" inside the one-shot Docker container using the \`security-audit\` skill.`,
     REVIEW_SCOPE,
-    'There is no runner time limit. Take the time needed to review every assigned claim; disclose coverage gaps and never invent missing verdicts.',
+    'There is no runner time limit; the operator sets a per-pass tool budget. Take the time needed to review every assigned claim; disclose coverage gaps and never invent missing verdicts.',
     '1. Use `audit_docker` MCP tools (`get_review_plan`, `read_file`, `search_code`, `list_existing_tests`, `run_existing_tests`) to inspect the cited `file:line` locations under `/work/src`.',
     '2. Double-check scope/role guards, DB locks, bot/economy invariants, and API response DTOs (for example, if a claim states an API returns an enumeration oracle like "user already registered" or leaks fields, verify the exact DTO/error in source).',
     '3. For EVERY assigned claim ID below, decide a verdict: "upheld", "partial", or "refuted", with `reason` and relative `file:line` `evidence` citations.',
