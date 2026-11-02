@@ -39,9 +39,10 @@ parse_flags() {
       --surface|-s) SURFACE="${2:?$1 needs a value}"; shift 2 ;;
       --out|-o) OUT_DIR="${2:?$1 needs a path}"; shift 2 ;;
       --agents|-a) REVIEWER_ARGS+=(--agents "${2:?$1 needs a list}"); shift 2 ;;
-      --reviewers|--config|--preset|--assign|--orchestrator|--alternate-judge|--passes|--tool-budget|--model|--models|--model-claude|--model-grok|--model-agy|--model-codex)
+      --reviewers|--config|--preset|--assign|--orchestrator|--alternate-judge|--passes|--tool-budget|--max-cost-usd|--model|--models|--model-claude|--model-grok|--model-agy|--model-codex)
         REVIEWER_ARGS+=("$1" "${2:?$1 needs a value}"); shift 2 ;;
       --plan) PLAN=1; shift ;;
+      --verbose) shift ;;
       --resume-from) RESUME_FROM="${2:?--resume-from needs a report directory}"; shift 2 ;;
       --test-artifacts) TEST_ARTIFACTS="${2:?--test-artifacts needs a Cargo target directory}"; shift 2 ;;
       --restart-failed) RESTART_FAILED=1; shift ;;

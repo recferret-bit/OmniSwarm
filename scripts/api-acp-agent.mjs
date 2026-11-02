@@ -10,7 +10,7 @@ import { readReportJson, writeReportFile } from './report-contract.mjs';
 import { SessionError } from './agent-rpc.mjs';
 import { runToolLoop } from './provider-openai-compat.mjs';
 import { toOpenAiTools, toolResultText } from './api-tool-schema.mjs';
-import { runStrategy } from './scripted-strategies.mjs';
+import { passFromBrief, runStrategy } from './scripted-strategies.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const send = (message) => process.stdout.write(`${JSON.stringify({ jsonrpc: '2.0', ...message })}\n`);
@@ -132,8 +132,10 @@ export class ApiAcpAgent {
           callTool: (name, args) => this.callBridge(name, args),
           fixtureRoot: this.config.fixtureRoot,
           surface: this.config.surface || 'S1',
+          pass: passFromBrief(brief),
         });
         this.state.turns += 1;
+        this.state.stop = 'submitted';
         this.save();
         return { stopReason: 'end_turn' };
       }
@@ -147,12 +149,16 @@ export class ApiAcpAgent {
         callTool: (name, args) => this.callBridge(name, args),
         brief,
         maxTurns: this.config.maxTurns || 40,
+        maxCostUsd: this.config.maxCostUsd ?? null,
+        prices: this.config.prices || null,
         provider: this.config.provider,
         transcriptPath: path.join(this.config.cwd, 'loop-transcript.jsonl'),
       });
       this.state.turns += loop.turns;
       this.state.servedModel = loop.servedModel;
-      this.state.stop = loop.stop;
+      this.state.stop = loop.failure === 'model_mismatch' ? 'error' : loop.stop;
+      this.state.usage = loop.usage;
+      this.state.cost = (loop.usage || []).reduce((total, row) => total + (Number(row.cost) || 0), 0);
       this.state.failure = loop.failure || null;
       this.save();
       if (loop.failure === 'model_mismatch') throw new SessionError('model_mismatch');

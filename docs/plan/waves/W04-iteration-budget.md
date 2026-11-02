@@ -24,23 +24,24 @@ The owner's rule — **each agent iterates a fixed number of times** — holds f
 
 ## Features covered
 
-- [ ] Budget fields, pass and usage schemas — W04-01
-- [ ] `--passes`, `--tool-budget`, `--max-cost-usd` flags and config — W04-02
-- [ ] Bridge budget counter per reviewer and pass, files-read map — W04-03
-- [ ] Finalize-only switch at N + grace 3 (`finalizeOnly`, R-15) — W04-04
-- [ ] Exactly-P pass loop in the review phase — W04-05
-- [ ] Pass brief roles discover / self-verify / deepen — W04-06
-- [ ] ACP-side call counting, "submit now" correction, cancel — W04-07
-- [ ] Grok `--max-turns`, Claude turn-flag probe — W04-08
-- [ ] API loop bound with forced submit on the last turn — W04-09
-- [ ] Scripted reviewers honour the budget — W04-10
-- [ ] Cost ceiling — W04-11, W04-12
-- [ ] Raw per-pass usage records — W04-13
-- [ ] Plan output with budgets — W04-14
-- [ ] Health: budget stops vs failures — W04-15
-- [ ] Cross-family budget test matrix — W04-16
-- [ ] Docs and skill copies — W04-17
-- [ ] Wave check — W04-18
+- [x] Budget fields, pass and usage schemas — W04-01
+- [x] `--passes`, `--tool-budget`, `--max-cost-usd` flags and config — W04-02
+- [x] Bridge budget counter per reviewer and pass, files-read map — W04-03
+- [x] Finalize-only switch at N + grace 3 (`finalizeOnly`, R-15) — W04-04
+- [x] Exactly-P pass loop in the review phase — W04-05
+- [x] Pass brief roles discover / self-verify / deepen — W04-06
+- [x] ACP-side call counting, "submit now" correction, cancel — W04-07
+- [x] Grok `--max-turns`, Claude turn-flag probe — W04-08
+- [x] API loop bound with forced submit on the last turn — W04-09
+- [x] Scripted reviewers honour the budget — W04-10
+- [x] Cost ceiling — W04-11
+- [x] Price table for providers that do not report cost — W04-12
+- [x] Raw per-pass usage records — W04-13
+- [x] Plan output with budgets — W04-14
+- [x] Health: budget stops vs failures — W04-15
+- [x] Cross-family budget test matrix — W04-16
+- [x] Docs and skill copies — W04-17
+- [x] Wave check — W04-18 (`npm run check:w04`)
 
 ## Issues
 

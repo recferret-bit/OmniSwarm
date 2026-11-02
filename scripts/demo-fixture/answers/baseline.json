@@ -17,6 +17,7 @@
       "fix": "Require the predecessor account to equal the stored owner before changing the balance."
     },
     {
+      "selfVerifyDrop": true,
       "title": "ft_on_transfer does not check the token contract",
       "surface": "S1",
       "severity": "high",

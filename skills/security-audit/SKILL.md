@@ -113,7 +113,7 @@ The visual direction is modern mechanical/Transformers-inspired: white panels, o
 
 ## Long sessions and recovery
 
-The runner sets no reasoning deadline on a review; the operator sets a per-pass tool budget (`--tool-budget`, recorded now and enforced from W04). Heartbeats every 30 seconds distinguish process, transport and agent activity. The preparation budget does not end a held review container. Individual protocol controls and test executions remain bounded; npm, Cargo and shell suites are limited to 15 minutes each (including cold compilation); pytest suites to 30 minutes.
+Each reviewer runs a fixed number of passes (`--passes`, default 2) and each pass allows a fixed number of bridge calls (`--tool-budget`, default 40). At that limit, inspection stops and the reviewer has 3 calls to submit. A pass that submits is complete. A pass that never submits leaves that surface incomplete. Heartbeats every 30 seconds distinguish process, transport and agent activity. The preparation budget does not end a held review container. Individual protocol controls and test executions remain bounded; npm, Cargo and shell suites are limited to 15 minutes each (including cold compilation); pytest suites to 30 minutes.
 
 Preserve the original private `sessions/` directories. `--resume-from` requires the same review workflow, source, models, reviewers and assignments. Legacy adversarial sessions cannot be resumed into this workflow. A transport loss permits one exact-session reconnect if supported; refusal, quota and authentication failures never auto-retry.
 

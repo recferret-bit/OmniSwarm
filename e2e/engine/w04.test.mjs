@@ -1,0 +1,63 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { budgetHealth } from '../../scripts/verification-health.mjs';
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+const run = (args, env = {}) => spawnSync(path.join(ROOT, 'bin', 'audit'), args, { cwd: ROOT, encoding: 'utf8', env: { ...process.env, ...env }, timeout: 180_000 });
+
+test('plan prints passes, grace and the worst-case call count', () => {
+  const result = run(['run', '--repo', 'scripts/demo-fixture', '--reviewers', 'scripted:baseline,scripted:lazy,key:zai:glm-5.3', '--passes', '2', '--tool-budget', '5', '--surface', 's1', '--plan']);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /scripted-lazy\s+2 × 5 \(\+3\)\s+discover, self-verify\s+max 16 calls\s+gate: bridge\+loop/);
+  assert.match(result.stdout, /Pass roles: discover, self-verify/);
+  const zero = run(['run', '--repo', 'scripts/demo-fixture', '--reviewers', 'scripted:baseline', '--passes', '0', '--plan']);
+  assert.equal(zero.status, 2);
+  assert.match(zero.stderr, /passes must be 1–5/);
+});
+
+test('scripted and replayed reviewers record two passes, a budget stop and a cost stop', () => {
+  const out = fs.mkdtempSync(path.join(os.tmpdir(), 'w04-'));
+  fs.rmSync(out, { recursive: true });
+  const result = run(['run', '--repo', 'scripts/demo-fixture', '--reviewers', 'scripted:baseline,scripted:lazy', '--surface', 's1', '--passes', '2', '--tool-budget', '5', '--out', out], { OMNI_DEMO_HOST: '1' });
+  assert.equal(result.status, 0, `${result.stderr}\n${result.stdout}`);
+  const lazy = JSON.parse(fs.readFileSync(path.join(out, 'harness', 'usage', 'scripted-lazy', 's1-pass-1.json'), 'utf8'));
+  assert.equal(lazy.calls, 5);
+  assert.equal(lazy.stop, 'budget');
+  assert.ok(fs.existsSync(path.join(out, 'harness', 'usage', 'scripted-lazy', 's1-pass-2.json')));
+  assert.ok(fs.existsSync(path.join(out, 'harness', 'usage', 'scripted-baseline', 's1-pass-2.json')));
+  const budget = JSON.parse(fs.readFileSync(path.join(out, 'harness', 'budget-scripted-lazy.json'), 'utf8'));
+  assert.equal(budget.passes['s1:1'].calls, 5);
+  assert.ok(budget.passes['s1:1'].finalizeOnlyAt);
+  assert.ok(budget.passes['s1:1'].filesRead.includes('src/lib.rs'));
+  const jobs = JSON.parse(fs.readFileSync(path.join(out, 'workers.json'), 'utf8')).jobs;
+  assert.ok(jobs.every((job) => job.passesCompleted === 2));
+  assert.ok(fs.readdirSync(path.join(out, 'submissions')).some((name) => name.includes('scripted-baseline') && name.includes('pass-1')));
+  const health = JSON.parse(fs.readFileSync(path.join(out, 'harness', 'budget-health.json'), 'utf8'));
+  assert.equal(health.state, 'COMPLETE');
+  assert.ok(health.budgetStops.some((row) => row.reviewer === 'scripted-lazy'));
+  assert.equal(budgetHealth([{ reviewer: 'scripted-lazy', stop: 'budget', submitted: false }]).state, 'INCOMPLETE');
+});
+
+test('a priced replay under the cost ceiling records stop cost and skips pass 2', () => {
+  const out = fs.mkdtempSync(path.join(os.tmpdir(), 'w04-cost-'));
+  fs.rmSync(out, { recursive: true });
+  const result = run(['run', '--repo', 'scripts/demo-fixture', '--reviewers', 'key:zai:glm-5.3', '--surface', 's1', '--passes', '2', '--tool-budget', '5', '--max-cost-usd', '0.0001', '--out', out], {
+    OMNI_DEMO_HOST: '1', OMNI_HTTP_REPLAY: path.join(ROOT, 'scripts', 'provider-fixtures', 'w04'), ZAI_API_KEY: 'zk-test',
+  });
+  assert.equal(result.status, 0, `${result.stderr}\n${result.stdout}`);
+  const first = JSON.parse(fs.readFileSync(path.join(out, 'harness', 'usage', 'key-zai-glm-5-3', 's1-pass-1.json'), 'utf8'));
+  const second = JSON.parse(fs.readFileSync(path.join(out, 'harness', 'usage', 'key-zai-glm-5-3', 's1-pass-2.json'), 'utf8'));
+  assert.equal(first.stop, 'cost');
+  assert.equal(second.skipped, 'cost_ceiling');
+});
+
+test('grok plan shows max-turns derived from the budget', () => {
+  const result = run(['run', '--repo', 'scripts/demo-fixture', '--reviewers', 'cli:grok:grok-4.7', '--tool-budget', '10', '--passes', '1', '--plan', '--verbose']);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /--max-turns 13/);
+});

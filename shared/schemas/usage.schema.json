@@ -7,7 +7,17 @@
   "required": ["passes"],
   "additionalProperties": false,
   "properties": {
-    "passes": { "type": "array", "items": { "$ref": "#/$defs/pass" } }
+    "passes": { "type": "array", "items": { "$ref": "#/$defs/pass" } },
+    "totals": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "calls": { "type": "integer", "minimum": 0 },
+        "tokensIn": { "type": "integer", "minimum": 0 },
+        "tokensOut": { "type": "integer", "minimum": 0 },
+        "cost": { "type": "number", "minimum": 0 }
+      }
+    }
   },
   "$defs": {
     "pass": {
@@ -16,13 +26,17 @@
       "additionalProperties": false,
       "properties": {
         "k": { "type": "integer", "minimum": 1 },
+        "index": { "type": "integer", "minimum": 1 },
+        "role": { "type": "string", "enum": ["discover", "self-verify", "deepen"] },
         "calls": { "type": "integer", "minimum": 0 },
         "tokensIn": { "type": "integer", "minimum": 0 },
         "tokensOut": { "type": "integer", "minimum": 0 },
         "cost": { "type": "number", "minimum": 0 },
+        "costSource": { "enum": ["reported", "estimated", "none"] },
         "stop": { "enum": ["submitted", "budget", "cost", "error"] },
         "startedAt": { "type": "string", "minLength": 1 },
-        "endedAt": { "type": "string", "minLength": 1 }
+        "endedAt": { "type": "string", "minLength": 1 },
+        "skipped": { "type": "string" }
       }
     }
   }

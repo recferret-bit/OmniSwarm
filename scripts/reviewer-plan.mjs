@@ -4,7 +4,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { GRACE } from './bridge-budget.mjs';
 import { families } from './reviewer-families.mjs';
+import { passRoles } from './review-briefs.mjs';
 import { formatReviewerSpec, parseReviewerSpec } from './reviewer-registry.mjs';
 import { SURFACES } from './orchestrator-surfaces.mjs';
 
@@ -73,7 +75,15 @@ export function renderPlan({ reviewers, assign, budgets, orchestrator, alternate
   }
   lines.push('', `Assignment: ${assign} (${jobs.length} job${jobs.length === 1 ? '' : 's'})`, `  ${pad('reviewer', w)}${surfaces.map((s) => pad(s.code, 4)).join('')}`);
   for (const r of reviewers) lines.push(`  ${pad(r.id, w)}${surfaces.map((s) => pad(jobs.some((j) => j.reviewer.id === r.id && j.surface.id === s.id) ? 'x' : '.', 4)).join('')}`);
-  lines.push('', `Budgets: passes ${budgets.passes}; tool budget ${budgets.toolBudget} per pass; debate rounds ${budgets.debate.rounds}; max cost ${budgets.maxCostUsd == null ? 'unset' : `$${budgets.maxCostUsd}`} (recorded now; enforced by W04)`);
+  const worst = budgets.passes * (budgets.toolBudget + GRACE);
+  lines.push('', `Budgets: passes ${budgets.passes}; tool budget ${budgets.toolBudget} per pass; debate rounds ${budgets.debate.rounds}; max cost ${budgets.maxCostUsd == null ? 'unset' : `$${budgets.maxCostUsd}`}`);
+  lines.push(`Pass roles: ${passRoles(budgets.passes).join(', ')}. Worst case ${worst} calls.`);
+  for (const r of reviewers) {
+    const roles = passRoles(Math.min(budgets.passes, 2)).join(', ');
+    const gate = r.family === 'cli' && r.provider === 'grok' ? 'bridge+acp+--max-turns' : r.family === 'cli' ? 'bridge+acp' : 'bridge+loop';
+    lines.push(`${r.id}  ${budgets.passes} × ${budgets.toolBudget} (+${GRACE})  ${roles}  max ${worst} calls  gate: ${gate}`);
+    if (r.provider === 'grok') lines.push(`--max-turns ${budgets.toolBudget + GRACE}`);
+  }
   if (orchestrator === 'recommended') {
     const rec = recommendedOrchestrator({ env });
     lines.push(`Orchestrator: recommended -> ${rec.spec || 'none'}; ${rec.reason}. No phase uses it yet.`);

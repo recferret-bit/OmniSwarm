@@ -19,7 +19,9 @@ export function buildApiLaunch(reviewer, ctx, preset) {
     keyEnv: preset.keyEnv,
     headers: preset.headers(env),
     extraBody: preset.extraBody,
-    maxTurns: ctx.maxTurns || 40,
+    maxTurns: ctx.maxTurns || (ctx.toolBudget ? ctx.toolBudget + 3 : 40),
+    maxCostUsd: ctx.maxCostUsd ?? null,
+    prices: ctx.prices || null,
     cwd: ctx.workDir,
     mcp: {
       command: ctx.mcpCommand || process.execPath,

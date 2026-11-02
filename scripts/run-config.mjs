@@ -94,9 +94,13 @@ export function resolveRunConfig({ flags = {}, root = ROOT, explicitConfig = fla
     ...((flags.assign || pick('assign')) ? { assign: flags.assign || pick('assign') } : {}),
     passes: number('--passes', flags.passes) ?? pick('passes') ?? DEFAULTS.passes,
     toolBudget: number('--tool-budget', flags.toolBudget) ?? pick('toolBudget') ?? DEFAULTS.toolBudget,
+    grace: 3,
     ...(pick('debate') ? { debate: pick('debate') } : {}),
-    ...(pick('maxCostUsd') !== undefined ? { maxCostUsd: pick('maxCostUsd') } : {}),
+    ...(flags.maxCostUsd !== undefined ? { maxCostUsd: Number(flags.maxCostUsd) } : pick('maxCostUsd') !== undefined ? { maxCostUsd: Number(pick('maxCostUsd')) } : {}),
+    ...(pick('prices') ? { prices: pick('prices') } : {}),
   };
+  if (!Number.isInteger(merged.passes) || merged.passes < 1 || merged.passes > 5) throw new ConfigError('passes must be 1–5');
+  if (!Number.isInteger(merged.toolBudget) || merged.toolBudget < 5 || merged.toolBudget > 200) throw new ConfigError('tool budget must be 5–200');
   const check = validate('run-config', merged);
   if (!check.ok) throw new ConfigError(`invalid run configuration: ${check.errors[0]}`);
 
@@ -115,6 +119,7 @@ export function resolveRunConfig({ flags = {}, root = ROOT, explicitConfig = fla
     alternateJudge: merged.alternateJudge ? parseReviewerSpec(merged.alternateJudge) : null,
     assign,
     budgets: { passes: merged.passes, toolBudget: merged.toolBudget, debate: { ...DEFAULTS.debate, ...(merged.debate || {}) }, maxCostUsd: merged.maxCostUsd ?? null },
+    prices: merged.prices || null,
     preset: flags.preset || null,
     configFile: config ? file : null,
     warnings,
@@ -127,7 +132,7 @@ export function parseFlags(argv) {
   const take = (i) => { if (i + 1 >= argv.length) throw new ConfigError(`${argv[i]} needs a value`); return argv[i + 1]; };
   for (let i = 0; i < argv.length; i += 2) {
     const arg = argv[i];
-    const key = { '--config': 'config', '--preset': 'preset', '--reviewers': 'reviewers', '--agents': 'agents', '--model': 'model', '--models': 'models', '--assign': 'assign', '--orchestrator': 'orchestrator', '--alternate-judge': 'alternateJudge', '--passes': 'passes', '--tool-budget': 'toolBudget' }[arg];
+    const key = { '--config': 'config', '--preset': 'preset', '--reviewers': 'reviewers', '--agents': 'agents', '--model': 'model', '--models': 'models', '--assign': 'assign', '--orchestrator': 'orchestrator', '--alternate-judge': 'alternateJudge', '--passes': 'passes', '--tool-budget': 'toolBudget', '--max-cost-usd': 'maxCostUsd' }[arg];
     if (key) { flags[key] = take(i); continue; }
     const legacy = /^--model-([a-z]+)$/.exec(arg);
     if (legacy && Object.hasOwn(CLI_DEFAULT_MODELS, legacy[1])) { flags.modelByAgent[legacy[1]] = take(i); continue; }
