@@ -14,7 +14,30 @@
     "test": "node --test --test-concurrency=2 scripts/*.test.mjs",
     "test:docker": "node --test scripts/*.docker.mjs",
     "pdf": "node scripts/report-pdf.mjs",
-    "check": "bash -n bin/audit && bash -n scripts/orchestrate.sh && bash -n scripts/sandbox.sh && npm test"
+    "check": "bash -n bin/audit && bash -n scripts/orchestrate.sh && bash -n scripts/sandbox.sh && npm test",
+    "test:schemas": "node shared/schemas/run-tests.mjs",
+    "test:intake": "node tools/gate.mjs test:intake backend/intake/package.json -- npm test --workspace backend/intake",
+    "test:landing": "node tools/gate.mjs test:landing frontend/landing/package.json -- npm test --workspace frontend/landing",
+    "test:contract": "node tools/gate.mjs test:contract contracts/review-registry/Cargo.toml -- cargo test --manifest-path contracts/review-registry/Cargo.toml",
+    "test:e2e": "node tools/gate.mjs test:e2e e2e/package.json -- npm test --prefix e2e --",
+    "check:infra": "node tools/gate.mjs check:infra infra/check.sh -- bash infra/check.sh",
+    "eval:golden": "node tools/gate.mjs eval:golden eval/run.mjs -- node eval/run.mjs",
+    "check:all": "npm run test:schemas && npm run test:intake && npm run test:landing && npm run test:contract && npm run test:e2e && npm run check:infra && node scripts/harness.mjs --self-test && npm test",
+    "check:w00": "node tools/check-w00.mjs",
+    "check:w01": "node tools/gate.mjs check:w01 --pending \"W01 is not built yet; its wave replaces this script\"",
+    "check:w02": "node tools/gate.mjs check:w02 --pending \"W02 is not built yet; its wave replaces this script\"",
+    "check:w03": "node tools/gate.mjs check:w03 --pending \"W03 is not built yet; its wave replaces this script\"",
+    "check:w04": "node tools/gate.mjs check:w04 --pending \"W04 is not built yet; its wave replaces this script\"",
+    "check:w05": "node tools/gate.mjs check:w05 --pending \"W05 is not built yet; its wave replaces this script\"",
+    "check:w06": "node tools/gate.mjs check:w06 --pending \"W06 is not built yet; its wave replaces this script\"",
+    "check:w07": "node tools/gate.mjs check:w07 --pending \"W07 is not built yet; its wave replaces this script\"",
+    "check:w08": "node tools/gate.mjs check:w08 --pending \"W08 is not built yet; its wave replaces this script\"",
+    "check:w09": "node tools/gate.mjs check:w09 --pending \"W09 is not built yet; its wave replaces this script\"",
+    "check:w10": "node tools/gate.mjs check:w10 --pending \"W10 is not built yet; its wave replaces this script\"",
+    "check:w11": "node tools/gate.mjs check:w11 --pending \"W11 is not built yet; its wave replaces this script\"",
+    "check:w12": "node tools/gate.mjs check:w12 --pending \"W12 is not built yet; its wave replaces this script\"",
+    "check:w13": "node tools/gate.mjs check:w13 --pending \"W13 is not built yet; its wave replaces this script\"",
+    "check:w14": "node tools/gate.mjs check:w14 --pending \"W14 is not built yet; its wave replaces this script\""
   },
   "keywords": [
     "solana",
@@ -30,5 +53,11 @@
     "grok",
     "agy"
   ],
-  "license": "MIT"
+  "license": "MIT",
+  "workspaces": [
+    "shared/schemas",
+    "backend/*",
+    "frontend/*",
+    "packages/*"
+  ]
 }
