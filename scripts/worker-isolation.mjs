@@ -3,10 +3,10 @@ import path from 'node:path';
 import os from 'node:os';
 import crypto from 'node:crypto';
 import { readReportText, validateAuditor, validCrosscheckRow } from './report-contract.mjs';
+import { REVIEWER_ID_PATTERN, isReviewerId } from './reviewer-registry.mjs';
 import { validateReviewRequest, requestBinding, validateTerminalReport } from './terminal-review-contract.mjs';
 
 export const REVIEW_IMAGE = 'node@sha256:c3de60bf2f9dd0ac6370e6117950ff62d6e339527e7472301c9c78a017978392';
-export const ADAPTERS = ['claude', 'grok', 'agy', 'codex'];
 export const LIMITS = Object.freeze({ fileBytes: 2 * 1024 * 1024, totalBytes: 512 * 1024 * 1024, files: 40_000, entries: 400_000, depth: 32, outputBytes: 4 * 1024 * 1024, logBytes: 1024 * 1024 });
 const SLUGS = ['auth', 'input', 'logic', 'config', 'deps', 'client'];
 const SKIP_DIRS = new Set(['__snapshots__', 'vendor', 'venv', '.venv', 'out', '.turbo', '.cache', '.idea', '.vscode', '.git', 'node_modules', 'target', 'dist', 'build', '.next', 'coverage', '__pycache__', '.cargo', '.ssh', '.aws', '.docker', '.kube', '.grok', '.codex', '.gemini', '.agy', 'secrets']);
@@ -39,7 +39,7 @@ export function requireOwnedSnapshot(capture) {
 
 // No subscription adapter currently has a verified credential-free bridge.
 export function backendStatus(adapter) {
-  if (!ADAPTERS.includes(adapter)) throw new Error('unknown reviewer adapter');
+  if (!isReviewerId(adapter)) throw new Error('unknown reviewer adapter');
   return { adapter, state: 'blocked', reason: 'subscription_bridge_unverified', credentialFree: false, toolsDisabled: false };
 }
 
@@ -166,7 +166,7 @@ export function createJob({ adapter, model, surface = 's1', phase = 'original', 
   if (!/^s[1-6]$/.test(surface) || !['original', 'crosscheck'].includes(phase)) throw new Error('invalid review phase or surface');
   if (![sourceDigest, runtimeDigest].every((d) => typeof d === 'string' && /^[a-f0-9]{64}$/.test(d))) throw new Error('invalid source/runtime digest');
   if (!Array.isArray(claims) || claims.length > 10_000 || (phase === 'original' && claims.length)) throw new Error('invalid assigned claims');
-  if (claims.some((c) => !c || typeof c.id !== 'string' || !/^(claude|grok|agy|codex)-s[1-6]-[a-z]+#\d+$/.test(c.id)) || new Set(claims.map((c) => c.id)).size !== claims.length) throw new Error('invalid claim identities');
+  if (claims.some((c) => !c || typeof c.id !== 'string' || !new RegExp(`^${REVIEWER_ID_PATTERN}-s[1-6]-[a-z]+#\\d+$`).test(c.id)) || new Set(claims.map((c) => c.id)).size !== claims.length) throw new Error('invalid claim identities');
   const assigned = structuredClone(claims);
   const name = phase === 'crosscheck' ? `crosscheck-${adapter}` : `${adapter}-${surface}-${SLUGS[Number(surface.slice(1)) - 1]}`;
   return {

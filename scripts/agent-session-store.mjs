@@ -4,11 +4,12 @@ import path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { readReportJson, writeReportFile } from './report-contract.mjs';
 import { SessionError } from './agent-rpc.mjs';
+import { isReviewerId } from './reviewer-registry.mjs';
 
 export const digest = value => crypto.createHash('sha256').update(typeof value === 'string' ? value : JSON.stringify(value)).digest('hex');
 
 export function openSessionStore(directory, identity) {
-  if (!identity || !['claude', 'codex', 'grok', 'agy'].includes(identity.agent) || !/^[a-f0-9]{64}$/.test(identity.sourceDigest) || !/^[a-f0-9]{64}$/.test(identity.assignmentDigest) || !/^[\w.:-]{1,128}$/.test(identity.model)) throw new SessionError('session_identity_rejected');
+  if (!identity || !isReviewerId(identity.agent) || !/^[a-f0-9]{64}$/.test(identity.sourceDigest) || !/^[a-f0-9]{64}$/.test(identity.assignmentDigest) || !/^[\w.:-]{1,128}$/.test(identity.model)) throw new SessionError('session_identity_rejected');
   fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
   const stat = fs.lstatSync(directory);
   if (!stat.isDirectory() || stat.isSymbolicLink() || stat.uid !== process.getuid() || (stat.mode & 0o077)) throw new SessionError('session_directory_rejected');

@@ -3,13 +3,14 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { readReportJson, writeReportFile, validateAuditor, validCrosscheckRow } from './report-contract.mjs';
+import { REVIEWER_ID_PATTERN, isReviewerId } from './reviewer-registry.mjs';
 
 const stable = value => Array.isArray(value) ? value.map(stable) : value && typeof value === 'object' ? Object.fromEntries(Object.keys(value).sort().map(key => [key, stable(value[key])])) : value;
 const fingerprint = value => crypto.createHash('sha256').update(JSON.stringify(stable(value))).digest('hex');
-const validKey = key => /^(?:(?:claude|grok|agy|codex)-s[1-6]-(?:auth|input|logic|config|deps|client)|crosscheck-(?:claude|grok|agy|codex))$/.test(key);
+const validKey = key => new RegExp(`^(?:${REVIEWER_ID_PATTERN}-s[1-6]-(?:auth|input|logic|config|deps|client)|crosscheck-${REVIEWER_ID_PATTERN})$`).test(key);
 
 export function validateSubmissionIdentity(identity, key) {
-  if (!validKey(key) || !identity || !['auditor', 'crosscheck'].includes(identity.role) || !/^[a-f0-9]{64}$/.test(identity.sourceDigest) || !/^[a-f0-9]{64}$/.test(identity.assignmentDigest) || !/^[\w.:-]{1,128}$/.test(identity.model) || !['claude', 'codex', 'grok', 'agy'].includes(identity.agent) || identity.name !== key) throw new Error('Invalid submission identity');
+  if (!validKey(key) || !identity || !['auditor', 'crosscheck'].includes(identity.role) || !/^[a-f0-9]{64}$/.test(identity.sourceDigest) || !/^[a-f0-9]{64}$/.test(identity.assignmentDigest) || !/^[\w.:-]{1,128}$/.test(identity.model) || !isReviewerId(identity.agent) || identity.name !== key) throw new Error('Invalid submission identity');
   if (identity.role === 'crosscheck' ? key !== `crosscheck-${identity.agent}` : !key.startsWith(`${identity.agent}-`)) throw new Error('Submission reviewer mismatch');
   return identity;
 }

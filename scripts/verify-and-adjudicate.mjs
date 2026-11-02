@@ -24,7 +24,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { clusterFindings, dedupCandidates, isCompoundTitle } from './cluster-findings.mjs';
-import { loadAuditors, providerOf, readReportJson, validCrosscheckRow, writeReportFile } from './report-contract.mjs';
+import { loadAuditors, readReportJson, validCrosscheckRow, writeReportFile } from './report-contract.mjs';
+import { reviewersOfMeta, vendorOfJob } from './reviewer-registry.mjs';
 
 function newestReportDir() {
   const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'reports');
@@ -46,7 +47,9 @@ const SEVERITY_WEIGHT = {
 
 export async function adjudicate(reportDir, opts = {}) {
   const auditorsDir = path.join(reportDir, 'auditors');
-  const { reports, health, assignments } = loadAuditors(reportDir);
+  const { reports, health, assignments, meta } = loadAuditors(reportDir);
+  const reviewers = reviewersOfMeta(meta);
+  const authorVendor = (job) => vendorOfJob(job, reviewers);
   const initialErrorCount = health.errors.length;
   const allFindings = [];
   const allVerifiedSafe = [];
@@ -73,7 +76,7 @@ export async function adjudicate(reportDir, opts = {}) {
   }
 
   const reviewsByClaim = new Map();
-  const claimAuthors = new Map(allFindings.map((f) => [f.claimId, providerOf(f.auditor)]));
+  const claimAuthors = new Map(allFindings.map((f) => [f.claimId, authorVendor(f.auditor)]));
   for (const file of (fs.existsSync(auditorsDir) ? fs.readdirSync(auditorsDir) : []).filter((f) => f.startsWith('crosscheck-') && f.endsWith('.json'))) {
     const reviewer = file.slice('crosscheck-'.length, -'.json'.length);
     if (!Object.hasOwn(assignments, reviewer)) {
@@ -106,7 +109,7 @@ export async function adjudicate(reportDir, opts = {}) {
     const reviews = [];
     for (const id of cluster.claimIds || []) {
       for (const row of reviewsByClaim.get(id) || []) {
-        if (claimAuthors.get(id) === providerOf(`${row.reviewer}-s1-auth`)) continue;
+        if (claimAuthors.get(id) === vendorOfJob(row.reviewer, reviewers)) continue;
         reviews.push(row);
       }
     }
@@ -129,7 +132,7 @@ export async function adjudicate(reportDir, opts = {}) {
 
 
   const scoredFindings = clusters.map((c) => {
-    const vendorSet = new Set(c.auditors.map(providerOf).filter(Boolean));
+    const vendorSet = new Set(c.auditors.map(authorVendor).filter(Boolean));
 
     let status = 'MODEL_ASSERTION';
     if (vendorSet.size >= 2) {

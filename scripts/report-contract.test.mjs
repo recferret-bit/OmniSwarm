@@ -18,10 +18,11 @@ const finding = (extra = {}) => ({
   preconditions: 'Source review only', attack: [], poc: '', fix: 'Use an assertion label.', ...extra,
 });
 
-test('cross-check preparation rejects unknown adapter identities', (t) => {
+test('the dead crosscheck prepare CLI is gone', (t) => {
   const f = fixture(t);
-  const r = spawnSync(process.execPath, [path.join(scripts, 'crosscheck.mjs'), 'prepare', f.dir, 'claude,unknown'], { encoding: 'utf8', timeout: 5000 });
-  assert.notEqual(r.status, 0);
+  const r = spawnSync(process.execPath, [path.join(scripts, 'crosscheck.mjs'), 'prepare', f.dir, 'claude'], { encoding: 'utf8', timeout: 5000 });
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /unknown command/);
   assert.equal(fs.existsSync(path.join(f.dir, 'crosscheck')), false);
 });
 const controls = { verified_safe: [] };
