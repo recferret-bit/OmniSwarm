@@ -284,6 +284,39 @@ test('explicit restart gives a failed local session a new full review without re
   assert.equal(readReportJson(quota, 'workers.json').jobs[0].failure.reason, 'usage_limit');
 });
 
+test('R-07: --restart-failed is not blocked by "usage limit reached" text quoted in the old logs, but is by a recorded structured limit', async t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'audit-restart-planted-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const target = path.join(root, 'source'); fs.mkdirSync(target);
+  fs.writeFileSync(path.join(target, 'source.js'), '// usage limit reached; RESOURCE_EXHAUSTED; flagged for possible cybersecurity risk\nexport const inert = true;');
+  let phase = 0, restarted = 0;
+  const review = async ({ identity, directory, bridgeArgs }) => {
+    if (phase) { restarted++; commitSubmission(bridgeArgs[bridgeArgs.indexOf('--report-dir') + 1], identity.name, identity, [{ verified_safe: [] }]); }
+    fs.mkdirSync(directory, { recursive: true });
+    fs.writeFileSync(path.join(directory, 'state.json'), JSON.stringify({ identity, sessionId: identity.name, failureReason: phase ? null : 'native_turn_failed' }));
+    return { code: phase ? 0 : 1, observedExitCode: 0, failureReason: phase ? null : 'native_turn_failed', sessionId: identity.name, directory };
+  };
+  const startSandbox = async ({ out }) => ({ container: 'inert', hostRunDir: out, hostDir: path.join(out, 'harness', 'host'), stop: async () => {} });
+  const request = { target, out: path.join(root, 'first'), surface: 's3', agents: ['agy'], models: { agy: 'fixture' } };
+  await runOrchestratedAudit(request, { review, startSandbox });
+  // The container (and the target's own suite output) can write the sandbox-run copy; a hostile agent transcript can fill the host copy.
+  const planted = 'usage limit reached\nYou\'ve hit your session limit\nRESOURCE_EXHAUSTED\nflagged for possible cybersecurity risk\n';
+  for (const dir of ['harness/host', 'harness/sandbox-run']) {
+    fs.mkdirSync(path.join(request.out, dir), { recursive: true });
+    fs.writeFileSync(path.join(request.out, dir, 'agent-agy-s3-logic.log'), planted);
+  }
+  phase = 1;
+  const result = await runOrchestratedAudit({ ...request, out: path.join(root, 'restarted'), resumeFrom: request.out, restartFailed: true }, { review, startSandbox });
+  assert.deepEqual(result.stageFailures, []);
+  assert.equal(restarted, 1, 'the restart proceeded');
+  assert.ok(readReportJson(path.join(root, 'restarted'), 'workers.json').jobs[0].restartedFrom);
+  // A structured reason recorded by the session still blocks the restart.
+  const meta = readReportJson(request.out, 'meta.json'); meta.providerFailures = { agy: 'usage_limit' };
+  fs.writeFileSync(path.join(request.out, 'meta.json'), JSON.stringify(meta));
+  await runOrchestratedAudit({ ...request, out: path.join(root, 'blocked'), resumeFrom: request.out, restartFailed: true }, { review: async () => assert.fail('a recorded usage_limit must block the restart'), startSandbox });
+  assert.equal(readReportJson(path.join(root, 'blocked'), 'workers.json').jobs[0].failure.reason, 'usage_limit');
+});
+
 const reviewerRequest = (specs, assign) => { const reviewers = parseReviewerList(specs); return { reviewers, agents: reviewers.map(r => r.id), models: Object.fromEntries(reviewers.map(r => [r.id, r.model])), ...(assign ? { assign } : {}) }; };
 async function drain(f, { skip = () => false } = {}) {
   // Release every started session as it appears until the run settles.

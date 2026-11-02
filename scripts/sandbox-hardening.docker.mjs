@@ -25,9 +25,12 @@ const expected = JSON.parse(fs.readFileSync(path.join(fixtureDir, 'expected.json
 const dockerBin = resolveDockerBin();
 const docker = args => spawnSync(dockerBin, args, { encoding: 'utf8', timeout: 60_000, maxBuffer: 8 * 1024 * 1024 });
 const imagesPresent = ['audit-sandbox:local', 'node:24-bookworm-slim'].every(image => docker(['image', 'inspect', image]).status === 0);
+// `npm run check:w02` sets OMNI_REQUIRE_HARDENING=1: there, a missing image is a failure, never a green skip.
+const required = process.env.OMNI_REQUIRE_HARDENING === '1';
 const invariant = id => expected.invariants.find(row => row.id === id);
 
-test('hardening: the hostile fixture cannot influence what reviewers see (six invariants)', { skip: imagesPresent ? false : 'local images audit-sandbox:local and node:24-bookworm-slim are required' }, async t => {
+test('hardening: the hostile fixture cannot influence what reviewers see (six invariants)', { skip: imagesPresent || required ? false : 'local images audit-sandbox:local and node:24-bookworm-slim are required' }, async t => {
+  assert.ok(imagesPresent, 'OMNI_REQUIRE_HARDENING=1 but the local images audit-sandbox:local and node:24-bookworm-slim are missing; this test never pulls or builds them');
   assert.equal(expected.invariants.length, 6);
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'omni-hostile-'));
   const report = path.join(root, 'report');
@@ -133,4 +136,11 @@ test('hardening: the hostile fixture cannot influence what reviewers see (six in
     assert.equal(hostLogRel('claude-s1-auth'), 'harness/host/agent-claude-s1-auth.log');
     assert.throws(() => readReportText(report, hostLogRel('claude-s1-auth')), /ENOENT/);
   });
+
+  // Owner check: keep the container up for N seconds so steps 3 and 4 of docs/plan/checks/w02-check.md can be run by hand.
+  const hold = Number(process.env.OMNI_HARDENING_HOLD_SECONDS || 0);
+  if (hold > 0) {
+    process.stderr.write(`\nHOLD ${container} ${report}\n`);
+    await new Promise(resolve => setTimeout(resolve, hold * 1000));
+  }
 });
