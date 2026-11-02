@@ -16,6 +16,14 @@ function tree(t, files) {
   return root;
 }
 
+test('the bundled demo fixture is a NEAR contract plus a Node client', () => {
+  const profile = detectEcosystems(path.join(path.dirname(new URL(import.meta.url).pathname), 'demo-fixture'));
+  assert.equal(profile.near.detected, true);
+  assert.equal(profile.near.contracts, true);
+  assert.equal(profile.node.detected, true);
+  assert.ok(profile.node.frameworks.includes('near-api-js'));
+});
+
 test('tests, docs and helper scripts do not decide the primary stack', () => {
   for (const p of ['backend/tests/test_a.py', 'frontend/scripts/check.mjs', 'docs/gen.js', 'x/conftest.py', 'web/app.test.ts']) assert.equal(isProductionPath(p), false, p);
   for (const p of ['backend/app/main.py', 'frontend/src/App.tsx']) assert.equal(isProductionPath(p), true, p);

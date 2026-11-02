@@ -86,7 +86,7 @@ export async function runReviewSession(options, { launch = buildSessionLaunch, p
   try {
     if (signal?.aborted) throw new SessionError('cancelled');
     const spec = launch({ agent: identity.agent, family: identity.family, provider: identity.provider, model: identity.model, workDir: store.workspace, bridgeArgs, legacyConversationId, env });
-    const bridge = await preflight(spec.mcpServers[0], { cwd: store.workspace, env: spec.invocation.env, signal, expectedRole: identity.role });
+    const bridge = await preflight(spec.mcpServers[0], { cwd: store.workspace, env: spec.bridgeEnv || spec.invocation.env, signal, expectedRole: identity.role });
     store.save('bridge_ready', { bridge, transport: spec.transport });
     for (;;) {
       let resumeCapable = false;

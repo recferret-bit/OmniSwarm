@@ -7,22 +7,30 @@ import { families, FamilyError } from './reviewer-families.mjs';
 import { parseReviewerSpec } from './reviewer-registry.mjs';
 import { buildSessionLaunch } from './agent-session-launch.mjs';
 
-test('only the cli family is installed before W03', () => {
-  assert.deepEqual(families.list(), ['cli']);
-  assert.throws(() => families.get('openrouter'), (error) => error instanceof FamilyError && error.code === 'FAMILY_NOT_INSTALLED' && /W03/.test(error.message));
+test('W03 installs key, openrouter and scripted; nearai stays uninstalled', () => {
+  assert.deepEqual(families.list(), ['cli', 'key', 'openrouter', 'scripted']);
+  assert.equal(families.get('openrouter').name, 'openrouter');
+  assert.equal(families.get('key').transport, 'api-acp');
+  assert.throws(() => families.get('nearai'), (error) => error instanceof FamilyError && error.code === 'FAMILY_NOT_INSTALLED' && /W03/.test(error.message));
   assert.throws(() => families.get('nonsense'), { code: 'FAMILY_UNKNOWN' });
 });
 
-test('check() reports uninstalled families and providers with the wave that adds them', () => {
+test('check() accepts installed W03 providers and rejects an unknown key provider', () => {
   assert.deepEqual(families.check(parseReviewerSpec('cli:claude:opus')), { ok: true });
-  const or = families.check(parseReviewerSpec('openrouter:qwen/qwen3.8-max-0902'));
-  assert.equal(or.ok, false);
-  assert.match(or.reason, /family `openrouter` not installed yet \(W03\)/);
-  const zai = families.check(parseReviewerSpec('cli:claude-zai:glm-5.3'));
-  assert.equal(zai.ok, false);
-  assert.match(zai.reason, /W03/);
-  assert.equal(families.check({ family: 'cli', provider: 'nope', model: 'x' }).code, 'PROVIDER_UNKNOWN');
-  assert.throws(() => families.launch(parseReviewerSpec('key:zai:glm-5.3'), {}), { code: 'FAMILY_NOT_INSTALLED' });
+  assert.equal(families.check(parseReviewerSpec('openrouter:qwen/qwen3.8-max-0902')).ok, true);
+  assert.equal(families.check(parseReviewerSpec('cli:claude-zai:glm-5.3')).ok, true);
+  assert.equal(families.check(parseReviewerSpec('key:zai:glm-5.3')).ok, true);
+  assert.equal(families.check(parseReviewerSpec('scripted:baseline')).ok, true);
+  const unknown = families.check(parseReviewerSpec('key:foo:x'));
+  assert.equal(unknown.code, 'PROVIDER_UNKNOWN');
+  assert.match(unknown.reason, /unknown provider foo/);
+  const deferred = families.check(parseReviewerSpec('key:openai:gpt-6.1-sol'));
+  assert.equal(deferred.ok, false);
+  assert.match(deferred.reason, /W03-05/);
+  const or = parseReviewerSpec('openrouter:qwen/qwen3.8-max-0902');
+  assert.equal(or.id, 'openrouter-qwen-qwen3-8-max-0902');
+  assert.equal(or.vendor, 'alibaba');
+  assert.deepEqual(parseReviewerSpec('cli:claude-zai:glm-5.3'), { id: 'cli-claude-zai-glm-5-3', family: 'cli', provider: 'claude-zai', vendor: 'zai', model: 'glm-5.3' });
 });
 
 test('cli reviewers receive no extra environment variables and codex/grok pin their model', () => {
@@ -41,7 +49,7 @@ test('a family file dropped next to the others is loaded without editing the reg
 });
 
 test('buildSessionLaunch is a dispatcher over the family registry', () => {
-  assert.throws(() => buildSessionLaunch({ agent: 'nope', model: 'm', workDir: '/tmp', bridgeArgs: [] }), /PROVIDER_UNKNOWN|has no provider/);
+  assert.throws(() => buildSessionLaunch({ agent: 'nope', model: 'm', workDir: '/tmp', bridgeArgs: [] }), /PROVIDER_UNKNOWN|unknown provider/);
   const source = fs.readFileSync(new URL('./agent-session-launch.mjs', import.meta.url), 'utf8');
   assert.ok(source.split('\n').length <= 12);
 });

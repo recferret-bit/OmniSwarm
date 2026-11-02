@@ -114,6 +114,98 @@ export function scrubProviderEnv(env = process.env) {
   return removed;
 }
 
+// Same digest the container computes over /src (sha256 of the sorted file list). Demo-host reads use it
+// so harness/source-read-digest.json can match source-manifest.json without a container.
+export function digestTree(root) {
+  const files = [];
+  const walk = (dir, rel) => {
+    for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
+      const next = rel ? `${rel}/${ent.name}` : ent.name;
+      const full = path.join(dir, ent.name);
+      if (ent.isSymbolicLink()) throw new Error(`symlink in sealed source: ${next}`);
+      if (ent.isDirectory()) walk(full, next);
+      else if (ent.isFile()) {
+        const body = fs.readFileSync(full);
+        files.push({ path: next, bytes: body.length, sha256: crypto.createHash('sha256').update(body).digest('hex') });
+      }
+    }
+  };
+  walk(root, '');
+  files.sort((a, b) => a.path.localeCompare(b.path, 'en'));
+  return { digest: crypto.createHash('sha256').update(JSON.stringify(files)).digest('hex'), files };
+}
+
+function demoHostFile(ctx, containerPath) {
+  const root = fs.realpathSync(ctx.demoHost);
+  const rel = containerPath === SEALED_SOURCE ? '' : containerPath.startsWith(`${SEALED_SOURCE}/`) ? containerPath.slice(SEALED_SOURCE.length + 1) : null;
+  if (rel == null || rel.split('/').includes('..')) throw new Error(`path outside source: ${containerPath}`);
+  const full = rel ? path.resolve(root, rel) : root;
+  if (full !== root && !full.startsWith(`${root}${path.sep}`)) throw new Error('path outside source');
+  return { full, rel: rel || '.' };
+}
+
+function demoHostList(ctx, containerPath, maxDepth) {
+  const { full } = demoHostFile(ctx, containerPath);
+  const skip = new Set(['node_modules', '.git', 'target', 'dist', '.cargo', 'coverage']);
+  const out = [];
+  const walk = (dir, depth) => {
+    if (depth > maxDepth || out.length >= 400) return;
+    let ents = [];
+    try { ents = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const ent of ents.sort((a, b) => a.name.localeCompare(b.name))) {
+      if (ent.isSymbolicLink()) continue;
+      const child = path.join(dir, ent.name);
+      const rel = path.relative(full, child) || ent.name;
+      if (ent.isDirectory()) { if (!skip.has(ent.name)) { out.push(`${rel}/`); walk(child, depth + 1); } }
+      else if (ent.isFile()) out.push(`${rel} (${fs.statSync(child).size}B)`);
+      if (out.length >= 400) break;
+    }
+  };
+  walk(full, 1);
+  return `Files under ${displayPath(containerPath)}:\n${out.join('\n') || '(empty)'}`;
+}
+
+function demoHostRead(ctx, containerPath, startLine, endLine) {
+  const { full, rel } = demoHostFile(ctx, containerPath);
+  if (!fs.lstatSync(full).isFile()) throw new Error(`Not a regular file: ${containerPath}`);
+  const lines = fs.readFileSync(full, 'utf8').split('\n');
+  const slice = lines.slice(startLine - 1, endLine).map((line, idx) => `${startLine + idx}: ${line}`);
+  const shown = rel === '.' ? containerPath : rel;
+  return `File: ${shown} (lines ${startLine}..${Math.min(endLine, lines.length)} of ${lines.length})\n${slice.join('\n')}`;
+}
+
+function demoHostSearch(ctx, containerPath, pattern, flags, limit) {
+  const { full } = demoHostFile(ctx, containerPath);
+  let re;
+  try { re = new RegExp(pattern, flags); } catch { re = new RegExp(pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), flags); }
+  const skip = new Set(['node_modules', '.git', 'target', 'dist', '.cargo', 'coverage']);
+  const hits = [];
+  const scan = (file) => {
+    let st;
+    try { st = fs.lstatSync(file); } catch { return; }
+    if (!st.isFile() || st.size > 1048576) return;
+    const text = fs.readFileSync(file, 'utf8');
+    if (text.includes('\0')) return;
+    const rel = path.relative(full, file) || path.basename(file);
+    const lines = text.split('\n');
+    for (let i = 0; i < lines.length && hits.length < limit; i++) {
+      if (re.test(lines[i])) hits.push(`${rel}:${i + 1}: ${lines[i].trim().slice(0, 220)}`);
+    }
+  };
+  const walk = (dir) => {
+    if (hits.length >= limit) return;
+    let st;
+    try { st = fs.lstatSync(dir); } catch { return; }
+    if (st.isFile()) return scan(dir);
+    if (!st.isDirectory()) return;
+    for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (!ent.isSymbolicLink() && !skip.has(ent.name)) walk(path.join(dir, ent.name));
+    }
+  };
+  walk(full);
+  return hits.length ? hits.join('\n') : 'No matches found.';
+}
+
 export function execInContainer(dockerBin, container, args, { cwd = SEALED_SOURCE, timeoutMs = 30_000, input = '', maxBytes = 64 * 1024, keepTail = false, path: execPath = BRIDGE_PATH } = {}) {
   return new Promise((resolve) => {
     const dockerArgs = [
@@ -204,13 +296,8 @@ process.stdout.write(JSON.stringify({killed,survivors}));
 
 // First read from /src records what reviewers were served (R-02). First writer wins; later bridges compare.
 export const SOURCE_READ_DIGEST_FILE = 'harness/source-read-digest.json';
-export async function ensureSourceReadDigest(ctx, containerPath) {
-  if (ctx.sourceDigestChecked || !ctx.reportDir || !ctx.container) return;
-  if (containerPath !== SEALED_SOURCE && !containerPath.startsWith(`${SEALED_SOURCE}/`)) return;
-  const res = await execInContainer(ctx.dockerBin, ctx.container, [NODE_BIN, '-e', SOURCE_DIGEST_SCRIPT], { cwd: '/', maxBytes: 32 * 1024 * 1024, timeoutMs: 120_000 });
-  let seen;
-  try { seen = JSON.parse(res.stdout); } catch { throw new Error(`Cannot compute the digest of the sealed source: ${res.stderr.slice(0, 200)}`); }
-  if (res.code !== 0 || !/^[a-f0-9]{64}$/.test(seen.digest) || !Array.isArray(seen.files)) throw new Error('Cannot compute the digest of the sealed source');
+function recordSourceDigest(ctx, seen) {
+  if (!/^[a-f0-9]{64}$/.test(seen.digest) || !Array.isArray(seen.files)) throw new Error('Cannot compute the digest of the sealed source');
   const record = `${JSON.stringify({ version: 1, source: SEALED_SOURCE, digest: seen.digest, files: seen.files, at: new Date().toISOString() })}\n`;
   const target = path.join(ctx.reportDir, SOURCE_READ_DIGEST_FILE);
   fs.mkdirSync(path.dirname(target), { recursive: true });
@@ -223,6 +310,18 @@ export async function ensureSourceReadDigest(ctx, containerPath) {
     if (first.digest !== seen.digest) throw new BridgeError('SOURCE_DIGEST_MISMATCH', 'The sealed source served now differs from the source served at the first read');
   } finally { fs.rmSync(temp, { force: true }); }
   ctx.sourceDigestChecked = true;
+}
+
+export async function ensureSourceReadDigest(ctx, containerPath) {
+  if (ctx.sourceDigestChecked || !ctx.reportDir) return;
+  if (ctx.demoHost) { recordSourceDigest(ctx, digestTree(ctx.demoHost)); return; }
+  if (!ctx.container) return;
+  if (containerPath !== SEALED_SOURCE && !containerPath.startsWith(`${SEALED_SOURCE}/`)) return;
+  const res = await execInContainer(ctx.dockerBin, ctx.container, [NODE_BIN, '-e', SOURCE_DIGEST_SCRIPT], { cwd: '/', maxBytes: 32 * 1024 * 1024, timeoutMs: 120_000 });
+  let seen;
+  try { seen = JSON.parse(res.stdout); } catch { throw new Error(`Cannot compute the digest of the sealed source: ${res.stderr.slice(0, 200)}`); }
+  if (res.code !== 0) throw new Error('Cannot compute the digest of the sealed source');
+  recordSourceDigest(ctx, seen);
 }
 
 export function commonToolDefinitions() {
@@ -340,6 +439,7 @@ export async function runCommonTool(ctx, name, args) {
     const targetPath = resolveContainerPath(args.path || REVIEW_SOURCE_LABEL);
     await ensureSourceReadDigest(ctx, targetPath);
     const maxDepth = Math.min(Math.max(Number(args.max_depth) || 3, 1), 6);
+    if (ctx.demoHost) return demoHostList(ctx, targetPath, maxDepth);
     const script = `
       const fs = require('node:fs'), path = require('node:path');
       const root = process.argv[1], maxDepth = Number(process.argv[2]);
@@ -368,6 +468,7 @@ export async function runCommonTool(ctx, name, args) {
     await ensureSourceReadDigest(ctx, targetPath);
     const startLine = Math.max(1, Number(args.start_line) || 1);
     const endLine = Math.min(startLine + 399, Math.max(startLine, Number(args.end_line) || (startLine + 200)));
+    if (ctx.demoHost) return demoHostRead(ctx, targetPath, startLine, endLine);
     const script = `
       const fs = require('node:fs');
       const file = process.argv[1], s = Number(process.argv[2]), e = Number(process.argv[3]);
@@ -389,6 +490,7 @@ export async function runCommonTool(ctx, name, args) {
     if (!pattern) throw new Error('pattern is required');
     const maxResults = Math.min(Math.max(Number(args.max_results) || 80, 1), 200);
     const flags = args.case_insensitive ? 'i' : '';
+    if (ctx.demoHost) return demoHostSearch(ctx, targetPath, pattern, flags, maxResults);
     const script = `
       const fs = require('node:fs'), path = require('node:path');
       const [root, pat, flags, limStr] = process.argv.slice(1);
@@ -424,6 +526,10 @@ export async function runCommonTool(ctx, name, args) {
   }
 
   if (name === 'list_existing_tests' || name === 'run_existing_tests') {
+    if (ctx.demoHost) {
+      if (name === 'list_existing_tests') return JSON.stringify({ scope: 'demo_host', tests: [] });
+      return `demo-host does not execute target tests (${args.test_id || 'unspecified'}). This is a coverage gap.`;
+    }
     if (Object.keys(args).some(key => name === 'list_existing_tests' || key !== 'test_id')) throw new Error('Existing test tools accept only a catalogued test_id');
     const catalog = readReportJson(reportDir, 'harness/existing-tests.json');
     const sourceDigest = ctx.submissionIdentity?.sourceDigest;

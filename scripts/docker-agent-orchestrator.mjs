@@ -40,6 +40,7 @@ import { runtimeAdapter, sessionEnvironment } from './agent-session-launch.mjs';
 import { REVIEW_WORKFLOW, REVIEW_SCOPE, buildExistingTestCatalog } from './review-workflow.mjs';
 import { SURFACES } from './orchestrator-surfaces.mjs';
 import { families } from './reviewer-families.mjs';
+import { withKeyFingerprint } from './reviewer-env.mjs';
 import { reviewersOfMeta } from './reviewer-registry.mjs';
 import { assignJobs, selectSurfaces } from './reviewer-plan.mjs';
 import { loadPhases, runPhases } from './orchestrator-phases.mjs';
@@ -53,7 +54,8 @@ export function checkBridgeAgents(env = process.env) {
   const dockerBin = resolveDockerBin();
   const dockerInfo = spawnSync(dockerBin, ['info', '--format', '{{.ServerVersion}}'], { encoding: 'utf8', timeout: 8000 });
   const dockerReady = dockerInfo.status === 0;
-  const agents = Object.keys(families.get('cli').providers).filter((agent) => families.check({ family: 'cli', provider: agent }).ok).map((agent) => {
+  // Presence check stays the four subscription CLIs. claude-zai is reported only when --reviewers names it.
+  const agents = ['claude', 'codex', 'grok', 'agy'].filter((agent) => families.check({ family: 'cli', provider: agent }).ok).map((agent) => {
     const exe = resolveExecutable(agent, env);
     if (!exe) return { agent, state: 'unavailable', executable: null, version: null, bridgeMode: 'docker_mcp_stdio' };
     const ver = spawnSync(exe, ['--version'], { encoding: 'utf8', timeout: 5000, env: sessionEnvironment(env) });
@@ -284,6 +286,7 @@ export async function runOrchestratedAudit(request, options = {}) {
     const verdict = families.check(reviewer);
     if (!verdict.ok) throw new Error(`Reviewer ${reviewer.id}: ${verdict.reason}`);
   }
+  const published = reviewers.map((reviewer) => withKeyFingerprint(reviewer, families.has(reviewer.family) ? families.envAllowlist(reviewer) : [], process.env));
   request.models = Object.fromEntries(reviewers.map((r) => [r.id, r.model]));
   request.agents = reviewers.map((r) => r.id);
 
@@ -322,8 +325,8 @@ export async function runOrchestratedAudit(request, options = {}) {
   // `models` stays populated for every reviewer so reports and tools that read the old map keep working.
   const orchestratorMeta = request.orchestrator === 'recommended' ? { requested: 'recommended' } : request.orchestrator || null;
   const budgets = request.budgets || null;
-  const initialMeta = { name: request.name || path.basename(request.target), mode: request.mode || 'local', source: request.source || request.target, surface: surfaceArg, agents: request.agents, models: request.models, reviewers, orchestrator: orchestratorMeta, assign, budgets, auditors: jobs.map(job => job.name), workerExits, crosscheckExits, stageFailures, finalized: false, sandboxHardening: 1, workflow: REVIEW_WORKFLOW, agentTransport: 'acp_v1', submissionAuthority: 'mcp_commit' };
-  writeReportFile(output, 'harness/reviewers.json', `${JSON.stringify({ version: 1, reviewers, orchestrator: orchestratorMeta, alternateJudge: request.alternateJudge || null, assign, budgets, preset: request.preset || null }, null, 2)}\n`);
+  const initialMeta = { name: request.name || path.basename(request.target), mode: request.mode || 'local', source: request.source || request.target, surface: surfaceArg, agents: request.agents, models: request.models, reviewers: published, orchestrator: orchestratorMeta, assign, budgets, auditors: jobs.map(job => job.name), workerExits, crosscheckExits, stageFailures, finalized: false, sandboxHardening: 1, workflow: REVIEW_WORKFLOW, agentTransport: 'acp_v1', submissionAuthority: 'mcp_commit', ...(request.preset === 'demo' || request.demo ? { demo: true } : {}) };
+  writeReportFile(output, 'harness/reviewers.json', `${JSON.stringify({ version: 1, reviewers: published, orchestrator: orchestratorMeta, alternateJudge: request.alternateJudge || null, assign, budgets, preset: request.preset || null }, null, 2)}\n`);
   writeReportFile(output, 'meta.json', JSON.stringify(initialMeta, null, 2));
   const saveWorkers = () => writeReportFile(output, 'workers.json', JSON.stringify({ version: 1, policy: 'docker_mcp_bridge', sourceDigest, jobs }, null, 2));
   saveWorkers();
@@ -387,9 +390,10 @@ export async function runOrchestratedAudit(request, options = {}) {
       }
     }
     const bridgeArgs = ['--docker-bin', dockerBin, '--container', session.container, '--report-dir', output, '--role', role, '--agent', agent, '--identity-file', identityFile, '--reviewers-file', path.join(output, 'harness', 'reviewers.json')];
+    const transport = families.has(reviewer.family) ? families.get(reviewer.family).transport : undefined;
     // Cross-check reviewers span every surface, so their context and plans must too (R-06).
     bridgeArgs.push(...(role === 'auditor' ? ['--auditor', name, '--surface', surface] : ['--surface', 'ALL']));
-    writeReportFile(output, `harness/session-${name}.json`, JSON.stringify({ directory, identity }));
+    writeReportFile(output, `harness/session-${name}.json`, JSON.stringify({ directory, identity, ...(transport ? { transport } : {}) }));
     const result = await review({ directory, identity, bridgeArgs, prompt, logFile, resume: resuming, ...processOptions(name) });
     writeReportFile(output, `harness/heartbeat-${name}.json`, `${JSON.stringify({ state: 'exited', at: new Date().toISOString(), elapsedMs: result.elapsedMs, turnCode: result.code, observedExitCode: result.observedExitCode ?? null, sessionId: result.sessionId, timeLimitMs: null })}\n`);
     if (result.code !== 0) {

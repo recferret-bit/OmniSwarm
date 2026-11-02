@@ -5,6 +5,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { cargoInfo, isNearCargo } from './cargo-manifest.mjs';
 
 const SKIP_DIRS = new Set([
@@ -219,4 +220,12 @@ export function analyseNodeDeps(targetRoot) {
   }
   const unresolved = out.noLock.length + out.nonRegistry.length + out.loose.length;
   return { ...out, unresolved, applicable: out.manifests.length > 0 };
+}
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const target = process.argv[2];
+  if (!target) { process.stderr.write('usage: stack-detect.mjs <dir>\n'); process.exit(2); }
+  const profile = detectEcosystems(target);
+  const names = ['near', 'node', 'rust', 'python', 'solana'].filter((name) => profile[name]?.detected);
+  process.stdout.write(`${names.join(' + ') || 'none'}\n`);
 }

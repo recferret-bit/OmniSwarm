@@ -286,6 +286,7 @@ function rail(modelPage) {
 function page(body, modelPage = false) {
   return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta http-equiv="Content-Security-Policy" content="${esc(policy)}"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(targetName)} — ${modelPage ? 'Findings by model' : 'Security audit'}</title><style>${styles}</style></head>
     <body><a class="skip-link" href="#main">Skip to report</a>${rail(modelPage)}<div class="workspace">
+    ${meta.demo ? '<p style="margin:0;padding:10px 16px;background:#111;color:#fff;font-weight:700">DEMO — not a review</p>' : ''}
     <div class="topbar"><span><b>Security intelligence</b> / ${modelPage ? 'Model comparison' : 'Audit overview'}</span><span class="topbar-detail">${esc(dateLabel)} &nbsp; / &nbsp; ${expected} review assignments</span></div>
     <main id="main">${body}<footer class="footer"><span>Audit / Core · Source security review</span><span>Model assertions · Unverified provenance</span><span>${esc(meta.commit || dateLabel)}</span></footer></main></div>
     ${!modelPage ? `<script nonce="${nonce}">${browserScript}</script>` : ''}</body></html>`;

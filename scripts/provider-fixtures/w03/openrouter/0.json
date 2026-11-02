@@ -1,0 +1,8 @@
+{
+  "status": 200,
+  "body": {
+    "model": "qwen/qwen3.8-max-0902",
+    "choices": [{ "message": { "role": "assistant", "content": "recorded openrouter turn" } }],
+    "usage": { "prompt_tokens": 10, "completion_tokens": 4, "cost": 0.001 }
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "status": 200,
+  "body": {
+    "model": "glm-5.3",
+    "choices": [{ "message": { "role": "assistant", "content": null, "tool_calls": [{ "id": "call-submit", "type": "function", "function": { "name": "submit_audit_report", "arguments": "{\"findings\":[],\"verified_safe\":[],\"markdown_summary\":\"replayed submit\"}" } }] } }],
+    "usage": { "prompt_tokens": 30, "completion_tokens": 12 }
+  }
+}

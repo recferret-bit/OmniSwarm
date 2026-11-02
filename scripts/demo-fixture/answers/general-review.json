@@ -1,0 +1,3 @@
+{
+  "Missing owner check in withdraw": { "summary": "The withdraw path does not compare the predecessor to the owner." }
+}
