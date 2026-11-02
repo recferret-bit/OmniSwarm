@@ -38,7 +38,7 @@
     "check:w11": "npm test --workspace frontend/landing && npm run guard --workspace frontend/landing",
     "check:w12": "npm run check:infra",
     "check:w13": "npm test --workspace packages/guard && node demos/attack/run.mjs && node demos/attack/run.mjs --no-guard",
-    "check:w14": "node tools/gate.mjs check:w14 --pending \"W14 is not built yet; its wave replaces this script\""
+    "check:w14": "bash tools/screener-check.sh && npm run check:all"
   },
   "keywords": [
     "solana",

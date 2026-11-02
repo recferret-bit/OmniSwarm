@@ -46,6 +46,30 @@ Reports bring together source citations, impact, suggested fixes, peer verdicts,
 
 See the [architecture notes](docs/how-it-works.md) and [visual operator guide](docs/index.html) for the full workflow.
 
+## Try it without a paid key
+
+<!-- screener
+run: node scripts/harness.mjs --self-test
+you should see: harness self-test ok
+-->
+
+```sh
+node scripts/harness.mjs --self-test
+```
+
+You should see `harness self-test ok`.
+
+<!-- screener
+run: ./bin/audit demo --no-docker
+you should see: DEMO — not a review
+-->
+
+```sh
+./bin/audit demo --no-docker
+```
+
+You should see `DEMO — not a review`. No provider key is read. The page is a scripted pass over `scripts/demo-fixture`, not a certificate.
+
 ## Quick Start
 
 ```sh
