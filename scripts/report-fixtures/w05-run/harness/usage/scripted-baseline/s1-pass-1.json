@@ -1,0 +1,11 @@
+{
+  "k": 1,
+  "calls": 4,
+  "tokensIn": 1,
+  "tokensOut": 1,
+  "cost": 0,
+  "costSource": "none",
+  "stop": "submitted",
+  "startedAt": "2026-11-02T00:00:00Z",
+  "endedAt": "2026-11-02T00:00:01Z"
+}

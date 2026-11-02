@@ -1,0 +1,9 @@
+{
+  "name": "scripted-baseline-s1-auth",
+  "agent": "scripted-baseline",
+  "role": "auditor",
+  "model": "baseline",
+  "sourceDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "assignmentDigest": "dcf43810b765517b10325d5fea4feec2d66306736f2c33f038e77e25772236dd",
+  "surface": "S1"
+}

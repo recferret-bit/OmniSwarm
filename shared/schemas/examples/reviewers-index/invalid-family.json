@@ -1,0 +1,7 @@
+{
+  "groups": [
+    { "family": "foo", "label": "Nope", "vendors": [] }
+  ],
+  "totals": {},
+  "pages": []
+}

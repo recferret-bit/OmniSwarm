@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import crypto from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { classifyAuditFailure, FAILURE_MESSAGES } from './audit-process.mjs';
@@ -261,9 +262,23 @@ export function loadAuditors(root) {
   }
   try {
     const extra = fs.readdirSync(path.join(root, 'auditors')).filter((n) => n.endsWith('.json') && !n.startsWith('crosscheck-') && !expected.includes(n.slice(0, -5)));
-    if (extra.length) errors.push('Unexpected auditor or tiebreak files were excluded.');
+    if (extra.length) errors.push(`unexpected auditor ${extra.map((name) => name.replace(/\.json$/, '')).join(', ')}`);
   } catch { errors.push('Auditor directory is missing.'); }
   if (Array.isArray(meta.stageFailures) && meta.stageFailures.length) errors.push('One or more review stages failed.');
+  if (fs.existsSync(path.join(root, 'reviewers'))) {
+    const walk = (dir) => {
+      for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, ent.name);
+        if (ent.isDirectory()) walk(full);
+        else if (ent.name === 'report.json') {
+          const rel = path.relative(root, full);
+          const check = validate('reviewer-report', readReportJson(root, rel));
+          if (!check.ok) errors.push(`${rel}: ${check.errors[0]}`);
+        }
+      }
+    };
+    try { walk(path.join(root, 'reviewers')); } catch (error) { errors.push(`reviewers/: ${error.message}`); }
+  }
   const assignments = {};
   for (const adapter of meta.agents) {
     const ids = reports.flatMap((r) => adapterOf(r.name) === adapter ? [] : r.data.slice(0, -1).map((_, i) => `${r.name}#${i}`));
@@ -285,4 +300,12 @@ export function loadAuditors(root) {
     meta, reports, assignments,
     health: { state: errors.length ? 'incomplete' : 'validated_outputs', reviewState, verification, expected, accepted: reports.map((r) => r.name), errors, provenance: 'unverified', executionEvidence: 'not_collected' },
   };
+}
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const result = loadAuditors(path.resolve(process.argv[2] || ''));
+  const complete = result.health.state !== 'incomplete';
+  process.stdout.write(`${complete ? 'COMPLETE' : 'INCOMPLETE'}\n`);
+  if (!complete) process.stderr.write(`${result.health.errors.join('\n')}\n`);
+  process.exit(complete ? 0 : 2);
 }

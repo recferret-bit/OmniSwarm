@@ -1,0 +1,13 @@
+{
+  "k": 1,
+  "index": 1,
+  "role": "discover",
+  "calls": 30,
+  "tokensIn": 10,
+  "tokensOut": 4,
+  "cost": 0.2,
+  "costSource": "reported",
+  "stop": "submitted",
+  "startedAt": "2026-11-02T00:00:00Z",
+  "endedAt": "2026-11-02T00:01:00Z"
+}
