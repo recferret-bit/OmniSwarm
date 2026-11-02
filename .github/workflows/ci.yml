@@ -1,0 +1,125 @@
+name: ci
+
+on:
+  push:
+    branches: [main, 'wave/**', 'issue/**']
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# No secrets, no provider calls, no Docker-marked tests (scripts/*.docker.mjs).
+# Every non-engine job turns itself into a notice until its folder has a package.
+
+jobs:
+  engine:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci
+      - run: node scripts/harness.mjs --self-test
+      - run: npm test
+      - name: Skill copies are byte-identical
+        run: cmp skills/security-audit/SKILL.md .claude/skills/security-audit/SKILL.md
+
+  schemas:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci
+      - run: npm run test:schemas
+      - run: node --test tools/
+
+  intake:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: omniswarm_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/omniswarm_ci
+    steps:
+      - uses: actions/checkout@v4
+      - name: Detect package
+        id: has
+        run: |
+          if [ -f backend/intake/package.json ]; then echo "present=true" >> "$GITHUB_OUTPUT"; else echo "present=false" >> "$GITHUB_OUTPUT"; echo "::notice::intake: skipped (no backend/intake/package.json yet)"; fi
+      - if: steps.has.outputs.present == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - if: steps.has.outputs.present == 'true'
+        run: npm ci
+      - if: steps.has.outputs.present == 'true'
+        run: npm run test:intake
+
+  landing:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Detect package
+        id: has
+        run: |
+          if [ -f frontend/landing/package.json ]; then echo "present=true" >> "$GITHUB_OUTPUT"; else echo "present=false" >> "$GITHUB_OUTPUT"; echo "::notice::landing: skipped (no frontend/landing/package.json yet)"; fi
+      - if: steps.has.outputs.present == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - if: steps.has.outputs.present == 'true'
+        run: npm ci
+      - if: steps.has.outputs.present == 'true'
+        run: npm run test:landing
+
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Detect crate
+        id: has
+        run: |
+          if [ -f contracts/review-registry/Cargo.toml ]; then echo "present=true" >> "$GITHUB_OUTPUT"; else echo "present=false" >> "$GITHUB_OUTPUT"; echo "::notice::contract: skipped (no contracts/review-registry/Cargo.toml yet)"; fi
+      - if: steps.has.outputs.present == 'true'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - if: steps.has.outputs.present == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - if: steps.has.outputs.present == 'true'
+        run: npm ci
+      - if: steps.has.outputs.present == 'true'
+        run: npm run test:contract
+
+  infra:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Detect infra
+        id: has
+        run: |
+          if [ -f infra/check.sh ] || ls infra/compose/*.y*ml >/dev/null 2>&1; then echo "present=true" >> "$GITHUB_OUTPUT"; else echo "present=false" >> "$GITHUB_OUTPUT"; echo "::notice::infra: skipped (no infra/check.sh or infra/compose yet)"; fi
+      - if: steps.has.outputs.present == 'true'
+        name: docker compose config and shellcheck
+        run: |
+          set -e
+          for f in infra/compose/*.y*ml; do [ -e "$f" ] && docker compose -f "$f" config -q; done
+          find infra -name '*.sh' -print0 | xargs -0 -r shellcheck
