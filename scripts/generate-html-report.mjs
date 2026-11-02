@@ -19,6 +19,7 @@ import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import crypto from 'node:crypto';
 import { esc, toneOf, severityLevel, findingCard as renderFindingCard, pageDocument } from './report-cards.mjs';
+import { v2Extras } from './report-sections/registry.mjs';
 import { loadAuditors, adapterOf, readReportText, readReportJson, writeReportFile } from './report-contract.mjs';
 import { reviewersOfMeta } from './reviewer-registry.mjs';
 
@@ -247,21 +248,38 @@ function mergeBadges(f) {
   if (f.compound) out.push('<span class="pill orange" title="Title lists several defects; review claim by claim">bundled claim</span>');
   return out.join('');
 }
+const v2 = v2Extras(reportDir, esc);
 function findingCard(f, index) {
-  return renderFindingCard(f, index, { originalClaims, mergeBadges, block, citations, disclosure, prose });
+  let card = renderFindingCard(f, index, { originalClaims, mergeBadges, block, citations, disclosure, prose });
+  if (!v2.active) return card;
+  const reviewers = (f.auditors || []).join(' ');
+  card = card.replace('<details class="finding ', `<details id="finding-${esc(f.clusterId || '')}" data-reviewers="${esc(reviewers)}" class="finding `);
+  const debate = v2.debateHtml(f);
+  if (!debate) return card;
+  const legacy = String(f.status || '').replace(/_/g, ' ').toLowerCase();
+  const judged = debate.match(/data-status="([^"]+)"/);
+  if (judged && card.includes(`<span class="pill">${esc(legacy)}</span>`)) {
+    card = card.replace(`<span class="pill">${esc(legacy)}</span>`, `<span class="pill" data-status="${judged[1]}">${judged[1]}</span>`);
+  }
+  return card.replace(/<\/div><\/details>$/, `${debate}</div></details>`);
 }
 
-function rail(modelPage) {
-  return `<aside class="rail"><a href="report.html" class="brand"><span class="emblem" aria-hidden="true"></span><span>OmniSwarm<small>SOURCE SECURITY REVIEW</small></span></a>
+function rail(modelPage, root = '', here = modelPage ? 'model' : 'report') {
+  const home = `${root}report.html`;
+  const extra = typeof v2.rail === 'function' ? v2.rail(root, here) : (v2.rail || '');
+  return `<aside class="rail"><a href="${home}" class="brand"><span class="emblem" aria-hidden="true"></span><span>OmniSwarm<small>SOURCE SECURITY REVIEW</small></span></a>
     <div class="rail-label">Report navigation</div><nav aria-label="Report">
-    <a href="report.html" ${!modelPage ? 'class="active" aria-current="page"' : ''}><span>01</span>Overview</a>
-    <a href="${modelPage ? 'report.html' : ''}#findings"><span>02</span>Findings <small>${counts.total}</small></a>
-    <a href="findings-by-model.html" ${modelPage ? 'class="active" aria-current="page"' : ''}><span>03</span>By model</a>
-    <a href="${modelPage ? 'report.html' : ''}#evidence"><span>04</span>Evidence & scope</a></nav>
+    <a href="${home}" ${!modelPage && here === 'report' ? 'class="active" aria-current="page"' : ''}><span>01</span>Overview</a>
+    <a href="${modelPage || here !== 'report' ? home : ''}#findings"><span>02</span>Findings <small>${counts.total}</small></a>
+    <a href="${root}findings-by-model.html" ${modelPage ? 'class="active" aria-current="page"' : ''}><span>03</span>By model</a>
+    <a href="${modelPage || here !== 'report' ? home : ''}#evidence"><span>04</span>${v2.active ? 'Evidence' : 'Evidence & scope'}</a>${extra}</nav>
     <div class="rail-bottom"><span class="signal"></span>SAVED REVIEW<br>${esc(dateLabel)}<br>REF / ${esc(meta.commit || 'not recorded')}</div></aside>`;
 }
-function page(body, modelPage = false) {
-  return pageDocument({ body, modelPage, policy, targetName, styles, railHtml: rail(modelPage), meta, nonce, browserScript, dateLabel, expected });
+function page(body, modelPage = false, root = '', here) {
+  return pageDocument({
+    body, modelPage, policy, targetName, styles, railHtml: rail(modelPage, root, here || (modelPage ? 'model' : 'report')), meta, nonce, browserScript, dateLabel, expected,
+    extraCss: v2.extraCss || '', extraScript: v2.script || '', styleNonce: Boolean(v2.active),
+  });
 }
 function hero(modelPage = false) {
   return `<header class="hero"><div><div class="eyebrow">${modelPage ? 'Reviewer output / 03' : 'Source assessment / 01'}</div><h1>${modelPage ? 'MODEL <span>REPORT.</span>' : 'AUDIT <span>REPORT.</span>'}</h1><p class="target">${esc(targetName)}</p><div class="source">${esc([meta.mode === 'remote' ? 'GITHUB' : 'SOURCE', meta.commit && `REF ${meta.commit}`, meta.surface && `SCOPE ${meta.surface}`].filter(Boolean).join(' / '))}</div></div>
@@ -304,7 +322,7 @@ function stackCoverage() {
 }
 const controlsDetails = verifiedSafe.length ? `<details class="panel"><summary><span class="pill green">Controls</span>Auditor control assertions<span class="meta-label">${verifiedSafe.length} reported</span></summary><div class="panel-body"><p class="note">Unverified model assertions, not certified controls. Contradiction detection and tiebreak escalation are not implemented.</p><div class="controls-list">${verifiedSafe.map(s => `<details class="control"><summary><span>${esc(s.control)}</span><span class="pill ${s.holds === false ? 'red' : 'green'}">${s.holds === false ? 'Reported broken' : 'Reported holding'}</span></summary><div class="prose">${prose(s.evidence || s.how_attacked)}<p class="meta-label">${s.provenance === 'model_assertion' ? '<span class="pill">model assertion</span> ' : ''}${esc(s.auditor)} · unverified</p></div></details>`).join('')}</div></div></details>` : '';
 
-const html = page(`${hero()}${notice}
+const html = page(`${hero()}${v2.hero}${notice}
   <section class="stats" aria-label="Finding totals">
     ${[
       ['red', 'High severity', counts.high, 'Critical + high model claims', '01'],
@@ -326,7 +344,7 @@ const html = page(`${hero()}${notice}
   <section id="findings" aria-label="Findings">${sectionTitle('02', 'Findings', `${counts.total} prioritized model claims`)}
     <div class="toolbar"><div class="filter-group" role="group" aria-label="Filter by severity">
       ${[['all', 'All', counts.total], ['high', 'High+', counts.high], ['medium', 'Medium', counts.medium], ['low', 'Low + info', counts.low + counts.info]].map(([key, label, n]) => `<button type="button" class="filter-btn${key === 'all' ? ' active' : ''}" data-filter="${key}" aria-pressed="${key === 'all'}">${label}<span>${n}</span></button>`).join('')}
-    </div><label class="search-wrap"><span aria-hidden="true">⌕</span><input type="search" id="search-box" aria-label="Search findings, files, fixes and evidence" placeholder="Search findings, files, fixes…"></label></div>
+    </div>${v2.reviewerFilter || ''}<label class="search-wrap"><span aria-hidden="true">⌕</span><input type="search" id="search-box" aria-label="Search findings, files, fixes and evidence" placeholder="Search findings, files, fixes…"></label></div>
     <div class="list-caption"><span id="results-count" role="status" aria-live="polite">${counts.total} / ${counts.total} findings</span><button type="button" id="reset-filters" class="text-button" hidden>Clear filters</button><button type="button" id="expand-all" class="text-button">Expand findings</button></div>
     <div id="findings-container">${findings.map(findingCard).join('')}</div><div class="empty" id="empty-results" hidden>No findings match. Try another filter or search.</div>
   </section>
@@ -335,7 +353,7 @@ const html = page(`${hero()}${notice}
     <details class="panel"><summary><span class="pill blue">Coverage</span>Sandbox & checks<span class="meta-label">${sandboxRows.length} records</span></summary><div class="panel-body">${sandboxDetails}${sandboxMd ? disclosure('Original sandbox record', `<pre>${esc(sandboxMd)}</pre>`) : ''}</div></details>
     <details class="panel"><summary><span class="pill blue">Stacks</span>Coverage by stack<span class="meta-label">Python · Node · Solana · NEAR</span></summary><div class="panel-body">${stackCoverage()}</div></details>
     ${controlsDetails}
-    ${diagrams.length ? `<details class="panel"><summary>Attached diagram source<span class="meta-label">${diagrams.length} files</span></summary><div class="panel-body"><p class="note">Attachments are displayed as inert source.</p>${diagrams.map(d => disclosure(d.title, `<pre>${esc(d.svg)}</pre>`)).join('')}</div></details>` : ''}
+    ${diagrams.length ? `<details class="panel"><summary>Attached diagram source<span class="meta-label">${diagrams.length} files</span></summary><div class="panel-body"><p class="note">Attachments are displayed as inert source.</p>${diagrams.map(d => disclosure(d.title, `<pre>${esc(d.svg)}</pre>`)).join('')}</div></details>` : ''}${v2.sections}
   </section>`);
 
 const modelHtml = page(`${hero(true)}${notice}${sectionTitle('03', 'Findings by model', 'Before deduplication')}
@@ -346,5 +364,11 @@ const modelHtml = page(`${hero(true)}${notice}${sectionTitle('03', 'Findings by 
 
 writeReportFile(reportDir, 'report.html', html);
 writeReportFile(reportDir, 'findings-by-model.html', modelHtml);
+if (v2.active && v2.writePages) {
+  v2.writePages(reportDir, Object.assign((rel, body, opts = {}) => {
+    fs.mkdirSync(path.dirname(path.join(reportDir, rel)), { recursive: true });
+    writeReportFile(reportDir, rel, page(body, Boolean(opts.modelPage), opts.root || '', opts.here));
+  }, { card: findingCard }), findings);
+}
 console.log(`Standalone review pages written to ${reportDir}`);
 if (health.state === 'incomplete') process.exitCode = 2;
