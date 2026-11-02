@@ -9,13 +9,16 @@ export function createPool(databaseUrl: string) {
   return new Pool({ connectionString: databaseUrl });
 }
 
+export type Pool = pg.Pool;
+
 export async function migrate(pool: pg.Pool) {
-  const file = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'migrations', '001_init.sql');
-  await pool.query(fs.readFileSync(file, 'utf8'));
+  const dir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'migrations');
+  const files = fs.readdirSync(dir).filter((name) => name.endsWith('.sql')).sort();
+  for (const name of files) await pool.query(fs.readFileSync(path.join(dir, name), 'utf8'));
 }
 
 export async function reset(pool: pg.Pool) {
-  await pool.query(`TRUNCATE nonce, payment, request_progress, audit_log, job_stub, mock_key, mock_request, mock_tx, request RESTART IDENTITY CASCADE`);
+  await pool.query(`TRUNCATE nonce, payment, request_progress, audit_log, job_stub, mock_key, mock_request, mock_tx, mock_attestation, mock_refund, request RESTART IDENTITY CASCADE`);
 }
 
 export async function issueNonce(pool: pg.Pool, nonce: string, now: Date, expires: Date, ip: string) {
@@ -145,6 +148,72 @@ export async function paymentExists(pool: pg.Pool, txHash: string) {
 export async function mockTx(pool: pg.Pool, txHash: string) {
   const result = await pool.query('SELECT * FROM mock_tx WHERE tx_hash = $1', [txHash]);
   return result.rows[0] || null;
+}
+
+export async function queuedIds(pool: pg.Pool) {
+  const result = await pool.query(`SELECT id FROM request WHERE status = 'queued' ORDER BY created_at, id`);
+  return result.rows.map((row) => row.id as string);
+}
+
+export async function queuePosition(pool: pg.Pool, id: string) {
+  const result = await pool.query(
+    `SELECT 1 + count(*)::int AS position FROM request
+     WHERE status = 'queued' AND (created_at, id) < (SELECT created_at, id FROM request WHERE id = $1)`,
+    [id],
+  );
+  return result.rows[0].position as number;
+}
+
+export async function claimNext(pool: pg.Pool, now: Date) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const row = await client.query(
+      `SELECT id FROM request WHERE status = 'queued' ORDER BY created_at, id FOR UPDATE SKIP LOCKED LIMIT 1`,
+    );
+    if (!row.rowCount) {
+      await client.query('ROLLBACK');
+      return null;
+    }
+    const id = row.rows[0].id as string;
+    await client.query(`UPDATE request SET status = 'running', updated_at = $2 WHERE id = $1`, [id, now.toISOString()]);
+    await client.query('COMMIT');
+    return id;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function setStatus(pool: pg.Pool, id: string, status: string, now: Date) {
+  await pool.query(`UPDATE request SET status = $2, updated_at = $3 WHERE id = $1`, [id, status, now.toISOString()]);
+}
+
+export async function attestOnce(pool: pg.Pool, requestHash: string, reportSha256: string) {
+  const tx = `mock:${reportSha256.slice(0, 16)}`;
+  const inserted = await pool.query(
+    `INSERT INTO mock_attestation (request_hash, report_sha256, tx) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING RETURNING tx`,
+    [requestHash, reportSha256, tx],
+  );
+  const existing = await pool.query('SELECT report_sha256, tx FROM mock_attestation WHERE request_hash = $1', [requestHash]);
+  return { created: Boolean(inserted.rowCount), tx: existing.rows[0].tx as string, reportSha256: existing.rows[0].report_sha256 as string };
+}
+
+export async function attestationCount(pool: pg.Pool, requestHash: string) {
+  const result = await pool.query('SELECT count(*)::int AS n FROM mock_attestation WHERE request_hash = $1', [requestHash]);
+  return result.rows[0].n as number;
+}
+
+export async function refundOnce(pool: pg.Pool, requestHash: string) {
+  const tx = `mock:refund:${requestHash.slice(0, 12)}`;
+  const inserted = await pool.query(
+    `INSERT INTO mock_refund (request_hash, tx) VALUES ($1, $2) ON CONFLICT DO NOTHING RETURNING tx`,
+    [requestHash, tx],
+  );
+  const existing = await pool.query('SELECT count(*)::int AS n, min(tx) AS tx FROM mock_refund WHERE request_hash = $1', [requestHash]);
+  return { created: Boolean(inserted.rowCount), count: existing.rows[0].n as number, tx: existing.rows[0].tx as string };
 }
 
 export async function mockRequest(pool: pg.Pool, requestHash: string) {

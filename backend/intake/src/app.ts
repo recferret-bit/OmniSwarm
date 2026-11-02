@@ -16,6 +16,7 @@ export interface AppConfig {
   maxRepoKb?: number;
   preset?: string;
   clock?: { now(): number };
+  adminToken?: string;
 }
 
 const OPENAPI = {
@@ -47,6 +48,7 @@ export async function createApp(config: AppConfig): Promise<FastifyInstance> {
   const maxRepoKb = config.maxRepoKb ?? 204800;
   const preset = config.preset || 'scripted';
   const challenges = new Map<string, number[]>();
+  const adminToken = config.adminToken || 'dev-admin';
   const app = Fastify({ logger: false, bodyLimit: 16 * 1024 });
   app.decorate('pool', pool);
   app.addHook('onClose', async () => { await pool.end(); });
@@ -192,6 +194,17 @@ export async function createApp(config: AppConfig): Promise<FastifyInstance> {
         createdAt: stamp(new Date(row.created_at).getTime()),
       })),
     };
+  });
+
+  app.post('/api/admin/requests/:id/refund', async (request) => {
+    if (request.headers['x-admin-token'] !== adminToken) fail(401, 'UNAUTHORIZED', 'Admin token required');
+    const id = (request.params as { id: string }).id;
+    const row = await store.getRequest(pool, id);
+    if (!row) fail(404, 'NOT_FOUND', 'Request not found');
+    if (row.status === 'done' || row.status === 'refunded') fail(409, 'REFUND_NOT_ALLOWED', 'This request cannot be refunded');
+    await store.refundOnce(pool, row.request_hash);
+    await store.setStatus(pool, id, 'refunded', new Date(clock.now()));
+    return { status: 'refunded' };
   });
 
   return app;
