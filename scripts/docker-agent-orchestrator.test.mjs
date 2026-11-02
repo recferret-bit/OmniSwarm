@@ -364,9 +364,9 @@ test('reviewers of one vendor never cross-check each other', { timeout: 15_000 }
 });
 
 test('an uninstalled reviewer family stops the run before any session starts', async t => {
-  const extra = reviewerRequest(['openrouter:qwen/qwen3.8-max-0902']);
+  const extra = reviewerRequest(['nearai:tee-model']);
   const f = fixture(t, extra.agents, 'all', extra);
-  await assert.rejects(f.run, /family `openrouter` not installed yet \(W03\)/);
+  await assert.rejects(f.run, /family `nearai` not installed yet/);
   assert.equal(f.started.size, 0);
 });
 

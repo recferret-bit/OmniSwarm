@@ -62,7 +62,14 @@ export function renderPlan({ reviewers, assign, budgets, orchestrator, alternate
   const lines = [`Reviewers (${reviewers.length}):`, `  ${pad('id', w)}${pad('family', 12)}${pad('vendor', 11)}${pad('model', 30)}installed`];
   for (const r of reviewers) {
     const v = families.check(r);
-    lines.push(`  ${pad(r.id, w)}${pad(r.family, 12)}${pad(r.vendor, 11)}${pad(r.model, 30)}${v.ok ? 'yes' : `no (${v.reason})`}`);
+    let extra = '';
+    if (v.ok && families.has(r.family)) {
+      const names = families.envAllowlist(r);
+      const transport = families.get(r.family).transport;
+      if (names.length) extra += `  env ${names.join(',')}`;
+      if (transport) extra += `  transport ${transport}`;
+    }
+    lines.push(`  ${pad(r.id, w)}${pad(r.family, 12)}${pad(r.vendor, 11)}${pad(r.model, 30)}${v.ok ? 'yes' : `no (${v.reason})`}${extra}`);
   }
   lines.push('', `Assignment: ${assign} (${jobs.length} job${jobs.length === 1 ? '' : 's'})`, `  ${pad('reviewer', w)}${surfaces.map((s) => pad(s.code, 4)).join('')}`);
   for (const r of reviewers) lines.push(`  ${pad(r.id, w)}${surfaces.map((s) => pad(jobs.some((j) => j.reviewer.id === r.id && j.surface.id === s.id) ? 'x' : '.', 4)).join('')}`);

@@ -89,10 +89,15 @@ case "$COMMAND" in
     if [ "${1:-}" = "--live" ]; then
       shift
       node "$AUDIT_ROOT/scripts/session-smoke.mjs" "$@"
+    elif [ "${1:-}" = "--reviewers" ]; then
+      node "$AUDIT_ROOT/scripts/check-agents.mjs" "$@"
     else
-      [ "$#" -eq 0 ] || die "check-agents accepts --live [--agents <list>] [--out <empty-dir>]"
+      [ "$#" -eq 0 ] || die "check-agents accepts --live [--agents <list>] [--out <empty-dir>] or --reviewers <list>"
       node "$AUDIT_ROOT/scripts/docker-agent-orchestrator.mjs" --check
     fi
+    ;;
+  demo)
+    node "$AUDIT_ROOT/scripts/audit-demo.mjs" "$@"
     ;;
   review-local)
     node "$AUDIT_ROOT/scripts/terminal-local-review.mjs" "$@"
@@ -155,8 +160,12 @@ Usage:
       Review supplied source/configuration/dependencies through restricted MCP tools and persistent ACP sessions. Only catalogued existing tests run in the offline Docker sandbox; no arbitrary commands, PoCs or deployed probes. Save validated peer-reviewed reports and remove owned resources.
   audit setup-agents
       Install the lockfile-pinned ACP runtime locally; no global tools or account login.
-  audit check-agents [--live [--agents <list>] [--out <empty-dir>]]
-      Check Docker, CLIs and pinned adapters. --live explicitly runs inert inference, bridge access and saved-session recovery checks.
+  audit check-agents [--live [--agents <list>] [--out <empty-dir>] | --reviewers <list>]
+      Check Docker, CLIs and pinned adapters. --reviewers checks key presence for key/openrouter/scripted/claude-zai and never prints a key.
+      --live explicitly runs inert inference, bridge access and saved-session recovery checks.
+  audit demo [--surface s1|all] [--out <empty-dir>] [--no-docker]
+      Review the bundled scripts/demo-fixture with scripted reviewers. Refuses --repo and --github.
+      Docker absent, or --no-docker, serves a read-only host snapshot stamped DEMO — not a review.
   audit verify [<report-dir>]    Validate and score model claims on an existing report directory
   audit report [<report-dir>]    Show findings and risk scores
   audit html   [<report-dir>]    Regenerate report.html and findings-by-model.html

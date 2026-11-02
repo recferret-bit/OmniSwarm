@@ -39,7 +39,7 @@ export const families = {
     let family;
     try { family = families.get(reviewer.family); } catch (error) { return { ok: false, code: error.code, reason: error.message }; }
     const provider = family.providers?.[reviewer.provider];
-    if (!provider) return { ok: false, code: 'PROVIDER_UNKNOWN', reason: `family \`${reviewer.family}\` has no provider \`${reviewer.provider}\`` };
+    if (!provider) return { ok: false, code: 'PROVIDER_UNKNOWN', reason: `unknown provider ${reviewer.provider}` };
     if (typeof provider.installed === 'function' ? !provider.installed() : provider.installed === false) {
       return { ok: false, code: 'FAMILY_NOT_INSTALLED', reason: `provider \`${reviewer.family}:${reviewer.provider}\` not installed yet (${provider.wave || FAMILY_WAVES[reviewer.family]})` };
     }

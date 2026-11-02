@@ -84,7 +84,8 @@ const launchers = {
 
 // reviewer: {provider, model}; ctx: {workDir, bridgeArgs, legacyConversationId, env, runtimeAdapter}
 function launch(reviewer, { workDir, bridgeArgs, legacyConversationId, env = process.env, runtimeAdapter: adapterFor = runtimeAdapter }) {
-  const provider = reviewer.provider;
+  const requested = reviewer.provider;
+  const provider = requested === 'claude-zai' ? 'claude' : requested;
   const cli = resolveExecutable(provider, env);
   if (!cli) throw new SessionError('setup_error', `CLI unavailable: ${provider}`);
   if (!Object.hasOwn(launchers, provider)) throw new SessionError('setup_error');
@@ -92,7 +93,17 @@ function launch(reviewer, { workDir, bridgeArgs, legacyConversationId, env = pro
   const environment = sessionEnvironment(env);
   const mcpServers = [{ name: 'audit_docker', command: process.execPath, args: [BRIDGE, ...bridgeArgs], env: [] }];
   const invocation = { executable: process.execPath, args: [], cwd: workDir, env: environment };
-  const sessionMeta = launchers[provider]({ model: reviewer.model, provider, cli, workDir, environment, invocation, mcpServers, legacyConversationId, adapterFor });
+  const sessionMeta = launchers[provider]({ model: reviewer.model, provider, cli, workDir, environment, invocation, mcpServers, legacyConversationId, adapterFor }) || {};
+  if (requested === 'claude-zai') {
+    if (typeof env.ZAI_API_KEY !== 'string' || !env.ZAI_API_KEY) throw new SessionError('setup_error', 'ZAI_API_KEY missing');
+    delete sessionMeta.claudeCode?.options?.settings?.forceLoginMethod;
+    environment.ANTHROPIC_BASE_URL = 'https://api.z.ai/api/anthropic';
+    environment.ANTHROPIC_AUTH_TOKEN = env.ZAI_API_KEY;
+    environment.ANTHROPIC_DEFAULT_OPUS_MODEL = reviewer.model;
+    environment.ANTHROPIC_DEFAULT_SONNET_MODEL = reviewer.model;
+    environment.ANTHROPIC_DEFAULT_HAIKU_MODEL = 'glm-5.3-flash';
+    environment.API_TIMEOUT_MS = '3000000';
+  }
   return { invocation, mcpServers, sessionMeta, transport: MAINTAINED[provider] ? 'maintained_acp' : provider === 'grok' ? 'native_acp' : 'native_cli_acp_adapter' };
 }
 
@@ -104,12 +115,14 @@ export const family = {
     codex: { installed: () => true, pinsModel: true },
     grok: { installed: () => true, pinsModel: true },
     agy: { installed: () => true, pinsModel: false },
-    // Registered so specs parse and plan; runs once W03 maps the Z.ai Coding Plan variables.
-    'claude-zai': { installed: () => false, wave: 'W03', pinsModel: false },
+    'claude-zai': { installed: () => true, pinsModel: false },
   },
   installed: () => true,
   // Is this reviewer usable on this machine right now (CLI on PATH)? Used to pick a recommended orchestrator.
-  available: (reviewer, env = process.env) => Boolean(resolveExecutable(reviewer.provider, env)),
+  available: (reviewer, env = process.env) => {
+    const binary = reviewer.provider === 'claude-zai' ? 'claude' : reviewer.provider;
+    return Boolean(resolveExecutable(binary, env)) && (reviewer.provider !== 'claude-zai' || Boolean(env.ZAI_API_KEY));
+  },
   launch,
-  envAllowlist: () => [],
+  envAllowlist: (reviewer) => (reviewer?.provider === 'claude-zai' ? ['ANTHROPIC_BASE_URL', 'ANTHROPIC_AUTH_TOKEN'] : []),
 };

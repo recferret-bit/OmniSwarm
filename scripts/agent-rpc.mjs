@@ -47,7 +47,8 @@ export class AgentRpc {
             if (!pending) continue;
             this.pending.delete(msg.id);
             clearTimeout(pending.timer);
-            if (msg.error) pending.reject(new SessionError(msg.error.code === -32000 && msg.error.message === 'native_turn_failed' ? 'native_turn_failed' : 'provider_error', JSON.stringify(msg.error).slice(0, 8192)));
+            const passthrough = new Set(['native_turn_failed', 'model_mismatch']);
+            if (msg.error) pending.reject(new SessionError(msg.error.code === -32000 && passthrough.has(msg.error.message) ? msg.error.message : 'provider_error', JSON.stringify(msg.error).slice(0, 8192)));
             else if (Object.hasOwn(msg, 'result')) pending.resolve(msg.result);
             else throw new Error('Missing RPC result');
           } else throw new Error('Invalid RPC envelope');

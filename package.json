@@ -26,7 +26,7 @@
     "check:w00": "node tools/check-w00.mjs",
     "check:w01": "node --test scripts/reviewer-*.test.mjs scripts/orchestrator-phases.test.mjs scripts/run-config.test.mjs && node scripts/harness.mjs --self-test && npm test",
     "check:w02": "node scripts/harness.mjs --self-test && npm test && OMNI_REQUIRE_HARDENING=1 node --test scripts/sandbox-hardening.docker.mjs scripts/review-workflow.docker.mjs",
-    "check:w03": "node tools/gate.mjs check:w03 --pending \"W03 is not built yet; its wave replaces this script\"",
+    "check:w03": "node --test e2e/engine/w03.test.mjs",
     "check:w04": "node tools/gate.mjs check:w04 --pending \"W04 is not built yet; its wave replaces this script\"",
     "check:w05": "node tools/gate.mjs check:w05 --pending \"W05 is not built yet; its wave replaces this script\"",
     "check:w06": "node tools/gate.mjs check:w06 --pending \"W06 is not built yet; its wave replaces this script\"",

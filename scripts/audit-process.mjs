@@ -23,6 +23,7 @@ export const FAILURE_MESSAGES = {
   session_record_failed: 'Session progress could not be saved; review stopped to preserve recovery consistency.',
   resume_unsupported: 'This agent does not advertise support for loading the saved session.',
   model_changed: 'Agent selected a different model; no automatic model substitution is permitted.',
+  model_mismatch: 'Provider served a different model than requested; the review is incomplete.',
   turn_incomplete: 'Agent ended its turn without a successful completion status.',
   provider_error: 'Agent/provider rejected the turn; inspect its private session record.',
   native_turn_failed: 'Native CLI did not produce a successful structured turn result.',

@@ -88,7 +88,16 @@ The model page counts each model's original findings before deduplication and gr
 
 ## Reviewers, presets and phases
 
-A **reviewer** is one model in one family, written `<family>:<provider>:<model>[#label]` (`cli:claude:opus`, later `key:zai:glm-5.3`, `openrouter:qwen/qwen3.8-max-0902`). Its id is a slug of the spec (`cli-claude-opus`; `/ . :` become `-`) or the label, and it names its jobs (`cli-claude-opus-s2-input`) and files. Its vendor is derived (`anthropic`, `openai`, `xai`, `google`, `zai`, `alibaba`); peer cross-checks exclude reviewers of the author's own vendor. Only the `cli` family exists in this wave; `key`, `openrouter` and `scripted` specs parse, and `--plan` and `run` exit 2 with the wave that adds them.
+A **reviewer** is one model in one family, written `<family>:<provider>:<model>[#label]` (`cli:claude:opus`, `key:zai:glm-5.3`, `openrouter:qwen/qwen3.8-max-0902`, `scripted:baseline`). Its id is a slug of the spec (`cli-claude-opus`; `/ . :` become `-`) or the label, and it names its jobs (`cli-claude-opus-s2-input`) and files. Its vendor is derived (`anthropic`, `openai`, `xai`, `google`, `zai`, `alibaba`, `scripted`); peer cross-checks exclude reviewers of the author's own vendor.
+
+| Family | Transport | Auth |
+|---|---|---|
+| `cli` | the vendor CLI's ACP session | the CLI's own login. `cli:claude-zai` maps `ZAI_API_KEY` to `ANTHROPIC_AUTH_TOKEN` and sets `ANTHROPIC_BASE_URL` |
+| `key` | OmniSwarm's tool loop (`api-acp-agent.mjs`) on the same MCP bridge | one allow-listed variable, for example `ZAI_API_KEY` (and optional `ZAI_BASE_URL`) |
+| `openrouter` | the same tool loop, base `https://openrouter.ai/api/v1` | `OPENROUTER_API_KEY` |
+| `scripted` | the same ACP shim, in process, no network | none |
+
+Keys come from the operator's environment only. Each API reviewer process receives its own allow-listed variable and no other provider key. The MCP bridge and the Docker sandbox never receive a key. Reports store `keyFingerprint` (first 4 and last 4 hex characters of sha256 of the key), never the key. OpenRouter requests send `provider: {require_parameters: true, data_collection: "deny"}` because target source leaves the machine for `key` and `openrouter` reviewers. `./bin/audit demo` reviews only `scripts/demo-fixture` with scripted reviewers and stamps every report page **DEMO — not a review**. `nearai` is not installed yet.
 
 `./bin/audit run` takes `--reviewers a,b`, `--config file`, `--preset name`, `--assign matrix|round-robin`, `--orchestrator <spec|recommended>`, `--alternate-judge <spec>`, `--passes N` and `--tool-budget N`. `--agents`, `--model`, `--models` and `--model-<agent>` remain as aliases for `cli:` reviewers and keep today's one-reviewer-per-surface split. Precedence: flags, then the preset, then `omniswarm.config.json` (copy of `omniswarm.config.example.json`, read from the OmniSwarm checkout or `--config`, never from the target), then defaults (2 passes, 40 tool calls per pass, 2 debate rounds). The orchestrator, judge, passes and budgets are recorded in `harness/reviewers.json` and `meta.json` but not yet enforced; `--plan` prints the reviewer table, the reviewer by surface matrix and the recommended orchestrator.
 

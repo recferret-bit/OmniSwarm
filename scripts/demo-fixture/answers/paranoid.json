@@ -1,0 +1,42 @@
+{
+  "markdown_summary": "Scripted paranoid submitted the seeded findings plus one decoy.",
+  "verified_safe": [],
+  "findings": [
+    {
+      "title": "Missing owner check in withdraw",
+      "surface": "S1",
+      "severity": "high",
+      "confidence": "confirmed",
+      "location": ["src/lib.rs:30"],
+      "impact": "Any account that can call the contract can reduce the recorded balance.",
+      "preconditions": "The contract holds a nonzero balance.",
+      "analysis": "withdraw subtracts amount at src/lib.rs:30 and never reads predecessor_account_id.",
+      "validation": "Source inspection of src/lib.rs.",
+      "fix": "Require the predecessor account to equal the stored owner before changing the balance."
+    },
+    {
+      "title": "transfer skips the owner check",
+      "surface": "S1",
+      "severity": "medium",
+      "confidence": "probable",
+      "location": ["src/lib.rs:36"],
+      "impact": "Decoy: this line is the owner comparison, not a missing check.",
+      "preconditions": "None. This claim is a planted decoy.",
+      "analysis": "The strategy reports src/lib.rs:36 as a missing check. The line is assert_eq of the predecessor and the owner.",
+      "validation": "Planted decoy for the later citation check. Source inspection contradicts the title.",
+      "fix": "Drop this claim."
+    },
+    {
+      "title": "Client stores the account secret in localStorage",
+      "surface": "S6",
+      "severity": "high",
+      "confidence": "confirmed",
+      "location": ["client/src/wallet.ts:4"],
+      "impact": "Any script that can read the page origin can copy the key.",
+      "preconditions": "The page calls account() with a secret.",
+      "analysis": "account writes the secret string to localStorage at client/src/wallet.ts:4.",
+      "validation": "Source inspection of client/src/wallet.ts.",
+      "fix": "Keep the key in memory for the session and do not write it to localStorage."
+    }
+  ]
+}

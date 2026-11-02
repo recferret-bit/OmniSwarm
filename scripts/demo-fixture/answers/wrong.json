@@ -1,0 +1,18 @@
+{
+  "markdown_summary": "Scripted wrong submitted a citation whose line does not say what the finding claims.",
+  "verified_safe": [],
+  "findings": [
+    {
+      "title": "deposit has no owner comparison",
+      "surface": "S1",
+      "severity": "high",
+      "confidence": "probable",
+      "location": ["src/lib.rs:25"],
+      "impact": "The claim says anyone can deposit. The cited line is the comparison that prevents that.",
+      "preconditions": "None. The citation does not hold the quote.",
+      "analysis": "The finding quotes src/lib.rs:25 as a line with no owner comparison. The line is assert_eq!(caller, self.owner).",
+      "validation": "Planted bad citation for the later checker. Source inspection of src/lib.rs:25 contradicts the quote.",
+      "fix": "Cite a line that actually omits the check, or drop the finding."
+    }
+  ]
+}

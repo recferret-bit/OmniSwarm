@@ -25,27 +25,27 @@ Approaches 2 (direct API keys) and 3 (OpenRouter) become reviewers that do exact
 
 ## Features covered
 
-- [ ] Family descriptor contract and reviewer-spec families — W03-01
-- [ ] OpenAI-compatible tool loop (non-streaming, raw `fetch`) — W03-02
-- [ ] Retry/backoff on 429 / 5xx, request timeout, `usage` + cost capture — W03-03
-- [ ] Z.ai and OpenRouter presets (base URLs, headers, `provider` routing with `require_parameters` + `data_collection: "deny"`, `reasoning_effort`) — W03-04
-- [ ] OpenAI / xAI / Google compat presets — W03-05
-- [ ] Bridge tool → strict function schema conversion (top-level `oneOf` stripped) and tool-call mapping — W03-06
-- [ ] `api-acp-agent.mjs` ACP shim spawning the bridge as its MCP child — W03-07
-- [ ] `key` and `openrouter` family files in the W01 registry — W03-08
-- [ ] Per-reviewer key allowlist, env-grep test, `keyFingerprint` — W03-09
-- [ ] Served-model check — W03-10
-- [ ] Anthropic Messages loop — W03-11
-- [ ] `cli:claude-zai` profile — W03-12
-- [ ] `scripted` family + strategies — W03-13
-- [ ] `scripted:judge` answers for the orchestrator role — W03-14
-- [ ] Recorded HTTP fixtures and replay — W03-15
-- [ ] `check-agents` for new families — W03-16
-- [ ] Bundled demo fixture with scripted answers — W03-17
-- [ ] `./bin/audit demo` (OD-10) — W03-18
-- [ ] Live smoke with the owner's keys — W03-19
-- [ ] Docs and both skill copies (key rule, R-20) — W03-20
-- [ ] Wave check, owner check guide, tag — W03-21
+- [x] Family descriptor contract and reviewer-spec families — W03-01
+- [x] OpenAI-compatible tool loop (non-streaming, raw `fetch`) — W03-02
+- [x] Retry/backoff on 429 / 5xx, request timeout, `usage` + cost capture — W03-03
+- [x] Z.ai and OpenRouter presets (base URLs, headers, `provider` routing with `require_parameters` + `data_collection: "deny"`, `reasoning_effort`) — W03-04
+- [ ] OpenAI / xAI / Google compat presets — W03-05 (`H+`)
+- [x] Bridge tool → strict function schema conversion (top-level `oneOf` stripped) and tool-call mapping — W03-06
+- [x] `api-acp-agent.mjs` ACP shim spawning the bridge as its MCP child — W03-07
+- [x] `key` and `openrouter` family files in the W01 registry — W03-08
+- [x] Per-reviewer key allowlist, env-grep test, `keyFingerprint` — W03-09
+- [x] Served-model check — W03-10
+- [ ] Anthropic Messages loop — W03-11 (`H+`)
+- [x] `cli:claude-zai` profile — W03-12
+- [x] `scripted` family + strategies — W03-13
+- [x] `scripted:judge` answers for the orchestrator role — W03-14
+- [x] Recorded HTTP fixtures and replay — W03-15
+- [x] `check-agents` for new families — W03-16
+- [x] Bundled demo fixture with scripted answers — W03-17
+- [x] `./bin/audit demo` (OD-10) — W03-18
+- [ ] Live smoke with the owner's keys — W03-19 (owner, `OMNI_LIVE=1`)
+- [x] Docs and both skill copies (key rule, R-20) — W03-20
+- [x] Wave check, owner check guide, tag — W03-21 (tag `wave-03` waits for land)
 
 ## Issues
 

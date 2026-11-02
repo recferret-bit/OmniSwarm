@@ -46,6 +46,7 @@ export function parseBridgeArgs(argv) {
     finalizeOnly: false,
     identityFile: '',
     reviewersFile: '',
+    demoHost: '',
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -59,6 +60,14 @@ export function parseBridgeArgs(argv) {
     else if (a === '--finalize-only') opts.finalizeOnly = true;
     else if (a === '--identity-file') opts.identityFile = argv[++i] || '';
     else if (a === '--reviewers-file') opts.reviewersFile = argv[++i] || '';
+    else if (a === '--demo-host') opts.demoHost = argv[++i] || '';
+  }
+  if (opts.demoHost) {
+    const bundled = fs.realpathSync(path.join(path.dirname(fileURLToPath(import.meta.url)), 'demo-fixture'));
+    let root;
+    try { root = fs.realpathSync(opts.demoHost); } catch { throw new Error('demo-host serves only the bundled fixture'); }
+    if (root !== bundled) throw new Error('demo-host serves only the bundled fixture');
+    opts.demoHost = root;
   }
   opts.dockerBin = resolveDockerBin(opts.dockerBin);
   // Reviewer ids come from harness/reviewers.json (written by the orchestrator), not from a list in this file.

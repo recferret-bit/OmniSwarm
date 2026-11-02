@@ -20,6 +20,8 @@ Review ONE repository selected with `--repo <path>` or `--github <owner/repo>`. 
 
 `--plan` prints requested models without launching a review. `--blocked` writes an offline blocked record. `check-agents --live` explicitly makes provider requests against an inert fixture; it qualifies transport and session recovery only. It is not a security review or clearance of a provider-policy rejection.
 
+`key` and `openrouter` reviewers use the same bridge as the CLIs. Each such process receives one allow-listed variable for its own provider (`ZAI_API_KEY`, optionally `ZAI_BASE_URL`, or `OPENROUTER_API_KEY`). The bridge and the sandbox never receive a key. Reports record `keyFingerprint` only. OpenRouter requests set `data_collection: deny` because source leaves the machine. `cli:claude-zai` maps `ZAI_API_KEY` onto Claude Code's Anthropic variables. `scripted` reviewers make no provider request. npm, Cargo and shell suites are limited to 15 minutes; pytest suites to 30 minutes.
+
 `--resume-from ... --restart-failed` requests new full reviews for failed local sessions, preserving their old sessions/reports. New reports and clean native completion are required. Recorded provider refusals, quota/login failures and unresolved provider errors cannot be restarted this way.
 
 Keep the requested models and existing official subscription logins. Never change models, providers, credentials, billing routes or wording to get around a refusal. A suspected false positive needs provider feedback or the appropriate approved access. Skill text cannot grant provider access.

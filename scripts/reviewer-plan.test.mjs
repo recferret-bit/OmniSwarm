@@ -24,11 +24,16 @@ test('plan prints the reviewer table, a 4 x 6 matrix and budgets', () => {
   assert.equal(text.split('\n').filter((l) => /^  cli-.*x\s+x\s+x\s+x\s+x\s+x/.test(l)).length, 4);
 });
 
-test('an uninstalled family is a plan problem that names the wave', (t) => {
-  const r = resolveRunConfig({ flags: { reviewers: 'openrouter:qwen/qwen3.8-max-0902' }, root: '/nonexistent' });
+test('an uninstalled family is a plan problem that names the wave', () => {
+  const r = resolveRunConfig({ flags: { reviewers: 'nearai:tee-model' }, root: '/nonexistent' });
   const { text, problems } = renderPlan({ ...r });
-  assert.match(problems[0], /family `openrouter` not installed yet \(W03\)/);
-  assert.match(text, /openrouter-qwen-qwen3-8-max-0902/);
+  assert.match(problems[0], /family `nearai` not installed yet \(W03 \(H\+\)\)/);
+  assert.match(text, /nearai-tee-model/);
+  const openrouter = renderPlan({ ...resolveRunConfig({ flags: { reviewers: 'openrouter:qwen/qwen3.8-max-0902,key:zai:glm-5.3' }, root: '/nonexistent' }) });
+  assert.deepEqual(openrouter.problems, []);
+  assert.match(openrouter.text, /openrouter-qwen-qwen3-8-max-0902\s+openrouter\s+alibaba/);
+  assert.match(openrouter.text, /env OPENROUTER_API_KEY\s+transport api-acp/);
+  assert.match(openrouter.text, /key-zai-glm-5-3\s+key\s+zai/);
 });
 
 test('recommended orchestrator follows the OD-05 order and says why', () => {
