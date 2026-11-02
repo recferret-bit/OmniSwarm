@@ -1,0 +1,10 @@
+{
+  "name": "@omniswarm/guard",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": "./index.mjs",
+  "scripts": {
+    "test": "node --test guard.test.mjs"
+  }
+}

@@ -37,7 +37,7 @@
     "check:w10": "cargo test --manifest-path contracts/review-registry/Cargo.toml && bash contracts/review-registry/scripts/deploy-testnet.sh --dry-run",
     "check:w11": "npm test --workspace frontend/landing && npm run guard --workspace frontend/landing",
     "check:w12": "npm run check:infra",
-    "check:w13": "node tools/gate.mjs check:w13 --pending \"W13 is not built yet; its wave replaces this script\"",
+    "check:w13": "npm test --workspace packages/guard && node demos/attack/run.mjs && node demos/attack/run.mjs --no-guard",
     "check:w14": "node tools/gate.mjs check:w14 --pending \"W14 is not built yet; its wave replaces this script\""
   },
   "keywords": [
