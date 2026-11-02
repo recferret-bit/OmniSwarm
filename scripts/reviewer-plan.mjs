@@ -76,7 +76,7 @@ export function renderPlan({ reviewers, assign, budgets, orchestrator, alternate
   lines.push('', `Assignment: ${assign} (${jobs.length} job${jobs.length === 1 ? '' : 's'})`, `  ${pad('reviewer', w)}${surfaces.map((s) => pad(s.code, 4)).join('')}`);
   for (const r of reviewers) lines.push(`  ${pad(r.id, w)}${surfaces.map((s) => pad(jobs.some((j) => j.reviewer.id === r.id && j.surface.id === s.id) ? 'x' : '.', 4)).join('')}`);
   const worst = budgets.passes * (budgets.toolBudget + GRACE);
-  lines.push('', `Budgets: passes ${budgets.passes}; tool budget ${budgets.toolBudget} per pass; debate rounds ${budgets.debate.rounds}; max cost ${budgets.maxCostUsd == null ? 'unset' : `$${budgets.maxCostUsd}`}`);
+  lines.push('', `Budgets: passes ${budgets.passes}; tool budget ${budgets.toolBudget} per pass; debate rounds ${budgets.debate.rounds} (max 3); debate cluster cap ${budgets.debate.maxClusters}; max cost ${budgets.maxCostUsd == null ? 'unset' : `$${budgets.maxCostUsd}`}`);
   lines.push(`Pass roles: ${passRoles(budgets.passes).join(', ')}. Worst case ${worst} calls.`);
   for (const r of reviewers) {
     const roles = passRoles(Math.min(budgets.passes, 2)).join(', ');

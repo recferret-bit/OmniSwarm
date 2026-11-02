@@ -14,7 +14,8 @@
     "verdict": { "enum": ["upheld", "partial", "refuted", "insufficient_evidence"] },
     "citations": { "type": "array", "maxItems": 100, "items": { "$ref": "#/$defs/citation" } },
     "argument": { "type": "string", "minLength": 1, "maxLength": 20000 },
-    "conformitySuspect": { "type": "boolean" }
+    "conformitySuspect": { "type": "boolean" },
+    "devilAdvocate": { "type": "boolean" }
   },
   "$defs": {
     "citation": {

@@ -21,7 +21,7 @@ test('tools/list over JSON-RPC is assembled from bridge-tools-<role>.mjs', async
     const response = await handleRpcMessage({ role }, { jsonrpc: '2.0', id: 1, method: 'tools/list' });
     assert.equal(`${JSON.stringify(response.result.tools, null, 2)}\n`, snapshot(role));
   }
-  assert.deepEqual(bridgeRoleNames().sort(), ['auditor', 'crosscheck', 'verification']);
+  assert.deepEqual(bridgeRoleNames().sort(), ['auditor', 'crosscheck', 'debater', 'orchestrator', 'verification']);
 });
 
 test('an unknown role fails closed instead of falling back to auditor tools', async () => {
