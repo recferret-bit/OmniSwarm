@@ -1,6 +1,6 @@
-# RULES.md (v0)
+# RULES.md
 
-The review round of OmniSwarm written as swarm rules. This is the rulebook the debate code in W06 implements; it is written first so the code can be checked against it. W14 finalizes it. Source of truth for the numbers: `docs/spec/ORCHESTRATION.md` sections 3 and 4.
+The review round of OmniSwarm written as swarm rules. This is the rulebook the debate code implements. Finalized for the hackathon pack. The owner still submits the form, posts, and chooses whether the repo is public. Source of truth for the numbers: `docs/spec/ORCHESTRATION.md` sections 3 and 4.
 
 Model agreement and passing checks do not certify security. The rules below make a review checkable, not conclusive.
 
