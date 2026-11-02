@@ -1,0 +1,1 @@
+body{margin:0;font:16px/1.5 Arial,sans-serif}.app{max-width:960px;margin:0 auto;padding:24px}.top{display:flex;justify-content:space-between;gap:12px;align-items:center}button,input,select{font:inherit}@media(max-width:360px){.app{padding:12px}.top{flex-direction:column;align-items:flex-start}button{min-height:44px}}
