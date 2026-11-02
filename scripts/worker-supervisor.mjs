@@ -1,10 +1,11 @@
+import { isReviewerId } from './reviewer-registry.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { REVIEW_IMAGE, LIMITS, ADAPTERS, hash, backendStatus, createSnapshot, disposeSnapshot, requireOwnedSnapshot, createJob, validateOutput, expectedFiles } from './worker-isolation.mjs';
+import { REVIEW_IMAGE, LIMITS, hash, backendStatus, createSnapshot, disposeSnapshot, requireOwnedSnapshot, createJob, validateOutput, expectedFiles } from './worker-isolation.mjs';
 import { writeReportFile } from './report-contract.mjs';
 import { validateReviewRequest, validateResult, encodeFrame, readJsonLine } from './terminal-review-contract.mjs';
 
@@ -277,7 +278,7 @@ async function runIsolated(snapshot, job, { fixture = 'probe', image = REVIEW_IM
 }
 
 export function recordBlockedRun(request) {
-  if (!request || !Array.isArray(request.agents) || !request.agents.length || !request.agents.every((a) => ADAPTERS.includes(a)) || new Set(request.agents).size !== request.agents.length) throw new Error('invalid requested adapters');
+  if (!request || !Array.isArray(request.agents) || !request.agents.length || !request.agents.every(isReviewerId) || new Set(request.agents).size !== request.agents.length) throw new Error('invalid requested adapters');
   const output = path.resolve(request.out);
   if (output === fs.realpathSync(request.target)) throw new Error('output cannot be the source root');
   if (fs.existsSync(output) && fs.readdirSync(output).length) throw new Error('output directory must be empty');

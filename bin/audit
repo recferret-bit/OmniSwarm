@@ -22,9 +22,10 @@ COMMAND="${1:-help}"
 shift || true
 
 ARG_REPO="" ARG_GITHUB="" ARG_REF="" ARG_WORKDIR="" ARG_CLEAN=0
-SURFACE="all" OUT_DIR="" AGENTS="claude,grok,agy,codex" POSITIONAL=()
-MODEL_ALL="" MODELS_CSV="" MODEL_CLAUDE="" MODEL_GROK="" MODEL_AGY="" MODEL_CODEX="" PLAN=0
+SURFACE="all" OUT_DIR="" POSITIONAL=()
+PLAN=0
 RPC="" RESUME_FROM="" TEST_ARTIFACTS="" RESTART_FAILED=0
+REVIEWER_ARGS=()   # reviewer, model, preset and budget flags, resolved by scripts/run-config.mjs
 
 # Flags for `run`; anything else is a positional argument.
 parse_flags() {
@@ -37,13 +38,9 @@ parse_flags() {
       --clean) ARG_CLEAN=1; shift ;;
       --surface|-s) SURFACE="${2:?$1 needs a value}"; shift 2 ;;
       --out|-o) OUT_DIR="${2:?$1 needs a path}"; shift 2 ;;
-      --agents|-a) AGENTS="${2:?$1 needs a list}"; shift 2 ;;
-      --model) MODEL_ALL="${2:?--model needs a slug}"; shift 2 ;;
-      --models) MODELS_CSV="${2:?--models needs vendor=slug pairs}"; shift 2 ;;
-      --model-claude) MODEL_CLAUDE="${2:?--model-claude needs a slug}"; shift 2 ;;
-      --model-grok) MODEL_GROK="${2:?--model-grok needs a slug}"; shift 2 ;;
-      --model-agy) MODEL_AGY="${2:?--model-agy needs a slug}"; shift 2 ;;
-      --model-codex) MODEL_CODEX="${2:?--model-codex needs a slug}"; shift 2 ;;
+      --agents|-a) REVIEWER_ARGS+=(--agents "${2:?$1 needs a list}"); shift 2 ;;
+      --reviewers|--config|--preset|--assign|--orchestrator|--alternate-judge|--passes|--tool-budget|--model|--models|--model-claude|--model-grok|--model-agy|--model-codex)
+        REVIEWER_ARGS+=("$1" "${2:?$1 needs a value}"); shift 2 ;;
       --plan) PLAN=1; shift ;;
       --resume-from) RESUME_FROM="${2:?--resume-from needs a report directory}"; shift 2 ;;
       --test-artifacts) TEST_ARTIFACTS="${2:?--test-artifacts needs a Cargo target directory}"; shift 2 ;;
@@ -109,22 +106,15 @@ case "$COMMAND" in
     if [ -z "$OUT_DIR" ]; then
       OUT_DIR="$AUDIT_ROOT/reports/$(date +%Y-%m-%d-%H%M%S)-$TARGET_NAME"
     fi
-    model_args=()
-    [ -n "$MODEL_ALL" ] && model_args+=(--model "$MODEL_ALL")
-    [ -n "$MODELS_CSV" ] && model_args+=(--models "$MODELS_CSV")
-    [ -n "$MODEL_CLAUDE" ] && model_args+=(--model-claude "$MODEL_CLAUDE")
-    [ -n "$MODEL_GROK" ] && model_args+=(--model-grok "$MODEL_GROK")
-    [ -n "$MODEL_AGY" ] && model_args+=(--model-agy "$MODEL_AGY")
-    [ -n "$MODEL_CODEX" ] && model_args+=(--model-codex "$MODEL_CODEX")
+    model_args=(${REVIEWER_ARGS[@]+"${REVIEWER_ARGS[@]}"})
     [ "$PLAN" -eq 1 ] && model_args+=(--plan)
-    [ -n "$RPC" ] && model_args+=(--rpc "$RPC")
     [ -n "$RESUME_FROM" ] && model_args+=(--resume-from "$RESUME_FROM")
     [ -n "$TEST_ARTIFACTS" ] && model_args+=(--test-artifacts "$TEST_ARTIFACTS")
     [ "$RESTART_FAILED" -eq 1 ] && model_args+=(--restart-failed)
     bash "$AUDIT_ROOT/scripts/orchestrate.sh" \
       --target "$TARGET_DIR" --name "$TARGET_NAME" --mode "$TARGET_MODE" \
       --source "$TARGET_SOURCE" --ref "$TARGET_REF" --commit "$TARGET_COMMIT" \
-      --surface "$SURFACE" --agents "$AGENTS" --out "$OUT_DIR" ${model_args[@]+"${model_args[@]}"}
+      --surface "$SURFACE" --out "$OUT_DIR" ${model_args[@]+"${model_args[@]}"}
     report_kept_clone
     ;;
 
@@ -153,7 +143,7 @@ case "$COMMAND" in
 
   help|--help|-h)
     cat <<'EOF'
-Security Audit & Security Check CLI (multi-agent, any repository)
+OmniSwarm: multi-agent source security review CLI (any repository)
 
 Pick exactly ONE target:
   --repo <path>      LOCAL mode: audit a directory on disk (alias: --path, -r)
@@ -183,18 +173,27 @@ Options (run):
   --ref <branch|tag|sha>   --github only: revision to check out (default: the default branch)
   --workdir <dir>          --github only: clone base directory (default: $AUDIT_TMP or /tmp/audit-targets)
   --clean                  --github only: delete the clone when the run ends (default: keep it)
-Options (run):
   --test-artifacts <dir>   Import deploy/*.so and Anchor idl/*.json from a prebuilt Cargo target directory; hashes are recorded, source equivalence remains unverified
   --restart-failed         With --resume-from, review failed assignments in new sessions; provider refusals, quotas and login errors remain blocked
   -s, --surface <id>       s1..s6 or all (default: all)
   -o, --out <dir>          report directory (default: reports/<timestamp>-<repo>)
-  -a, --agents <list>      comma-separated subset of claude,grok,agy,codex (default: claude,grok,agy,codex)
-  --model <slug>           use this model for every selected agent
-  --models <list>          per vendor: claude=<slug>,grok=<slug>,agy=<slug>,codex=<slug>
-  --model-claude <slug>    one vendor. Also --model-grok, --model-agy, --model-codex
+  --reviewers <list>       comma-separated reviewer specs <family>:<provider>:<model>[#label]; family cli (claude, codex, grok, agy),
+                           later key, openrouter, scripted. Example: cli:claude:opus,cli:codex:gpt-6.1-sol
+  --config <file>          run config (default: ./omniswarm.config.json in the OmniSwarm checkout, if present); see omniswarm.config.example.json
+  --preset <name>          a preset from the config file (local-subscriptions, api-only, mixed, hosted, demo)
+  --assign <mode>          matrix (every reviewer x every surface; default with --reviewers/--preset up to 8 reviewers)
+                           or round-robin (one reviewer per surface; default with --agents)
+  --orchestrator <spec|recommended>   orchestrator model; recorded and planned now, used from W06
+  --alternate-judge <spec>            judge for same-vendor conflicts; recorded now, used from W06
+  --passes <n>             passes per reviewer (default 2); --tool-budget <n> bridge calls per pass (default 40); both recorded now, enforced from W04
+  Flags override the preset, the preset overrides the config file, the file overrides the defaults.
+  -a, --agents <list>      alias: comma-separated subset of claude,grok,agy,codex (default: claude,grok,agy,codex), each a cli: reviewer
+  --model <slug>           alias: use this model for every selected agent
+  --models <list>          alias, per vendor: claude=<slug>,grok=<slug>,agy=<slug>,codex=<slug>
+  --model-claude <slug>    alias, one vendor. Also --model-grok, --model-agy, --model-codex
                            precedence: --model-<vendor>, then --models, then --model, then the default
   --resume-from <report>   continue saved source-review sessions with matching workflow, source, reviewers, models and assignments
-  --plan                   print the agent and model table and exit before the harness
+  --plan                   print the reviewer table, assignment, budgets and orchestrator, then exit before the harness (exit 2 if a family is not installed)
 
 Surfaces:
   s1, auth     Identity & access control
@@ -212,6 +211,8 @@ Examples:
   audit run --repo ~/work/my-app --agents claude,grok,agy,codex
   audit run --repo . --surface s1 --model-codex gpt-6.1-sol
   audit run --repo . --models claude=opus,codex=gpt-6.1-sol --plan
+  audit run --repo . --reviewers cli:claude:opus,cli:codex:gpt-6.1-sol --assign matrix --plan
+  audit run --repo . --preset local-subscriptions --plan
 EOF
     ;;
 

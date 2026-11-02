@@ -111,7 +111,7 @@ The visual direction is modern mechanical/Transformers-inspired: white panels, o
 
 ## Long sessions and recovery
 
-Reviews have no runner reasoning deadline. Heartbeats every 30 seconds distinguish process, transport and agent activity. The preparation budget does not end a held review container. Individual protocol controls and test executions remain bounded; npm tests are limited to 90 seconds; Cargo, pytest and shell suites have 15 minutes including cold compilation.
+The runner sets no reasoning deadline on a review; the operator sets a per-pass tool budget (`--tool-budget`, recorded now and enforced from W04). Heartbeats every 30 seconds distinguish process, transport and agent activity. The preparation budget does not end a held review container. Individual protocol controls and test executions remain bounded; npm, Cargo and shell suites are limited to 15 minutes each (including cold compilation); pytest suites to 30 minutes.
 
 Preserve the original private `sessions/` directories. `--resume-from` requires the same review workflow, source, models, reviewers and assignments. Legacy adversarial sessions cannot be resumed into this workflow. A transport loss permits one exact-session reconnect if supported; refusal, quota and authentication failures never auto-retry.
 

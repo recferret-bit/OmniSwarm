@@ -598,6 +598,8 @@ const NEAR_CLIENT_SURFACE = {
 
 // With a profile, only the detected ecosystems' guidance is emitted; with none, every stack is included.
 export function renderSurfaceSkillGuidance(surfaceCode, profile) {
+  // Cross-check reviewers span every surface (R-06): show the guidance of all six.
+  if (String(surfaceCode).toUpperCase() === 'ALL') return ['S1', 'S2', 'S3', 'S4', 'S5', 'S6'].map((code) => renderSurfaceSkillGuidance(code, profile)).join('\n\n');
   const code = /^S[1-6]$/i.test(String(surfaceCode)) ? String(surfaceCode).toUpperCase() : 'S1';
   const eco = profile?.ecosystems;
   const want = (name) => !eco || eco[name]?.detected;

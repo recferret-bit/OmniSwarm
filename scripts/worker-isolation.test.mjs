@@ -5,7 +5,7 @@ import os from 'node:os';
 import test from 'node:test';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { ADAPTERS, LIMITS, hash, backendStatus, createSnapshot, disposeSnapshot, requireOwnedSnapshot, createJob, validateOutput } from './worker-isolation.mjs';
+import { LIMITS, hash, backendStatus, createSnapshot, disposeSnapshot, requireOwnedSnapshot, createJob, validateOutput } from './worker-isolation.mjs';
 import { runtimeDigest, transition, recordBlockedRun } from './worker-supervisor.mjs';
 
 const scripts = path.dirname(fileURLToPath(import.meta.url));
@@ -81,8 +81,8 @@ test('snapshot file/count/entry budgets fail or disclose bounded omissions', (t)
 });
 
 test('all subscription adapters are explicitly blocked, not inferred from PATH', () => {
-  for (const adapter of ADAPTERS) assert.deepEqual(backendStatus(adapter), { adapter, state: 'blocked', reason: 'subscription_bridge_unverified', credentialFree: false, toolsDisabled: false });
-  assert.throws(() => backendStatus('unknown'));
+  for (const adapter of ['claude', 'grok', 'agy', 'codex', 'cli-claude-opus']) assert.deepEqual(backendStatus(adapter), { adapter, state: 'blocked', reason: 'subscription_bridge_unverified', credentialFree: false, toolsDisabled: false });
+  assert.throws(() => backendStatus('Not An Id'));
 });
 
 test('only owned sealed capture handles can be presented to the runtime', (t) => {

@@ -10,7 +10,7 @@
  * Everything an auditor wrote is untrusted (it was derived from a third-party repo), so it is HTML-escaped.
  *
  * Usage:
- *   node audit/scripts/generate-html-report.mjs [report-dir]   (default: newest dir under audit/reports)
+ *   node scripts/generate-html-report.mjs [report-dir]   (default: newest dir under reports/)
  */
 
 import fs from 'node:fs';
@@ -19,6 +19,7 @@ import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import crypto from 'node:crypto';
 import { loadAuditors, adapterOf, readReportText, readReportJson, writeReportFile } from './report-contract.mjs';
+import { reviewersOfMeta } from './reviewer-registry.mjs';
 
 const scriptsDir = path.dirname(fileURLToPath(import.meta.url));
 
@@ -33,7 +34,7 @@ function newestReportDir() {
 
 const reportDir = process.argv[2] || newestReportDir();
 if (!reportDir) {
-  console.error('No report directory given and none found under audit/reports');
+  console.error('No report directory given and none found under reports/');
   process.exit(1);
 }
 const assetsDir = path.join(reportDir, 'assets');
@@ -109,7 +110,6 @@ const surfaces = Object.fromEntries(
 
 // Raw findings per model. A cluster in findings-and-scores.json is shared, so it is the wrong count.
 const SEVERITY_LEVELS = ['high', 'medium', 'low', 'info'];
-const MODEL_ORDER = ['claude', 'gpt', 'codex', 'grok', 'agy', 'gemini'];
 
 function severityLevel(raw) {
   const token = String(raw ?? '').toLowerCase().match(/[a-z]+/)?.[0] || '';
@@ -146,16 +146,18 @@ function loadModelRows() {
     }
   }
   const levels = [...SEVERITY_LEVELS, ...extra.sort()];
+  const order = reviewersOfMeta(meta).map((r) => r.id); // the run's reviewer order
   const rows = [...buckets.values()].map((row) => {
-    const slug = meta.models && meta.models[row.key];
+    const reviewer = reviewersOfMeta(meta).find((r) => r.id === row.key);
+    const slug = reviewer ? `${reviewer.id} (${reviewer.family})` : meta.models && meta.models[row.key];
     const total = levels.reduce((n, level) => n + (row.counts[level] || 0), 0);
     const available = reports.some((r) => adapterOf(r.name) === row.key);
     const expectedOutputs = (health.expected || []).filter(name => adapterOf(name) === row.key).length;
     const acceptedOutputs = (health.accepted || []).filter(name => adapterOf(name) === row.key).length;
     return { ...row, label: slug || row.key, available, total, expectedOutputs, acceptedOutputs };
   }).sort((a, b) => {
-    const ia = MODEL_ORDER.indexOf(a.key);
-    const ib = MODEL_ORDER.indexOf(b.key);
+    const ia = order.indexOf(a.key);
+    const ib = order.indexOf(b.key);
     if (ia === -1 && ib === -1) return a.key.localeCompare(b.key);
     if (ia === -1) return 1;
     if (ib === -1) return -1;
@@ -273,7 +275,7 @@ function findingCard(f, index) {
 }
 
 function rail(modelPage) {
-  return `<aside class="rail"><a href="report.html" class="brand"><span class="emblem" aria-hidden="true"></span><span>AUDIT / CORE<small>SOURCE SECURITY REVIEW</small></span></a>
+  return `<aside class="rail"><a href="report.html" class="brand"><span class="emblem" aria-hidden="true"></span><span>OmniSwarm<small>SOURCE SECURITY REVIEW</small></span></a>
     <div class="rail-label">Report navigation</div><nav aria-label="Report">
     <a href="report.html" ${!modelPage ? 'class="active" aria-current="page"' : ''}><span>01</span>Overview</a>
     <a href="${modelPage ? 'report.html' : ''}#findings"><span>02</span>Findings <small>${counts.total}</small></a>
@@ -327,7 +329,7 @@ function stackCoverage() {
   ];
   return `<div class="table-scroll"><table><thead><tr><th>Stack</th><th>Detected</th><th>Existing tests</th><th>Open coverage gaps</th></tr></thead><tbody>${rows.map(([name, detected, detail, tests, open]) => `<tr><td><b>${esc(name)}</b><br><small>${esc(detail)}</small></td><td>${detected ? 'yes' : 'absent'}</td><td>${detected ? (tests.length ? tests.map(esc).join('<br>') : 'no suite catalogued') : '—'}</td><td>${detected ? (open.length ? open.map(esc).join('<br>') : 'none recorded') : '—'}</td></tr>`).join('')}</tbody></table></div><p class="note">Source review of a detected stack is performed by the assigned surfaces S1–S6 (see the surface map); this table shows only tool-reported test and scanner coverage. A failed or missing item is not a pass.</p>`;
 }
-const controlsDetails = verifiedSafe.length ? `<details class="panel"><summary><span class="pill green">Controls</span>Auditor control assertions<span class="meta-label">${verifiedSafe.length} reported</span></summary><div class="panel-body"><p class="note">Unverified model assertions, not certified controls. Contradiction detection and tiebreak escalation are not implemented.</p><div class="controls-list">${verifiedSafe.map(s => `<details class="control"><summary><span>${esc(s.control)}</span><span class="pill ${s.holds === false ? 'red' : 'green'}">${s.holds === false ? 'Reported broken' : 'Reported holding'}</span></summary><div class="prose">${prose(s.evidence || s.how_attacked)}<p class="meta-label">${esc(s.auditor)} · unverified</p></div></details>`).join('')}</div></div></details>` : '';
+const controlsDetails = verifiedSafe.length ? `<details class="panel"><summary><span class="pill green">Controls</span>Auditor control assertions<span class="meta-label">${verifiedSafe.length} reported</span></summary><div class="panel-body"><p class="note">Unverified model assertions, not certified controls. Contradiction detection and tiebreak escalation are not implemented.</p><div class="controls-list">${verifiedSafe.map(s => `<details class="control"><summary><span>${esc(s.control)}</span><span class="pill ${s.holds === false ? 'red' : 'green'}">${s.holds === false ? 'Reported broken' : 'Reported holding'}</span></summary><div class="prose">${prose(s.evidence || s.how_attacked)}<p class="meta-label">${s.provenance === 'model_assertion' ? '<span class="pill">model assertion</span> ' : ''}${esc(s.auditor)} · unverified</p></div></details>`).join('')}</div></div></details>` : '';
 
 const html = page(`${hero()}${notice}
   <section class="stats" aria-label="Finding totals">

@@ -5,7 +5,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
-import { expectedAuditors, loadAuditors, providerOf, validateAuditor, readReportText } from './report-contract.mjs';
+import { expectedAuditors, loadAuditors, providerOf, validateAuditor, readReportText, writeReportFile } from './report-contract.mjs';
 import { commitSubmission } from './audit-submission.mjs';
 import { digest } from './agent-session-store.mjs';
 import { loadAuditorFindings } from './crosscheck.mjs';
@@ -18,10 +18,11 @@ const finding = (extra = {}) => ({
   preconditions: 'Source review only', attack: [], poc: '', fix: 'Use an assertion label.', ...extra,
 });
 
-test('cross-check preparation rejects unknown adapter identities', (t) => {
+test('the dead crosscheck prepare CLI is gone', (t) => {
   const f = fixture(t);
-  const r = spawnSync(process.execPath, [path.join(scripts, 'crosscheck.mjs'), 'prepare', f.dir, 'claude,unknown'], { encoding: 'utf8', timeout: 5000 });
-  assert.notEqual(r.status, 0);
+  const r = spawnSync(process.execPath, [path.join(scripts, 'crosscheck.mjs'), 'prepare', f.dir, 'claude'], { encoding: 'utf8', timeout: 5000 });
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /unknown command/);
   assert.equal(fs.existsSync(path.join(f.dir, 'crosscheck')), false);
 });
 const controls = { verified_safe: [] };
@@ -388,4 +389,47 @@ test('ACP report validation requires the committed identity and rejects altered 
   f.put(`auditors/${name}.json`, [finding(), controls]);
   f.put(`harness/assignments/${name}.json`, { surface: 'S2' });
   assert.equal(loadAuditors(f.dir).health.state, 'incomplete');
+});
+
+test('report writes are atomic: temp file then rename, no leftovers, links refused (R-13)', (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'audit-atomic-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  writeReportFile(dir, 'meta.json', '{"a":1}');
+  const inode = fs.statSync(path.join(dir, 'meta.json')).ino;
+  writeReportFile(dir, 'meta.json', '{"a":2}');
+  assert.equal(fs.readFileSync(path.join(dir, 'meta.json'), 'utf8'), '{"a":2}');
+  assert.notEqual(fs.statSync(path.join(dir, 'meta.json')).ino, inode, 'replaced by rename, not truncated in place');
+  assert.deepEqual(fs.readdirSync(dir), ['meta.json']);
+  fs.symlinkSync(path.join(dir, 'meta.json'), path.join(dir, 'link.json'));
+  assert.throws(() => writeReportFile(dir, 'link.json', 'x'), /singly linked regular file/);
+  fs.linkSync(path.join(dir, 'meta.json'), path.join(dir, 'hard.json'));
+  assert.throws(() => writeReportFile(dir, 'hard.json', 'x'), /singly linked regular file/);
+  assert.equal(fs.readFileSync(path.join(dir, 'meta.json'), 'utf8'), '{"a":2}');
+  fs.mkdirSync(path.join(dir, 'adir'));
+  assert.throws(() => writeReportFile(dir, 'adir', 'x'));
+  assert.ok(!fs.readdirSync(dir).some((n) => n.endsWith('.tmp')));
+});
+
+test('a report with submissions/ must declare mcp_commit authority (R-03)', (t) => {
+  const f = fixture(t);
+  f.save('claude');
+  fs.mkdirSync(path.join(f.dir, 'submissions'));
+  const { health } = loadAuditors(f.dir);
+  assert.equal(health.state, 'incomplete');
+  assert.ok(health.errors.some((e) => /claude-s1-auth: missing or invalid outputs/.test(e)));
+});
+
+test('new reviewer metadata is accepted next to the legacy shape, and a mismatched inventory is not', (t) => {
+  const f = fixture(t, ['cli-claude-sonnet']);
+  f.meta.models = { 'cli-claude-sonnet': 'sonnet' };
+  f.meta.reviewers = [{ id: 'cli-claude-sonnet', family: 'cli', provider: 'claude', vendor: 'anthropic', model: 'sonnet' }];
+  f.save('cli-claude-sonnet');
+  let health = loadAuditors(f.dir).health;
+  assert.deepEqual(health.expected, ['cli-claude-sonnet-s1-auth']);
+  assert.deepEqual(health.accepted, ['cli-claude-sonnet-s1-auth']);
+  assert.ok(!health.errors.some((e) => /inventory|metadata/.test(e)), health.errors.join('\n'));
+  f.meta.reviewers[0].id = 'someone-else';
+  f.put('meta.json', f.meta);
+  health = loadAuditors(f.dir).health;
+  assert.ok(health.errors.some((e) => /Invalid reviewer inventory/.test(e)));
 });

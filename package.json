@@ -24,7 +24,7 @@
     "eval:golden": "node tools/gate.mjs eval:golden eval/run.mjs -- node eval/run.mjs",
     "check:all": "npm run test:schemas && npm run test:intake && npm run test:landing && npm run test:contract && npm run test:e2e && npm run check:infra && node scripts/harness.mjs --self-test && npm test",
     "check:w00": "node tools/check-w00.mjs",
-    "check:w01": "node tools/gate.mjs check:w01 --pending \"W01 is not built yet; its wave replaces this script\"",
+    "check:w01": "node --test scripts/reviewer-*.test.mjs scripts/orchestrator-phases.test.mjs scripts/run-config.test.mjs && node scripts/harness.mjs --self-test && npm test",
     "check:w02": "node tools/gate.mjs check:w02 --pending \"W02 is not built yet; its wave replaces this script\"",
     "check:w03": "node tools/gate.mjs check:w03 --pending \"W03 is not built yet; its wave replaces this script\"",
     "check:w04": "node tools/gate.mjs check:w04 --pending \"W04 is not built yet; its wave replaces this script\"",

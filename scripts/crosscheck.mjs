@@ -1,35 +1,31 @@
-#!/usr/bin/env node
 /**
- * crosscheck.mjs prepare <report-dir> <agent,agent,...>
+ * crosscheck.mjs
  *
- * Writes crosscheck/<agent>.json: the other models' claims (id, title, location, impact).
- * The argument and the other model's write-up are left out on purpose.
- * Prints the agents that have something to review, one per line.
+ * Collects the claims a cross-check reviewer receives: every other reviewer's findings (id, title,
+ * location, impact). The argument and the other reviewer's write-up are left out on purpose.
+ * Peers are chosen by reviewer id; a claim is excluded from a reviewer's inbox when the reviewer
+ * shares its **vendor** (cli:claude:opus and openrouter:anthropic/... are one vendor).
  */
 
-import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { loadAuditors, adapterOf, writeReportFile } from './report-contract.mjs';
-
-export const KNOWN_MODELS = ['claude', 'gpt', 'codex', 'grok', 'agy', 'gemini'];
-
-export function modelOfName(name) {
-  const parts = String(name).toLowerCase().replace(/\.json$/, '').split(/[^a-z0-9.]+/).filter(Boolean);
-  return parts.find((p) => KNOWN_MODELS.includes(p)) || null;
-}
+import { loadAuditors, adapterOf } from './report-contract.mjs';
+import { reviewersOfMeta, vendorOfJob } from './reviewer-registry.mjs';
 
 export function loadAuditorFindings(auditorsDir) {
   const claims = [];
-  const { reports } = loadAuditors(path.dirname(auditorsDir));
+  const { reports, meta } = loadAuditors(path.dirname(auditorsDir));
+  const reviewers = reviewersOfMeta(meta);
   for (const { name: stem, data } of reports) {
-    const model = adapterOf(stem);
+    const model = adapterOf(stem); // reviewer id of the author
+    const vendor = vendorOfJob(stem, reviewers);
     const findings = data.filter((x) => x && x.title && !x.verified_safe);
     findings.forEach((x, i) => {
       claims.push({
         id: `${stem}#${i}`,
         auditor: stem,
         model,
+        vendor,
         surface: String(x.surface || ''),
         severity: String(x.severity || ''),
         title: String(x.title),
@@ -41,37 +37,14 @@ export function loadAuditorFindings(auditorsDir) {
   return claims;
 }
 
-function prepare(reportDir, agents) {
-  if (!agents.every((a) => ['claude', 'grok', 'agy', 'codex'].includes(a)) || new Set(agents).size !== agents.length) {
-    throw new Error('crosscheck: expected distinct known adapter names');
-  }
-  const claims = loadAuditorFindings(path.join(reportDir, 'auditors'));
-  const outDir = path.join(reportDir, 'crosscheck');
-  fs.mkdirSync(outDir, { recursive: true });
-  const launched = [];
-  for (const agent of agents) {
-    const mine = modelOfName(agent);
-    const inbox = claims.filter((c) => c.model && c.model !== mine);
-    const dest = path.join(outDir, `${agent}.json`);
-    if (!inbox.length) {
-      if (fs.existsSync(dest)) fs.unlinkSync(dest);
-      continue;
-    }
-    writeReportFile(reportDir, `crosscheck/${agent}.json`, JSON.stringify(inbox, null, 2) + '\n');
-    launched.push(agent);
-  }
-  return launched;
+// Claims a reviewer may cross-check: authored by anyone of another vendor. An unknown vendor never matches,
+// so claims of unknown origin are never silently dropped.
+export function peerClaims(claims, reviewer) {
+  return claims.filter((c) => c.model && c.model !== reviewer.id && (!c.vendor || c.vendor !== reviewer.vendor));
 }
 
-function main() {
-  const [cmd, reportDir, agentCsv] = process.argv.slice(2);
-  if (cmd !== 'prepare' || !reportDir) {
-    console.error('usage: crosscheck.mjs prepare <report-dir> <agent,agent>');
-    process.exit(1);
-  }
-  const agents = String(agentCsv || '').split(',').map((s) => s.trim()).filter(Boolean);
-  const launched = prepare(reportDir, agents);
-  if (launched.length) process.stdout.write(`${launched.join('\n')}\n`);
+// The old `prepare` command is gone (the orchestrator builds inboxes in-process).
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  process.stderr.write(`crosscheck: unknown command${process.argv[2] ? ` "${process.argv[2]}"` : ''}\n`);
+  process.exitCode = 1;
 }
-
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main();

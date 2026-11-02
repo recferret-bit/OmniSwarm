@@ -1,0 +1,42 @@
+{
+  "reviewers": ["cli:claude:opus", "cli:codex:gpt-6.1-sol", "cli:grok:grok-4.7", "cli:agy:gemini-4-argon-high"],
+  "orchestrator": "recommended",
+  "passes": 2,
+  "toolBudget": 40,
+  "debate": { "rounds": 2, "toolBudget": 12, "maxClusters": 25 },
+  "presets": {
+    "local-subscriptions": {
+      "reviewers": ["cli:claude:opus", "cli:codex:gpt-6.1-sol", "cli:grok:grok-4.7", "cli:agy:gemini-4-argon-high"],
+      "orchestrator": "recommended",
+      "assign": "matrix"
+    },
+    "api-only": {
+      "reviewers": ["key:zai:glm-5.3", "openrouter:qwen/qwen3.8-max-0902"],
+      "orchestrator": "recommended",
+      "assign": "matrix",
+      "maxCostUsd": 25
+    },
+    "mixed": {
+      "reviewers": ["cli:claude:opus", "cli:codex:gpt-6.1-sol", "cli:grok:grok-4.7", "cli:agy:gemini-4-argon-high", "openrouter:qwen/qwen3.8-max-0902", "key:zai:glm-5.3"],
+      "orchestrator": "recommended",
+      "assign": "matrix"
+    },
+    "hosted": {
+      "reviewers": ["key:zai:glm-5.3", "openrouter:qwen/qwen3.8-max-0902", "openrouter:anthropic/claude-opus-5.5", "openrouter:openai/gpt-6.1-sol", "openrouter:x-ai/grok-4.7", "openrouter:google/gemini-4-argon"],
+      "orchestrator": "openrouter:anthropic/claude-opus-5.5",
+      "alternateJudge": "openrouter:openai/gpt-6.1-sol",
+      "assign": "round-robin",
+      "passes": 2,
+      "toolBudget": 30,
+      "maxCostUsd": 25
+    },
+    "demo": {
+      "reviewers": ["scripted:baseline", "scripted:paranoid", "scripted:lazy", "scripted:wrong"],
+      "orchestrator": "scripted:judge",
+      "assign": "matrix",
+      "passes": 1,
+      "toolBudget": 10,
+      "debate": { "rounds": 2 }
+    }
+  }
+}

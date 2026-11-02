@@ -3,6 +3,7 @@ import path from 'node:path';
 import { AgentRpc, SessionError } from './agent-rpc.mjs';
 import { openSessionStore } from './agent-session-store.mjs';
 import { buildSessionLaunch } from './agent-session-launch.mjs';
+import { families } from './reviewer-families.mjs';
 import { classifyAuditFailure } from './audit-process.mjs';
 
 import { REVIEW_TOOLS as TOOLS } from './review-workflow.mjs';
@@ -84,7 +85,7 @@ export async function runReviewSession(options, { launch = buildSessionLaunch, p
   signal?.addEventListener('abort', abort, { once: true });
   try {
     if (signal?.aborted) throw new SessionError('cancelled');
-    const spec = launch({ agent: identity.agent, model: identity.model, workDir: store.workspace, bridgeArgs, legacyConversationId, env });
+    const spec = launch({ agent: identity.agent, family: identity.family, provider: identity.provider, model: identity.model, workDir: store.workspace, bridgeArgs, legacyConversationId, env });
     const bridge = await preflight(spec.mcpServers[0], { cwd: store.workspace, env: spec.invocation.env, signal, expectedRole: identity.role });
     store.save('bridge_ready', { bridge, transport: spec.transport });
     for (;;) {
@@ -137,7 +138,7 @@ export async function runReviewSession(options, { launch = buildSessionLaunch, p
           sessionId = opened.sessionId;
         }
         activeModel = modelValue(opened.configOptions) || opened.models?.currentModelId;
-        if (['codex', 'grok'].includes(identity.agent) && activeModel && activeModel.split('[')[0] !== identity.model) throw new SessionError('model_changed');
+        if (families.modelPinned({ family: identity.family || 'cli', provider: identity.provider || identity.agent }) && activeModel && activeModel.split('[')[0] !== identity.model) throw new SessionError('model_changed');
         store.save('running', { sessionId, selectedModel: activeModel || identity.model });
         phase = 'running';
         if (signal?.aborted) throw new SessionError('cancelled');

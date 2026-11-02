@@ -6,38 +6,57 @@ import { classifyAuditFailure, FAILURE_MESSAGES } from './audit-process.mjs';
 import { verificationHealth } from './verification-health.mjs';
 import { REVIEW_WORKFLOW } from './review-workflow.mjs';
 import { readCanonicalSubmission } from './audit-submission.mjs';
+import { CLI_DEFAULT_MODELS, REVIEWER_ID_PATTERN, isReviewerId, reviewersOfMeta, vendorOfJob } from './reviewer-registry.mjs';
+import { validate } from '../shared/schemas/index.mjs';
 
 const LEVELS = new Set(['critical', 'high', 'medium', 'low', 'info']);
 const CONFIDENCE = new Set(['confirmed', 'probable']);
 const MAX_BYTES = 4 * 1024 * 1024;
-const NAME = /^(claude|grok|agy|codex)-s[1-6]-(auth|input|logic|config|deps|client)$/;
 const SLUGS = ['auth', 'input', 'logic', 'config', 'deps', 'client'];
-const PROVIDERS = { claude: 'anthropic', codex: 'openai', grok: 'xai', agy: 'google' };
+// "<reviewer-id>-sN-<slug>"; the reviewer id may contain hyphens. Legacy reports use the adapter name as id.
+const NAME = new RegExp(`^(${REVIEWER_ID_PATTERN})-(s[1-6])-(${SLUGS.join('|')})$`);
 
+// Reviewer id that authored a job name (null when the name is not a job name).
 export function adapterOf(name) {
-  return NAME.test(name) ? name.split('-')[0] : null;
+  const match = NAME.exec(String(name));
+  return match && SLUGS[Number(match[2].slice(1)) - 1] === match[3] ? match[1] : null;
 }
 export function readReportJson(root, rel, max = MAX_BYTES) {
   return JSON.parse(readReportText(root, rel, max));
 }
 
+// Atomic: the bytes go to a private temp file in the same directory, then rename over the target (R-13).
+// A crash leaves the old file or the new file, never a truncated one. An existing target must be a
+// singly linked regular file; a symlink or hard link there is refused and never followed.
 export function writeReportFile(root, rel, value) {
   const bytes = Buffer.from(value);
   if (bytes.length > 64 * 1024 * 1024) throw new Error('derived report exceeds byte limit');
-  const fd = fs.openSync(reportPath(root, rel), fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK, 0o600);
+  const target = reportPath(root, rel);
+  let existing = null;
+  try { existing = fs.lstatSync(target); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+  if (existing && (!existing.isFile() || existing.nlink !== 1)) throw new Error('report output must be a singly linked regular file');
+  const temp = path.join(path.dirname(target), `.${path.basename(target)}.${process.pid}.${crypto.randomBytes(4).toString('hex')}.tmp`);
+  const fd = fs.openSync(temp, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_NOFOLLOW, 0o600);
   try {
-    const stat = fs.fstatSync(fd);
-    if (!stat.isFile() || stat.nlink !== 1) throw new Error('report output must be a singly linked regular file');
-    fs.ftruncateSync(fd, 0);
     fs.writeFileSync(fd, bytes);
-  } finally {
+    fs.fsyncSync(fd);
+  } catch (error) {
     fs.closeSync(fd);
+    fs.rmSync(temp, { force: true });
+    throw error;
   }
+  fs.closeSync(fd);
+  try { fs.renameSync(temp, target); }
+  catch (error) { fs.rmSync(temp, { force: true }); throw error; }
 }
 
-// Adapter identity is an assertion, not attestation of the served model/provider.
-export function providerOf(name) {
-  return PROVIDERS[adapterOf(name)] || null;
+// Vendor of a job name. Reviewer identity is an assertion, not attestation of the served model/provider.
+// Pass the report's reviewers (reviewersOfMeta(meta)); without them only the legacy adapter names resolve.
+export function providerOf(name, reviewers) {
+  const id = adapterOf(name);
+  if (!id) return null;
+  if (reviewers) return vendorOfJob(name, reviewers);
+  return Object.hasOwn(CLI_DEFAULT_MODELS, id) ? reviewersOfMeta({ agents: [id] })[0].vendor : null;
 }
 
 function reportPath(root, rel) {
@@ -81,13 +100,19 @@ function normalizeMeta(meta, errors) {
     errors.push('Invalid metadata date.');
     delete meta.date;
   }
-  if (!Array.isArray(meta.agents) || !meta.agents.length || !meta.agents.every((a) => typeof a === 'string' && Object.hasOwn(PROVIDERS, a)) || new Set(meta.agents).size !== meta.agents.length) {
+  if (!Array.isArray(meta.agents) || !meta.agents.length || !meta.agents.every(isReviewerId) || new Set(meta.agents).size !== meta.agents.length) {
     errors.push('Invalid adapter inventory.');
     meta.agents = [];
   }
-  if (meta.models != null && (typeof meta.models !== 'object' || Array.isArray(meta.models) || !Object.entries(meta.models).every(([a, m]) => Object.hasOwn(PROVIDERS, a) && typeof m === 'string' && m.length <= 128))) {
+  if (meta.models != null && (typeof meta.models !== 'object' || Array.isArray(meta.models) || !Object.entries(meta.models).every(([a, m]) => isReviewerId(a) && typeof m === 'string' && m.length <= 128))) {
     errors.push('Invalid requested-model metadata.');
     meta.models = {};
+  }
+  // meta.reviewers (W01) must describe exactly the reviewers named in meta.agents; legacy reports have none.
+  if (meta.reviewers != null) {
+    const ok = Array.isArray(meta.reviewers) && meta.reviewers.length && meta.reviewers.every((r) => validate('reviewer-spec#parsed', r).ok)
+      && JSON.stringify(meta.reviewers.map((r) => r.id).sort()) === JSON.stringify([...meta.agents].sort());
+    if (!ok) { errors.push('Invalid reviewer inventory.'); delete meta.reviewers; }
   }
   if (meta.finalized !== true || !Array.isArray(meta.stageFailures) || !meta.stageFailures.every((s) => typeof s === 'string') || !record(meta.crosscheckExits) || !record(meta.workerExits)) {
     errors.push('Missing or invalid finalized stage/exit metadata.');
@@ -105,12 +130,15 @@ export function validCrosscheckRow(row) {
 }
 
 function verifyCommittedOutput(root, meta, name, data) {
+  // A run that wrote submissions/ is a committed-submission run, whatever its meta says (R-03).
+  if (meta.submissionAuthority !== 'mcp_commit' && fs.existsSync(path.join(root, 'submissions'))) throw new Error('submissions exist but meta does not declare mcp_commit authority');
   if (meta.submissionAuthority !== 'mcp_commit') return;
   const identity = readReportJson(root, `harness/identities/${name}.json`);
   const manifest = readReportJson(root, 'source-manifest.json');
   const assignment = readReportJson(root, `harness/assignments/${name}.json`);
   const assignmentDigest = crypto.createHash('sha256').update(JSON.stringify(assignment)).digest('hex');
-  if (identity.model !== meta.models?.[identity.agent] || identity.sourceDigest !== manifest.digest || identity.assignmentDigest !== assignmentDigest) throw new Error('Submission source/model/assignment mismatch');
+  const reviewer = reviewersOfMeta(meta).find((r) => r.id === identity.agent);
+  if (!reviewer || identity.model !== reviewer.model || identity.sourceDigest !== manifest.digest || identity.assignmentDigest !== assignmentDigest) throw new Error('Submission source/model/assignment mismatch');
   if (meta.workflow === REVIEW_WORKFLOW && identity.workflow !== REVIEW_WORKFLOW) throw new Error('Submission workflow mismatch');
   const submission = readCanonicalSubmission(root, name, identity);
   if (meta.workflow === REVIEW_WORKFLOW && identity.role === 'auditor' && (data.slice(0, -1).some(row => row.attack.length || row.poc || !text(row.analysis) || !text(row.validation)) || data.at(-1).verified_safe.some(row => !text(row.evidence)))) throw new Error('Source review evidence contract mismatch');
@@ -118,8 +146,9 @@ function verifyCommittedOutput(root, meta, name, data) {
 }
 
 export function validateAuditor(data, name) {
-  if (!NAME.test(name)) throw new Error('unknown auditor identity');
-  const [, , surface, slug] = name.match(/^(claude|grok|agy|codex)-(s[1-6])-(\w+)$/);
+  const match = NAME.exec(String(name));
+  if (!match) throw new Error('unknown auditor identity');
+  const [, , surface, slug] = match;
   if (SLUGS[Number(surface.slice(1)) - 1] !== slug) throw new Error('auditor surface mismatch');
   if (!Array.isArray(data) || !data.length || data.length > 1000) throw new Error('expected findings plus a final control-assertions object');
   for (const row of data.slice(0, -1)) {
@@ -140,7 +169,7 @@ export function validateAuditor(data, name) {
 
 export function expectedAuditors(meta) {
   if (Array.isArray(meta.auditors)) return meta.auditors;
-  if (!Array.isArray(meta.agents) || !meta.agents.length || !meta.agents.every((a) => PROVIDERS[a])) return [];
+  if (!Array.isArray(meta.agents) || !meta.agents.length || !meta.agents.every(isReviewerId)) return [];
   const ids = meta.surface === 'all' ? SLUGS.map((_, i) => i) : [SLUGS.indexOf(meta.surface)];
   if (ids[0] === -1) {
     const match = String(meta.surface || '').match(/^s([1-6])$/i);
@@ -166,7 +195,7 @@ export function loadAuditors(root) {
   if (meta.auditors != null && (!Array.isArray(meta.auditors) || !meta.auditors.every((n) => typeof n === 'string') || JSON.stringify([...meta.auditors].sort()) !== JSON.stringify([...expected].sort()))) {
     errors.push('Declared auditor inventory does not match requested scope.');
   }
-  if (!expected.length || !expected.every((n) => typeof n === 'string' && NAME.test(n)) || new Set(expected).size !== expected.length) {
+  if (!expected.length || !expected.every((n) => typeof n === 'string' && adapterOf(n) && (meta.agents.length === 0 || meta.agents.includes(adapterOf(n)))) || new Set(expected).size !== expected.length) {
     errors.push('Missing or invalid expected auditor inventory.');
     expected = [];
   }

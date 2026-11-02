@@ -89,7 +89,7 @@ export async function localTerminalReview({ repo, out, files }, { signal, deadli
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   try {
     const options = parseLocalReview(process.argv.slice(2));
-    await localTerminalReview(options, { onReady: (info) => process.stdout.write(`${terminalSafeJson({ state: 'awaiting_user_terminal', ...info, client: 'node audit/scripts/terminal-review-client.mjs claim --socket <socketPath>', note: 'Data-only handoff. Supply a structured result; no model is launched.' })}\n`) });
+    await localTerminalReview(options, { onReady: (info) => process.stdout.write(`${terminalSafeJson({ state: 'awaiting_user_terminal', ...info, client: 'node scripts/terminal-review-client.mjs claim --socket <socketPath>', note: 'Data-only handoff. Supply a structured result; no model is launched.' })}\n`) });
     process.stdout.write('Terminal review transport completed. Model identity and tool-free inference remain unverified.\n');
   } catch {
     console.error('Local terminal review failed or is incomplete. No model CLI or target code was executed.');
