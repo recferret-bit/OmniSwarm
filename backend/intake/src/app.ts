@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { requestHash } from '../../../shared/schemas/canonical-message.mjs';
+import { verdictFor } from '../../../packages/guard/index.mjs';
 import {
   AppError, PRICE_YOCTO, b58decode, decodeKey, fail, quoteRepo, rateLimit, readSession, sessionToken, verifyNep413, yoctoLess,
 } from './lib.ts';
@@ -63,6 +64,12 @@ export async function createApp(config: AppConfig): Promise<FastifyInstance> {
       return;
     }
     reply.code(400).send({ error: { code: 'VALIDATION_ERROR', message: error.message || 'Invalid request', retryable: false } });
+  });
+
+  app.get('/api/guard/verdict', async (request) => {
+    const account = (request.query as { account?: string }).account || '';
+    if (!account) fail(400, 'VALIDATION_ERROR', 'account is required');
+    return verdictFor(account);
   });
 
   app.get('/api/health', async () => ({
