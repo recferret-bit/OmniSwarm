@@ -107,9 +107,9 @@ test('CLI wrapper keeps exit code and output', (t) => {
   const ok = spawnSync(process.execPath, [path.join(scripts, 'verify-and-adjudicate.mjs'), f.dir], { encoding: 'utf8', timeout: 10_000 });
   assert.equal(ok.status, 0);
   assert.match(ok.stdout, /Output validation: validated_outputs; 1 model-claim clusters/);
-  const f = fixture(t, ['claude', 'grok']);
-  f.save('claude', [controls()]);
-  const bad = spawnSync(process.execPath, [path.join(scripts, 'verify-and-adjudicate.mjs'), f.dir], { encoding: 'utf8', timeout: 10_000 });
+  const h = fixture(t, ['claude', 'grok']);
+  h.save('claude', [controls()]);
+  const bad = spawnSync(process.execPath, [path.join(scripts, 'verify-and-adjudicate.mjs'), h.dir], { encoding: 'utf8', timeout: 10_000 });
   assert.equal(bad.status, 2);
   assert.match(bad.stderr, /INCOMPLETE/);
 });
