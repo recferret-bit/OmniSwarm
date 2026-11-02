@@ -22,7 +22,6 @@ import { resolveExecutable } from './agent-launch.mjs';
 export { resolveExecutable } from './agent-launch.mjs';
 import { fileURLToPath } from 'node:url';
 import { renderReviewPlansMarkdown, renderSurfaceSkillGuidance } from './audit-plans.mjs';
-import { loadAuditorFindings } from './crosscheck.mjs';
 import {
   callBridgeTool,
   normalizeCrosscheckPayload,
@@ -38,18 +37,22 @@ import { readCanonicalSubmission, deriveSubmission } from './audit-submission.mj
 import { commitSubmission } from './audit-submission.mjs';
 import { runtimeAdapter, sessionEnvironment } from './agent-session-launch.mjs';
 import { REVIEW_WORKFLOW, REVIEW_SCOPE, buildExistingTestCatalog } from './review-workflow.mjs';
+import { SURFACES } from './orchestrator-surfaces.mjs';
+import { families } from './reviewer-families.mjs';
+import { reviewersOfMeta } from './reviewer-registry.mjs';
+import { assignJobs, selectSurfaces } from './reviewer-plan.mjs';
+import { loadPhases, runPhases } from './orchestrator-phases.mjs';
+import { loadAuditorFindings, peerClaims } from './crosscheck.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const BRIDGE_SCRIPT = path.join(HERE, 'docker-mcp-bridge.mjs');
 const SANDBOX_SCRIPT = path.join(HERE, 'sandbox.sh');
 
-import { SURFACES } from './orchestrator-surfaces.mjs';
-
 export function checkBridgeAgents(env = process.env) {
   const dockerBin = resolveDockerBin();
   const dockerInfo = spawnSync(dockerBin, ['info', '--format', '{{.ServerVersion}}'], { encoding: 'utf8', timeout: 8000 });
   const dockerReady = dockerInfo.status === 0;
-  const agents = ['claude', 'codex', 'grok', 'agy'].map((agent) => {
+  const agents = Object.keys(families.get('cli').providers).filter((agent) => families.check({ family: 'cli', provider: agent }).ok).map((agent) => {
     const exe = resolveExecutable(agent, env);
     if (!exe) return { agent, state: 'unavailable', executable: null, version: null, bridgeMode: 'docker_mcp_stdio' };
     const ver = spawnSync(exe, ['--version'], { encoding: 'utf8', timeout: 5000, env: sessionEnvironment(env) });
@@ -247,7 +250,8 @@ async function runProviderQueues(agents, jobs, execute) {
   if (failure) throw failure.reason;
 }
 
-export async function runOrchestratedAudit(request, { review = runReviewSession, startSandbox = startOneShotDocker } = {}) {
+export async function runOrchestratedAudit(request, options = {}) {
+  const { review = runReviewSession, startSandbox = startOneShotDocker } = options;
   if (request.rpc || request.resume) throw new Error('Source security review excludes deployed RPC comparisons and legacy adversarial-session finalization');
   if (request.restartFailed && !request.resumeFrom) throw new Error('--restart-failed requires --resume-from');
   const output = path.resolve(request.out);
@@ -264,17 +268,21 @@ export async function runOrchestratedAudit(request, { review = runReviewSession,
   if (request.testArtifacts) stageTestArtifacts(request.testArtifacts, output, sourceDigest);
 
   const surfaceArg = String(request.surface || 'all').toLowerCase();
-  const selectedSurfaces = surfaceArg === 'all' ? SURFACES : SURFACES.filter((s) => s.id === surfaceArg || s.slug === surfaceArg);
-  if (!selectedSurfaces.length) throw new Error(`Unknown surface: ${request.surface}`);
-
-  const jobs = selectedSurfaces.flatMap((s, idx) => {
-    const agents = surfaceArg === 'all' ? [request.agents[idx % request.agents.length]] : request.agents;
-    return agents.map((agent) => ({
-      id: crypto.randomUUID(), name: `${agent}-${s.id}-${s.slug}`,
-      adapter: agent, requestedModel: request.models[agent], surface: s, state: 'pending',
-    }));
-  });
-
+  const selectedSurfaces = selectSurfaces(surfaceArg);
+  // Reviewers: resolved by run-config. Requests that predate reviewers (agents + models) map to adapter-named cli reviewers.
+  const reviewers = request.reviewers?.length ? request.reviewers : reviewersOfMeta({ agents: request.agents, models: request.models });
+  const reviewerById = new Map(reviewers.map((r) => [r.id, r]));
+  const assign = request.assign || (request.reviewers?.length ? 'matrix' : 'round-robin');
+  const jobs = assignJobs({ reviewers, surfaceArg, assign }).map(({ name, reviewer, surface }) => ({
+    id: crypto.randomUUID(), name, adapter: reviewer.id, family: reviewer.family, provider: reviewer.provider, vendor: reviewer.vendor,
+    requestedModel: reviewer.model, surface, state: 'pending',
+  }));
+  for (const reviewer of reviewers) {
+    const verdict = families.check(reviewer);
+    if (!verdict.ok) throw new Error(`Reviewer ${reviewer.id}: ${verdict.reason}`);
+  }
+  request.models = Object.fromEntries(reviewers.map((r) => [r.id, r.model]));
+  request.agents = reviewers.map((r) => r.id);
 
   const stageFailures = [];
   const providerFailures = {};
@@ -306,7 +314,12 @@ export async function runOrchestratedAudit(request, { review = runReviewSession,
   let sandboxFailure = null;
   const cancellation = new AbortController();
   const cleanupSignal = () => { cancellation.abort(); };
-  const initialMeta = { name: request.name || path.basename(request.target), mode: request.mode || 'local', source: request.source || request.target, surface: surfaceArg, agents: request.agents, models: request.models, auditors: jobs.map(job => job.name), workerExits, crosscheckExits, stageFailures, finalized: false, workflow: REVIEW_WORKFLOW, agentTransport: 'acp_v1', submissionAuthority: 'mcp_commit' };
+  // Reviewers, orchestrator choice and budgets are recorded at plan time (harness/reviewers.json) and in meta.json.
+  // `models` stays populated for every reviewer so reports and tools that read the old map keep working.
+  const orchestratorMeta = request.orchestrator === 'recommended' ? { requested: 'recommended' } : request.orchestrator || null;
+  const budgets = request.budgets || null;
+  const initialMeta = { name: request.name || path.basename(request.target), mode: request.mode || 'local', source: request.source || request.target, surface: surfaceArg, agents: request.agents, models: request.models, reviewers, orchestrator: orchestratorMeta, assign, budgets, auditors: jobs.map(job => job.name), workerExits, crosscheckExits, stageFailures, finalized: false, workflow: REVIEW_WORKFLOW, agentTransport: 'acp_v1', submissionAuthority: 'mcp_commit' };
+  writeReportFile(output, 'harness/reviewers.json', `${JSON.stringify({ version: 1, reviewers, orchestrator: orchestratorMeta, alternateJudge: request.alternateJudge || null, assign, budgets, preset: request.preset || null }, null, 2)}\n`);
   writeReportFile(output, 'meta.json', JSON.stringify(initialMeta, null, 2));
   const saveWorkers = () => writeReportFile(output, 'workers.json', JSON.stringify({ version: 1, policy: 'docker_mcp_bridge', sourceDigest, jobs }, null, 2));
   saveWorkers();
@@ -321,7 +334,8 @@ export async function runOrchestratedAudit(request, { review = runReviewSession,
   });
   const execute = async ({ name, agent, role, surface, prompt, assignment, logFile }) => {
     if (sandboxFailure) throw sandboxFailure;
-    const identity = { name, agent, role, workflow: REVIEW_WORKFLOW, model: request.models[agent], sourceDigest, assignmentDigest: digest(assignment), ...(surface ? { surface } : {}) };
+    const reviewer = reviewerById.get(agent);
+    const identity = { name, agent, role, workflow: REVIEW_WORKFLOW, model: request.models[agent], family: reviewer.family, provider: reviewer.provider, sourceDigest, assignmentDigest: digest(assignment), ...(surface ? { surface } : {}) };
     const identityFile = path.join(output, 'harness', 'identities', `${name}.json`);
     writeReportFile(output, `harness/identities/${name}.json`, JSON.stringify(identity));
     writeReportFile(output, `harness/assignments/${name}.json`, JSON.stringify(assignment));
@@ -371,7 +385,8 @@ export async function runOrchestratedAudit(request, { review = runReviewSession,
       }
     }
     const bridgeArgs = ['--docker-bin', dockerBin, '--container', session.container, '--report-dir', output, '--role', role, '--agent', agent, '--identity-file', identityFile];
-    if (role === 'auditor') bridgeArgs.push('--auditor', name, '--surface', surface);
+    // Cross-check reviewers span every surface, so their context and plans must too (R-06).
+    bridgeArgs.push(...(role === 'auditor' ? ['--auditor', name, '--surface', surface] : ['--surface', 'ALL']));
     writeReportFile(output, `harness/session-${name}.json`, JSON.stringify({ directory, identity }));
     const result = await review({ directory, identity, bridgeArgs, prompt, logFile, resume: resuming, ...processOptions(name) });
     writeReportFile(output, `harness/heartbeat-${name}.json`, `${JSON.stringify({ state: 'exited', at: new Date().toISOString(), elapsedMs: result.elapsedMs, turnCode: result.code, observedExitCode: result.observedExitCode ?? null, sessionId: result.sessionId, timeLimitMs: null })}\n`);
@@ -384,7 +399,10 @@ export async function runOrchestratedAudit(request, { review = runReviewSession,
   process.on('SIGINT', cleanupSignal);
   process.on('SIGTERM', cleanupSignal);
 
-  try {
+  // The phase list: prepare -> tests -> review -> crosscheck -> debate -> adjudicate -> general-review -> report.
+  // debate, adjudicate and general-review are registry stubs until their waves add scripts/orchestrator-phase-<name>.mjs.
+  const builtin = {
+    async prepare() {
     console.log('[1/4] Starting one-shot Docker sandbox and source scanners...');
     const sealed = createSnapshot(request.target, { exclude: [output] });
     try {
@@ -399,6 +417,8 @@ export async function runOrchestratedAudit(request, { review = runReviewSession,
     } finally { disposeSnapshot(sealed); }
     console.log(`      Container ${session.container} is ready and airgapped (network disconnected).`);
 
+    },
+    async tests() {
     const catalog = readReportJson(output, 'harness/existing-tests.json');
     for (const entry of catalog.tests) {
       if (cancellation.signal.aborted) break;
@@ -406,6 +426,8 @@ export async function runOrchestratedAudit(request, { review = runReviewSession,
       await callBridgeTool({ dockerBin, container: session.container, reportDir: output, auditor: 'verification' }, 'run_existing_tests', { test_id: entry.id });
     }
 
+    },
+    async review() {
     console.log(`[2/4] Running ${jobs.length} surface audit job(s) in parallel across [${request.agents.join(', ')}] via MCP bridge (one active job per provider)...`);
     await runProviderQueues(request.agents, jobs, async job => {
       if (cancellation.signal.aborted) { job.state = sandboxFailure ? 'pending' : 'cancelled'; workerExits[job.name] = sandboxFailure ? 1 : 130; job.failure = sandboxFailure ? { reason: 'sandbox_unavailable', message: FAILURE_MESSAGES.sandbox_unavailable } : undefined; stageFailures.push(`auditor_cancelled:${job.name}`); saveWorkers(); return; }
@@ -448,18 +470,11 @@ export async function runOrchestratedAudit(request, { review = runReviewSession,
           job.failure = { reason: fs.existsSync(path.join(output, 'submissions', `${job.name}.json`)) ? 'invalid_report' : 'missing_report', message: FAILURE_MESSAGES[fs.existsSync(path.join(output, 'submissions', `${job.name}.json`)) ? 'invalid_report' : 'missing_report'] };
           throw err;
         }
-        if (submission) {
-          job.submissionHash = submission.hash;
-          workerExits[job.name] = 0;
-          job.state = 'collected';
-          console.log(`  <- [${job.name}] completed and validated.`);
-        } else {
-          workerExits[job.name] = 1;
-          job.state = 'failed';
-          job.failure = classifyAuditFailure(res);
-          stageFailures.push(`auditor_failed:${job.name}`);
-          console.error(`  <- [${job.name}] ${job.failure.message} See ${job.logFile}.`);
-        }
+        // readCanonicalSubmission throws when nothing valid was committed, so reaching here means it was.
+        job.submissionHash = submission.hash;
+        workerExits[job.name] = 0;
+        job.state = 'collected';
+        console.log(`  <- [${job.name}] completed and validated.`);
       } catch (err) {
         workerExits[job.name] = job.turnCode || 1;
         job.state = 'failed';
@@ -470,13 +485,11 @@ export async function runOrchestratedAudit(request, { review = runReviewSession,
       } finally { saveWorkers(); }
     });
 
-    const baseMeta = {
-      name: request.name || path.basename(request.target), mode: request.mode || 'local',
-      source: request.source || request.target, ref: request.ref || null, commit: request.commit || null,
-      date: new Date().toISOString(), surface: surfaceArg, agents: request.agents, models: request.models,
-      auditors: jobs.map((j) => j.name), workerExits, crosscheckExits, stageFailures, finalized: true,
-    };
-    writeReportFile(output, 'meta.json', `${JSON.stringify(baseMeta, null, 2)}\n`);
+    },
+    async crosscheck() {
+    // Until teardown the meta keeps finalized:false and every field of the initial meta (R-03): a crash from
+    // here on leaves a report that validation treats as an unfinished committed-submission run, never a finalized one.
+    writeReportFile(output, 'meta.json', `${JSON.stringify({ ...initialMeta, ref: request.ref || null, commit: request.commit || null, date: new Date().toISOString(), finalized: false }, null, 2)}\n`);
 
     const allClaims = loadAuditorFindings(path.join(output, 'auditors'));
     fs.mkdirSync(path.join(output, 'crosscheck'), { recursive: true });
@@ -491,60 +504,60 @@ export async function runOrchestratedAudit(request, { review = runReviewSession,
         stageFailures.push(`crosscheck_deferred:${agent}`);
         return;
       }
-      const peerClaims = allClaims.filter((c) => c.model && c.model !== agent);
-      if (!peerClaims.length) return;
-      const claimsJson = `${JSON.stringify(peerClaims, null, 2)}\n`;
+      const inbox = peerClaims(allClaims, reviewerById.get(agent));
+      if (!inbox.length) return;
+      const claimsJson = `${JSON.stringify(inbox, null, 2)}\n`;
       writeReportFile(output, `crosscheck/${agent}.json`, claimsJson);
       fs.writeFileSync(path.join(containerCrosscheckDir, `${agent}.json`), claimsJson);
 
       const logFile = path.join(output, 'harness', 'sandbox-run', `crosscheck-${agent}.log`);
       try {
-        console.log(`  -> [crosscheck-${agent}] reviewing ${peerClaims.length} peer claim(s)...`);
-        const prompt = buildCrosscheckPrompt({ targetName: request.name, agent, claims: peerClaims });
-        const res = await execute({ name: `crosscheck-${agent}`, agent, role: 'crosscheck', prompt, assignment: peerClaims, logFile });
+        console.log(`  -> [crosscheck-${agent}] reviewing ${inbox.length} peer claim(s)...`);
+        const prompt = buildCrosscheckPrompt({ targetName: request.name, agent, claims: inbox });
+        const res = await execute({ name: `crosscheck-${agent}`, agent, role: 'crosscheck', prompt, assignment: inbox, logFile });
         crosscheckExits[agent] = res.code || 1;
-        if (res.code !== 0) throw new Error(res.failure.message);
+        if (res.code !== 0) { if (res.failure?.reason) providerFailures[agent] ||= res.failure.reason; throw new Error(res.failure.message); }
         const submission = readCanonicalSubmission(output, `crosscheck-${agent}`, res.identity);
-        normalizeCrosscheckPayload(submission.report.payload, peerClaims);
+        normalizeCrosscheckPayload(submission.report.payload, inbox);
         deriveSubmission(output, submission, renderMarkdownFromFindings);
-        if (submission) {
-          crosscheckExits[agent] = 0;
-          console.log(`  <- [crosscheck-${agent}] completed and validated.`);
-        } else {
-          crosscheckExits[agent] = res.code || 1;
-          stageFailures.push(`crosscheck_failed:${agent}`);
-          console.error(`  <- [crosscheck-${agent}] failed (exit ${res.code}).`);
-        }
+        crosscheckExits[agent] = 0;
+        console.log(`  <- [crosscheck-${agent}] completed and validated.`);
       } catch (err) {
         crosscheckExits[agent] ||= 1;
+        providerFailures[agent] ||= (Object.hasOwn(FAILURE_MESSAGES, err.reason) ? err.reason : 'crosscheck_failed');
         stageFailures.push(`crosscheck_error:${agent}`);
         console.error(`  <- [crosscheck-${agent}] error: ${err.message}`);
       }
     });
-  } catch (err) {
-    stageFailures.push(`sandbox_or_orchestrator:${err.message}`);
-    console.error(`Orchestrator error: ${err.message}`);
-  } finally {
-    process.removeListener('SIGINT', cleanupSignal);
-    process.removeListener('SIGTERM', cleanupSignal);
-    if (session) {
-      console.log('[4/4] Stopping and removing one-shot Docker container and volumes...');
-      await session.stop();
-    }
-  }
-
+    },
+    async report() {
   writeReportFile(output, 'workers.json', `${JSON.stringify({ version: 1, runId: crypto.randomUUID(), policy: 'docker_mcp_bridge', sourceDigest, jobs }, null, 2)}\n`);
   const finalMeta = {
-    name: request.name || path.basename(request.target), mode: request.mode || 'local',
-    source: request.source || request.target, ref: request.ref || null, commit: request.commit || null,
-    date: new Date().toISOString(), surface: surfaceArg, agents: request.agents, models: request.models,
-    auditors: jobs.map((j) => j.name), workerExits, crosscheckExits, stageFailures, finalized: true,
-    providerFailures,
+    ...initialMeta, ref: request.ref || null, commit: request.commit || null, date: new Date().toISOString(),
+    finalized: true, providerFailures,
     ...(resumeRoot ? { resumedFrom: resumeRoot } : {}),
-    workflow: REVIEW_WORKFLOW, agentTransport: 'acp_v1', submissionAuthority: 'mcp_commit',
     isolation: { policy: 'docker_mcp_bridge', sourceDigest, liveTransport: 'docker_mcp_stdio', privateOutputs: 'validated', workerManifest: 'workers.json' },
   };
   writeReportFile(output, 'meta.json', `${JSON.stringify(finalMeta, null, 2)}\n`);
+    },
+  };
+  const ctx = {
+    request, output, reviewers, jobs, assign, budgets, surfaceArg, stageFailures, providerFailures, workerExits, crosscheckExits, cancellation,
+    get session() { return session; }, execute,
+    fail(err) {
+      stageFailures.push(`sandbox_or_orchestrator:${err.message}`);
+      console.error(`Orchestrator error: ${err.message}`);
+    },
+    async teardown() {
+      process.removeListener('SIGINT', cleanupSignal);
+      process.removeListener('SIGTERM', cleanupSignal);
+      if (session) {
+        console.log('[4/4] Stopping and removing one-shot Docker container and volumes...');
+        await session.stop();
+      }
+    },
+  };
+  await runPhases(await loadPhases({ builtin, dir: options.phasesDir }), ctx);
   return { stageFailures, output, cancelled: cancellation.signal.aborted && !sandboxFailure };
 }
 
