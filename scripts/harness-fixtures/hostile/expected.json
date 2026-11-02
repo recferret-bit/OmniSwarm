@@ -1,0 +1,13 @@
+{
+  "fixture": "hostile",
+  "suite": "npm test (node --test attack.test.cjs); it exits 0 whether or not each attack works, so the invariants below are what decide",
+  "sealedContent": "ORIGINAL-SEALED-CONTENT",
+  "invariants": [
+    { "id": "R-01-bridge-node", "ref": "R-01", "statement": "The bridge's programs run /usr/local/bin/node (checked through /proc/self/exe); /work and /work/bin are root:root 0755; the planted node never ran (no /tmp/hostile-node-ran)." },
+    { "id": "R-02-sealed-reads", "ref": "R-02", "statement": "After the suite rewrote /work/src/src/lib.js, bridge read_file src/lib.js returns the original sealed content and list_files shows no backdoor.js." },
+    { "id": "R-02-source-digest", "ref": "R-02", "statement": "harness/source-read-digest.json digest equals the digest in source-manifest.json and the report contract finds no SOURCE_DIGEST_MISMATCH." },
+    { "id": "R-02-no-leftovers", "ref": "R-02", "statement": "No uid-10001 process outlives the suite except the sandbox's own; the setsid sleeper is gone and its pid is in existing-test-results-<key>.json killedProcesses." },
+    { "id": "R-04-host-lifecycle", "ref": "R-04", "statement": "The forged /out/lifecycle.json says lost, but the host's harness/host/lifecycle.json stays running, harness/host is not mounted into the container, and the orchestrator's loss signal never fires." },
+    { "id": "R-07-text-not-classified", "ref": "R-07", "statement": "The forged log and suite output containing 'usage limit reached' do not classify as usage_limit; only a structured RPC error does." }
+  ]
+}

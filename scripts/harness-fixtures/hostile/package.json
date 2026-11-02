@@ -1,0 +1,7 @@
+{
+  "name": "hostile-fixture",
+  "version": "1.0.0",
+  "private": true,
+  "description": "OmniSwarm W02 fixture. Its own test suite attacks the review sandbox. Inert outside the sandbox: every path it writes is absolute and absent on a developer host.",
+  "scripts": { "test": "node --test attack.test.cjs" }
+}
