@@ -1,0 +1,234 @@
+[
+  {
+    "name": "get_audit_context",
+    "description": "Read the audit scope, detected stacks (http, grpc, websockets, databases, crypto), skill guidance, harness lead summary, and (for crosscheck) assigned peer claims from the one-shot Docker container.",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "get_review_plan",
+    "description": "Read the source security review plan and codebase entry-point leads for a protocol or risk domain (http, grpc, websockets, databases, crypto, scopes_roles, bots_economy, api_dto_abuse, or all).",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "domain": {
+          "type": "string",
+          "description": "Domain filter: http | grpc | websockets | databases | crypto | scopes_roles | bots_economy | api_dto_abuse | all (default: surface-relevant plans)"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "list_files",
+    "description": "List files inside the one-shot Docker container (/work/src, /out/harness, /out/crosscheck).",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Directory path (default: /work/src)"
+        },
+        "max_depth": {
+          "type": "integer",
+          "description": "Max recursion depth (1..6, default 3)"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "read_file",
+    "description": "Read a file with 1-based line numbers inside the one-shot Docker container (/work/src or /out/harness). Relative paths resolve under /work/src.",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Relative path under /work/src or absolute path under /out/harness"
+        },
+        "start_line": {
+          "type": "integer",
+          "description": "1-based start line (default 1)"
+        },
+        "end_line": {
+          "type": "integer",
+          "description": "1-based inclusive end line (default start_line + 200)"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "search_code",
+    "description": "Search source files inside the one-shot Docker container (/work/src or /out/harness) by regex or literal string. Returns relative file:line citations.",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "pattern": {
+          "type": "string",
+          "description": "Regex or literal pattern to search for"
+        },
+        "path": {
+          "type": "string",
+          "description": "Directory or file inside container (default: /work/src)"
+        },
+        "case_insensitive": {
+          "type": "boolean",
+          "description": "Case-insensitive search (default: false)"
+        },
+        "max_results": {
+          "type": "integer",
+          "description": "Max matches (default 80, max 200)"
+        }
+      },
+      "required": [
+        "pattern"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "list_existing_tests",
+    "description": "List fixed test IDs discovered in the captured source before review. No commands or test code can be supplied.",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "run_existing_tests",
+    "description": "Run one catalogued existing test suite inside the verified network-disconnected Docker container. Dependencies must already be available; failures remain coverage gaps.",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "test_id": {
+          "type": "string",
+          "description": "An ID returned by list_existing_tests; no additional arguments are accepted"
+        }
+      },
+      "required": [
+        "test_id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "submit_crosscheck_report",
+    "description": "Validate and save the cross-check verdicts for all assigned peer claims. Call this tool before finishing.",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "report_json": {
+          "type": "string",
+          "description": "JSON-encoded object containing verdicts. Use this instead of nested arguments when the CLI cannot serialize object arrays."
+        },
+        "verdicts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "upheld",
+                  "partial",
+                  "refuted"
+                ]
+              },
+              "severity": {
+                "type": "string",
+                "enum": [
+                  "critical",
+                  "high",
+                  "medium",
+                  "low",
+                  "info"
+                ]
+              },
+              "reason": {
+                "type": "string"
+              },
+              "evidence": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "id",
+              "verdict",
+              "reason",
+              "evidence"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "required": [
+            "report_json"
+          ]
+        },
+        {
+          "required": [
+            "verdicts"
+          ]
+        }
+      ]
+    }
+  }
+]
