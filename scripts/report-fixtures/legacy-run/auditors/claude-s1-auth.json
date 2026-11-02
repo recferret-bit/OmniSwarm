@@ -1,0 +1,17 @@
+[
+  {
+    "title": "Missing owner check",
+    "surface": "S1",
+    "severity": "high",
+    "confidence": "confirmed",
+    "location": ["src/lib.rs:16"],
+    "impact": "Any caller can withdraw.",
+    "preconditions": "A balance exists.",
+    "analysis": "withdraw does not compare the predecessor.",
+    "validation": "Source inspection.",
+    "attack": [],
+    "poc": "",
+    "fix": "Compare the predecessor to the owner."
+  },
+  { "verified_safe": [] }
+]

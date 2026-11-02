@@ -1,0 +1,145 @@
+{
+  "groups": [
+    {
+      "family": "cli",
+      "label": "Local subscriptions",
+      "vendors": [
+        {
+          "vendor": "anthropic",
+          "reviewers": [
+            {
+              "id": "cli-claude-opus",
+              "status": "COMPLETE",
+              "uniqueFindings": 2,
+              "uniqueConfirmed": 1,
+              "refuted": 0,
+              "calls": 4,
+              "cost": 0,
+              "model": "opus",
+              "report": "reviewers/cli-claude-opus/report.html",
+              "severity": {
+                "high": 1,
+                "medium": 0,
+                "low": 1
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "family": "key",
+      "label": "API keys",
+      "vendors": [
+        {
+          "vendor": "zai",
+          "reviewers": [
+            {
+              "id": "key-zai-glm-5-3",
+              "status": "COMPLETE",
+              "uniqueFindings": 1,
+              "uniqueConfirmed": 0,
+              "refuted": 0,
+              "calls": 4,
+              "cost": 0.41,
+              "model": "glm-5.3",
+              "report": "reviewers/key-zai-glm-5-3/report.html",
+              "severity": {
+                "high": 0,
+                "medium": 0,
+                "low": 1
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "family": "openrouter",
+      "label": "OpenRouter",
+      "vendors": [
+        {
+          "vendor": "alibaba",
+          "reviewers": [
+            {
+              "id": "openrouter-qwen-qwen3-8-max",
+              "status": "COMPLETE",
+              "uniqueFindings": 1,
+              "uniqueConfirmed": 0,
+              "refuted": 0,
+              "calls": 4,
+              "cost": null,
+              "model": "qwen/qwen3.8-max-0902",
+              "report": "reviewers/openrouter-qwen-qwen3-8-max/report.html",
+              "severity": {
+                "high": 0,
+                "medium": 0,
+                "low": 1
+              }
+            }
+          ]
+        },
+        {
+          "vendor": "anthropic",
+          "reviewers": [
+            {
+              "id": "openrouter-anthropic-claude-opus",
+              "status": "COMPLETE",
+              "uniqueFindings": 1,
+              "uniqueConfirmed": 0,
+              "refuted": 0,
+              "calls": 4,
+              "cost": 0.2,
+              "model": "claude-opus-5.5",
+              "report": "reviewers/openrouter-anthropic-claude-opus/report.html",
+              "severity": {
+                "high": 0,
+                "medium": 0,
+                "low": 1
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "family": "scripted",
+      "label": "Demo",
+      "vendors": [
+        {
+          "vendor": "scripted",
+          "reviewers": [
+            {
+              "id": "scripted-baseline",
+              "status": "COMPLETE",
+              "uniqueFindings": 1,
+              "uniqueConfirmed": 0,
+              "refuted": 0,
+              "calls": 4,
+              "cost": 0,
+              "model": "baseline",
+              "report": "reviewers/scripted-baseline/report.html",
+              "severity": {
+                "high": 0,
+                "medium": 0,
+                "low": 1
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "totals": {
+    "findings": 2,
+    "reviewers": 5
+  },
+  "pages": [
+    "reviewers.html",
+    "reviewers/cli-claude-opus/report.html",
+    "reviewers/key-zai-glm-5-3/report.html",
+    "reviewers/openrouter-qwen-qwen3-8-max/report.html",
+    "reviewers/openrouter-anthropic-claude-opus/report.html",
+    "reviewers/scripted-baseline/report.html"
+  ]
+}

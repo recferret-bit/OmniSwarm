@@ -24,7 +24,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { readReportText, writeReportFile } from './report-contract.mjs';
 
 const scriptsDir = path.dirname(fileURLToPath(import.meta.url));
-export const PAGES = [['report.html', 'report.pdf'], ['findings-by-model.html', 'findings-by-model.pdf']];
+export const PAGES = [['report.html', 'report.pdf'], ['findings-by-model.html', 'findings-by-model.pdf'], ['reviewers.html', 'reviewers.pdf']];
 const PRINT_STYLE = '<style>@page { size: A4; margin: 12mm; }</style>';
 const BROWSERS = [
   '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
@@ -77,16 +77,28 @@ export function printToPdf(browser, htmlFile, pdfFile, profileDir) {
   return bytes;
 }
 
+export function nestedReviewerPages(reportDir) {
+  const dir = path.join(reportDir, 'reviewers');
+  if (!fs.existsSync(dir)) return [];
+  return fs.readdirSync(dir, { withFileTypes: true })
+    .filter((ent) => ent.isDirectory() && fs.existsSync(path.join(dir, ent.name, 'report.html')))
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((ent) => [`reviewers/${ent.name}/report.html`, `reviewers/${ent.name}/report.pdf`]);
+}
+
 export function convertReport(reportDir, { browser = findBrowser() } = {}) {
   if (!browser) throw new Error('No Chrome, Chromium, Edge or Brave browser found; set CHROME_PATH to a Chrome-family executable.');
-  const pages = PAGES.filter(([html]) => fs.existsSync(path.join(reportDir, html)));
+  const pages = [...PAGES, ...nestedReviewerPages(reportDir)].filter(([html]) => fs.existsSync(path.join(reportDir, html)));
   if (!pages.length) throw new Error(`No report.html in ${reportDir}; run 'npm run html' or 'audit html' first.`);
   const work = fs.mkdtempSync(path.join(os.tmpdir(), 'audit-report-pdf-'));
   try {
     return pages.map(([html, pdf]) => {
       const source = path.join(work, html);
+      const target = path.join(work, pdf);
+      fs.mkdirSync(path.dirname(source), { recursive: true });
+      fs.mkdirSync(path.dirname(target), { recursive: true });
       fs.writeFileSync(source, printableHtml(readReportText(reportDir, html)), { mode: 0o600 });
-      const bytes = printToPdf(browser, source, path.join(work, pdf), path.join(work, 'profile'));
+      const bytes = printToPdf(browser, source, target, path.join(work, 'profile'));
       writeReportFile(reportDir, pdf, bytes);
       return path.join(reportDir, pdf);
     });

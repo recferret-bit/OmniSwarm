@@ -31,7 +31,7 @@
     "check:w05": "node --test e2e/engine/w05.test.mjs",
     "check:w06": "node --test scripts/debate-*.test.mjs scripts/orchestrator-briefs.test.mjs e2e/engine/w06.test.mjs",
     "eval:golden": "node eval/validate.mjs && node eval/run.mjs",
-    "check:w07": "node tools/gate.mjs check:w07 --pending \"W07 is not built yet; its wave replaces this script\"",
+    "check:w07": "node --test scripts/report-section-*.test.mjs e2e/engine/w07.test.mjs",
     "check:w08": "node tools/gate.mjs check:w08 --pending \"W08 is not built yet; its wave replaces this script\"",
     "check:w09": "node tools/gate.mjs check:w09 --pending \"W09 is not built yet; its wave replaces this script\"",
     "check:w10": "node tools/gate.mjs check:w10 --pending \"W10 is not built yet; its wave replaces this script\"",

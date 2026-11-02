@@ -1,0 +1,14 @@
+{
+  "name": "legacy-fixture",
+  "mode": "local",
+  "source": "fixture",
+  "date": "2026-11-02T00:00:00Z",
+  "finalized": true,
+  "surface": "s1",
+  "agents": ["claude"],
+  "models": { "claude": "opus" },
+  "auditors": ["claude-s1-auth"],
+  "workerExits": { "claude-s1-auth": 0 },
+  "crosscheckExits": {},
+  "stageFailures": []
+}
