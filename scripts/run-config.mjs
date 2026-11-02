@@ -14,7 +14,7 @@ export const ROOT = path.resolve(HERE, '..');
 export const CONFIG_NAME = 'omniswarm.config.json';
 export const DEFAULTS = Object.freeze({ passes: 2, toolBudget: 40, debate: Object.freeze({ rounds: 2, toolBudget: 12, maxClusters: 25 }) });
 export const MATRIX_LIMIT = 8;
-const LEGACY_AGENTS = ['claude', 'grok', 'agy', 'codex'];
+const LEGACY_AGENTS = Object.keys(CLI_DEFAULT_MODELS);
 
 export class ConfigError extends Error {
   constructor(message) { super(message); this.name = 'ConfigError'; this.code = 'CONFIG_INVALID'; }
@@ -129,8 +129,8 @@ export function parseFlags(argv) {
     const arg = argv[i];
     const key = { '--config': 'config', '--preset': 'preset', '--reviewers': 'reviewers', '--agents': 'agents', '--model': 'model', '--models': 'models', '--assign': 'assign', '--orchestrator': 'orchestrator', '--alternate-judge': 'alternateJudge', '--passes': 'passes', '--tool-budget': 'toolBudget' }[arg];
     if (key) { flags[key] = take(i); continue; }
-    const legacy = /^--model-(claude|codex|grok|agy)$/.exec(arg);
-    if (legacy) { flags.modelByAgent[legacy[1]] = take(i); continue; }
+    const legacy = /^--model-([a-z]+)$/.exec(arg);
+    if (legacy && Object.hasOwn(CLI_DEFAULT_MODELS, legacy[1])) { flags.modelByAgent[legacy[1]] = take(i); continue; }
     throw new ConfigError(`unknown option ${arg}`);
   }
   return flags;

@@ -13,8 +13,9 @@ export const FAMILIES = ['cli', 'key', 'openrouter', 'nearai', 'scripted'];
 
 // Default model per cli provider when only an adapter name is given (--agents claude).
 // Kept here, not in shell, so every entry point agrees (ORCHESTRATION section 1 "Defaults").
+// Key order is the default reviewer order of `audit run` without --agents/--reviewers.
 export const CLI_DEFAULT_MODELS = Object.freeze({
-  claude: 'opus', codex: 'gpt-6.1-sol', grok: 'grok-4.7', agy: 'gemini-4-argon-high',
+  claude: 'opus', grok: 'grok-4.7', agy: 'gemini-4-argon-high', codex: 'gpt-6.1-sol',
 });
 
 const CLI_VENDORS = { claude: 'anthropic', 'claude-zai': 'zai', codex: 'openai', grok: 'xai', agy: 'google' };
