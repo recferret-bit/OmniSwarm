@@ -22,9 +22,10 @@ COMMAND="${1:-help}"
 shift || true
 
 ARG_REPO="" ARG_GITHUB="" ARG_REF="" ARG_WORKDIR="" ARG_CLEAN=0
-SURFACE="all" OUT_DIR="" AGENTS="claude,grok,agy,codex" POSITIONAL=()
-MODEL_ALL="" MODELS_CSV="" MODEL_CLAUDE="" MODEL_GROK="" MODEL_AGY="" MODEL_CODEX="" PLAN=0
+SURFACE="all" OUT_DIR="" POSITIONAL=()
+PLAN=0
 RPC="" RESUME_FROM="" TEST_ARTIFACTS="" RESTART_FAILED=0
+REVIEWER_ARGS=()   # reviewer, model, preset and budget flags, resolved by scripts/run-config.mjs
 
 # Flags for `run`; anything else is a positional argument.
 parse_flags() {
@@ -37,13 +38,9 @@ parse_flags() {
       --clean) ARG_CLEAN=1; shift ;;
       --surface|-s) SURFACE="${2:?$1 needs a value}"; shift 2 ;;
       --out|-o) OUT_DIR="${2:?$1 needs a path}"; shift 2 ;;
-      --agents|-a) AGENTS="${2:?$1 needs a list}"; shift 2 ;;
-      --model) MODEL_ALL="${2:?--model needs a slug}"; shift 2 ;;
-      --models) MODELS_CSV="${2:?--models needs vendor=slug pairs}"; shift 2 ;;
-      --model-claude) MODEL_CLAUDE="${2:?--model-claude needs a slug}"; shift 2 ;;
-      --model-grok) MODEL_GROK="${2:?--model-grok needs a slug}"; shift 2 ;;
-      --model-agy) MODEL_AGY="${2:?--model-agy needs a slug}"; shift 2 ;;
-      --model-codex) MODEL_CODEX="${2:?--model-codex needs a slug}"; shift 2 ;;
+      --agents|-a) REVIEWER_ARGS+=(--agents "${2:?$1 needs a list}"); shift 2 ;;
+      --reviewers|--config|--preset|--assign|--orchestrator|--alternate-judge|--passes|--tool-budget|--model|--models|--model-claude|--model-grok|--model-agy|--model-codex)
+        REVIEWER_ARGS+=("$1" "${2:?$1 needs a value}"); shift 2 ;;
       --plan) PLAN=1; shift ;;
       --resume-from) RESUME_FROM="${2:?--resume-from needs a report directory}"; shift 2 ;;
       --test-artifacts) TEST_ARTIFACTS="${2:?--test-artifacts needs a Cargo target directory}"; shift 2 ;;
@@ -109,22 +106,15 @@ case "$COMMAND" in
     if [ -z "$OUT_DIR" ]; then
       OUT_DIR="$AUDIT_ROOT/reports/$(date +%Y-%m-%d-%H%M%S)-$TARGET_NAME"
     fi
-    model_args=()
-    [ -n "$MODEL_ALL" ] && model_args+=(--model "$MODEL_ALL")
-    [ -n "$MODELS_CSV" ] && model_args+=(--models "$MODELS_CSV")
-    [ -n "$MODEL_CLAUDE" ] && model_args+=(--model-claude "$MODEL_CLAUDE")
-    [ -n "$MODEL_GROK" ] && model_args+=(--model-grok "$MODEL_GROK")
-    [ -n "$MODEL_AGY" ] && model_args+=(--model-agy "$MODEL_AGY")
-    [ -n "$MODEL_CODEX" ] && model_args+=(--model-codex "$MODEL_CODEX")
+    model_args=(${REVIEWER_ARGS[@]+"${REVIEWER_ARGS[@]}"})
     [ "$PLAN" -eq 1 ] && model_args+=(--plan)
-    [ -n "$RPC" ] && model_args+=(--rpc "$RPC")
     [ -n "$RESUME_FROM" ] && model_args+=(--resume-from "$RESUME_FROM")
     [ -n "$TEST_ARTIFACTS" ] && model_args+=(--test-artifacts "$TEST_ARTIFACTS")
     [ "$RESTART_FAILED" -eq 1 ] && model_args+=(--restart-failed)
     bash "$AUDIT_ROOT/scripts/orchestrate.sh" \
       --target "$TARGET_DIR" --name "$TARGET_NAME" --mode "$TARGET_MODE" \
       --source "$TARGET_SOURCE" --ref "$TARGET_REF" --commit "$TARGET_COMMIT" \
-      --surface "$SURFACE" --agents "$AGENTS" --out "$OUT_DIR" ${model_args[@]+"${model_args[@]}"}
+      --surface "$SURFACE" --out "$OUT_DIR" ${model_args[@]+"${model_args[@]}"}
     report_kept_clone
     ;;
 

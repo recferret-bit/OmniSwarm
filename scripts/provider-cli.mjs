@@ -108,6 +108,8 @@ export const family = {
     'claude-zai': { installed: () => false, wave: 'W03', pinsModel: false },
   },
   installed: () => true,
+  // Is this reviewer usable on this machine right now (CLI on PATH)? Used to pick a recommended orchestrator.
+  available: (reviewer, env = process.env) => Boolean(resolveExecutable(reviewer.provider, env)),
   launch,
   envAllowlist: () => [],
 };
