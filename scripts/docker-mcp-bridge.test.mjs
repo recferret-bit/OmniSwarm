@@ -316,6 +316,8 @@ test('buildCliInvocation configures isolated MCP bridge workspaces for claude, c
       workDir,
       bridgeArgs,
       env,
+      // The pinned adapter lives in runtime/node_modules, which a fresh clone lacks.
+      runtimeAdapter: (name) => path.join(root, `stub-${name}-adapter.js`),
     });
     const inv = spec.invocation;
     assert.equal(inv.cwd, workDir);

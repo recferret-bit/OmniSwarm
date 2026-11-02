@@ -31,7 +31,7 @@ export function runtimeAdapter(agent) {
   return file;
 }
 
-export function buildSessionLaunch({ agent, model, workDir, bridgeArgs, legacyConversationId, env = process.env }) {
+export function buildSessionLaunch({ agent, model, workDir, bridgeArgs, legacyConversationId, env = process.env, runtimeAdapter: adapterFor = runtimeAdapter }) {
   const cli = resolveExecutable(agent, env);
   if (!cli) throw new SessionError('setup_error', `CLI unavailable: ${agent}`);
   stageAuditSkill(workDir);
@@ -49,11 +49,11 @@ export function buildSessionLaunch({ agent, model, workDir, bridgeArgs, legacyCo
       project_doc_max_bytes: 0, mcp_servers: { audit_docker: { command: process.execPath, args: mcpServers[0].args, required: true } },
       features: { shell_tool: false, shell_snapshot: false, apply_patch_freeform: false, js_repl: false, code_mode: false, multi_agent: false, apps: false, image_generation: false, skill_mcp_dependency_install: false },
     });
-    invocation.args = [runtimeAdapter(agent)];
+    invocation.args = [adapterFor(agent)];
   } else if (agent === 'claude') {
     environment.CLAUDE_CODE_EXECUTABLE = cli;
     environment.CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION = 'false';
-    invocation.args = [runtimeAdapter(agent)];
+    invocation.args = [adapterFor(agent)];
     sessionMeta = { claudeCode: { options: {
       model, tools: [], allowedTools: ['mcp__audit_docker__*'], settingSources: [],
       allowDangerouslySkipPermissions: false, persistSession: true, promptSuggestions: false,
