@@ -21,3 +21,6 @@ reports/*
 
 # Golden eval run output (W06)
 eval/runs/
+
+# operator run config (copy of omniswarm.config.example.json)
+omniswarm.config.json

@@ -56,7 +56,7 @@ const hasLegacyModelFlags = (flags) => Boolean(flags.model || flags.models || Ob
 
 // Resolve flags + config into the effective run configuration.
 // flags: {config, preset, reviewers, agents, model, models, modelByAgent, assign, orchestrator, alternateJudge, passes, toolBudget}
-export function resolveRunConfig({ flags = {}, root = ROOT, explicitConfig = flags.config, env = process.env } = {}) {
+export function resolveRunConfig({ flags = {}, root = ROOT, explicitConfig = flags.config } = {}) {
   const file = explicitConfig ? path.resolve(explicitConfig) : path.join(root, CONFIG_NAME);
   let config = null;
   if (explicitConfig || fs.existsSync(file)) config = loadConfigFile(file);
@@ -83,7 +83,7 @@ export function resolveRunConfig({ flags = {}, root = ROOT, explicitConfig = fla
   let reviewers = parseReviewerList(specs);
   if (hasLegacyModelFlags(flags) && from !== 'agents' && from !== 'default') {
     const models = legacyModels(flags);
-    reviewers = parseReviewerList(reviewers.map((r) => (r.family === 'cli' && models[r.provider] ? { ...r, model: models[r.provider], id: undefined } : r)).map((r) => (typeof r.id === 'string' ? r : parseReviewerSpec(formatReviewerSpec({ ...r, label: r.label })))));
+    reviewers = parseReviewerList(reviewers.map((r) => formatReviewerSpec(r.family === 'cli' && models[r.provider] ? { ...r, model: models[r.provider] } : r)));
   }
 
   const number = (name, value) => { if (value === undefined || value === '') return undefined; const n = Number(value); if (!Number.isInteger(n)) throw new ConfigError(`${name} must be an integer`); return n; };
@@ -108,8 +108,6 @@ export function resolveRunConfig({ flags = {}, root = ROOT, explicitConfig = fla
     else if (reviewers.length <= MATRIX_LIMIT) assign = 'matrix';
     else { assign = 'round-robin'; warnings.push(`${reviewers.length} reviewers exceed ${MATRIX_LIMIT}: using --assign round-robin to bound cost`); }
   }
-  const sameVendor = new Map();
-  for (const r of reviewers) sameVendor.set(r.vendor, (sameVendor.get(r.vendor) || 0) + 1);
   return {
     reviewers,
     reviewersFrom: from,
@@ -120,7 +118,6 @@ export function resolveRunConfig({ flags = {}, root = ROOT, explicitConfig = fla
     preset: flags.preset || null,
     configFile: config ? file : null,
     warnings,
-    env: undefined,
   };
 }
 
