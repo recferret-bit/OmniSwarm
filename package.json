@@ -33,7 +33,7 @@
     "eval:golden": "node eval/validate.mjs && node eval/run.mjs",
     "check:w07": "node --test scripts/report-section-*.test.mjs e2e/engine/w07.test.mjs",
     "check:w08": "npm test --workspace backend/intake && node --test e2e/intake/w08.spec.ts",
-    "check:w09": "node tools/gate.mjs check:w09 --pending \"W09 is not built yet; its wave replaces this script\"",
+    "check:w09": "npm test --workspace backend/intake && node --test e2e/intake/w09.spec.ts",
     "check:w10": "cargo test --manifest-path contracts/review-registry/Cargo.toml && bash contracts/review-registry/scripts/deploy-testnet.sh --dry-run",
     "check:w11": "node tools/gate.mjs check:w11 --pending \"W11 is not built yet; its wave replaces this script\"",
     "check:w12": "node tools/gate.mjs check:w12 --pending \"W12 is not built yet; its wave replaces this script\"",
