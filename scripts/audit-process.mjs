@@ -26,18 +26,35 @@ export const FAILURE_MESSAGES = {
   turn_incomplete: 'Agent ended its turn without a successful completion status.',
   provider_error: 'Agent/provider rejected the turn; inspect its private session record.',
   native_turn_failed: 'Native CLI did not produce a successful structured turn result.',
-  sandbox_unavailable: 'Docker sandbox was lost before review completion; inspect harness/sandbox-run/lifecycle.json and resume into a fresh sandbox.',
+  sandbox_unavailable: 'Docker sandbox was lost before review completion; inspect harness/host/lifecycle.json and resume into a fresh sandbox.',
   permission_denied: 'Agent requested a host capability unavailable to this audit session.',
 };
 
+const RPC_ERROR_REASONS = [
+  ['provider_policy', /flagged for possible cybersecurity risk|apply for Daybreak access/i],
+  ['usage_limit', /you.ve hit your (?:session|usage|weekly) limit|usage limit (?:reached|exceeded)|quota exceeded|RESOURCE_EXHAUSTED/i],
+  ['auth_required', /authentication required|auth required|subscription_login_required|not logged in|please (?:log|sign) in/i],
+  ['mcp_unavailable', /audit (?:MCP|tool).*?(?:not (?:show up|attached)|empty)|audit_docker.*?(?:unavailable|not attached)|project MCP server (?:never attached|is not attached)|folder untrusted/i],
+];
+
+// R-07: a label comes from a JSON-RPC error object (`error.code`, `error.message`, `error.data.reason`) that the session
+// received as the response to a request, never from log or output text, which can quote the target's own source.
+// `error` is the object or its JSON encoding (SessionError carries the encoding). Anything else yields null.
+export function classifyRpcError(error) {
+  let frame = error;
+  if (typeof frame === 'string') { try { frame = JSON.parse(frame); } catch { return null; } }
+  if (!frame || typeof frame !== 'object' || Array.isArray(frame)) return null;
+  const fields = [frame.message, frame.code, frame.data?.reason, frame.data?.message, frame.data?.status].filter(value => typeof value === 'string' || typeof value === 'number').map(String);
+  const text = fields.join('\n');
+  return RPC_ERROR_REASONS.find(([, pattern]) => pattern.test(text))?.[0] ?? null;
+}
+
 // Labels explain failures without copying source, credentials, or provider payloads into diagnostics.
+// `result.rpcError` is the only text-derived input; stdout and stderr are ignored on purpose.
 export function classifyAuditFailure(result, fallback = 'missing_report') {
-  const output = `${result.stdout || ''}\n${result.stderr || ''}`;
   let reason = fallback;
-  if (/flagged for possible cybersecurity risk|apply for Daybreak access/i.test(output)) reason = 'provider_policy';
-  else if (/you.ve hit your (?:session|usage|weekly) limit|usage limit (?:reached|exceeded)|quota exceeded|RESOURCE_EXHAUSTED/i.test(output)) reason = 'usage_limit';
-  else if (/authentication required|auth required|subscription_login_required|not logged in|please (?:log|sign) in/i.test(output)) reason = 'auth_required';
-  else if (/audit (?:MCP|tool).*?(?:not (?:show up|attached)|empty)|audit_docker.*?(?:unavailable|not attached)|project MCP server (?:never attached|is not attached)|folder untrusted/i.test(output)) reason = 'mcp_unavailable';
+  const structured = classifyRpcError(result.rpcError);
+  if (structured) reason = structured;
   else if (result.timedOut || result.code === 124) reason = 'timeout';
   else if (result.code == null) reason = 'missing_exit';
   else if (result.code !== 0) reason = 'process_error';

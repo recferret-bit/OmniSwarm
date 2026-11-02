@@ -202,12 +202,12 @@ test('resume reuses successful immutable reports and reruns peer checks when cla
 test('saved completion repair requires a normal turn, clean process exit and no RPC error', t => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'audit-completion-repair-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
-  fs.mkdirSync(path.join(root,'harness/sandbox-run'),{recursive:true});
+  fs.mkdirSync(path.join(root,'harness/host'),{recursive:true});
   const directory=path.join(root,'session'); fs.mkdirSync(directory);
   const state={failureReason:'usage_limit',observedExitCode:0};
   const writeState=()=>fs.writeFileSync(path.join(directory,'state.json'),JSON.stringify(state));
   writeState();
-  const file=path.join(root,'harness/sandbox-run/agent-claude-s1-auth.log');
+  const file=path.join(root,'harness/host/agent-claude-s1-auth.log');
   const end=JSON.stringify({jsonrpc:'2.0',id:3,result:{stopReason:'end_turn'}})+'\n';
   fs.writeFileSync(file,end);
   assert.equal(savedTurnCompleted(root,'claude-s1-auth',directory),true);

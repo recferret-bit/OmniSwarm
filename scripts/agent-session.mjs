@@ -166,7 +166,7 @@ export async function runReviewSession(options, { launch = buildSessionLaunch, p
         store.save(phase, { stopReason: result.stopReason, completedAt: new Date().toISOString() });
         return { code: 0, observedExitCode: exit.code, processSignal: exit.signal, elapsedMs: Date.now() - started, sessionId, directory, transport: spec.transport, stopReason: result.stopReason, recoveryAttempts: totalRecoveries };
       } catch (error) {
-        const failure = classifyAuditFailure({ code: 1, stderr: error.message });
+        const failure = classifyAuditFailure({ code: 1, rpcError: error.reason === 'provider_error' ? error.message : undefined });
         const reason = signal?.aborted ? 'cancelled' : error.reason === 'provider_error' && ['provider_policy', 'usage_limit', 'auth_required', 'mcp_unavailable'].includes(failure.reason) ? failure.reason : error.reason || 'process_error';
         if (reason === 'transport_lost' && resumeCapable && sessionId && totalRecoveries < maxRecoveries && !signal?.aborted) {
           totalRecoveries++;

@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -92,8 +93,8 @@ test('cancelled cross-checks are not relabeled from historical MCP error prose',
   f.save('claude'); f.save('grok'); f.cross();
   f.meta.crosscheckExits.grok = 130;
   f.put('meta.json', f.meta);
-  fs.mkdirSync(path.join(f.dir, 'harness/sandbox-run'));
-  fs.writeFileSync(path.join(f.dir, 'harness/sandbox-run/crosscheck-grok.log'), 'Historical audit_docker unavailable message.');
+  fs.mkdirSync(path.join(f.dir, 'harness/host'));
+  fs.writeFileSync(path.join(f.dir, 'harness/host/crosscheck-grok.log'), 'Historical audit_docker unavailable message.');
   const message = loadAuditors(f.dir).health.errors.find(error => error.startsWith('grok: missing or failed cross-check exit'));
   assert.match(message, /Review cancelled/);
   assert.doesNotMatch(message, /Docker MCP tools were unavailable/);
@@ -101,13 +102,11 @@ test('cancelled cross-checks are not relabeled from historical MCP error prose',
 
 test('incomplete reports explain recorded policy refusals, MCP failures and timeouts', (t) => {
   const f = fixture(t, ['claude', 'grok', 'agy', 'codex']);
-  const logs = path.join(f.dir, 'harness', 'sandbox-run');
-  fs.mkdirSync(logs);
-  f.meta.workerExits = { 'claude-s1-auth': 1, 'grok-s1-auth': 124, 'agy-s1-auth': 124, 'codex-s1-auth': 1 };
+  fs.mkdirSync(path.join(f.dir, 'harness', 'host'));
+  f.meta.workerExits = { 'claude-s1-auth': 1, 'grok-s1-auth': 1, 'agy-s1-auth': 124, 'codex-s1-auth': 1 };
   f.put('meta.json', f.meta);
-  fs.writeFileSync(path.join(logs, 'agent-claude-s1-auth.log'), "You've hit your session limit");
-  fs.writeFileSync(path.join(logs, 'agent-grok-s1-auth.log'), 'The project MCP server never attached');
-  fs.writeFileSync(path.join(logs, 'agent-codex-s1-auth.log'), 'This content was flagged for possible cybersecurity risk');
+  // R-07: the reasons are the structured ones the session recorded. Log text, here and in the forgeable /out, is not read.
+  f.put('workers.json', { jobs: [{ name: 'claude-s1-auth', failure: { reason: 'usage_limit' } }, { name: 'grok-s1-auth', failure: { reason: 'mcp_unavailable' } }, { name: 'codex-s1-auth', failure: { reason: 'provider_policy' } }] });
   const health = loadAuditors(f.dir).health;
   assert.equal(health.state, 'incomplete');
   for (const expected of [/usage\/session limit/, /MCP tools were unavailable/, /exceeded its time budget/, /Provider refused/]) assert.ok(health.errors.some(error => expected.test(error)));
@@ -118,6 +117,32 @@ test('incomplete reports explain recorded policy refusals, MCP failures and time
   const diagnostics = loadAuditors(f.dir).health.errors.join('\n');
   assert.match(diagnostics, /Submitted report failed contract validation/);
   assert.ok(!diagnostics.includes('DO_NOT_TRUST_CUSTOM_TEXT'));
+});
+
+test('R-07: quota, refusal or MCP text in a log never decides a failure label', (t) => {
+  const f = fixture(t, ['claude', 'grok']);
+  fs.mkdirSync(path.join(f.dir, 'harness', 'host'));
+  fs.mkdirSync(path.join(f.dir, 'harness', 'sandbox-run'));
+  f.meta.workerExits = { 'claude-s1-auth': 1, 'grok-s1-auth': 1 };
+  f.put('meta.json', f.meta);
+  for (const dir of ['host', 'sandbox-run']) {
+    fs.writeFileSync(path.join(f.dir, 'harness', dir, 'agent-claude-s1-auth.log'), "usage limit reached. You've hit your session limit. RESOURCE_EXHAUSTED");
+    fs.writeFileSync(path.join(f.dir, 'harness', dir, 'agent-grok-s1-auth.log'), 'flagged for possible cybersecurity risk; The project MCP server never attached');
+  }
+  const errors = loadAuditors(f.dir).health.errors.join('\n');
+  assert.match(errors, /Audit process exited unsuccessfully/);
+  assert.doesNotMatch(errors, /usage\/session limit|Provider refused|MCP tools were unavailable/);
+});
+
+test('R-04: the report points at the host-only log, never at the container-writable /out', (t) => {
+  const f = fixture(t, ['claude']);
+  fs.mkdirSync(path.join(f.dir, 'harness', 'host'));
+  f.meta.workerExits = { 'claude-s1-auth': 1 };
+  f.put('meta.json', f.meta);
+  fs.writeFileSync(path.join(f.dir, 'harness/host/agent-claude-s1-auth.log'), 'host log');
+  const errors = loadAuditors(f.dir).health.errors.join('\n');
+  assert.match(errors, /Log: harness\/host\/agent-claude-s1-auth\.log/);
+  assert.doesNotMatch(errors, /sandbox-run/);
 });
 
 test('nonzero or absent worker exit remains incomplete with valid JSON', (t) => {
@@ -432,4 +457,37 @@ test('new reviewer metadata is accepted next to the legacy shape, and a mismatch
   f.put('meta.json', f.meta);
   health = loadAuditors(f.dir).health;
   assert.ok(health.errors.some((e) => /Invalid reviewer inventory/.test(e)));
+});
+
+test('R-02: the source digest the bridge recorded must match the sealed manifest, or the report is INCOMPLETE', (t) => {
+  const f = fixture(t, ['claude']);
+  f.save('claude');
+  f.meta.sandboxHardening = 1;
+  f.put('meta.json', f.meta);
+  const files = [{ path: 'src/a.js', bytes: 3, sha256: 'a'.repeat(64) }, { path: 'src/b.js', bytes: 4, sha256: 'b'.repeat(64) }];
+  const digest = list => crypto.createHash('sha256').update(JSON.stringify(list)).digest('hex');
+  f.put('source-manifest.json', { version: 1, files, digest: digest(files) });
+  const served = value => f.put('harness/source-read-digest.json', value);
+  const errors = () => loadAuditors(f.dir).health.errors.filter(error => /SOURCE_DIGEST_MISMATCH/.test(error));
+  assert.deepEqual(errors(), [], 'no read, no digest file: nothing to compare');
+  served({ version: 1, digest: digest(files), files });
+  assert.deepEqual(errors(), []);
+  // The sandbox copy may drop a name the snapshot kept; what it served must still be a verbatim subset.
+  served({ version: 1, digest: digest(files.slice(0, 1)), files: files.slice(0, 1) });
+  assert.deepEqual(errors(), []);
+  // Tampered digest file: a changed file, an extra file, a digest that does not match its own list.
+  served({ version: 1, digest: digest(files), files: [{ ...files[0], sha256: 'c'.repeat(64) }, files[1]] });
+  assert.equal(errors().length, 1);
+  assert.equal(loadAuditors(f.dir).health.state, 'incomplete');
+  const extra = [...files, { path: 'src/evil.js', bytes: 1, sha256: 'd'.repeat(64) }];
+  served({ version: 1, digest: digest(extra), files: extra });
+  assert.equal(errors().length, 1);
+  served({ version: 1, digest: 'e'.repeat(64), files });
+  assert.equal(errors().length, 1);
+  fs.writeFileSync(path.join(f.dir, 'harness/source-read-digest.json'), '{');
+  assert.equal(errors().length, 1);
+  // Reports from before this hardening carry no marker and are not judged by it.
+  delete f.meta.sandboxHardening;
+  f.put('meta.json', f.meta);
+  assert.deepEqual(errors(), []);
 });

@@ -31,6 +31,7 @@ import {
 import { readReportJson, readReportText, writeReportFile } from './report-contract.mjs';
 import { createSnapshot, disposeSnapshot } from './worker-isolation.mjs';
 import { classifyAuditFailure, FAILURE_MESSAGES } from './audit-process.mjs';
+import { HOST_DIR, LIFECYCLE_FILE, hostLogRel } from './sandbox-host-paths.mjs';
 import { runReviewSession } from './agent-session.mjs';
 import { digest } from './agent-session-store.mjs';
 import { readCanonicalSubmission, deriveSubmission } from './audit-submission.mjs';
@@ -95,7 +96,7 @@ export function savedTurnCompleted(root, name, directory) {
   try {
     const state = readReportJson(directory, 'state.json');
     if (state.observedExitCode !== 0 || !['usage_limit', 'provider_policy', 'auth_required', 'mcp_unavailable'].includes(state.failureReason)) return false;
-    const log = readReportText(root, `harness/sandbox-run/${name.startsWith('crosscheck-') ? name : `agent-${name}`}.log`, 8 * 1024 * 1024);
+    const log = readReportText(root, hostLogRel(name), 8 * 1024 * 1024);
     let complete = false;
     for (const line of log.split('\n')) {
       let frame; try { frame = JSON.parse(line); } catch { continue; }
@@ -208,18 +209,20 @@ export async function startOneShotDocker({ target, out }) {
     if (fs.existsSync(readyFile)) {
       try {
         const info = JSON.parse(fs.readFileSync(readyFile, 'utf8'));
-        if (info.container) {
+        if (info.container && typeof info.hostDir === 'string') {
           let reportLoss;
           const lost = new Promise(resolve => { reportLoss = resolve; });
-          const lifecycleFile = path.join(info.hostRunDir, 'lifecycle.json');
+          // Lifecycle is written by the host next to, not inside, the directory the container can write (R-04).
+          const lifecycleFile = path.join(info.hostDir, 'lifecycle.json');
           const monitor = setInterval(() => {
-            try { if (JSON.parse(fs.readFileSync(lifecycleFile, 'utf8')).state === 'lost') reportLoss(new Error('Docker sandbox was lost; inspect harness/sandbox-run/lifecycle.json.')); }
+            try { if (JSON.parse(fs.readFileSync(lifecycleFile, 'utf8')).state === 'lost') reportLoss(new Error(`Docker sandbox was lost; inspect ${LIFECYCLE_FILE}.`)); }
             catch { /* the lifecycle writer may not have published its first probe */ }
           }, 1000);
-          closePromise.then(() => { clearInterval(monitor); if (!stopping) reportLoss(new Error('One-shot Docker sandbox exited before review completion; inspect harness/sandbox-run/lifecycle.json.')); });
+          closePromise.then(() => { clearInterval(monitor); if (!stopping) reportLoss(new Error(`One-shot Docker sandbox exited before review completion; inspect ${LIFECYCLE_FILE}.`)); });
           return {
             container: info.container,
             hostRunDir: info.hostRunDir,
+            hostDir: info.hostDir,
             lost,
             stop: async () => {
               stopping = true;
@@ -307,6 +310,7 @@ export async function runOrchestratedAudit(request, options = {}) {
     }
   }
   fs.mkdirSync(path.join(output, 'sessions'), { mode: 0o700 });
+  fs.mkdirSync(path.join(output, HOST_DIR), { recursive: true, mode: 0o700 });
   fs.mkdirSync(path.join(output, 'harness', 'identities'), { mode: 0o700 });
   fs.mkdirSync(path.join(output, 'harness', 'assignments'), { mode: 0o700 });
 
@@ -318,7 +322,7 @@ export async function runOrchestratedAudit(request, options = {}) {
   // `models` stays populated for every reviewer so reports and tools that read the old map keep working.
   const orchestratorMeta = request.orchestrator === 'recommended' ? { requested: 'recommended' } : request.orchestrator || null;
   const budgets = request.budgets || null;
-  const initialMeta = { name: request.name || path.basename(request.target), mode: request.mode || 'local', source: request.source || request.target, surface: surfaceArg, agents: request.agents, models: request.models, reviewers, orchestrator: orchestratorMeta, assign, budgets, auditors: jobs.map(job => job.name), workerExits, crosscheckExits, stageFailures, finalized: false, workflow: REVIEW_WORKFLOW, agentTransport: 'acp_v1', submissionAuthority: 'mcp_commit' };
+  const initialMeta = { name: request.name || path.basename(request.target), mode: request.mode || 'local', source: request.source || request.target, surface: surfaceArg, agents: request.agents, models: request.models, reviewers, orchestrator: orchestratorMeta, assign, budgets, auditors: jobs.map(job => job.name), workerExits, crosscheckExits, stageFailures, finalized: false, sandboxHardening: 1, workflow: REVIEW_WORKFLOW, agentTransport: 'acp_v1', submissionAuthority: 'mcp_commit' };
   writeReportFile(output, 'harness/reviewers.json', `${JSON.stringify({ version: 1, reviewers, orchestrator: orchestratorMeta, alternateJudge: request.alternateJudge || null, assign, budgets, preset: request.preset || null }, null, 2)}\n`);
   writeReportFile(output, 'meta.json', JSON.stringify(initialMeta, null, 2));
   const saveWorkers = () => writeReportFile(output, 'workers.json', JSON.stringify({ version: 1, policy: 'docker_mcp_bridge', sourceDigest, jobs }, null, 2));
@@ -350,10 +354,8 @@ export async function runOrchestratedAudit(request, options = {}) {
         const priorExit = role === 'auditor' ? priorMeta.workerExits?.[name] : priorMeta.crosscheckExits?.[agent];
         if (request.restartFailed && priorExit !== 0) {
           const failure = role === 'auditor' ? readReportJson(resumeRoot, 'workers.json').jobs.find(job => job.name === name)?.failure?.reason : priorMeta.providerFailures?.[agent];
-          const rel = `harness/sandbox-run/${role === 'auditor' ? 'agent-' : ''}${name}.log`;
-          let log = ''; try { log = readReportText(resumeRoot, rel, 8 * 1024 * 1024); } catch { /* saved structured failures still apply */ }
-          const classified = classifyAuditFailure({ code: 1, stdout: log }).reason;
-          const blocked = [failure, saved.failureReason, priorMeta.providerFailures?.[agent], classified].find(reason => ['provider_policy', 'usage_limit', 'auth_required', 'provider_error'].includes(reason));
+          // R-07: the recorded structured reasons decide; the log is never scanned, because it can quote target source.
+          const blocked = [failure, saved.failureReason, priorMeta.providerFailures?.[agent]].find(reason => ['provider_policy', 'usage_limit', 'auth_required', 'provider_error'].includes(reason));
           if (blocked) { const error = new Error('A provider refusal, quota, login or unresolved provider error cannot be restarted in a new conversation'); error.reason = blocked; throw error; }
           restartedFrom = priorDirectory;
           if (role === 'auditor' && fs.existsSync(path.join(resumeRoot, 'submissions', `${name}.json`))) {
@@ -384,7 +386,7 @@ export async function runOrchestratedAudit(request, options = {}) {
         commitSubmission(output, name, identity, previous.report.payload, previous.report.summary);
       }
     }
-    const bridgeArgs = ['--docker-bin', dockerBin, '--container', session.container, '--report-dir', output, '--role', role, '--agent', agent, '--identity-file', identityFile];
+    const bridgeArgs = ['--docker-bin', dockerBin, '--container', session.container, '--report-dir', output, '--role', role, '--agent', agent, '--identity-file', identityFile, '--reviewers-file', path.join(output, 'harness', 'reviewers.json')];
     // Cross-check reviewers span every surface, so their context and plans must too (R-06).
     bridgeArgs.push(...(role === 'auditor' ? ['--auditor', name, '--surface', surface] : ['--surface', 'ALL']));
     writeReportFile(output, `harness/session-${name}.json`, JSON.stringify({ directory, identity }));
@@ -439,7 +441,7 @@ export async function runOrchestratedAudit(request, options = {}) {
         saveWorkers();
         return;
       }
-      const logFile = path.join(output, 'harness', 'sandbox-run', `agent-${job.name}.log`);
+      const logFile = path.join(output, hostLogRel(job.name));
       try {
         job.state = 'running';
         saveWorkers();
@@ -510,7 +512,7 @@ export async function runOrchestratedAudit(request, options = {}) {
       writeReportFile(output, `crosscheck/${agent}.json`, claimsJson);
       fs.writeFileSync(path.join(containerCrosscheckDir, `${agent}.json`), claimsJson);
 
-      const logFile = path.join(output, 'harness', 'sandbox-run', `crosscheck-${agent}.log`);
+      const logFile = path.join(output, hostLogRel(`crosscheck-${agent}`));
       try {
         console.log(`  -> [crosscheck-${agent}] reviewing ${inbox.length} peer claim(s)...`);
         const prompt = buildCrosscheckPrompt({ targetName: request.name, agent, claims: inbox });

@@ -91,3 +91,24 @@ test('R-09: exploit steps, PoCs and missing evidence are refused for every ident
   await assert.rejects(callBridgeTool(f.ctx, 'submit_audit_report', noEvidence), /requires evidence/);
   assert.equal(fs.existsSync(path.join(f.root, 'submissions')), false);
 });
+
+test('W02-02: the bridge accepts reviewer ids listed in harness/reviewers.json and refuses any other with IDENTITY_UNKNOWN', t => {
+  const f = fixture(t);
+  const id = 'openrouter-qwen-qwen3-8-max';
+  const identity = { ...f.identity, name: `${id}-s3-logic`, agent: id };
+  const identityFile = path.join(f.root, 'identity.json');
+  fs.writeFileSync(identityFile, JSON.stringify(identity));
+  fs.writeFileSync(path.join(f.root, 'harness/reviewers.json'), JSON.stringify({ version: 1, reviewers: [{ id }, { id: 'cli-claude-opus' }] }));
+  const flags = ['--report-dir', f.root, '--role', 'auditor', '--agent', id, '--auditor', identity.name, '--surface', 'S3', '--identity-file', identityFile, '--reviewers-file', path.join(f.root, 'harness/reviewers.json')];
+  assert.equal(parseBridgeArgs(flags).submissionIdentity.agent, id);
+  // Same pattern-valid id, but not a reviewer of this run.
+  const rogue = { ...identity, name: 'rogue-s3-logic', agent: 'rogue' };
+  fs.writeFileSync(identityFile, JSON.stringify(rogue));
+  const rogueFlags = flags.map(flag => flag === id ? 'rogue' : flag === identity.name ? rogue.name : flag);
+  assert.throws(() => parseBridgeArgs(rogueFlags), /IDENTITY_UNKNOWN/);
+  // The reviewers file cannot be taken from outside the report directory.
+  assert.throws(() => parseBridgeArgs([...flags.slice(0, -1), '/tmp/reviewers.json']));
+  // A run without the flag keeps the pattern-only check, so older callers still start.
+  fs.writeFileSync(identityFile, JSON.stringify(identity));
+  assert.doesNotThrow(() => parseBridgeArgs(flags.slice(0, -2)));
+});

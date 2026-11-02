@@ -18,6 +18,7 @@ import { readReportJson, writeReportFile } from './report-contract.mjs';
 import { validateSubmissionIdentity } from './audit-submission.mjs';
 import { REVIEW_TOOLS } from './review-workflow.mjs';
 import { bridgeRole } from './bridge-tools-registry.mjs';
+import { BridgeError, scrubProviderEnv } from './bridge-tools-common.mjs';
 
 // Helpers that lived here before the per-role split stay importable from this module.
 export { boundedCapture, execInContainer, normalizeCitation } from './bridge-tools-common.mjs';
@@ -44,6 +45,7 @@ export function parseBridgeArgs(argv) {
     surface: (process.env.AUDIT_SURFACE || 'S1').toUpperCase(),
     finalizeOnly: false,
     identityFile: '',
+    reviewersFile: '',
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -56,14 +58,23 @@ export function parseBridgeArgs(argv) {
     else if (a === '--surface') opts.surface = (argv[++i] || 'S1').toUpperCase();
     else if (a === '--finalize-only') opts.finalizeOnly = true;
     else if (a === '--identity-file') opts.identityFile = argv[++i] || '';
+    else if (a === '--reviewers-file') opts.reviewersFile = argv[++i] || '';
   }
   opts.dockerBin = resolveDockerBin(opts.dockerBin);
+  // Reviewer ids come from harness/reviewers.json (written by the orchestrator), not from a list in this file.
+  if (opts.reviewersFile) {
+    const listed = readReportJson(opts.reportDir, path.relative(opts.reportDir, opts.reviewersFile));
+    if (!Array.isArray(listed?.reviewers)) throw new BridgeError('IDENTITY_UNKNOWN', 'Reviewers file has no reviewers list');
+    opts.reviewerIds = new Set(listed.reviewers.map(reviewer => reviewer?.id).filter(id => typeof id === 'string'));
+    if (opts.agent && !opts.reviewerIds.has(opts.agent)) throw new BridgeError('IDENTITY_UNKNOWN', `Reviewer ${String(opts.agent).slice(0, 80)} is not in this run's reviewers file`);
+  }
   if (opts.identityFile) {
     const rel = path.relative(opts.reportDir, opts.identityFile);
     opts.submissionIdentity = readReportJson(opts.reportDir, rel);
     const name = opts.role === 'crosscheck' ? `crosscheck-${opts.agent}` : opts.auditor;
     validateSubmissionIdentity(opts.submissionIdentity, name);
     if (opts.submissionIdentity.agent !== opts.agent || opts.submissionIdentity.role !== opts.role) throw new Error('Bridge submission identity mismatch');
+    if (opts.reviewerIds && !opts.reviewerIds.has(opts.submissionIdentity.agent)) throw new BridgeError('IDENTITY_UNKNOWN', `Submission identity names reviewer ${String(opts.submissionIdentity.agent).slice(0, 80)}, which is not in this run's reviewers file`);
   }
   return opts;
 }
@@ -178,5 +189,6 @@ function startStdioServer(ctx) {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  scrubProviderEnv();
   startStdioServer(parseBridgeArgs(process.argv.slice(2)));
 }

@@ -566,10 +566,9 @@ async function main() {
   if (process.env.SANDBOX_HOLD === '1') {
     fs.mkdirSync(path.join(outDir, 'auditors'), { recursive: true });
     fs.mkdirSync(path.join(outDir, 'crosscheck'), { recursive: true });
-    // The preparation budget ends at checks.done; reviewers have no deadline.
-    while (!fs.existsSync(path.join(outDir, 'sandbox.release'))) {
-      await new Promise((r) => setTimeout(r, 400));
-    }
+    // The preparation budget ends at checks.done; reviewers have no deadline. The host ends this container with
+    // docker kill. No file under /out can release it: target suites run as the same uid and can write there.
+    for (;;) await new Promise((r) => setTimeout(r, 60_000));
   }
   } finally {
     sweepSpills();

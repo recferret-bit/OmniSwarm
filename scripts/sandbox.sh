@@ -37,9 +37,12 @@ done
 OUT="$(cd "$OUT" && pwd -P)"
 HARNESS="$OUT/harness"
 RUN="$HARNESS/sandbox-run"
+# Host-only control files (lifecycle). Never mounted into the container: /out is $RUN, this is a sibling (R-04).
+HOSTDIR="$HARNESS/host"
 SANDBOX_MD="$HARNESS/sandbox.md"
 SUMMARY="$HARNESS/summary.md"
-mkdir -p "$RUN"
+mkdir -p "$RUN" "$HOSTDIR"
+chmod 700 "$HOSTDIR" || true
 
 ID="$(date +%H%M%S)-$$"
 NET="audit-sbx-$ID"
@@ -52,6 +55,7 @@ SVERIFY="audit-sverify-$ID"
 OSVFETCH="audit-osv-$ID"
 TOOLS="audit-tools-$ID"
 EXPORT="audit-export-$ID"
+SEAL="audit-seal-$ID"
 VOL="audit-work-$ID"
 STAGE=""
 MEMORY="${AUDIT_SANDBOX_MEMORY:-8g}"
@@ -61,7 +65,7 @@ RENDERED=0
 VOLUME_READY=0
 
 cleanup_docker() {
-  docker rm -f "$SBX" "$INIT" "$PROXY" "$ZAP" "$SVERIFY" "$OSVFETCH" "$TOOLS" "$EXPORT" >/dev/null 2>&1 || true
+  docker rm -f "$SBX" "$INIT" "$PROXY" "$ZAP" "$SVERIFY" "$OSVFETCH" "$TOOLS" "$EXPORT" "$SEAL" >/dev/null 2>&1 || true
   docker network rm "$NET" "$OUTNET" >/dev/null 2>&1 || true
   docker volume rm "$VOL" >/dev/null 2>&1 || true
   if [ -n "$STAGE" ] && [ -d "$STAGE" ]; then rm -rf "$STAGE"; fi
@@ -295,7 +299,7 @@ if ! docker run --rm --name "$INIT" \
   -v "$VOL":/work \
   -v "$RUN":/out \
   audit-sandbox:local \
-  -c 'mkdir -p /work/src /work/cargo /work/target /work/bin /work/uv-cache /work/python && chown -R 10001:10001 /work && chmod 777 /out' \
+  -c 'mkdir -p /work/src /work/cargo /work/target /work/bin /work/uv-cache /work/python /work/runs && chown -R 10001:10001 /work && chmod 777 /out' \
   >"$RUN/init.log" 2>&1; then
   note_blocked "The sandbox work directory could not be prepared. See harness/sandbox-run/init.log."
 fi
@@ -499,16 +503,34 @@ if [ -n "$HOLD_FILE" ] && running; then
     echo "sandbox: cannot verify network disconnection; refusing reviewer handoff" >&2
     exit 1
   fi
+  # R-01: target suites run as uid 10001 after this point. Make /work and /work/bin root-owned so a suite cannot
+  # replace or rename /work/bin. Subdirectories (src, cargo, target, runs, venv) stay 10001-owned; preparation is finished.
+  if ! docker run --rm --name "$SEAL" \
+    --entrypoint bash \
+    --user 0:0 \
+    --cap-drop ALL \
+    --cap-add CHOWN \
+    --cap-add DAC_OVERRIDE \
+    --cap-add FOWNER \
+    --security-opt no-new-privileges \
+    --network none \
+    --read-only \
+    -v "$VOL":/work \
+    audit-sandbox:local \
+    -c 'mkdir -p /work/runs /work/bin && chown 10001:10001 /work/runs && chown -R root:root /work/bin && chown root:root /work && chmod 755 /work /work/bin && chmod -R go-w /work/bin' \
+    >"$RUN/seal.log" 2>&1; then
+    echo "sandbox: cannot make /work root-owned; refusing reviewer handoff" >&2
+    exit 1
+  fi
   if [ -n "$READY_FILE" ]; then
     node -e '
       const fs = require("node:fs");
-      const [file, container, hostRunDir, hostOutDir] = process.argv.slice(1);
-      fs.writeFileSync(file, JSON.stringify({ container, workDir: "/work/src", outDir: "/out", hostRunDir, hostOutDir }) + "\n");
-    ' "$READY_FILE" "$SBX" "$RUN" "$OUT"
+      const [file, container, hostRunDir, hostOutDir, hostDir] = process.argv.slice(1);
+      fs.writeFileSync(file, JSON.stringify({ container, workDir: "/work/src", outDir: "/out", hostRunDir, hostOutDir, hostDir }) + "\n");
+    ' "$READY_FILE" "$SBX" "$RUN" "$OUT" "$HOSTDIR"
   fi
   # A transient inspect/daemon failure must never release an active review.
-  node "$SCRIPT_DIR/sandbox-lifecycle.mjs" "$SBX" "$HOLD_FILE" "$RUN/lifecycle.json"
-  : > "$RUN/sandbox.release" 2>/dev/null || true
+  node "$SCRIPT_DIR/sandbox-lifecycle.mjs" "$SBX" "$HOLD_FILE" "$HOSTDIR/lifecycle.json"
   if running; then docker kill "$SBX" >/dev/null 2>&1 || true; fi
   docker wait "$SBX" >/dev/null 2>&1 || true
 fi
