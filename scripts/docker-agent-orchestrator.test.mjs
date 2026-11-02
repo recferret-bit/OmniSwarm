@@ -3,13 +3,17 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { loadAuditors } from './report-contract.mjs';
+import { parseReviewerList } from './reviewer-registry.mjs';
 import { setTimeout as delay } from 'node:timers/promises';
 import { runOrchestratedAudit, savedTurnCompleted } from './docker-agent-orchestrator.mjs';
 import { commitSubmission } from './audit-submission.mjs';
 import { readReportJson } from './report-contract.mjs';
 
 // Inert reviewer gates expose scheduling without provider requests or target execution.
-function fixture(t, agents = ['claude', 'grok', 'agy', 'codex'], surface = 'all') {
+function fixture(t, agents = ['claude', 'grok', 'agy', 'codex'], surface = 'all', extra = {}, runOptions = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'audit-parallel-'));
   const target = path.join(root, 'source'), out = path.join(root, 'report');
   fs.mkdirSync(target);
@@ -45,8 +49,8 @@ function fixture(t, agents = ['claude', 'grok', 'agy', 'codex'], surface = 'all'
     assert.equal(active.size, 0, 'cleanup waits for every active session');
     stopped = true;
   } });
-  const request = { target, out, name: 'inert-scheduling-fixture', agents, surface, models: Object.fromEntries(agents.map(agent => [agent, 'fixture-model'])) };
-  const run = runOrchestratedAudit(request, { review, startSandbox });
+  const request = { target, out, name: 'inert-scheduling-fixture', agents, surface, models: Object.fromEntries(agents.map(agent => [agent, 'fixture-model'])), ...extra };
+  const run = runOrchestratedAudit(request, { review, startSandbox, ...runOptions });
   const waitFor = async predicate => {
     const deadline = performance.now() + 3000;
     while (!predicate()) {
@@ -278,4 +282,130 @@ test('explicit restart gives a failed local session a new full review without re
   const quota = path.join(root, 'quota');
   await runOrchestratedAudit({ ...request, out: quota, resumeFrom: request.out, restartFailed: true }, { review: async () => assert.fail('Provider-wide limits also block restarts'), startSandbox });
   assert.equal(readReportJson(quota, 'workers.json').jobs[0].failure.reason, 'usage_limit');
+});
+
+const reviewerRequest = (specs, assign) => { const reviewers = parseReviewerList(specs); return { reviewers, agents: reviewers.map(r => r.id), models: Object.fromEntries(reviewers.map(r => [r.id, r.model])), ...(assign ? { assign } : {}) }; };
+async function drain(f, { skip = () => false } = {}) {
+  // Release every started session as it appears until the run settles.
+  let settled = false;
+  const done = f.run.finally(() => { settled = true; });
+  const seen = new Set();
+  while (!settled) {
+    for (const [name, options] of f.started) if (!seen.has(name)) { seen.add(name); if (!skip(name)) options.release(); }
+    await delay(5);
+  }
+  return done;
+}
+
+test('matrix assignment gives every reviewer every surface under hyphenated reviewer ids', { timeout: 15_000 }, async t => {
+  const extra = reviewerRequest(['cli:claude:opus', 'cli:codex:gpt-6.1-sol'], 'matrix');
+  const f = fixture(t, extra.agents, 'all', extra);
+  const result = await drain(f);
+  assert.deepEqual(result.stageFailures, []);
+  const jobs = readReportJson(f.out, 'workers.json').jobs;
+  assert.equal(jobs.length, 12);
+  assert.ok(jobs.some(job => job.name === 'cli-claude-opus-s6-client' && job.family === 'cli' && job.provider === 'claude'));
+  const meta = readReportJson(f.out, 'meta.json');
+  assert.equal(meta.finalized, true);
+  assert.equal(meta.reviewers.length, 2);
+  assert.deepEqual(meta.models, { 'cli-claude-opus': 'opus', 'cli-codex-gpt-6-1-sol': 'gpt-6.1-sol' });
+  assert.equal(readReportJson(f.out, 'harness/reviewers.json').reviewers.length, 2);
+  assert.equal(readReportJson(f.out, 'harness/reviewers.json').assign, 'matrix');
+});
+
+test('round-robin keeps one reviewer per surface (six jobs for two reviewers)', { timeout: 15_000 }, async t => {
+  const extra = reviewerRequest(['cli:claude:opus', 'cli:codex:gpt-6.1-sol'], 'round-robin');
+  const f = fixture(t, extra.agents, 'all', extra);
+  await drain(f);
+  assert.equal(readReportJson(f.out, 'workers.json').jobs.length, 6);
+});
+
+test('reviewers of one vendor never cross-check each other', { timeout: 15_000 }, async t => {
+  const extra = reviewerRequest(['cli:claude:opus', 'cli:claude:sonnet', 'cli:codex:gpt-6.1-sol'], 'round-robin');
+  const f = fixture(t, extra.agents, 'all', extra);
+  await drain(f);
+  const inbox = readReportJson(f.out, 'crosscheck/cli-claude-opus.json');
+  assert.ok(inbox.length > 0);
+  assert.ok(inbox.every(claim => claim.vendor !== 'anthropic'));
+  assert.ok(readReportJson(f.out, 'crosscheck/cli-codex-gpt-6-1-sol.json').some(claim => claim.vendor === 'anthropic'));
+});
+
+test('an uninstalled reviewer family stops the run before any session starts', async t => {
+  const extra = reviewerRequest(['openrouter:qwen/qwen3.8-max-0902']);
+  const f = fixture(t, extra.agents, 'all', extra);
+  await assert.rejects(f.run, /family `openrouter` not installed yet \(W03\)/);
+  assert.equal(f.started.size, 0);
+});
+
+test('cross-check sessions are bridged to all surfaces and their failures are recorded (R-06, R-11)', { timeout: 15_000 }, async t => {
+  const f = fixture(t, ['claude', 'grok'], 'all');
+  const result = await drain(f, { skip: () => false });
+  assert.deepEqual(result.stageFailures, []);
+  const bridges = [...f.started.entries()].map(([name, options]) => [name, options.bridgeArgs]);
+  const surfaceOf = args => args[args.indexOf('--surface') + 1];
+  for (const [name, args] of bridges) assert.equal(surfaceOf(args), name.startsWith('crosscheck-') ? 'ALL' : name.split('-')[1].toUpperCase(), name);
+  // a failing cross-check shows up in providerFailures
+  const g = fixture(t, ['claude', 'grok'], 'all');
+  let settled = false;
+  const run = g.run.finally(() => { settled = true; });
+  const seen = new Set();
+  while (!settled) {
+    for (const [name, options] of g.started) if (!seen.has(name)) { seen.add(name); options.release(name === 'crosscheck-grok' ? { code: 1, observedExitCode: 1, failureReason: 'usage_limit', failure: { reason: 'usage_limit', message: 'limit' } } : undefined); }
+    await delay(5);
+  }
+  const failed = await run;
+  assert.ok(failed.stageFailures.includes('crosscheck_error:grok'));
+  assert.equal(readReportJson(g.out, 'meta.json').providerFailures.grok, 'usage_limit');
+});
+
+test('the cross-check context lists every surface plan', async () => {
+  const { renderSurfaceSkillGuidance } = await import('./audit-plans.mjs');
+  const text = renderSurfaceSkillGuidance('ALL');
+  for (const code of ['S1', 'S2', 'S3', 'S4', 'S5', 'S6']) assert.match(text, new RegExp(`### ${code} Skill Focus`));
+});
+
+test('a phase file dropped into the phase folder runs between crosscheck and report', { timeout: 15_000 }, async t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'audit-phases-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(dir, 'orchestrator-phase-probe.mjs'), "export const phase = { name: 'probe', after: 'crosscheck', async run(ctx) { ctx.stageFailures.length; ctx.probeSaw = { meta: JSON.parse((await import('node:fs')).readFileSync(ctx.output + '/meta.json', 'utf8')) }; (globalThis.__probe ||= []).push({ finalized: ctx.probeSaw.meta.finalized, session: Boolean(ctx.session) }); } };\n");
+  const f = fixture(t, ['claude', 'grok'], 'all', {}, { phasesDir: dir });
+  globalThis.__probe = [];
+  await drain(f);
+  assert.deepEqual(globalThis.__probe, [{ finalized: false, session: true }], 'ran after crosscheck, before teardown and the final meta');
+  assert.equal(readReportJson(f.out, 'meta.json').finalized, true);
+});
+
+test('a crash during cross-check leaves an unfinalized report that validation rejects as incomplete (R-03)', { timeout: 30_000 }, async t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'audit-crash-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const target = path.join(root, 'source'), out = path.join(root, 'report');
+  fs.mkdirSync(target); fs.writeFileSync(path.join(target, 'source.js'), 'export const inert = true;\n');
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const script = path.join(root, 'crash.mjs');
+  fs.writeFileSync(script, `
+import path from 'node:path';
+import { runOrchestratedAudit } from ${JSON.stringify(path.join(here, 'docker-agent-orchestrator.mjs'))};
+import { commitSubmission } from ${JSON.stringify(path.join(here, 'audit-submission.mjs'))};
+const out = ${JSON.stringify(out)};
+const review = async ({ identity, directory }) => {
+  if (identity.role === 'crosscheck') process.kill(process.pid, 'SIGKILL');
+  commitSubmission(out, identity.name, identity, [{ title: 'Inert finding', surface: identity.surface, severity: 'low', confidence: 'probable', location: ['source.js:1'], impact: 'Fixture', preconditions: 'x', analysis: 'Inspected source.js:1', validation: 'None', attack: [], poc: '', fix: 'Fixture' }, { verified_safe: [] }]);
+  return { code: 0, observedExitCode: 0, elapsedMs: 1, sessionId: identity.name, directory };
+};
+const startSandbox = async () => ({ container: 'inert', lost: new Promise(() => {}), hostRunDir: ${JSON.stringify(path.join(root, 'container'))}, stop: async () => {} });
+await runOrchestratedAudit({ target: ${JSON.stringify(target)}, out, name: 'crash', agents: ['claude', 'grok'], surface: 's1', models: { claude: 'm', grok: 'm' } }, { review, startSandbox });
+`);
+  const run = spawnSync(process.execPath, [script], { encoding: 'utf8', timeout: 20_000 });
+  assert.equal(run.signal, 'SIGKILL', run.stderr);
+  const meta = readReportJson(out, 'meta.json');
+  assert.equal(meta.finalized, false);
+  assert.equal(meta.submissionAuthority, 'mcp_commit');
+  assert.equal(meta.workflow !== undefined, true);
+  assert.equal(meta.reviewers.length, 2);
+  // Canonical-submission validation must run: tampering with a derived report is caught, and the run is incomplete.
+  fs.writeFileSync(path.join(out, 'auditors', 'claude-s1-auth.json'), JSON.stringify([{ verified_safe: [] }]));
+  const health = loadAuditors(out).health;
+  assert.equal(health.state, 'incomplete');
+  assert.ok(health.errors.some(e => /^claude-s1-auth: missing or invalid outputs/.test(e)), health.errors.join('\n'));
+  assert.ok(health.errors.some(e => /finalized/.test(e)));
 });

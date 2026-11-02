@@ -41,7 +41,7 @@ function fixture(t, agents) {
     }
     put('meta.json', meta);
   };
-  return { dir, save, cross };
+  return { dir, save, cross, put, meta };
 }
 
 test('single vendor claim is MODEL_ASSERTION', async (t) => {
@@ -112,4 +112,21 @@ test('CLI wrapper keeps exit code and output', (t) => {
   const bad = spawnSync(process.execPath, [path.join(scripts, 'verify-and-adjudicate.mjs'), h.dir], { encoding: 'utf8', timeout: 10_000 });
   assert.equal(bad.status, 2);
   assert.match(bad.stderr, /INCOMPLETE/);
+});
+
+test('a review by a reviewer of the author\'s own vendor is ignored, whatever the reviewer ids (R-17c)', async (t) => {
+  const f = fixture(t, ['cli-claude-opus', 'openrouter-anthropic-x']);
+  f.meta.reviewers = [
+    { id: 'cli-claude-opus', family: 'cli', provider: 'claude', vendor: 'anthropic', model: 'requested-model' },
+    { id: 'openrouter-anthropic-x', family: 'openrouter', provider: 'openrouter', vendor: 'anthropic', model: 'requested-model' },
+  ];
+  f.put('meta.json', f.meta);
+  f.save('cli-claude-opus', [finding({ title: 'Opus-only claim' }), controls()]);
+  f.save('openrouter-anthropic-x', [controls()]);
+  f.cross(() => 'refuted');
+  const r = await adjudicate(f.dir);
+  const row = r.scoredFindings.find((x) => x.title === 'Opus-only claim');
+  assert.equal(row.status, 'MODEL_ASSERTION', 'same-vendor refutation must not count');
+  assert.deepEqual(row.reviews, []);
+  assert.deepEqual(row.vendors, ['anthropic']);
 });
