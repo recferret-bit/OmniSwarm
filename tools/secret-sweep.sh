@@ -7,7 +7,8 @@ if printf '%s\n' "$tracked" | grep -E '(^|/)(reports/|pocs/|\.env$)' >/dev/null;
   printf '%s\n' "$tracked" | grep -E '(^|/)(reports/|pocs/|\.env$)' >&2 || true
   exit 1
 fi
-pattern='ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|sk-ant-[A-Za-z0-9]|sk-proj-[A-Za-z0-9]'
+# The harness fixture bad.js contains only the PEM header plus "MII", which is a shape, not a key.
+pattern='ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|-----BEGIN [A-Z ]*PRIVATE KEY-----['"'"'\r\n]+[A-Za-z0-9+/=]{40,}|sk-ant-[A-Za-z0-9]|sk-proj-[A-Za-z0-9]'
 tmp="$(mktemp)"
 # git grep exits 1 when nothing matches. Any other failure is a real error.
 set +e
