@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { classifyAuditFailure, runAgentProcess } from './audit-process.mjs';
+import { classifyAuditFailure, classifyRpcError, runAgentProcess } from './audit-process.mjs';
 
 function fixture(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'audit-process-test-'));
@@ -17,7 +17,8 @@ test('audit process preserves provider refusal and real exit code', async (t) =>
   const result = await runAgentProcess(invocation(f.dir, 'console.error("This content was flagged for possible cybersecurity risk."); process.exit(1)'), null, f.log);
   assert.equal(result.code, 1);
   assert.equal(result.timedOut, false);
-  assert.equal(classifyAuditFailure(result).reason, 'provider_policy');
+  // R-07: the text reached the log, but only a structured RPC error can label the failure.
+  assert.equal(classifyAuditFailure(result).reason, 'process_error');
   assert.match(fs.readFileSync(f.log, 'utf8'), /cybersecurity risk/);
   assert.equal(fs.statSync(f.log).mode & 0o777, 0o600);
 });
@@ -44,9 +45,10 @@ test('cancellation stops the worker without misreporting a timeout', async (t) =
 test('process failures have bounded labels without echoing provider output', () => {
   const secret = 'DO_NOT_ECHO_SAMPLE_PAYLOAD';
   for (const [input, expected] of [
-    [{ code: 1, stderr: `You've hit your session limit ${secret}` }, 'usage_limit'],
-    [{ code: 1, stderr: `Authentication required ${secret}` }, 'auth_required'],
-    [{ code: 0, stdout: `The project MCP server never attached ${secret}` }, 'mcp_unavailable'],
+    [{ code: 1, rpcError: { code: -32000, message: `You've hit your session limit ${secret}` } }, 'usage_limit'],
+    [{ code: 1, rpcError: JSON.stringify({ code: -32000, message: `Authentication required ${secret}` }) }, 'auth_required'],
+    [{ code: 0, rpcError: { code: -32000, message: `The project MCP server never attached ${secret}` } }, 'mcp_unavailable'],
+    [{ code: 1, rpcError: { code: 8, message: 'quota', data: { reason: 'RESOURCE_EXHAUSTED' } } }, 'usage_limit'],
     [{ code: 124 }, 'timeout'],
     [{ code: 1 }, 'process_error'],
     [{}, 'missing_exit'],
@@ -56,6 +58,15 @@ test('process failures have bounded labels without echoing provider output', () 
     assert.equal(failure.reason, expected);
     assert.ok(!failure.message.includes(secret));
   }
+});
+
+test('R-07: text quoted from target source in stdout, stderr or a non-error value is never classified', () => {
+  const quoted = "// usage limit reached; You've hit your session limit; RESOURCE_EXHAUSTED; flagged for possible cybersecurity risk; authentication required";
+  assert.equal(classifyAuditFailure({ code: 1, stdout: quoted, stderr: quoted }).reason, 'process_error');
+  assert.equal(classifyAuditFailure({ code: 0, stdout: quoted }).reason, 'missing_report');
+  assert.equal(classifyAuditFailure({ code: 0, stdout: quoted }, 'unknown').reason, 'unknown');
+  for (const notAFrame of [quoted, 42, null, [quoted], JSON.stringify(quoted), '{', JSON.stringify([{ message: quoted }])]) assert.equal(classifyRpcError(notAFrame), null);
+  assert.equal(classifyRpcError({ code: -32000, message: 'usage limit reached' }), 'usage_limit');
 });
 
 test('invalid deadlines and log symlinks fail before launching a process', async (t) => {

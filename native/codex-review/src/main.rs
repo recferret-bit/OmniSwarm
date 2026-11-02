@@ -85,7 +85,7 @@ async fn run(args: Vec<String>) -> Result<(), GateError> {
         return Err(GateError::Authentication);
     }
     let private = tempfile::Builder::new()
-        .prefix("fc-codex-runtime-")
+        .prefix("omni-codex-runtime-")
         .tempdir()
         .map_err(|_| GateError::Runtime)?;
     let credential_home = find_codex_home().map_err(|_| GateError::Authentication)?;

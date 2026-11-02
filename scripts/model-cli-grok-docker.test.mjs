@@ -30,7 +30,7 @@ test('Grok Docker container has no host credentials, source, socket, privilege o
   assert.throws(() => grokContainerArgs({ image, name: 'fixture', label: 'fixture', network: 'fixture', volume: '/host/home' }));
 });
 test('Grok Docker image receipts reject stale inputs, untested images and linked files', (t) => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fc-grok-docker-receipt-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'omni-grok-docker-receipt-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const file = path.join(dir, 'runtime.json');
   const identity = { packageDigest: 'package', recipeDigest: 'recipe' };
@@ -97,7 +97,7 @@ test('Grok Docker retains cleanup failures and a journal write failure cannot pr
     const runtime = await prepareGrokDocker({ control, receipt: { image } });
     let protectedFile;
     if (failJournal) {
-      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fc-grok-journal-fault-'));
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'omni-grok-journal-fault-'));
       t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
       protectedFile = path.join(dir, 'dummy.txt'); fs.writeFileSync(protectedFile, 'untouched');
       fs.unlinkSync(runtime.identity.journal); fs.symlinkSync(protectedFile, runtime.identity.journal);

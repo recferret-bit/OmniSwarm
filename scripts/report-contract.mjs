@@ -8,6 +8,7 @@ import { REVIEW_WORKFLOW } from './review-workflow.mjs';
 import { readCanonicalSubmission } from './audit-submission.mjs';
 import { CLI_DEFAULT_MODELS, REVIEWER_ID_PATTERN, isReviewerId, reviewersOfMeta, vendorOfJob } from './reviewer-registry.mjs';
 import { validate } from '../shared/schemas/index.mjs';
+import { hostLogRel } from './sandbox-host-paths.mjs';
 
 const LEVELS = new Set(['critical', 'high', 'medium', 'low', 'info']);
 const CONFIDENCE = new Set(['confirmed', 'probable']);
@@ -167,6 +168,25 @@ export function validateAuditor(data, name) {
   return data;
 }
 
+// R-02: the bridge records the digest of the /src tree it served at the first read. It must equal the sealed source
+// manifest, or be a subset of it (the sandbox copy drops a few names the snapshot may keep). A run in which nothing was read has no file.
+export function sourceReadDigestProblem(root) {
+  let served;
+  try { served = readReportJson(root, 'harness/source-read-digest.json', 64 * 1024 * 1024); }
+  catch (error) { return error?.code === 'ENOENT' ? null : 'the recorded digest of the served source is unreadable.'; }
+  let manifest;
+  try { manifest = readReportJson(root, 'source-manifest.json', 64 * 1024 * 1024); }
+  catch { return 'source-manifest.json is missing or invalid, so the served source cannot be checked.'; }
+  if (!served || typeof served.digest !== 'string' || !Array.isArray(served.files)) return 'the recorded digest of the served source is malformed.';
+  // The file list must hash to the digest it claims before either is compared with the manifest.
+  const recomputed = crypto.createHash('sha256').update(JSON.stringify(served.files)).digest('hex') === served.digest;
+  if (!recomputed) return 'the recorded digest does not match the file list it was computed from.';
+  if (served.digest === manifest.digest) return null;
+  const sealed = new Map((manifest.files || []).map(file => [file.path, file]));
+  const subset = served.files.every(file => sealed.get(file?.path)?.sha256 === file?.sha256 && sealed.get(file.path)?.bytes === file.bytes);
+  return subset ? null : 'the source reviewers read differs from the sealed source manifest.';
+}
+
 export function expectedAuditors(meta) {
   if (Array.isArray(meta.auditors)) return meta.auditors;
   if (!Array.isArray(meta.agents) || !meta.agents.length || !meta.agents.every(isReviewerId)) return [];
@@ -207,13 +227,12 @@ export function loadAuditors(root) {
   } catch { /* older reports may not include process diagnostics */ }
   const failureDetail = (name, crosscheck = false) => {
     const code = crosscheck ? meta.crosscheckExits?.[name] : meta.workerExits?.[name];
-    const rel = `harness/sandbox-run/${crosscheck ? 'crosscheck' : 'agent'}-${name}.log`;
-    let log = '';
+    const rel = hostLogRel(crosscheck ? `crosscheck-${name}` : name);
     let hasLog = false;
-    try { log = readReportText(root, rel, 8 * 1024 * 1024); hasLog = true; } catch { /* older runs may have no log */ }
+    try { readReportText(root, rel, 8 * 1024 * 1024); hasLog = true; } catch { /* older runs may have no log */ }
     const observed = code === 130 ? meta.stageFailures?.includes('sandbox_unavailable') ? 'sandbox_unavailable' : 'cancelled' : undefined;
     const recorded = observed || (crosscheck ? meta.providerFailures?.[name] : jobs.find(job => job?.name === name)?.failure?.reason);
-    const message = Object.hasOwn(FAILURE_MESSAGES, recorded) ? FAILURE_MESSAGES[recorded] : classifyAuditFailure({ code, stdout: log }).message;
+    const message = Object.hasOwn(FAILURE_MESSAGES, recorded) ? FAILURE_MESSAGES[recorded] : classifyAuditFailure({ code }).message;
     return `${message}${hasLog ? ` Log: ${rel}.` : ''}`;
   };
   try {
@@ -221,6 +240,10 @@ export function loadAuditors(root) {
     if (!/^# Sandbox/m.test(sandbox) || !/^\| .+ \| (ran|failed|impossible) \| .+ \|$/m.test(sandbox)) throw new Error('invalid coverage record');
   } catch {
     errors.push('Sandbox coverage record is missing or invalid; coverage is unknown.');
+  }
+  if (meta.sandboxHardening === 1) {
+    const problem = sourceReadDigestProblem(root);
+    if (problem) errors.push(`SOURCE_DIGEST_MISMATCH: ${problem}`);
   }
   for (const name of expected) {
     try {

@@ -67,7 +67,7 @@ export async function prepareGrokDocker({ model = DEFAULT_GROK_MODEL, checkOnly 
   if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(model)) throw new ConnectorError('requested_model_rejected');
   let receipt;
   try { receipt = injectedReceipt || readGrokDockerReceipt(); } catch { throw new ConnectorError('grok_docker_not_prepared'); }
-  const label = crypto.randomUUID(), prefix = `fc-grok-${label}`;
+  const label = crypto.randomUUID(), prefix = `omni-grok-${label}`;
   const names = { worker: `${prefix}-client`, proxy: `${prefix}-proxy`, network: `${prefix}-internal`, external: `${prefix}-external` };
   fs.mkdirSync(SESSIONS, { recursive: true, mode: 0o700 });
   const journal = path.join(SESSIONS, `${label}.json`);
@@ -130,7 +130,7 @@ export function createGrokDockerAdapter({ model = DEFAULT_GROK_MODEL, checkOnly 
     try {
       const adapter = createNativeReviewAdapter({ model, checkOnly }, {
         provider: 'grok', sourceCommit: GROK_SOURCE, sourceRevision: GROK_SOURCE_REVISION, authMethod: 'oidc_cached',
-        version: 'public-source-docker', tempPrefix: 'fc-grok-docker-', environmentKeys: [],
+        version: 'public-source-docker', tempPrefix: 'omni-grok-docker-', environmentKeys: [],
         inventories: ['tools', 'hostedTools', 'mcpServers'], allowUnknownModel: true, diagnostics: true,
         admissionError: 'grok_docker_not_prepared', resolveBinary: async () => runtime, reasons: REASONS,
       });

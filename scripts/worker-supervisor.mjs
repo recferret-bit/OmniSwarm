@@ -128,7 +128,7 @@ async function runIsolated(snapshot, job, { fixture = 'probe', image = REVIEW_IM
   requireOwnedSnapshot(snapshot);
   if (!IMAGE.test(image) || job.state !== 'pending' || job.sourceDigest !== snapshot.manifest.digest || job.runtimeDigest !== runtimeDigest() || JSON.stringify(job.expected) !== JSON.stringify(expectedFiles(job.phase)) || job.assignmentDigest !== hash(JSON.stringify(job.claims))) throw new Error('invalid immutable job runtime');
   const label = crypto.randomUUID();
-  const prefix = `fc-review-${label}`;
+  const prefix = `omni-review-${label}`;
   const volume = `${prefix}-out`;
   const worker = `${prefix}-worker`;
   const collector = `${prefix}-collect`;

@@ -15,7 +15,7 @@ function fixture(t, role = 'auditor') {
   const ctx = { reportDir: root, role, surface: 'S3', auditor: role === 'auditor' ? identity.name : '', agent: 'agy', container: '', submissionIdentity: identity };
   return { root, identity, ctx };
 }
-const report = () => ({ findings: [{ title: 'Inert evidence fixture', surface: 'S3', severity: 'low', confidence: 'probable', location: ['src/rules.rs:12'], impact: 'Fixture impact', preconditions: 'Fixture only', attack: ['Read source'], poc: '', fix: 'Require authorization' }], verified_safe: [], markdown_summary: 'Static fixture only; no actual security audit was performed.' });
+const report = () => ({ findings: [{ title: 'Inert evidence fixture', surface: 'S3', severity: 'low', confidence: 'probable', location: ['src/rules.rs:12'], impact: 'Fixture impact', preconditions: 'Fixture only', analysis: 'Source analysis of the fixture rule.', validation: 'Source inspection only; no test run.', fix: 'Require authorization' }], verified_safe: [], markdown_summary: 'Static fixture only; no actual security audit was performed.' });
 
 test('one MCP commit is authoritative and repeated identical submissions are idempotent', async t => {
   const f = fixture(t);
@@ -69,4 +69,46 @@ test('identity file cannot point outside the report or silently change reviewer 
   assert.throws(() => parseBridgeArgs([...flags.slice(0, -1), '/tmp/outside-identity.json']));
   fs.writeFileSync(file, JSON.stringify({ ...f.identity, agent: 'grok' }));
   assert.throws(() => parseBridgeArgs(flags));
+});
+
+test('R-09: every submit requires a submission identity; there is no direct-write path', async t => {
+  for (const [role, name, args] of [['auditor', 'submit_audit_report', report()], ['crosscheck', 'submit_crosscheck_report', { verdicts: [] }]]) {
+    const f = fixture(t, role);
+    delete f.ctx.submissionIdentity;
+    await assert.rejects(callBridgeTool(f.ctx, name, args), /IDENTITY_REQUIRED/);
+    assert.equal(fs.existsSync(path.join(f.root, 'auditors')), false);
+    assert.equal(fs.existsSync(path.join(f.root, 'submissions')), false);
+  }
+});
+
+test('R-09: exploit steps, PoCs and missing evidence are refused for every identity, whatever its workflow field', async t => {
+  const f = fixture(t);
+  const withAttack = report(); withAttack.findings[0].attack = ['step one'];
+  await assert.rejects(callBridgeTool(f.ctx, 'submit_audit_report', withAttack), /not exploit steps or PoCs/);
+  const withPoc = report(); withPoc.findings[0].poc = 'curl http://x';
+  await assert.rejects(callBridgeTool(f.ctx, 'submit_audit_report', withPoc), /not exploit steps or PoCs/);
+  const noEvidence = report(); noEvidence.verified_safe = [{ control: 'c', holds: true }];
+  await assert.rejects(callBridgeTool(f.ctx, 'submit_audit_report', noEvidence), /requires evidence/);
+  assert.equal(fs.existsSync(path.join(f.root, 'submissions')), false);
+});
+
+test('W02-02: the bridge accepts reviewer ids listed in harness/reviewers.json and refuses any other with IDENTITY_UNKNOWN', t => {
+  const f = fixture(t);
+  const id = 'openrouter-qwen-qwen3-8-max';
+  const identity = { ...f.identity, name: `${id}-s3-logic`, agent: id };
+  const identityFile = path.join(f.root, 'identity.json');
+  fs.writeFileSync(identityFile, JSON.stringify(identity));
+  fs.writeFileSync(path.join(f.root, 'harness/reviewers.json'), JSON.stringify({ version: 1, reviewers: [{ id }, { id: 'cli-claude-opus' }] }));
+  const flags = ['--report-dir', f.root, '--role', 'auditor', '--agent', id, '--auditor', identity.name, '--surface', 'S3', '--identity-file', identityFile, '--reviewers-file', path.join(f.root, 'harness/reviewers.json')];
+  assert.equal(parseBridgeArgs(flags).submissionIdentity.agent, id);
+  // Same pattern-valid id, but not a reviewer of this run.
+  const rogue = { ...identity, name: 'rogue-s3-logic', agent: 'rogue' };
+  fs.writeFileSync(identityFile, JSON.stringify(rogue));
+  const rogueFlags = flags.map(flag => flag === id ? 'rogue' : flag === identity.name ? rogue.name : flag);
+  assert.throws(() => parseBridgeArgs(rogueFlags), /IDENTITY_UNKNOWN/);
+  // The reviewers file cannot be taken from outside the report directory.
+  assert.throws(() => parseBridgeArgs([...flags.slice(0, -1), '/tmp/reviewers.json']));
+  // A run without the flag keeps the pattern-only check, so older callers still start.
+  fs.writeFileSync(identityFile, JSON.stringify(identity));
+  assert.doesNotThrow(() => parseBridgeArgs(flags.slice(0, -2)));
 });

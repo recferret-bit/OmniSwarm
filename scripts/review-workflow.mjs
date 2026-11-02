@@ -114,7 +114,7 @@ ${cargoInfo.toString()}
 ${isNearCargo.toString()}
 (async()=>{
  let input='';for await(const chunk of process.stdin)input+=chunk;
- const entry=JSON.parse(input),root='/work/src';
+ const entry=JSON.parse(input),root=(process.argv&&process.argv[1])||'/work/src';
  const timeoutMs=entry.timeoutMs??90000;
  if(![90000,900000,1800000].includes(timeoutMs))throw Error('Invalid existing test time limit');
  for(const file of entry.files){

@@ -9,7 +9,7 @@ export async function createTerminalRelay(authorized, { deadlineMs = null, signa
   validateReviewRequest(authorized);
   if (deadlineMs != null && (!Number.isSafeInteger(deadlineMs) || deadlineMs < 50 || deadlineMs > 2_147_483_647)) throw new Error('relay deadline rejected');
   const request = structuredClone(authorized);
-  const dir = fs.mkdtempSync('/tmp/fc-tr-');
+  const dir = fs.mkdtempSync('/tmp/omni-tr-');
   fs.chmodSync(dir, 0o700);
   const socketPath = path.join(dir, 's');
   const clients = new Set();

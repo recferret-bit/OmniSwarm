@@ -69,9 +69,11 @@ test('real Docker enforces offline existing tests, manifest binding and unlimite
   ]);
   assert.ok(results.every(result => /exit code: 0/.test(result)), results.join('\n'));
   assert.equal(docker(['exec', offline, 'cat', '/tmp/test-runs']), 'ran\nran');
+  // R-02: suites run on a fresh copy of the read-only /src, so altering the prepared /work/src changes neither the run nor the manifest check.
   docker(['exec', offline, 'node', '-e', "require('node:fs').appendFileSync('/work/src/package.json',' ')"]);
-  assert.match(await callBridgeTool(ctx, 'run_existing_tests', { test_id: entry.id }), /Existing test manifest changed/);
-  assert.equal(docker(['exec', offline, 'cat', '/tmp/test-runs']), 'ran\nran');
+  assert.match(await callBridgeTool(ctx, 'run_existing_tests', { test_id: entry.id }), /exit code: 0/);
+  assert.equal(docker(['exec', offline, 'cat', '/tmp/test-runs']), 'ran\nran\nran');
+  assert.equal(docker(['exec', offline, 'node', '-e', "process.stdout.write(String(require('node:fs').readdirSync('/work/runs').length))"]), '0', 'per-run copies are removed after the suite');
   const connected = start('bridge');
   await assert.rejects(callBridgeTool({ ...ctx, container: connected }, 'run_existing_tests', { test_id: entry.id }), /network-disconnected/);
   const lifecycle = [];

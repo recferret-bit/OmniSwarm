@@ -25,6 +25,10 @@ import { buildCliInvocation } from './agent-launch.mjs';
 import { readReportJson, validateAuditor, validCrosscheckRow, writeReportFile } from './report-contract.mjs';
 import { REVIEW_WORKFLOW } from './review-workflow.mjs';
 
+const ID_DIGESTS = { sourceDigest: 'a'.repeat(64), assignmentDigest: 'b'.repeat(64), model: 'fixture-model' };
+const auditorIdentity = (name, agent, surface) => ({ name, agent, role: 'auditor', surface, ...ID_DIGESTS });
+const crosscheckIdentity = agent => ({ name: `crosscheck-${agent}`, agent, role: 'crosscheck', ...ID_DIGESTS });
+
 test('normalizeCitation strips container prefixes and ensures file:line format', () => {
   assert.equal(normalizeCitation('/work/src/programs/escrow/src/lib.rs:42-48'), 'programs/escrow/src/lib.rs:42');
   assert.equal(normalizeCitation('./src/index.ts:10'), 'src/index.ts:10');
@@ -109,7 +113,8 @@ test('reviews have no deadline and only explicit finalization restricts inspecti
   assert.doesNotMatch(prompt, /Time budget:|final 300|inspection tools then stop/);
   assert.match(prompt, /surface is absent, submit an empty findings array/);
   assert.match(prompt, /Do not search the host/);
-  const ctx = { role: 'auditor', surface: 'S6', reportDir: root, auditor: 'grok-s6-client', deadlineMs: Date.now() - 1000 };
+  fs.mkdirSync(path.join(root, 'harness'));
+  const ctx = { role: 'auditor', surface: 'S6', reportDir: root, auditor: 'grok-s6-client', agent: 'grok', submissionIdentity: auditorIdentity('grok-s6-client', 'grok', 'S6'), deadlineMs: Date.now() - 1000 };
   const result = await handleRpcMessage(ctx, { id: 1, method: 'tools/call', params: { name: 'get_audit_context' } });
   assert.equal(result.result.isError, false, 'legacy deadline metadata cannot close inspection');
   const ping = await handleRpcMessage(ctx, { id: 2, method: 'ping' });
@@ -171,7 +176,9 @@ test('MCP JSON-RPC handler supports initialize, tools/list, get_review_plan, and
     auditor: 'claude-s1-auth',
     agent: 'claude',
     surface: 'S1',
+    submissionIdentity: auditorIdentity('claude-s1-auth', 'claude', 'S1'),
   };
+  fs.mkdirSync(path.join(reportDir, 'harness'));
 
   const initRes = await handleRpcMessage(ctx, {
     jsonrpc: '2.0',
@@ -218,7 +225,7 @@ test('MCP JSON-RPC handler supports initialize, tools/list, get_review_plan, and
       name: 'submit_audit_report',
       arguments: {
         findings: [],
-        verified_safe: [{ control: 'Signer check', how_attacked: 'Inspected handler', holds: true }],
+        verified_safe: [{ control: 'Signer check', evidence: 'Inspected handler', holds: true }],
         markdown_summary: '# Clean S1 audit\nNo issues found on S1.',
       },
     },
@@ -592,13 +599,14 @@ process.exitCode=result.stageFailures.length||html.status!==0?2:0;
 test('JSON-string report submission preserves nested findings and controls', async (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'audit-json-submit-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
-  const ctx = { role: 'auditor', surface: 'S3', auditor: 'agy-s3-logic', reportDir: root, container: '' };
-  const report = { findings: [{ title: 'Static evidence fixture', surface: 'S3', severity: 'low', confidence: 'probable', location: ['src/rules.rs:12'], impact: 'Fixture impact', preconditions: 'Fixture only', attack: ['Inspect source'], poc: '', fix: 'Require authorization' }], verified_safe: [{ control: 'Fixture bound', how_attacked: 'Read source', holds: true }], markdown_summary: '# Fixture; no actual audit performed.' };
+  fs.mkdirSync(path.join(root, 'harness'));
+  const ctx = { role: 'auditor', surface: 'S3', auditor: 'agy-s3-logic', agent: 'agy', reportDir: root, container: '', submissionIdentity: auditorIdentity('agy-s3-logic', 'agy', 'S3') };
+  const report = { findings: [{ title: 'Static evidence fixture', surface: 'S3', severity: 'low', confidence: 'probable', location: ['src/rules.rs:12'], impact: 'Fixture impact', preconditions: 'Fixture only', analysis: 'Source analysis of the fixture rule.', validation: 'Source inspection only.', fix: 'Require authorization' }], verified_safe: [{ control: 'Fixture bound', evidence: 'Read source', holds: true }], markdown_summary: '# Fixture; no actual audit performed.' };
   const result = await callBridgeTool(ctx, 'submit_audit_report', { report_json: JSON.stringify(report) });
-  assert.match(result, /1 findings, 1 verified_safe/);
+  assert.match(result, /1 findings, 1 control assertions/);
   const saved = readReportJson(root, 'auditors/agy-s3-logic.json');
   assert.equal(saved[0].title, report.findings[0].title);
-  assert.deepEqual(saved[1].verified_safe, report.verified_safe);
+  assert.deepEqual(saved[1].verified_safe.map(({ control, evidence, holds }) => ({ control, evidence, holds })), report.verified_safe);
   for (const args of [{ report_json: '{}', findings: [] }, { report_json: '[2]' }, { report_json: '{' }, { report_json: JSON.stringify({ findings: [2], verified_safe: [] }) }]) {
     await assert.rejects(callBridgeTool(ctx, 'submit_audit_report', args));
   }
@@ -609,7 +617,8 @@ test('JSON-string peer verdicts still require complete assignment coverage', asy
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   fs.mkdirSync(path.join(root, 'crosscheck'));
   fs.writeFileSync(path.join(root, 'crosscheck/agy.json'), JSON.stringify([{ id: 'claim-1' }]));
-  const ctx = { role: 'crosscheck', agent: 'agy', reportDir: root, container: '' };
+  fs.mkdirSync(path.join(root, 'harness'));
+  const ctx = { role: 'crosscheck', agent: 'agy', reportDir: root, container: '', submissionIdentity: crosscheckIdentity('agy') };
   await assert.rejects(callBridgeTool(ctx, 'submit_crosscheck_report', { report_json: JSON.stringify({ verdicts: [] }) }), /every assigned claim/);
   await callBridgeTool(ctx, 'submit_crosscheck_report', { report_json: JSON.stringify({ verdicts: [{ id: 'claim-1', verdict: 'partial', reason: 'Static source only', evidence: ['src/rules.rs:12'] }] }) });
   assert.equal(readReportJson(root, 'auditors/crosscheck-agy.json')[0].id, 'claim-1');

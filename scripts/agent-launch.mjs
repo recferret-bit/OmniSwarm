@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { agyHookPreflight } from './agent-hook-preflight.mjs';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const BRIDGE_SCRIPT = path.join(HERE, 'docker-mcp-bridge.mjs');
 const SKILL_FILE = path.resolve(HERE, '..', 'skills', 'security-audit', 'SKILL.md');
@@ -60,6 +61,9 @@ export function buildCliInvocation({ agent, model, prompt, workDir, bridgeArgs, 
         }],
       },
     }, null, 2));
+    // R-08: refuse to launch AGY whose permission hook is absent or not refusing host tools.
+    const hook = agyHookPreflight({ hooksFile: path.join(pluginDir, 'hooks.json') });
+    if (hook.state !== 'ready') throw new Error(`AGY unavailable: ${hook.reason} (${hook.detail})`);
     return {
       executable: exe,
       args: ['--output-format', 'stream-json', '--dangerously-skip-permissions', '--disable-slash-commands', '--model', model, ...(conversationId ? ['--conversation', conversationId] : []), `--print=${prompt}`],

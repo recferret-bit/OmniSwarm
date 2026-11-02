@@ -11,8 +11,8 @@ import { REVIEW_IMAGE } from './worker-isolation.mjs';
 import { staticCliReview } from './static-cli-review.mjs';
 
 test('Grok Docker keeps the inference process and credentials inside its private boundary', { timeout: 120_000 }, async (t) => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'fc-grok-docker-fixture-'));
-  const fixture = `fc-grok-fixture-${crypto.randomUUID()}`;
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'omni-grok-docker-fixture-'));
+  const fixture = `omni-grok-fixture-${crypto.randomUUID()}`;
   const volume = `${fixture}-auth`;
   t.after(async () => {
     await grokDockerControl(['volume', 'rm', volume]);
