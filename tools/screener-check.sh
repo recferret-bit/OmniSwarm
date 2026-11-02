@@ -2,7 +2,8 @@
 # Run every README screener block in a clean clone with provider keys unset.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-CLONE="$(mktemp -d)"
+CLONE="$(mktemp -d "$ROOT/../omniswarm-screener.XXXXXX")"
+trap 'rm -rf "$CLONE"' EXIT
 git clone --local "$ROOT" "$CLONE" >/dev/null
 cd "$CLONE"
 unset OPENROUTER_API_KEY ZAI_API_KEY ANTHROPIC_API_KEY OPENAI_API_KEY XAI_API_KEY GEMINI_API_KEY NEARAI_API_KEY GITHUB_TOKEN || true

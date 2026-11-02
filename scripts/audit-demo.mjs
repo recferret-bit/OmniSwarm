@@ -124,6 +124,6 @@ export async function runDemo(argv = process.argv.slice(2), env = process.env) {
   return 0;
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (process.argv[1] && fs.realpathSync(process.argv[1]) === fs.realpathSync(fileURLToPath(import.meta.url))) {
   runDemo().then((code) => process.exit(code), (error) => { process.stderr.write(`${error.stack || error}\n`); process.exit(1); });
 }
