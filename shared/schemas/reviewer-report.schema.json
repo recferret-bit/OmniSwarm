@@ -11,6 +11,9 @@
     "surfaces": { "type": "array", "items": { "$ref": "#/$defs/surface" } },
     "findings": { "type": "array", "maxItems": 1000, "items": { "$ref": "#/$defs/finding" } },
     "verified_safe": { "type": "array", "maxItems": 1000, "items": { "$ref": "#/$defs/verified-safe" } },
+    "status": { "enum": ["COMPLETE", "INCOMPLETE"] },
+    "gaps": { "type": "array", "items": { "type": "object", "required": ["surface", "reason"], "additionalProperties": false, "properties": { "surface": { "$ref": "#/$defs/surface" }, "reason": { "type": "string" } } } },
+    "usage": { "type": "object" },
     "generatedAt": { "type": "string", "minLength": 1 }
   },
   "$defs": {
@@ -26,6 +29,7 @@
         "provider": { "type": "string", "pattern": "^[a-z0-9-]+$" },
         "vendor": { "type": "string", "pattern": "^[a-z0-9-]+$" },
         "model": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "servedModel": { "type": "string", "minLength": 1, "maxLength": 128 },
         "label": { "type": "string", "pattern": "^[a-z0-9-]{1,40}$" },
         "keyFingerprint": { "type": "string", "pattern": "^[0-9a-f]{4}(\\.\\.\\.)?[0-9a-f]{4}$" }
       }
@@ -46,7 +50,9 @@
         "validation": { "type": "string", "minLength": 1 },
         "attack": { "type": "array", "items": { "type": "string" } },
         "poc": { "type": "string", "maxLength": 20000 },
-        "fix": { "type": "string", "minLength": 1 }
+        "fix": { "type": "string", "minLength": 1 },
+        "status": { "type": "string" },
+        "claimId": { "type": "string" }
       }
     },
     "verified-safe": {

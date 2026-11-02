@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "identity": {
+    "name": "key-zai-glm-5-3-s1-auth",
+    "agent": "key-zai-glm-5-3",
+    "role": "auditor",
+    "model": "glm-5.3",
+    "sourceDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "assignmentDigest": "dcf43810b765517b10325d5fea4feec2d66306736f2c33f038e77e25772236dd",
+    "surface": "S1"
+  },
+  "hash": "1ef4e4c107abed80a5dbac87e207382eeb8d5c9671a553b4b87803337fdb86bf",
+  "report": {
+    "payload": [
+      {
+        "verified_safe": []
+      }
+    ],
+    "summary": "Fixture."
+  },
+  "committedAt": "2026-11-02T21:48:28.249Z"
+}

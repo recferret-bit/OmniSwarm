@@ -25,20 +25,20 @@ The owner wants **the audit result of each model saved into its own report, by p
 
 ## Features covered
 
-- [ ] Reviewer report and index schemas, `meta.reviewers` reading — W05-01
-- [ ] Report contract accepts `reviewers/`, `debate/`, `general-review.*` (R-18a) — W05-02
-- [ ] Committed report fixture with 4 reviewers / 3 families — W05-03
-- [ ] Derive `reviewers/<id>/report.json` from canonical submissions — W05-04
-- [ ] `usage.json` and `passes/` from W04 records (stub without W04) — W05-05
-- [ ] Per-reviewer `report.md` — W05-06
-- [ ] Extract finding-card renderers to `report-cards.mjs` — W05-07
-- [ ] Per-reviewer `report.html` in today's style — W05-08
-- [ ] `reviewers/index.json` grouped by family and vendor — W05-09
-- [ ] `reviewers.html` index page — W05-10
-- [ ] `reviewers/by-provider/` roll-ups — W05-11
-- [ ] INCOMPLETE reviewers shown, never dropped — W05-12
-- [ ] Hook into the `report` phase — W05-13
-- [ ] Wave check — W05-14
+- [x] Reviewer report and index schemas, `meta.reviewers` reading — W05-01
+- [x] Report contract accepts `reviewers/`, `debate/`, `general-review.*` (R-18a) — W05-02
+- [x] Committed report fixture with 4 reviewers / 3 families — W05-03
+- [x] Derive `reviewers/<id>/report.json` from canonical submissions — W05-04
+- [x] `usage.json` and `passes/` from W04 records (stub without W04) — W05-05
+- [x] Per-reviewer `report.md` — W05-06
+- [x] Extract finding-card renderers to `report-cards.mjs` — W05-07
+- [x] Per-reviewer `report.html` in today's style — W05-08
+- [x] `reviewers/index.json` grouped by family and vendor — W05-09
+- [x] `reviewers.html` index page — W05-10
+- [x] `reviewers/by-provider/` roll-ups — W05-11
+- [x] INCOMPLETE reviewers shown, never dropped — W05-12
+- [x] Hook into the `report` phase — W05-13
+- [x] Wave check — W05-14
 
 ## Issues
 

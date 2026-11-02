@@ -18,6 +18,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import crypto from 'node:crypto';
+import { esc, toneOf, severityLevel, findingCard as renderFindingCard, pageDocument } from './report-cards.mjs';
 import { loadAuditors, adapterOf, readReportText, readReportJson, writeReportFile } from './report-contract.mjs';
 import { reviewersOfMeta } from './reviewer-registry.mjs';
 
@@ -46,7 +47,7 @@ try {
   if (err.status !== 2 || !fs.existsSync(path.join(reportDir, 'report-health.json'))) throw err;
 }
 
-const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+
 const readJson = (file, fallback) => {
   try { return readReportJson(reportDir, file, 64 * 1024 * 1024); } catch { return fallback; }
 };
@@ -110,12 +111,6 @@ const surfaces = Object.fromEntries(
 
 // Raw findings per model. A cluster in findings-and-scores.json is shared, so it is the wrong count.
 const SEVERITY_LEVELS = ['high', 'medium', 'low', 'info'];
-
-function severityLevel(raw) {
-  const token = String(raw ?? '').toLowerCase().match(/[a-z]+/)?.[0] || '';
-  if (token === 'critical') return 'high';
-  return token;
-}
 
 function loadModelRows() {
   const buckets = new Map();
@@ -217,7 +212,7 @@ const complete = health.state === 'validated_outputs';
 const reviewComplete = health.reviewState ? health.reviewState === 'validated_outputs' : complete;
 const statusLabel = complete ? 'Outputs validated' : reviewComplete ? 'Verification incomplete' : 'Incomplete review';
 const incompleteLabel = reviewComplete ? 'INCOMPLETE VERIFICATION' : 'INCOMPLETE REVIEW';
-const toneOf = (level) => ({ critical: 'red', high: 'red', medium: 'orange', low: 'blue', info: 'blue' })[level] || 'blue';
+
 const shortSurface = { S1: 'Identity & access', S2: 'Input & injection', S3: 'Logic & value', S4: 'Secrets & config', S5: 'Dependencies', S6: 'Client & web' };
 
 // Format only inert text; source Markdown never supplies links, HTML or attributes.
@@ -253,25 +248,7 @@ function mergeBadges(f) {
   return out.join('');
 }
 function findingCard(f, index) {
-  const originals = (f.claimIds || []).map(id => originalClaims.get(id)).filter(Boolean);
-  const primary = originals[0] || f.findings?.[0] || {};
-  const impact = primary.impact || 'No impact statement was provided by the auditor.';
-  const status = String(f.status || '').replace(/_/g, ' ').toLowerCase();
-  const reviews = Array.isArray(f.reviews) ? f.reviews : [];
-  const technical = originals.length ? originals : [primary];
-  return `<details class="finding ${toneOf(f.severity)}" data-severity="${esc(severityLevel(f.severity))}" data-surface="${esc(String(f.surface).toUpperCase().slice(0, 2))}">
-    <summary><span class="finding-index">${String(index + 1).padStart(2, '0')}</span><div>
-      <div class="finding-tags"><span class="pill ${toneOf(f.severity)}">${esc(f.severity)}</span><span class="meta-label">${esc(f.surface)}</span><span class="pill">${esc(status)}</span>${mergeBadges(f)}</div>
-      <h3>${esc(f.title)}</h3><p class="finding-preview">${esc(impact)}</p>
-    </div><span class="expand-icon" aria-hidden="true"></span></summary>
-    <div class="finding-body">
-      <div class="finding-priority"><strong>Priority ${esc(f.score)}</strong><span>Heuristic · not a probability</span><span>${esc((f.auditors || f.vendors || []).join(' · '))}</span></div>
-      <div class="action-grid">${block('Impact', impact, 'red')}${block('Recommended fix', f.remediation || primary.fix || 'No fix was provided.', 'green')}</div>
-      ${disclosure('Source analysis & validation', technical.map((claim, i) => `${technical.length > 1 ? `<p class="meta-label">Claim ${i + 1} · ${esc(f.claimIds?.[i] || '')}</p>` : ''}${block('Preconditions', claim.preconditions)}${block('Analysis', claim.analysis)}${block('Validation & limits', claim.validation)}${claim.attack?.length ? block('Historical review notes', claim.attack.join('\n\n')) : ''}`).join(''))}
-      ${f.locations?.length ? disclosure(`Affected files · ${f.locations.length}`, citations(f.locations)) : ''}
-      ${reviews.length ? disclosure(`Peer reviews · ${reviews.length}`, `<p class="note">Model statements; no independent reproduction evidence.</p>${reviews.map(r => `<div class="review"><span class="pill ${r.verdict === 'refuted' ? 'red' : r.verdict === 'upheld' ? 'green' : 'orange'}">${esc(r.reviewer)} · ${esc(r.verdict)}</span><div class="prose">${prose(r.reason)}</div>${citations(r.evidence)}</div>`).join('')}`) : ''}
-      ${f.pocs?.length ? disclosure('Historical regression material · unexecuted', `<pre>${esc(f.pocs.join('\n'))}</pre>`) : ''}
-    </div></details>`;
+  return renderFindingCard(f, index, { originalClaims, mergeBadges, block, citations, disclosure, prose });
 }
 
 function rail(modelPage) {
@@ -284,12 +261,7 @@ function rail(modelPage) {
     <div class="rail-bottom"><span class="signal"></span>SAVED REVIEW<br>${esc(dateLabel)}<br>REF / ${esc(meta.commit || 'not recorded')}</div></aside>`;
 }
 function page(body, modelPage = false) {
-  return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta http-equiv="Content-Security-Policy" content="${esc(policy)}"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(targetName)} — ${modelPage ? 'Findings by model' : 'Security audit'}</title><style>${styles}</style></head>
-    <body><a class="skip-link" href="#main">Skip to report</a>${rail(modelPage)}<div class="workspace">
-    ${meta.demo ? '<p style="margin:0;padding:10px 16px;background:#111;color:#fff;font-weight:700">DEMO — not a review</p>' : ''}
-    <div class="topbar"><span><b>Security intelligence</b> / ${modelPage ? 'Model comparison' : 'Audit overview'}</span><span class="topbar-detail">${esc(dateLabel)} &nbsp; / &nbsp; ${expected} review assignments</span></div>
-    <main id="main">${body}<footer class="footer"><span>Audit / Core · Source security review</span><span>Model assertions · Unverified provenance</span><span>${esc(meta.commit || dateLabel)}</span></footer></main></div>
-    ${!modelPage ? `<script nonce="${nonce}">${browserScript}</script>` : ''}</body></html>`;
+  return pageDocument({ body, modelPage, policy, targetName, styles, railHtml: rail(modelPage), meta, nonce, browserScript, dateLabel, expected });
 }
 function hero(modelPage = false) {
   return `<header class="hero"><div><div class="eyebrow">${modelPage ? 'Reviewer output / 03' : 'Source assessment / 01'}</div><h1>${modelPage ? 'MODEL <span>REPORT.</span>' : 'AUDIT <span>REPORT.</span>'}</h1><p class="target">${esc(targetName)}</p><div class="source">${esc([meta.mode === 'remote' ? 'GITHUB' : 'SOURCE', meta.commit && `REF ${meta.commit}`, meta.surface && `SCOPE ${meta.surface}`].filter(Boolean).join(' / '))}</div></div>

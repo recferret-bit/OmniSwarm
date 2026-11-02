@@ -1,0 +1,13 @@
+{
+  "k": 2,
+  "index": 2,
+  "role": "self-verify",
+  "calls": 33,
+  "tokensIn": 12,
+  "tokensOut": 5,
+  "cost": 0.21,
+  "costSource": "reported",
+  "stop": "submitted",
+  "startedAt": "2026-11-02T00:02:00Z",
+  "endedAt": "2026-11-02T00:03:00Z"
+}

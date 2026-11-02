@@ -1,0 +1,7 @@
+{
+  "groups": [
+    { "family": "cli", "label": "Local subscriptions", "vendors": [{ "vendor": "anthropic", "reviewers": [{ "id": "cli-claude-opus" }] }] }
+  ],
+  "totals": { "findings": 1 },
+  "pages": ["reviewers/cli-claude-opus/report.html", "reviewers.html"]
+}

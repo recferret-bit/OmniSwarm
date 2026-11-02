@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://omniswarm.dev/schemas/reviewers-index.schema.json",
+  "title": "reviewers-index",
+  "description": "reviewers/index.json: reviewers grouped by family and vendor. ORCHESTRATION section 6.",
+  "type": "object",
+  "required": ["groups", "totals", "pages"],
+  "additionalProperties": false,
+  "properties": {
+    "groups": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["family", "label", "vendors"],
+        "additionalProperties": false,
+        "properties": {
+          "family": { "enum": ["cli", "key", "openrouter", "scripted", "nearai"] },
+          "label": { "type": "string", "minLength": 1 },
+          "vendors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["vendor", "reviewers"],
+              "additionalProperties": false,
+              "properties": {
+                "vendor": { "type": "string", "minLength": 1 },
+                "reviewers": { "type": "array", "items": { "type": "object" } }
+              }
+            }
+          }
+        }
+      }
+    },
+    "totals": { "type": "object" },
+    "pages": { "type": "array", "items": { "type": "string" } }
+  }
+}
