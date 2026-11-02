@@ -1,0 +1,15 @@
+{
+  "reviewers": [
+    "cli:claude:opus",
+    "cli:codex:gpt-6.1-sol",
+    "cli:grok:grok-4.7",
+    "cli:agy:gemini-4-argon-high",
+    "openrouter:qwen/qwen3.8-max-0902",
+    "key:zai:glm-5.3"
+  ],
+  "orchestrator": "recommended",
+  "assign": "matrix",
+  "passes": 2,
+  "toolBudget": 40,
+  "debate": { "rounds": 2, "toolBudget": 12, "maxClusters": 25 }
+}

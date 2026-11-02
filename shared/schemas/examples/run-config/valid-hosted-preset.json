@@ -1,0 +1,16 @@
+{
+  "reviewers": [
+    "key:zai:glm-5.3",
+    "openrouter:qwen/qwen3.8-max-0902",
+    "openrouter:anthropic/claude-opus-5.5",
+    "openrouter:openai/gpt-6.1-sol",
+    "openrouter:x-ai/grok-4.7",
+    "openrouter:google/gemini-4-argon"
+  ],
+  "orchestrator": "openrouter:anthropic/claude-opus-5.5",
+  "alternateJudge": "openrouter:openai/gpt-6.1-sol",
+  "assign": "round-robin",
+  "passes": 2,
+  "toolBudget": 30,
+  "maxCostUsd": 25
+}

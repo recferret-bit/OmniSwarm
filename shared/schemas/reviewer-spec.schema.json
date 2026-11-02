@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://omniswarm.dev/schemas/reviewer-spec.schema.json",
+  "title": "reviewer-spec",
+  "description": "One reviewer: a spec string (cli:<provider>:<model>, key:<provider>:<model>, openrouter:<slug>, nearai:<model>, scripted:<strategy>[:<id>], optional #label) or its parsed object form. ORCHESTRATION section 1.",
+  "oneOf": [
+    {
+      "type": "string",
+      "pattern": "^(?:(?:cli|key):[a-z0-9-]+:[A-Za-z0-9._:/-]{1,128}|openrouter:[A-Za-z0-9._:/-]{1,128}|nearai:[A-Za-z0-9._:/-]{1,128}|scripted:[a-z0-9-]+(?::[A-Za-z0-9._-]{1,64})?)(?:#[a-z0-9-]{1,40})?$"
+    },
+    { "$ref": "#/$defs/parsed" }
+  ],
+  "$defs": {
+    "parsed": {
+      "type": "object",
+      "required": ["id", "family", "provider", "vendor", "model"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,80}$" },
+        "family": { "enum": ["cli", "key", "openrouter", "nearai", "scripted"] },
+        "provider": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+        "vendor": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+        "model": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "label": { "type": "string", "pattern": "^[a-z0-9-]{1,40}$" }
+      }
+    }
+  }
+}

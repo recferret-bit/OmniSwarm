@@ -1,0 +1,9 @@
+{
+  "normalizedRepo": "near/near-sdk-rs",
+  "commitSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "priceYocto": "1000000000000000000000000",
+  "contractId": "review-registry.alice.testnet",
+  "queueDepth": 2,
+  "preset": "hosted",
+  "etaMinutes": 45
+}

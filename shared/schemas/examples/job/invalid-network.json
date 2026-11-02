@@ -1,0 +1,10 @@
+{
+  "input": {
+    "requestId": "3f2b8c1e-5d4a-4b7e-9c1a-2e6f0a8b4d10",
+    "repo": "near/near-sdk-rs",
+    "commitSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "preset": "hosted",
+    "network": "localnet",
+    "outDir": "reports/req-3f2b8c1e"
+  }
+}

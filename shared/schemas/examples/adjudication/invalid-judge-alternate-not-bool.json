@@ -1,0 +1,15 @@
+{
+  "clusterId": "c-001",
+  "finalStatus": "CONFIRMED",
+  "severity": "high",
+  "judge": {
+    "reviewerId": "x",
+    "vendor": "openai",
+    "alternate": "yes"
+  },
+  "rationale": "Evidence holds and one independent reviewer upheld it.",
+  "validArguments": [
+    "Reviewer A quotes the unconstrained field."
+  ],
+  "discardedArguments": []
+}

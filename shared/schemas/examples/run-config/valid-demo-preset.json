@@ -1,0 +1,8 @@
+{
+  "reviewers": ["scripted:baseline", "scripted:paranoid", "scripted:lazy", "scripted:wrong"],
+  "orchestrator": "scripted:judge",
+  "assign": "matrix",
+  "passes": 1,
+  "toolBudget": 10,
+  "debate": { "rounds": 2 }
+}

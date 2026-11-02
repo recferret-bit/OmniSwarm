@@ -1,0 +1,10 @@
+{
+  "ok": true,
+  "network": "testnet",
+  "queueDepth": 0,
+  "workers": 1,
+  "chain": {
+    "rpc": true,
+    "contract": true
+  }
+}

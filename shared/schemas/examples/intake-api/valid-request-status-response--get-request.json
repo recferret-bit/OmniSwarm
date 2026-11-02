@@ -1,0 +1,10 @@
+{
+  "status": "running",
+  "progress": {
+    "phase": "review",
+    "reviewer": "key-zai-glm-5-3",
+    "pass": 1,
+    "percent": 35.5
+  },
+  "createdAt": "2026-11-05T12:00:00Z"
+}

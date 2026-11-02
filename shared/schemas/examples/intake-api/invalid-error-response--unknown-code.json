@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": "BOOM",
+    "message": "x",
+    "retryable": false
+  }
+}

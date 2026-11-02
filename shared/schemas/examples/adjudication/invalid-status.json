@@ -1,0 +1,15 @@
+{
+  "clusterId": "c-001",
+  "finalStatus": "UPHELD_REVIEW",
+  "severity": "high",
+  "judge": {
+    "reviewerId": "cli-claude-opus",
+    "vendor": "anthropic",
+    "alternate": false
+  },
+  "rationale": "Evidence holds and one independent reviewer upheld it.",
+  "validArguments": [
+    "Reviewer A quotes the unconstrained field."
+  ],
+  "discardedArguments": []
+}
