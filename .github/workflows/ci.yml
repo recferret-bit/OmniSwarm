@@ -38,7 +38,7 @@ jobs:
           node-version: 24
       - run: npm ci
       - run: npm run test:schemas
-      - run: node --test tools/
+      - run: node --test "tools/*.test.mjs"
 
   intake:
     runs-on: ubuntu-latest

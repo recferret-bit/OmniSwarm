@@ -41,7 +41,7 @@ function step(label, cmd, args) {
 
 layout();
 step('schemas', 'npm', ['run', 'test:schemas']);
-step('tools', process.execPath, ['--test', 'tools/']);
+step('tools', process.execPath, ['--test', 'tools/worktree-env.test.mjs', 'tools/wave.test.mjs']);
 step('harness self-test', process.execPath, ['scripts/harness.mjs', '--self-test']);
 step('skill copies identical', 'cmp', ['skills/security-audit/SKILL.md', '.claude/skills/security-audit/SKILL.md']);
 step('engine tests (npm test)', 'npm', ['test']);
