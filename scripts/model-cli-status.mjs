@@ -18,7 +18,7 @@ function executableFor(provider, env) {
 }
 // Fixed --version only. Unsupported providers never receive source or auth requests.
 async function versionOf(file, env, signal) {
-  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'fc-cli-status-'));
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'omni-cli-status-'));
   fs.chmodSync(cwd, 0o700);
   try {
     return await new Promise((resolve) => {

@@ -18,7 +18,7 @@ const REASONS = new Set(['native_input_contract_rejected', 'native_output_contra
 const modelName = (value) => typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value);
 const CODEX_PROFILE = Object.freeze({
   provider: 'codex', sourceCommit: CODEX_SOURCE, authMethod: 'chatgpt', version: '0.162.1-native',
-  tempPrefix: 'fc-codex-session-', environmentKeys: ['CODEX_HOME'], inventories: ['tools','mcpServers'],
+  tempPrefix: 'omni-codex-session-', environmentKeys: ['CODEX_HOME'], inventories: ['tools','mcpServers'],
   admissionError: 'native_broker_not_admitted', resolveBinary: admittedBinary, reasons: REASONS,
 });
 

@@ -139,7 +139,7 @@ export function createClaudeAdapter({ executable, environment = process.env, inf
   const cli = executable || resolveClaude(env);
   return {
     async withSession(callback, { signal } = {}) {
-      const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'fc-model-'));
+      const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'omni-model-'));
       fs.chmodSync(cwd, 0o700);
       try {
         const version = await run(cli, ['--version'], '', { cwd, env, signal, timeoutMs: 5000 });

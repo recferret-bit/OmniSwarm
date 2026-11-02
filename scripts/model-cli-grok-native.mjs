@@ -43,7 +43,7 @@ async function admittedBinary(){
 }
 const PROFILE=Object.freeze({
   provider:'grok',sourceCommit:PIN,sourceRevision:SOURCE_REVISION,authMethod:'oidc_cached',
-  version:'public-source-native',tempPrefix:'fc-grok-session-',
+  version:'public-source-native',tempPrefix:'omni-grok-session-',
   environmentKeys:['GROK_HOME','GROK_FORCE_LOGIN_TEAM_ID','GROK_DISABLE_API_KEY_AUTH'],
   inventories:['tools','hostedTools','mcpServers'],allowUnknownModel:true,
   diagnostics:true,
