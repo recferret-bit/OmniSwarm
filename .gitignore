@@ -13,8 +13,7 @@ Thumbs.db
 # Local drops. Not part of the suite.
 
 # One directory per `audit run`: auditors, harness, and Docker build products.
-reports/*
-!reports/.gitkeep
+reports/
 
 # Per-worktree isolation (tools/worktree-env.mjs)
 .env.worktree
