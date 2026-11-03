@@ -86,6 +86,8 @@ const report = http.get<{ id: string }>('/api/reports/:id', async ({ params }) =
     attestation: {
       requestHash: attestation.request_hash, reportSha256: attestation.report_sha256, reportUri: attestation.report_uri,
       deployed: attestation.deployed, codeHash: attestation.code_hash, maxSeverity: attestation.max_severity,
+      repo: attestation.repo, commit: attestation.commit, bindingConfirmed: attestation.binding_confirmed,
+      blockHeight: attestation.block_height, blockTimestampMs: attestation.block_timestamp_ms,
     },
   });
 });

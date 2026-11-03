@@ -157,7 +157,7 @@ export interface ReportIndexResponse {
   attestation?: Attestation;
 }
 /**
- * What the backend attests on chain after a review (registry attest call). INTAKE sections 3 (step 9) and 6.
+ * What the backend attests on chain after a review (registry attest call). INTAKE sections 3 (step 9) and 6. Chain-side fields (bindingConfirmed, blockHeight, blockTimestampMs) appear when the attestation is read back from the contract.
  */
 export interface Attestation {
   requestHash: string;
@@ -166,6 +166,11 @@ export interface Attestation {
   deployed?: string | null;
   codeHash?: string | null;
   maxSeverity: 'critical' | 'high' | 'medium' | 'low' | 'info' | 'none';
+  repo?: string;
+  commit?: string;
+  bindingConfirmed?: boolean;
+  blockHeight?: number;
+  blockTimestampMs?: number;
 }
 export interface GuardVerdictResponse {
   verdict: 'allow' | 'warn' | 'block';
