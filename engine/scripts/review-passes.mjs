@@ -1,7 +1,7 @@
 // Archive a committed pass so the next pass can submit a replacement, and write the raw usage row.
 import fs from 'node:fs';
 import path from 'node:path';
-import { writeReportFile } from './report-contract.mjs';
+import { writeReportFile } from './report-files.mjs';
 import { loadBudget, passKey } from './bridge-budget.mjs';
 
 export function archivePassSubmission(root, name, passIndex) {

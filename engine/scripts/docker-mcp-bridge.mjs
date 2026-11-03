@@ -15,7 +15,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { readReportJson, writeReportFile } from './report-contract.mjs';
+import { readReportJson, writeReportFile } from './report-files.mjs';
 import { validateSubmissionIdentity } from './audit-submission.mjs';
 import { REVIEW_TOOLS } from './review-workflow.mjs';
 import { bridgeRole } from './bridge-tools-registry.mjs';

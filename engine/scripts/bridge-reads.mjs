@@ -8,7 +8,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { readReportJson, readReportText } from './report-contract.mjs';
+import { readReportJson, readReportText } from './report-files.mjs';
 import { BridgeError, SEALED_SOURCE, displayPath, resolveContainerPath, runProgram, truncationMarker } from './bridge-container.mjs';
 import {
   LIST_FILES_SCRIPT, READ_FILE_SCRIPT, SEARCH_CODE_SCRIPT, SEARCH_LINE_CHARS, SKIP_DIRS, SOURCE_DIGEST_SCRIPT,

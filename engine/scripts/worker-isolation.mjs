@@ -3,7 +3,8 @@ import path from 'node:path';
 import os from 'node:os';
 import crypto from 'node:crypto';
 import { sha256Hex as hash } from './hash-util.mjs';
-import { readReportText, validateAuditor, validCrosscheckRow } from './report-contract.mjs';
+import { readReportText } from './report-files.mjs';
+import { validateAuditor, validCrosscheckRow } from './report-contract-auditor.mjs';
 import { REVIEWER_ID_PATTERN, isReviewerId } from './reviewer-registry.mjs';
 import { validateReviewRequest, requestBinding, validateTerminalReport } from './terminal-review-contract.mjs';
 

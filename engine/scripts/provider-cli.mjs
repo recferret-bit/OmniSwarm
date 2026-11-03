@@ -9,7 +9,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveExecutable, stageAuditSkill } from './agent-launch.mjs';
 import { SessionError } from './agent-rpc.mjs';
-import { writeReportFile } from './report-contract.mjs';
+import { writeReportFile } from './report-files.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const maxTurnsCache = new Map();

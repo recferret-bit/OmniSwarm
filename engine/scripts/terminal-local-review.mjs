@@ -5,7 +5,7 @@ import { createSnapshot, disposeSnapshot, createTerminalJob } from './worker-iso
 import { createTerminalRelay } from './terminal-relay.mjs';
 import { buildReviewRequest, relativeFile, terminalSafeJson } from './terminal-review-contract.mjs';
 import { runtimeDigest, runTerminalReview } from './worker-supervisor.mjs';
-import { writeReportFile } from './report-contract.mjs';
+import { writeReportFile } from './report-files.mjs';
 
 export function parseLocalReview(argv) {
   const result = { files: [] };

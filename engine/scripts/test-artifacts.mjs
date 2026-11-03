@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { sha256Hex } from './hash-util.mjs';
-import { writeReportFile } from './report-contract.mjs';
+import { writeReportFile } from './report-files.mjs';
 
 // Explicit operator input, kept separate from the text-only source snapshot.
 // Import program bytes and Anchor IDL only; never import generated deployment keypairs.

@@ -16,7 +16,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { adjudicate, printSummary } from './verify-and-adjudicate.mjs';
 import { deriveReviewerReports } from './reviewer-reports.mjs';
-import { readReportJson, writeReportFile } from './report-contract.mjs';
+import { readReportJson, writeReportFile } from './report-files.mjs';
 import { esc } from './report-cards.mjs';
 import { reportShell } from './report-cards-shell.mjs';
 import { loadV2 } from './report-section-registry.mjs';

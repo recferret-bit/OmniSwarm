@@ -15,7 +15,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { stageTestArtifacts } from './test-artifacts.mjs';
 import { callBridgeTool, resolveDockerBin } from './docker-mcp-bridge.mjs';
-import { readReportJson, writeReportFile } from './report-contract.mjs';
+import { readReportJson, writeReportFile } from './report-files.mjs';
 import { createSnapshot, disposeSnapshot } from './worker-isolation.mjs';
 import { HOST_DIR } from './sandbox-host-paths.mjs';
 import { runReviewSession } from './agent-session.mjs';

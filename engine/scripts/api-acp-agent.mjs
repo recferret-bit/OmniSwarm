@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { readReportJson, writeReportFile } from './report-contract.mjs';
+import { readReportJson, writeReportFile } from './report-files.mjs';
 import { loadAgentConfig, sendAcp, serveAcpStdio } from './agent-acp-stdio.mjs';
 import { SessionError } from './agent-rpc.mjs';
 import { runToolLoop } from './provider-openai-compat.mjs';

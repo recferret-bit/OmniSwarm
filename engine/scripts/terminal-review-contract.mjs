@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { sha256Hex as digest } from './hash-util.mjs';
-import { readReportText } from './report-contract.mjs';
+import { readReportText } from './report-files.mjs';
 
 export const FRAME_BYTES = 512 * 1024;
 export const SOURCE_BYTES = 64 * 1024;

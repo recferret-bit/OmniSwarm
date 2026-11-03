@@ -1,7 +1,7 @@
 // Newline-delimited JSON-RPC (ACP v1) over stdio for OmniSwarm's own ACP agents
 // (api-acp-agent.mjs, native-acp-agent.mjs). The coordinator's client is agent-rpc.mjs.
 import path from 'node:path';
-import { readReportJson } from './report-contract.mjs';
+import { readReportJson } from './report-files.mjs';
 
 const MAX_FRAME = 4 * 1024 * 1024;
 

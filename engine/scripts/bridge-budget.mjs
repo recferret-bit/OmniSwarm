@@ -5,7 +5,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { withFileLock } from './fs-lock.mjs';
-import { readReportJson, writeReportFile } from './report-contract.mjs';
+import { readReportJson, writeReportFile } from './report-files.mjs';
 
 export const GRACE = 3;
 const SUBMIT = new Set(['submit_audit_report', 'submit_crosscheck_report']);

@@ -4,7 +4,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { adapterOf, readReportJson, writeReportFile } from './report-contract.mjs';
+import { readReportJson, writeReportFile } from './report-files.mjs';
+import { adapterOf } from './report-contract-auditor.mjs';
 import { validate } from '../../packages/schemas/index.mjs';
 import { readJsonOr, writeJson, writeText } from './report-util-files.mjs';
 import { reportShell } from './report-cards-shell.mjs';

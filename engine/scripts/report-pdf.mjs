@@ -21,7 +21,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { readReportText, writeReportFile } from './report-contract.mjs';
+import { readReportText, writeReportFile } from './report-files.mjs';
 import { newestReportDir as newestWith } from './report-util-files.mjs';
 
 const scriptsDir = path.dirname(fileURLToPath(import.meta.url));

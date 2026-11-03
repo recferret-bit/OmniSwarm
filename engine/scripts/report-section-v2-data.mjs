@@ -1,7 +1,7 @@
 // The report-v2 inputs every section reads: debate/, general-review.*, reviewers/index.json. Size-capped reads,
 // because report directories hold target-influenced text. Not a section (exports no `section`).
 import { listJsonFiles, readJsonOr } from './report-util-files.mjs';
-import { readReportText } from './report-contract.mjs';
+import { readReportText } from './report-files.mjs';
 
 export const FAMILY_ORDER = ['cli', 'key', 'openrouter', 'scripted', 'nearai'];
 const familyRank = (family) => (FAMILY_ORDER.includes(family) ? FAMILY_ORDER.indexOf(family) : FAMILY_ORDER.length);
