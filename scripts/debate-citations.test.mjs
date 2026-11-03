@@ -26,6 +26,7 @@ test('a file that changed after the snapshot manifest is refused', () => {
   assert.equal(anchorEvidence(sealed, { file: 'src/lib.rs', line: 2 }).valid, true);
   fs.appendFileSync(path.join(root, 'src/lib.rs'), '// edited\n');
   assert.equal(anchorEvidence(sourceReader(root, { files: [{ path: 'src/lib.rs', sha256: sha }] }), { file: 'src/lib.rs', line: 2 }).reason, 'source_changed');
+  assert.equal(anchorEvidence(sourceReader(root, { files: [] }), { file: 'src/lib.rs', line: 2 }).reason, 'file_not_in_snapshot');
 });
 
 test('a blank line or a lone brace is not evidence', () => {

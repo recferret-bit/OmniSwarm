@@ -25,6 +25,7 @@ export function sourceReader(root, manifest = null) {
     try { stat = fs.lstatSync(full); } catch { return { error: 'file_not_in_snapshot' }; }
     if (!stat.isFile()) return { error: 'file_not_in_snapshot' };
     const bytes = fs.readFileSync(full);
+    if (hashes && !hashes.has(rel)) return { error: 'file_not_in_snapshot' };
     if (hashes && hashes.get(rel) !== sha256Hex(bytes)) return { error: 'source_changed' };
     return { lines: bytes.toString('utf8').split(/\r?\n/) };
   };
