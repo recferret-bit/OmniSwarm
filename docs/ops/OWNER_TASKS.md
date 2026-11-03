@@ -11,7 +11,7 @@ Keep your filled env files in `~/.omniswarm/env/` on your own machine (`chmod 70
 - [ ] Rent one Linux VM: 8 vCPU, 32 GB RAM, 200 GB SSD, Debian 13 or Ubuntu 24.04, a public IPv4 address. See `docs/ops/COST.md` "Host" for the reasoning and a smaller fallback. Needed by D4 (HACKATHON_CUT).
 - [ ] Add an ssh alias for it to `~/.ssh/config` on your machine (`Host <host>`, `HostName <ip>`, `User <cloud default user or root>`).
 - [ ] Create a dedicated deploy key: `ssh-keygen -t ed25519 -f ~/.ssh/omniswarm_deploy -C omniswarm-deploy`.
-- [ ] Check the plan, then provision. The first command contacts nothing; the second applies the plan over ssh:
+- [ ] Check the plan, then provision. The first command contacts nothing; the second applies the plan over ssh. The ssh user must be root, or have passwordless sudo (the cloud images' default user does), because the remote `sudo` runs without a terminal. If the image ships a distribution `nodejs` older than 24 that apt keeps, the script stops with a message. Remove that package and run it again:
   ```sh
   infra/deploy/provision.sh --dry-run --remote <host> --deploy-key ~/.ssh/omniswarm_deploy.pub
   infra/deploy/provision.sh --remote <host> --deploy-key ~/.ssh/omniswarm_deploy.pub
