@@ -40,9 +40,8 @@ test('demo refuses a foreign repo and the host snapshot stamps the banner', () =
 });
 
 // Demo step 2: the documented replay command, with the documented RELATIVE OMNI_HTTP_REPLAY.
-// `todo` until audit-submission.mjs accepts a `/` in identity.model (lead request: validModelId from
-// reviewer-registry.mjs); without it the openrouter bridge refuses its identity (mcp_unavailable).
-test('a replayed zai and openrouter run reads, searches and submits through the bridge', { todo: 'needs the audit-submission.mjs validModelId lead diff' }, () => {
+// The openrouter identity carries a `vendor/model` id, which audit-submission.mjs validates with validModelId.
+test('a replayed zai and openrouter run reads, searches and submits through the bridge', () => {
   const out = fs.mkdtempSync(path.join(os.tmpdir(), 'w03-replay-'));
   fs.rmSync(out, { recursive: true });
   const result = run(['run', '--repo', 'scripts/demo-fixture', '--reviewers', 'key:zai:glm-5.3,openrouter:qwen/qwen3.8-max-0902', '--surface', 's1', '--passes', '1', '--out', out], {
