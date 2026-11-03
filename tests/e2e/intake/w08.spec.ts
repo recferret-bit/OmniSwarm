@@ -93,6 +93,8 @@ describe('W08 intake API @hack', NEEDS_DB, () => {
     const txHash = mockPay(created.requestId);
     const paid = await call(base, `/api/requests/${created.requestId}/payment`, { method: 'POST', body: { txHash }, cookie: created.cookie });
     assert.deepEqual(paid.body, { status: 'queued', position: 1 });
+    const replay = await call(base, `/api/requests/${created.requestId}/payment`, { method: 'POST', body: { txHash }, cookie: created.cookie });
+    assert.deepEqual(replay.body, { status: 'queued', position: 1 }, 'a replay answers with the current status and rank');
     const other = await call(base, '/api/requests', { method: 'POST', body: signed(await challenge(), 'dave.mock') });
     const otherCookie = sessionCookie(other);
     const reused = await call(base, `/api/requests/${other.body.requestId}/payment`, { method: 'POST', body: { txHash }, cookie: otherCookie });
