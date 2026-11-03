@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Golden eval (ORCHESTRATION 7): union, majority vote and the debate, all computed from the same scripted
-// submissions on every eval/golden repo. Writes eval/RESULTS.md, including the OD-14 default-rounds decision.
+// submissions on every eval/golden repo. Writes eval/RESULTS.md (only when the numbers change), including the
+// OD-14 default-rounds decision; this run's date and commit go to eval/runs/last-run.json.
 // Offline only; real models (OMNI_LIVE=1) are not wired here yet.
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -12,6 +13,7 @@ import { offlinePlan } from '../scripts/debate-plan.mjs';
 import { runDebateStages } from '../scripts/debate-run.mjs';
 import { runPanel, STRATEGIES } from './panel.mjs';
 import { decideDefaultRounds, rates, retainedBy, score, sum } from './metrics.mjs';
+import { writeResults } from './results.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const GOLDEN = path.join(HERE, 'golden');
@@ -65,11 +67,7 @@ for (const name of repos) results.push(await evalRepo(name));
 const totals = Object.fromEntries(MODES.map((mode) => [mode, sum(results.map(({ row }) => row[mode]))]));
 const decision = decideDefaultRounds({ debate: totals['debate-2'], union: totals.union, majority: totals.majority });
 const text = table(results, totals);
-fs.writeFileSync(path.join(HERE, 'RESULTS.md'), `# Golden eval
-
-Command: \`npm run eval:golden\` · date ${new Date().toISOString().slice(0, 10)} · commit ${commit()}
-
-Reviewers: ${STRATEGIES.map((s) => `scripted:${s}`).join(', ')}; judge scripted:judge. Cost: none (no model was called).
+const body = `Reviewers: ${STRATEGIES.map((s) => `scripted:${s}`).join(', ')}; judge scripted:judge. Cost: none (no model was called).
 
 These are scripted reviewers whose answers derive from each repo's expected.json by the fixed policy in
 eval/panel.mjs, so the table measures the debate protocol (citation checks, conformity rule, evidence floor),
@@ -81,6 +79,8 @@ Union keeps every cluster. Majority keeps clusters reported by more than half of
 a finding. debate-N keeps every cluster the N-round debate did not REFUTE. Totals are micro-averaged.
 
 ${text}
-`);
+`;
+const { changed } = writeResults({ file: path.join(HERE, 'RESULTS.md'), runsDir: RUNS, body, date: new Date().toISOString().slice(0, 10), commit: commit() });
 console.log(text);
 console.log(`Default debate rounds: ${decision.rounds}. ${decision.reason}`);
+console.log(changed ? 'RESULTS.md updated: the numbers changed.' : 'RESULTS.md unchanged: same numbers as the committed table.');
