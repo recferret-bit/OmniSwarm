@@ -80,6 +80,9 @@ export const envSchema = z.object({
   MOCK_ENGINE_STEP_MS: int(0, 600_000).default(50),
   RUNS_ROOT: absPath.default(path.join(REPO_ROOT, 'reports/intake/runs')),
   REPORTS_ROOT: absPath.default(path.join(REPO_ROOT, 'reports/intake/published')),
+  // Disk hygiene (W09-19): finished requests whose run dirs are kept; how long an orphaned report stays.
+  KEEP_RUNS: int(1, 100_000).default(20),
+  ORPHAN_REPORT_RETENTION_H: int(1, 87_600).default(168),
   REPORTS_BASE_URL: z.url().refine((url) => url.startsWith('https://'), 'must be https').default('https://reports.localhost'),
 
   WORKER_ID: z.string().regex(/^[A-Za-z0-9._@-]{1,64}$/).optional(),

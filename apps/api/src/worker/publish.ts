@@ -36,12 +36,16 @@ function setModes(dir: string, includeRoot: boolean): void {
   if (includeRoot) fs.chmodSync(dir, 0o555);
 }
 
+/** Remove a published (0555/0444) tree: every directory is made writable before anything below it goes. */
 export function removeTree(dir: string): void {
   if (!fs.existsSync(dir)) return;
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    if (entry.isDirectory()) { fs.chmodSync(path.join(dir, entry.name), 0o755); removeTree(path.join(dir, entry.name)); }
-  }
-  fs.chmodSync(dir, 0o755);
+  const unlock = (current: string) => {
+    fs.chmodSync(current, 0o755);
+    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+      if (entry.isDirectory()) unlock(path.join(current, entry.name));
+    }
+  };
+  unlock(dir);
   fs.rmSync(dir, { recursive: true, force: true });
 }
 

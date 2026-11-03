@@ -30,7 +30,7 @@ export interface Config {
     logMaxBytes: number; envPassthrough: string[];
     mock: { fail: 'infra' | 'findings' | 'crash' | 'operator' | null; stepMs: number };
   };
-  storage: { runsRoot: string; reportsRoot: string; reportsBaseUrl: string };
+  storage: { runsRoot: string; reportsRoot: string; reportsBaseUrl: string; keepRuns: number; orphanReportRetentionH: number };
   queue: {
     workerId: string | null; concurrency: number; stopTimeoutS: number; expireS: number; heartbeatS: number;
     retryLimit: number; retryDelayS: number; monitorS: number;
@@ -129,7 +129,10 @@ function build(raw: RawEnv): Config {
       envPassthrough: raw.ENGINE_ENV_PASSTHROUGH,
       mock: { fail: raw.MOCK_ENGINE_FAIL ?? null, stepMs: raw.MOCK_ENGINE_STEP_MS },
     },
-    storage: { runsRoot: raw.RUNS_ROOT, reportsRoot: raw.REPORTS_ROOT, reportsBaseUrl: raw.REPORTS_BASE_URL.replace(/\/+$/, '') },
+    storage: {
+      runsRoot: raw.RUNS_ROOT, reportsRoot: raw.REPORTS_ROOT, reportsBaseUrl: raw.REPORTS_BASE_URL.replace(/\/+$/, ''),
+      keepRuns: raw.KEEP_RUNS, orphanReportRetentionH: raw.ORPHAN_REPORT_RETENTION_H,
+    },
     queue: {
       workerId: raw.WORKER_ID ?? null, concurrency: raw.WORKER_CONCURRENCY, stopTimeoutS: raw.WORKER_STOP_TIMEOUT_S, expireS: raw.QUEUE_EXPIRE_S,
       heartbeatS: raw.QUEUE_HEARTBEAT_S, retryLimit: raw.QUEUE_RETRY_LIMIT, retryDelayS: raw.QUEUE_RETRY_DELAY_S,
