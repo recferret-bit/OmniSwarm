@@ -1,0 +1,5 @@
+# hadolint config for infra/check/lint.sh. Every rule is on; the threshold is
+# the lowest severity, so a style finding fails the gate too.
+failure-threshold: style
+trustedRegistries:
+  - docker.io

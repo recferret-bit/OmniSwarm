@@ -8,13 +8,13 @@
   "agents": [
     "cli-claude-opus",
     "key-zai-glm-5-3",
-    "openrouter-qwen-qwen3-8-max",
+    "openrouter-qwen-qwen3-8-max-0902",
     "scripted-baseline"
   ],
   "models": {
     "cli-claude-opus": "opus",
     "key-zai-glm-5-3": "glm-5.3",
-    "openrouter-qwen-qwen3-8-max": "qwen3.8-max-0902",
+    "openrouter-qwen-qwen3-8-max-0902": "qwen/qwen3.8-max-0902",
     "scripted-baseline": "baseline"
   },
   "reviewers": [
@@ -33,11 +33,11 @@
       "model": "glm-5.3"
     },
     {
-      "id": "openrouter-qwen-qwen3-8-max",
+      "id": "openrouter-qwen-qwen3-8-max-0902",
       "family": "openrouter",
       "provider": "openrouter",
       "vendor": "alibaba",
-      "model": "qwen3.8-max-0902"
+      "model": "qwen/qwen3.8-max-0902"
     },
     {
       "id": "scripted-baseline",
@@ -50,14 +50,14 @@
   "auditors": [
     "cli-claude-opus-s1-auth",
     "key-zai-glm-5-3-s1-auth",
-    "openrouter-qwen-qwen3-8-max-s1-auth",
+    "openrouter-qwen-qwen3-8-max-0902-s1-auth",
     "scripted-baseline-s1-auth"
   ],
   "submissionAuthority": "mcp_commit",
   "workerExits": {
     "cli-claude-opus-s1-auth": 0,
     "key-zai-glm-5-3-s1-auth": 0,
-    "openrouter-qwen-qwen3-8-max-s1-auth": 0,
+    "openrouter-qwen-qwen3-8-max-0902-s1-auth": 0,
     "scripted-baseline-s1-auth": 0
   },
   "crosscheckExits": {},

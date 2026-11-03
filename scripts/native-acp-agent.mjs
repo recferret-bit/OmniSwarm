@@ -6,15 +6,15 @@ import { StringDecoder } from 'node:string_decoder';
 import { fileURLToPath } from 'node:url';
 import { buildCliInvocation } from './agent-launch.mjs';
 import { readReportJson, writeReportFile } from './report-contract.mjs';
+import { loadAgentConfig, sendAcp, serveAcpStdio } from './agent-acp-stdio.mjs';
 import { SessionError } from './agent-rpc.mjs';
 
 const UUID = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i;
-const send = message => process.stdout.write(JSON.stringify({ jsonrpc: '2.0', ...message }) + '\n');
 
 // AGY exposes a structured stream. This adapter supplies ACP v1 lifecycle
 // around its native saved conversations.
 export class NativeAcpAgent {
-  constructor(config, output = send) {
+  constructor(config, output = sendAcp) {
     if (config.agent !== 'agy' || !path.isAbsolute(config.cwd) || !path.isAbsolute(config.cli)) throw new SessionError('setup_error');
     if (config.legacyConversationId && (!UUID.test(config.legacyConversationId))) throw new SessionError('session_identity_rejected');
     this.config = config;
@@ -146,24 +146,6 @@ export class NativeAcpAgent {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const configPath = path.resolve(process.argv[2]);
-  const config = readReportJson(path.dirname(configPath), path.basename(configPath));
-  const agent = new NativeAcpAgent(config);
-  let buffer = '';
-  process.stdin.on('data', data => {
-    buffer += data.toString('utf8');
-    if (buffer.length > 4 * 1024 * 1024) { process.exitCode = 2; process.stdin.destroy(); agent.stop('SIGKILL'); return; }
-    for (let at; (at = buffer.indexOf('\n')) >= 0;) {
-      const line = buffer.slice(0, at); buffer = buffer.slice(at + 1);
-      if (!line.trim()) continue;
-      let msg;
-      try { msg = JSON.parse(line); } catch { process.exitCode = 2; process.stdin.destroy(); continue; }
-      // A prompt must not block cancellation or a subsequent RPC control message.
-      Promise.resolve().then(() => agent.request(msg.method, msg.params)).then(
-        result => { if (msg.id != null) send({ id: msg.id, result }); },
-        err => { if (msg.id != null) send({ id: msg.id, error: { code: -32000, message: err.reason || 'native_turn_failed' } }); },
-      );
-    }
-  });
-  process.stdin.on('end', () => { agent.stop('SIGTERM'); });
+  const agent = new NativeAcpAgent(loadAgentConfig(process.argv[2]));
+  serveAcpStdio(agent, { errorReason: 'native_turn_failed', onAbort: () => agent.stop('SIGKILL'), onEnd: () => agent.stop('SIGTERM') });
 }

@@ -39,6 +39,33 @@ test('demo refuses a foreign repo and the host snapshot stamps the banner', () =
   assert.match(fs.readFileSync(path.join(out, 'harness', bridgeLog), 'utf8'), /read_file/);
 });
 
+// Demo step 2: the documented replay command, with the documented RELATIVE OMNI_HTTP_REPLAY.
+// The openrouter identity carries a `vendor/model` id, which audit-submission.mjs validates with validModelId.
+test('a replayed zai and openrouter run reads, searches and submits through the bridge', () => {
+  const out = fs.mkdtempSync(path.join(os.tmpdir(), 'w03-replay-'));
+  fs.rmSync(out, { recursive: true });
+  const result = run(['run', '--repo', 'scripts/demo-fixture', '--reviewers', 'key:zai:glm-5.3,openrouter:qwen/qwen3.8-max-0902', '--surface', 's1', '--passes', '1', '--out', out], {
+    OMNI_DEMO_HOST: '1', OMNI_HTTP_REPLAY: 'scripts/provider-fixtures/w03', ZAI_API_KEY: 'zk-test', OPENROUTER_API_KEY: 'or-test',
+  });
+  assert.equal(result.status, 0, `${result.stderr}\n${result.stdout}`);
+  const submissions = fs.readdirSync(path.join(out, 'submissions'));
+  assert.ok(submissions.includes('key-zai-glm-5-3-s1-auth.json'));
+  assert.ok(submissions.includes('openrouter-qwen-qwen3-8-max-0902-s1-auth.json'));
+  const usage = JSON.parse(fs.readFileSync(path.join(out, 'harness', 'usage', 'openrouter-qwen-qwen3-8-max-0902', 's1-pass-1.json'), 'utf8'));
+  assert.equal(usage.stop, 'submitted');
+  assert.equal(usage.costSource, 'reported');
+  const tools = JSON.parse(fs.readFileSync(path.join(out, 'harness', 'bridge-openrouter-qwen-qwen3-8-max-0902-s1-auth.json'), 'utf8')).map((row) => row.tool);
+  assert.deepEqual(tools, ['read_file', 'search_code', 'submit_audit_report']);
+  const committed = JSON.parse(fs.readFileSync(path.join(out, 'submissions', 'openrouter-qwen-qwen3-8-max-0902-s1-auth.json'), 'utf8'));
+  assert.equal(JSON.stringify(committed).includes('src/lib.rs:30'), true);
+  for (const name of fs.readdirSync(out, { recursive: true })) {
+    const file = path.join(out, name);
+    if (!fs.statSync(file).isFile()) continue;
+    const text = fs.readFileSync(file, 'utf8');
+    assert.equal(text.includes('zk-test') || text.includes('or-test'), false, `${name} contains a key`);
+  }
+});
+
 test('check-agents --reviewers reports a missing openrouter key', () => {
   const env = { ...process.env };
   delete env.OPENROUTER_API_KEY;

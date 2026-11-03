@@ -1,13 +1,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { brokerEnvironment, ConnectorError } from './model-cli-claude.mjs';
 import { exactKeys, validateReviewRequest, validateResult } from './terminal-review-contract.mjs';
 import { nativeIdentity } from '../native/codex-review/build.mjs';
 import { matchesAdmission } from '../native/codex-review/admit.mjs';
+import { verifyAdmittedBinary } from '../native/admission-common.mjs';
 import { providerDiagnostic } from './provider-error-diagnostic.mjs';
 
 export const CODEX_SOURCE = '092d3acd6bec3e3a14bdc7e7a2810ab628ab759d';
@@ -22,24 +22,9 @@ const CODEX_PROFILE = Object.freeze({
   admissionError: 'native_broker_not_admitted', resolveBinary: admittedBinary, reasons: REASONS,
 });
 
+// Any refusal here surfaces as the profile's admissionError (native_broker_not_admitted).
 async function admittedBinary() {
-  const parent = fs.lstatSync(CACHE);
-  if (!parent.isDirectory() || parent.isSymbolicLink() || parent.uid !== process.getuid() || (parent.mode & 0o077)) throw new ConnectorError('native_broker_not_admitted');
-  const file = path.join(CACHE, 'runtime-admission.json');
-  const fd = fs.openSync(file, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK);
-  let receipt;
-  try {
-    const stat = fs.fstatSync(fd);
-    if (!stat.isFile() || stat.nlink !== 1 || stat.uid !== process.getuid() || (stat.mode & 0o077) || stat.size > 16_384) throw new Error('receipt rejected');
-    receipt = JSON.parse(fs.readFileSync(fd, 'utf8'));
-  } finally { fs.closeSync(fd); }
-  if (!matchesAdmission(receipt, nativeIdentity())) throw new ConnectorError('native_broker_not_admitted');
-  const stat = fs.lstatSync(BINARY);
-  if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1 || stat.uid !== process.getuid() || stat.size > 4 * 1024 ** 3) throw new ConnectorError('native_broker_not_admitted');
-  fs.accessSync(BINARY, fs.constants.X_OK);
-  const hash = crypto.createHash('sha256');
-  for await (const chunk of fs.createReadStream(BINARY)) hash.update(chunk);
-  if (hash.digest('hex') !== receipt.binarySha256) throw new ConnectorError('native_broker_not_admitted');
+  const receipt = await verifyAdmittedBinary({ cache: CACHE, binary: BINARY, matches: (value) => matchesAdmission(value, nativeIdentity()) });
   return { executable: BINARY, identity: { sourceCommit: CODEX_SOURCE, packageDigest: receipt.packageDigest, recipeDigest: receipt.recipeDigest, binarySha256: receipt.binarySha256 } };
 }
 

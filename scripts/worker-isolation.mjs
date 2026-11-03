@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import crypto from 'node:crypto';
+import { sha256Hex as hash } from './hash-util.mjs';
 import { readReportText, validateAuditor, validCrosscheckRow } from './report-contract.mjs';
 import { REVIEWER_ID_PATTERN, isReviewerId } from './reviewer-registry.mjs';
 import { validateReviewRequest, requestBinding, validateTerminalReport } from './terminal-review-contract.mjs';
@@ -21,7 +22,7 @@ const TEXT_EXT = new Set(['.js', '.mjs', '.cjs', '.ts', '.tsx', '.jsx', '.json',
 const SKIP_NAME = /^(readme|changelog|license|licence|notice|authors|contributors|code_of_conduct|security)(\..*)?$|^(swagger|openapi)[^/]*\.(json|ya?ml)$|\.(min\.js|min\.css|map|d\.ts|snap|log)$/i;
 const OWNED = new Map();
 const CAPTURES = new WeakMap();
-export const hash = (value) => crypto.createHash('sha256').update(value).digest('hex');
+export { hash };
 const inside = (root, file) => file === root || file.startsWith(`${root}${path.sep}`);
 export function expectedFiles(phase) {
   if (!['original', 'crosscheck', 'terminal'].includes(phase)) throw new Error('invalid output phase');

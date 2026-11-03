@@ -1,0 +1,29 @@
+{
+  "status": 200,
+  "body": {
+    "model": "qwen/qwen3.8-max-0902",
+    "choices": [
+      {
+        "message": {
+          "role": "assistant",
+          "content": null,
+          "tool_calls": [
+            {
+              "id": "call-submit",
+              "type": "function",
+              "function": {
+                "name": "submit_audit_report",
+                "arguments": "{\"findings\": [{\"title\": \"Missing owner check in withdraw\", \"surface\": \"S1\", \"severity\": \"high\", \"confidence\": \"confirmed\", \"location\": [\"src/lib.rs:30\"], \"impact\": \"Any account that can call the contract can reduce the recorded balance.\", \"preconditions\": \"The contract holds a nonzero balance.\", \"analysis\": \"withdraw subtracts amount at src/lib.rs:30 and never reads predecessor_account_id, unlike deposit.\", \"validation\": \"Source inspection of src/lib.rs; search_code finds predecessor_account_id only in deposit. No existing test covers this method.\", \"fix\": \"Require the predecessor account to equal the stored owner before changing the balance.\"}], \"verified_safe\": [{\"control\": \"deposit compares the predecessor to the owner\", \"evidence\": \"src/lib.rs:25 asserts caller == owner before crediting the balance\", \"holds\": true}], \"markdown_summary\": \"Replayed OpenRouter reviewer: one S1 finding in withdraw.\"}"
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 90,
+      "completion_tokens": 80,
+      "cost": 0.001
+    }
+  }
+}

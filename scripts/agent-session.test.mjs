@@ -120,6 +120,46 @@ readline.createInterface({input:process.stdin}).on('line', line => {
   assert.equal(handedIn.stop, 'submitted');
 });
 
+test('W04-07: more than N+3 counted tool calls without a submit cancels the pass; the correction names the role\'s submit tool', async t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'audit-flood-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const executable = path.join(root, 'flood.mjs');
+  fs.writeFileSync(executable, `
+import fs from 'node:fs';
+import readline from 'node:readline';
+const send = msg => process.stdout.write(JSON.stringify({jsonrpc:'2.0',...msg})+'\\n');
+const sid = 'flood-session';
+const [mode, calls] = [process.argv[2], Number(process.argv[3])];
+let pending;
+readline.createInterface({input:process.stdin}).on('line', line => {
+  const msg = JSON.parse(line);
+  if (msg.method === 'initialize') send({id:msg.id,result:{protocolVersion:1,agentCapabilities:{loadSession:true}}});
+  else if (msg.method === 'session/new') send({id:msg.id,result:{sessionId:sid}});
+  else if (msg.method === 'session/cancel') { fs.appendFileSync('events.txt', 'cancel\\n'); if (pending) send({id:pending,result:{stopReason:'cancelled'}}); pending = null; }
+  else if (msg.method === 'session/prompt') {
+    fs.appendFileSync('prompts.txt', JSON.stringify(msg.params.prompt[0].text) + '\\n');
+    pending = msg.id;
+    if (mode === 'flood') { for (let i = 0; i < calls; i++) send({method:'session/update',params:{sessionId:sid,update:{sessionUpdate:'tool_call',toolCallId:'t'+i,title:'read_file'}}}); return; }
+    send({id:msg.id,result:{stopReason:'end_turn'}}); pending = null;
+  }
+});
+`);
+  const run = (mode, calls, role, dir) => runReviewSession(
+    { directory: path.join(root, dir), identity: { ...identity, role, name: role === 'crosscheck' ? 'crosscheck-claude' : identity.name }, bridgeArgs: [], prompt: 'Review.', budgets: { toolBudget: 2, passes: 1, maxCostUsd: null } },
+    { heartbeatMs: 30_000, preflight: async () => ({ state: 'ready', tools: [] }), launch: ({ workDir }) => ({ invocation: { executable: process.execPath, args: [executable, mode, String(calls)], cwd: workDir, env: process.env }, mcpServers: [{}], transport: 'inert_acp_fixture' }) },
+  );
+  const flooded = await run('flood', 6, 'auditor', 'flood');
+  assert.equal(flooded.code, 0);
+  assert.equal(flooded.stop, 'budget');
+  assert.equal(fs.readFileSync(path.join(root, 'flood', 'workspace', 'prompts.txt'), 'utf8').trim().split('\n').length, 1, 'no correction turn after a budget cancel');
+  assert.match(fs.readFileSync(path.join(root, 'flood', 'workspace', 'events.txt'), 'utf8'), /cancel/);
+  const quiet = await run('quiet', 0, 'crosscheck', 'quiet');
+  assert.equal(quiet.stop, 'budget');
+  const prompts = fs.readFileSync(path.join(root, 'quiet', 'workspace', 'prompts.txt'), 'utf8').trim().split('\n');
+  assert.match(prompts[1], /Call submit_crosscheck_report now/);
+  assert.doesNotMatch(prompts[1], /Budget exhausted/);
+});
+
 test('ACP session records completion and can load the exact saved conversation', async t => {
   const f = fixture(t);
   const first = await runReviewSession(f.options, f.support);

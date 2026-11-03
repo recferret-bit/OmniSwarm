@@ -40,10 +40,17 @@ export function vendorOf(reviewer) {
   if (r.family === 'nearai') return 'nearai';
   if (r.family === 'scripted') return 'scripted';
   if (r.family === 'openrouter') {
-    const org = String(r.model).split('/')[0].toLowerCase();
-    return String(r.model).includes('/') ? (ORG_VENDORS[org] || org.replace(/[^a-z0-9-]+/g, '-')) : 'openrouter';
+    return vendorOfOpenRouterModel(r.model);
   }
   return r.provider;
+}
+
+// OpenRouter slugs are <org>/<model>; the org names the vendor. A slug without an org is 'openrouter'.
+export function vendorOfOpenRouterModel(model) {
+  const text = String(model || '');
+  if (!text.includes('/')) return 'openrouter';
+  const org = text.split('/')[0].toLowerCase();
+  return ORG_VENDORS[org] || org.replace(/[^a-z0-9-]+/g, '-');
 }
 
 function splitSpec(text) {
@@ -96,6 +103,15 @@ export function assertUniqueReviewers(list) {
     seen.add(reviewer.id);
   }
   return list;
+}
+
+// Same character set and length as a model in a reviewer spec (packages/schemas reviewer-spec), so an
+// OpenRouter slug such as `qwen/qwen3.8-max-0902` is accepted. A path segment of `.` or `..`, or a leading
+// or trailing `/`, is refused: the model is a label, never a path. Session stores and submission
+// identities both use this check.
+const MODEL_ID = /^[A-Za-z0-9._:/-]{1,128}$/;
+export function validModelId(model) {
+  return typeof model === 'string' && MODEL_ID.test(model) && model.split('/').every((part) => part && part !== '.' && part !== '..');
 }
 
 // Reviewer-id pattern used wherever a reviewer id is embedded in a job or file name.

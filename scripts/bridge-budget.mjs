@@ -1,7 +1,10 @@
 // Per-reviewer, per-pass bridge call budget. Submit tools are never counted and never blocked.
-// Inspection stops at N; the next 3 calls are finalize-only; the one after that is an error.
+// Inspection stops at N; the next 3 calls are finalize-only; the one after that is an error and the pass
+// record says `exhausted`. One reviewer can run several surfaces at once, so every bridge serializes its
+// read-modify-write of harness/budget-<reviewer>.json with a cross-process lock.
 import fs from 'node:fs';
 import path from 'node:path';
+import { withFileLock } from './fs-lock.mjs';
 import { readReportJson, writeReportFile } from './report-contract.mjs';
 
 export const GRACE = 3;
@@ -31,10 +34,10 @@ export function saveBudget(reportDir, budget) {
 }
 
 export function decideCall(record, { tool, path, toolBudget, grace = GRACE }) {
-  const next = { calls: record.calls || 0, graceUsed: record.graceUsed || 0, filesRead: [...(record.filesRead || [])], finalizeOnlyAt: record.finalizeOnlyAt || null };
+  const next = { calls: record.calls || 0, graceUsed: record.graceUsed || 0, filesRead: [...(record.filesRead || [])], finalizeOnlyAt: record.finalizeOnlyAt || null, ...(record.exhaustedAt ? { exhausted: true, exhaustedAt: record.exhaustedAt } : {}) };
   if (SUBMIT.has(tool)) return { allow: true, record: next };
   if (next.calls >= toolBudget) {
-    if (next.graceUsed >= grace) return { allow: false, error: 'budget_exhausted', record: next };
+    if (next.graceUsed >= grace) return { allow: false, error: 'budget_exhausted', record: { ...next, exhausted: true, exhaustedAt: next.exhaustedAt || new Date().toISOString() } };
     const left = grace - next.graceUsed;
     next.graceUsed += 1;
     next.finalizeOnlyAt = next.finalizeOnlyAt || new Date().toISOString();
@@ -46,22 +49,25 @@ export function decideCall(record, { tool, path, toolBudget, grace = GRACE }) {
   return { allow: true, record: next };
 }
 
+export function budgetLockFile(reportDir, reviewerId) {
+  return path.join(fs.realpathSync(path.join(reportDir, 'harness')), `${path.basename(budgetFile(reviewerId))}.lock`);
+}
+
+// The decision is taken on the freshest saved record, under the lock, so parallel surfaces never lose a count.
 export function createBeforeCall({ reportDir, reviewerId, surface, pass, toolBudget }) {
+  const key = passKey(surface, pass);
   return async (ctx, name) => {
-    const budget = loadBudget(reportDir, reviewerId);
-    const key = passKey(surface, pass);
-    const current = budget.passes[key] || { calls: 0, filesRead: [], finalizeOnlyAt: null };
-    const path = ctx.pendingArgs?.path;
-    const decision = decideCall(current, { tool: name, path, toolBudget });
-    budget.passes[key] = decision.record;
-    saveBudget(reportDir, budget);
-    if (decision.finalize || decision.record.calls >= toolBudget) ctx.finalizeOnly = true;
-    if (decision.error) {
-      ctx.budgetExhausted = true;
-      throw Object.assign(new Error('budget_exhausted'), { code: 'budget_exhausted' });
-    }
-    if (decision.text) return { text: decision.text };
-    return null;
+    fs.mkdirSync(path.join(reportDir, 'harness'), { recursive: true });
+    const decision = await withFileLock(budgetLockFile(reportDir, reviewerId), () => {
+      const budget = loadBudget(reportDir, reviewerId);
+      const current = budget.passes[key] || { calls: 0, filesRead: [], finalizeOnlyAt: null };
+      const verdict = decideCall(current, { tool: name, path: ctx.pendingArgs?.path, toolBudget });
+      budget.passes[key] = verdict.record;
+      saveBudget(reportDir, budget);
+      return verdict;
+    });
+    if (decision.error) throw Object.assign(new Error('budget_exhausted'), { code: 'budget_exhausted' });
+    return decision.text ? { text: decision.text } : null;
   };
 }
 
@@ -73,7 +79,6 @@ export function attachBudget(ctx) {
     catch { toolBudget = 40; }
   }
   const pass = Number(ctx.pass) || 1;
-  ctx.budget = true;
   ctx.beforeCall = createBeforeCall({ reportDir: ctx.reportDir, reviewerId: ctx.agent, surface: ctx.surface, pass, toolBudget });
   return ctx;
 }

@@ -47,7 +47,7 @@ export class AgentRpc {
             if (!pending) continue;
             this.pending.delete(msg.id);
             clearTimeout(pending.timer);
-            const passthrough = new Set(['native_turn_failed', 'model_mismatch']);
+            const passthrough = new Set(['native_turn_failed', 'model_mismatch', 'live_required', 'auth_required']);
             if (msg.error) pending.reject(new SessionError(msg.error.code === -32000 && passthrough.has(msg.error.message) ? msg.error.message : 'provider_error', JSON.stringify(msg.error).slice(0, 8192)));
             else if (Object.hasOwn(msg, 'result')) pending.resolve(msg.result);
             else throw new Error('Missing RPC result');

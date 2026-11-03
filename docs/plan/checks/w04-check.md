@@ -37,14 +37,14 @@ Pass 1 is `stop: cost`. Pass 2 is `skipped: cost_ceiling`.
 **4. Grok turn cap.**
 
 ```sh
-./bin/audit run --repo scripts/demo-fixture --reviewers cli:grok:grok-4.7 --tool-budget 10 --passes 1 --plan --verbose
+./bin/audit run --repo scripts/demo-fixture --reviewers cli:grok:grok-4.7 --tool-budget 10 --passes 1 --plan
 ```
 
 See `--max-turns 13`.
 
 ## Automated checks
 
-On this branch, before the merge: `npm test` (350 passed) and `npm run check:w04` (4 passed).
+`npm test` and `npm run check:w04`. Since the 2026-11-03 fixes, check:w04 also drives the Docker path with a fake session: budgets and prices reach every session, each pass writes `harness/usage/<reviewer>/<surface>-pass-<k>.json`, a failed pass keeps the last committed pass, and `harness/budget-health.json` feeds `report-health.json`. `scripts/budget-matrix.test.mjs` runs the 24 family x passes x budget cases through the real pass loop and bridge.
 
 ## When you're done
 

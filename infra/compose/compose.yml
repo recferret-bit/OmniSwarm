@@ -1,0 +1,187 @@
+# OmniSwarm stack, shared by every profile. Never used alone:
+#   prod   compose.yml + compose.prod.yml   (infra/deploy/lib.sh)
+#   dev    compose.yml + compose.dev.yml    (infra/compose/local.sh)
+#   check  compose.yml + compose.dev.yml + compose.stub.yml (infra/check/bring-up.sh)
+# Interpolation comes from one --env-file (infra/env/stack.env.example). Every
+# required value is ${VAR:?}, so a missing secret stops `up` before any
+# container starts. Each service gets only the variables it reads.
+#
+# The review worker is not here: it spawns ./bin/audit, which needs the host's
+# Docker daemon, so it runs as omniswarm-worker@N.service (infra/systemd/).
+
+name: omniswarm
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 20m
+    max-file: "5"
+
+x-app: &app
+  init: true
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  restart: unless-stopped
+  logging: *logging
+
+services:
+  postgres:
+    image: postgres:16.15-alpine3.24@sha256:0cefaabd882e42bcb2a2f3dc56d3ce4770560ba62fd7f197f1a2e008fd5731ab
+    environment:
+      POSTGRES_USER: omniswarm
+      POSTGRES_DB: omniswarm
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in the stack env file}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks: [db]
+    shm_size: 128m
+    read_only: true
+    tmpfs:
+      - /var/run/postgresql:mode=2777
+      - /tmp
+    # The entrypoint chowns the data dir and drops to the postgres user.
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
+    security_opt: ["no-new-privileges:true"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U omniswarm -d omniswarm -h 127.0.0.1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    restart: unless-stopped
+    logging: *logging
+
+  # One-shot. Runs before api starts on `up`; deploy also runs it on its own
+  # (`compose run --rm migrate`) before the rolling restart. The migration
+  # runner takes a Postgres advisory lock, so a concurrent run waits.
+  migrate:
+    <<: *app
+    image: omniswarm/api:${OMNI_RELEASE:?set OMNI_RELEASE (infra/deploy/lib.sh does)}
+    build:
+      context: ../..
+      dockerfile: apps/api/Dockerfile
+    command: ["exec-script", "apps/api", "db:migrate"]
+    environment:
+      DATABASE_URL: postgres://omniswarm:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in the stack env file}@postgres:5432/omniswarm
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [db]
+    restart: "no"
+    healthcheck:
+      disable: true
+
+  # Scalable: no host port and no container_name, so `--scale api=N` works.
+  # nginx re-resolves the `api` name (upstream `resolve`), so new replicas get
+  # traffic without a reload.
+  api:
+    <<: *app
+    image: omniswarm/api:${OMNI_RELEASE:?set OMNI_RELEASE (infra/deploy/lib.sh does)}
+    build:
+      context: ../..
+      dockerfile: apps/api/Dockerfile
+    environment:
+      HOST: 0.0.0.0
+      PORT: "8787"
+      # Admin listener: container loopback only, never published or proxied.
+      # Reach it with `compose exec api ...` on the host.
+      ADMIN_HOST: 127.0.0.1
+      ADMIN_PORT: "8788"
+      # nginx is the only peer and overwrites X-Forwarded-For with the client
+      # address ($remote_addr), so trusting the proxy cannot be spoofed.
+      TRUST_PROXY: "true"
+      DATABASE_URL: postgres://omniswarm:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in the stack env file}@postgres:5432/omniswarm
+      SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET in the stack env file}
+      ADMIN_TOKEN: ${ADMIN_TOKEN:?set ADMIN_TOKEN in the stack env file}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      NETWORK: ${NETWORK:?set NETWORK in the stack env file}
+      CONTRACT_ID: ${CONTRACT_ID:?set CONTRACT_ID in the stack env file}
+      INTAKE_RECIPIENT: ${INTAKE_RECIPIENT:?set INTAKE_RECIPIENT in the stack env file}
+      RPC_URLS: ${RPC_URLS:?set RPC_URLS in the stack env file}
+      PRICE_YOCTO: ${PRICE_YOCTO:?set PRICE_YOCTO in the stack env file}
+      MAX_REPO_KB: ${MAX_REPO_KB:?set MAX_REPO_KB in the stack env file}
+      HOSTED_PRESET: ${HOSTED_PRESET:?set HOSTED_PRESET in the stack env file}
+    expose: ["8787"]
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    deploy:
+      replicas: ${OMNI_API_REPLICAS:?set OMNI_API_REPLICAS in the stack env file}
+    stop_grace_period: 30s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    networks: [db, edge]
+
+  web:
+    <<: *app
+    image: omniswarm/web:${OMNI_RELEASE:?set OMNI_RELEASE (infra/deploy/lib.sh does)}
+    build:
+      context: ../..
+      dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_NETWORK: ${NEXT_PUBLIC_NETWORK:-testnet}
+        NEXT_PUBLIC_CONTRACT_ID: ${NEXT_PUBLIC_CONTRACT_ID:?set NEXT_PUBLIC_CONTRACT_ID (must equal the API CONTRACT_ID)}
+        NEXT_PUBLIC_INTAKE_RECIPIENT: ${NEXT_PUBLIC_INTAKE_RECIPIENT:?set NEXT_PUBLIC_INTAKE_RECIPIENT}
+        NEXT_PUBLIC_RPC_URL: ${NEXT_PUBLIC_RPC_URL:?set NEXT_PUBLIC_RPC_URL}
+        NEXT_PUBLIC_EXPLORER_URL: ${NEXT_PUBLIC_EXPLORER_URL:-https://testnet.nearblocks.io}
+    environment:
+      PORT: "3000"
+      HOSTNAME: 0.0.0.0
+    expose: ["3000"]
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+      - /app/apps/web/.next/cache:size=128m,uid=1000,gid=1000,mode=0700
+    stop_grace_period: 15s
+    networks: [edge]
+
+  nginx:
+    image: nginx:1.30.6-alpine3.24@sha256:0e52bd054126cdc040b1276c0af347aeb02a41b9cfe305d6094767ac30e97949
+    environment:
+      # Only OMNI_* names are substituted into templates; $host etc. survive.
+      NGINX_ENVSUBST_FILTER: ^OMNI_
+      OMNI_DOMAIN: ${OMNI_DOMAIN:?set OMNI_DOMAIN in the stack env file}
+      OMNI_REPORTS_DOMAIN: ${OMNI_REPORTS_DOMAIN:?set OMNI_REPORTS_DOMAIN in the stack env file}
+    volumes:
+      - ${OMNI_NGINX_DIR:?set OMNI_NGINX_DIR in the stack env file}/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ${OMNI_NGINX_DIR:?set OMNI_NGINX_DIR in the stack env file}/templates:/etc/nginx/templates:ro
+      - ${OMNI_NGINX_DIR:?set OMNI_NGINX_DIR in the stack env file}/snippets:/etc/nginx/snippets:ro
+      - ${OMNI_TLS_DIR:?set OMNI_TLS_DIR in the stack env file}:/etc/letsencrypt:ro
+      - ${OMNI_ACME_DIR:?set OMNI_ACME_DIR in the stack env file}:/var/www/certbot:ro
+      - ${OMNI_REPORTS_DIR:?set OMNI_REPORTS_DIR in the stack env file}:/srv/reports:ro
+    read_only: true
+    tmpfs:
+      - /etc/nginx/conf.d
+      - /var/cache/nginx
+      - /var/run
+      - /tmp
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETGID, SETUID, NET_BIND_SERVICE]
+    security_opt: ["no-new-privileges:true"]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/nginx-health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    depends_on:
+      api:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+    networks: [edge]
+    restart: unless-stopped
+    logging: *logging
+
+networks:
+  # postgres, migrate, api. Not `internal`: prod publishes Postgres on
+  # 127.0.0.1 for the host workers, and the api needs NEAR RPC and GitHub.
+  db: {}
+  # nginx, api, web. nginx and web never join `db`.
+  edge: {}
+
+volumes:
+  pgdata: {}

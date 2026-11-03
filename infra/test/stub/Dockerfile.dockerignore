@@ -1,0 +1,5 @@
+*
+!infra/test/stub/package.json
+!infra/test/stub/api.mjs
+!infra/test/stub/web.mjs
+!infra/bin/exec-script.sh

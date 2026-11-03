@@ -10,6 +10,7 @@ import { expectedAuditors, loadAuditors, providerOf, validateAuditor, readReport
 import { commitSubmission } from './audit-submission.mjs';
 import { digest } from './agent-session-store.mjs';
 import { loadAuditorFindings } from './crosscheck.mjs';
+import { assignJobs } from './reviewer-plan-assign.mjs';
 
 const scripts = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(scripts, '..');
@@ -78,6 +79,39 @@ test('adapter names are exact and unknown filenames are not vendors', () => {
 test('expected inventory follows single-surface and breadth-first contracts', () => {
   assert.deepEqual(expectedAuditors({ agents: ['claude', 'codex'], surface: 's1' }), ['claude-s1-auth', 'codex-s1-auth']);
   assert.deepEqual(expectedAuditors({ agents: ['claude'], surface: 'all' }), ['claude-s1-auth', 'claude-s2-input', 'claude-s3-logic', 'claude-s4-config', 'claude-s5-deps', 'claude-s6-client']);
+  assert.deepEqual(expectedAuditors({ agents: ['claude', 'codex'], surface: 'all' }), ['claude-s1-auth', 'codex-s2-input', 'claude-s3-logic', 'codex-s4-config', 'claude-s5-deps', 'codex-s6-client']);
+  assert.deepEqual(expectedAuditors({ agents: ['claude'], surface: 'nowhere' }), []);
+});
+
+test('W01-09: a matrix run over every surface validates every reviewer x surface job, not a round-robin subset', (t) => {
+  const agents = ['cli-claude-opus', 'cli-codex-gpt-6-1-sol'];
+  const reviewers = [
+    { id: agents[0], family: 'cli', provider: 'claude', vendor: 'anthropic', model: 'opus' },
+    { id: agents[1], family: 'cli', provider: 'codex', vendor: 'openai', model: 'gpt-6.1-sol' },
+  ];
+  const meta = { agents, reviewers, surface: 'all', assign: 'matrix' };
+  const jobs = assignJobs({ reviewers, surfaceArg: 'all', assign: 'matrix' }).map((job) => job.name);
+  assert.equal(jobs.length, 12);
+  assert.deepEqual(expectedAuditors(meta), jobs, 'the contract derives the inventory with the launcher\'s own function');
+  const f = fixture(t, agents);
+  Object.assign(f.meta, { reviewers, surface: 'all', assign: 'matrix', auditors: jobs, models: { [agents[0]]: 'opus', [agents[1]]: 'gpt-6.1-sol' } });
+  for (const name of jobs) {
+    const surface = name.match(/-(s[1-6])-/)[1].toUpperCase();
+    f.meta.workerExits[name] = 0;
+    f.put(`auditors/${name}.json`, [finding({ surface, location: [`src/${name}.ts:3`], title: `Distinct claim ${name}` }), controls]);
+    fs.writeFileSync(path.join(f.dir, 'auditors', `${name}.md`), 'Source review only.\n');
+  }
+  f.put('meta.json', f.meta);
+  f.cross();
+  const { health, reports } = loadAuditors(f.dir);
+  assert.deepEqual(health.expected, jobs);
+  assert.equal(reports.length, 12);
+  assert.ok(!health.errors.some((e) => /inventory|unexpected auditor/.test(e)), health.errors.join('\n'));
+  assert.equal(health.state, 'validated_outputs', health.errors.join('\n'));
+  assert.equal(loadAuditorFindings(path.join(f.dir, 'auditors')).length, 12, 'every matrix job reaches cross-check');
+  f.meta.assign = 'round-robin';
+  f.put('meta.json', f.meta);
+  assert.ok(loadAuditors(f.dir).health.errors.some((e) => /Declared auditor inventory does not match/.test(e)));
 });
 
 test('missing workers cannot become a complete zero-finding report', (t) => {
@@ -469,12 +503,12 @@ test('R-02: the source digest the bridge recorded must match the sealed manifest
   f.put('source-manifest.json', { version: 1, files, digest: digest(files) });
   const served = value => f.put('harness/source-read-digest.json', value);
   const errors = () => loadAuditors(f.dir).health.errors.filter(error => /SOURCE_DIGEST_MISMATCH/.test(error));
-  assert.deepEqual(errors(), [], 'no read, no digest file: nothing to compare');
+  assert.equal(errors().length, 1, 'reviewer output without any recorded /src read fails closed');
   served({ version: 1, digest: digest(files), files });
   assert.deepEqual(errors(), []);
-  // The sandbox copy may drop a name the snapshot kept; what it served must still be a verbatim subset.
+  // A served subset is a different tree: the sandbox copy drops nothing the snapshot kept.
   served({ version: 1, digest: digest(files.slice(0, 1)), files: files.slice(0, 1) });
-  assert.deepEqual(errors(), []);
+  assert.equal(errors().length, 1);
   // Tampered digest file: a changed file, an extra file, a digest that does not match its own list.
   served({ version: 1, digest: digest(files), files: [{ ...files[0], sha256: 'c'.repeat(64) }, files[1]] });
   assert.equal(errors().length, 1);
@@ -490,4 +524,37 @@ test('R-02: the source digest the bridge recorded must match the sealed manifest
   delete f.meta.sandboxHardening;
   f.put('meta.json', f.meta);
   assert.deepEqual(errors(), []);
+});
+
+test('W04-15: a budget stop without a submission reaches report health, and a budgeted run needs its budget record', (t) => {
+  const f = fixture(t, ['claude']);
+  f.save('claude');
+  const budgetErrors = () => loadAuditors(f.dir).health.errors.filter((e) => e.startsWith('BUDGET:'));
+  assert.deepEqual(budgetErrors(), [], 'legacy reports without budgets are not judged by it');
+  f.put('harness/budget-health.json', { state: 'INCOMPLETE', budgetStops: [], errors: ['claude: budget_exhausted_without_submission'] });
+  assert.deepEqual(budgetErrors(), ['BUDGET: claude: budget_exhausted_without_submission']);
+  assert.equal(loadAuditors(f.dir).health.state, 'incomplete');
+  f.put('harness/budget-health.json', { state: 'COMPLETE', budgetStops: [], errors: [] });
+  assert.deepEqual(budgetErrors(), []);
+  f.put('harness/budget-health.json', { state: 'INCOMPLETE', errors: [] });
+  assert.equal(budgetErrors().length, 1);
+  fs.rmSync(path.join(f.dir, 'harness/budget-health.json'));
+  Object.assign(f.meta, { budgets: { passes: 2, toolBudget: 5 }, submissionAuthority: 'mcp_commit' });
+  f.put('meta.json', f.meta);
+  fs.mkdirSync(path.join(f.dir, 'submissions'));
+  assert.deepEqual(budgetErrors(), ['BUDGET: harness/budget-health.json is missing or unreadable.']);
+});
+
+test('meta.reviewers may carry the observed key fingerprint and served model, nothing else', (t) => {
+  const f = fixture(t, ['key-zai-glm-5-3']);
+  f.meta.models = { 'key-zai-glm-5-3': 'glm-5.3' };
+  f.meta.reviewers = [{ id: 'key-zai-glm-5-3', family: 'key', provider: 'zai', vendor: 'zai', model: 'glm-5.3', keyFingerprint: 'ab12cd34', servedModel: 'glm-5.3' }];
+  f.save('key-zai-glm-5-3');
+  const inventory = () => loadAuditors(f.dir).health.errors.filter((e) => /Invalid reviewer inventory/.test(e));
+  assert.deepEqual(inventory(), []);
+  for (const bad of [{ keyFingerprint: 'sk-full-key-value' }, { servedModel: '' }, { apiKey: 'x' }]) {
+    f.meta.reviewers = [{ id: 'key-zai-glm-5-3', family: 'key', provider: 'zai', vendor: 'zai', model: 'glm-5.3', ...bad }];
+    f.put('meta.json', f.meta);
+    assert.equal(inventory().length, 1, JSON.stringify(bad));
+  }
 });

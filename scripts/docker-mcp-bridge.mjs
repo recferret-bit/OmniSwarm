@@ -2,12 +2,13 @@
 /**
  * docker-mcp-bridge.mjs
  *
- * Model Context Protocol (MCP) stdio bridge between host agentic CLIs
- * (claude, codex, grok, agy) and the one-shot Docker audit container.
+ * Model Context Protocol (MCP) stdio bridge between one reviewer session (any family: cli, key,
+ * openrouter, scripted) and the one-shot Docker audit container.
  *
- * All repository browsing, code search, command execution, PoC execution,
- * and report artifacts happen inside the isolated one-shot Docker container
- * (`docker exec --user 10001:10001`), never on the host filesystem.
+ * Reviewers get the role's fixed tools only: read-only browsing and search of the sealed source,
+ * catalogued existing tests (rebuilt by the runner, no caller commands), and the role's submit tool.
+ * Reads and test runs happen inside the container (`docker exec --user 10001:10001`); there is no
+ * arbitrary command execution, exploit or PoC tool. Submissions are committed to the host report dir.
  */
 
 import { spawnSync } from 'node:child_process';
@@ -44,7 +45,6 @@ export function parseBridgeArgs(argv) {
     auditor: process.env.SECURITY_AUDITOR || '',
     agent: process.env.AUDIT_AGENT || '',
     surface: (process.env.AUDIT_SURFACE || 'S1').toUpperCase(),
-    finalizeOnly: false,
     identityFile: '',
     reviewersFile: '',
     demoHost: '',
@@ -60,7 +60,6 @@ export function parseBridgeArgs(argv) {
     else if (a === '--auditor') opts.auditor = argv[++i] || '';
     else if (a === '--agent') opts.agent = argv[++i] || '';
     else if (a === '--surface') opts.surface = (argv[++i] || 'S1').toUpperCase();
-    else if (a === '--finalize-only') opts.finalizeOnly = true;
     else if (a === '--identity-file') opts.identityFile = argv[++i] || '';
     else if (a === '--reviewers-file') opts.reviewersFile = argv[++i] || '';
     else if (a === '--demo-host') opts.demoHost = argv[++i] || '';
@@ -76,21 +75,28 @@ export function parseBridgeArgs(argv) {
   }
   opts.dockerBin = resolveDockerBin(opts.dockerBin);
   // Reviewer ids come from harness/reviewers.json (written by the orchestrator), not from a list in this file.
-  if (opts.reviewersFile) {
-    const listed = readReportJson(opts.reportDir, path.relative(opts.reportDir, opts.reviewersFile));
-    if (!Array.isArray(listed?.reviewers)) throw new BridgeError('IDENTITY_UNKNOWN', 'Reviewers file has no reviewers list');
-    opts.reviewerIds = new Set(listed.reviewers.map(reviewer => reviewer?.id).filter(id => typeof id === 'string'));
-    if (opts.agent && !opts.reviewerIds.has(opts.agent)) throw new BridgeError('IDENTITY_UNKNOWN', `Reviewer ${String(opts.agent).slice(0, 80)} is not in this run's reviewers file`);
-  }
+  // A bridge that carries a submission identity always checks it: without --reviewers-file the run's own
+  // harness/reviewers.json is used, and a missing or unreadable list refuses to start (fail closed).
+  if (opts.identityFile && !opts.reviewersFile && opts.reportDir) opts.reviewersFile = path.join(opts.reportDir, 'harness', 'reviewers.json');
+  if (opts.reviewersFile) opts.reviewerIds = loadReviewerIds(opts);
+  if (opts.agent && opts.reviewerIds && !opts.reviewerIds.has(opts.agent)) throw new BridgeError('IDENTITY_UNKNOWN', `Reviewer ${String(opts.agent).slice(0, 80)} is not in this run's reviewers file`);
   if (opts.identityFile) {
     const rel = path.relative(opts.reportDir, opts.identityFile);
     opts.submissionIdentity = readReportJson(opts.reportDir, rel);
     const name = opts.role === 'crosscheck' ? `crosscheck-${opts.agent}` : opts.auditor;
     validateSubmissionIdentity(opts.submissionIdentity, name);
     if (opts.submissionIdentity.agent !== opts.agent || opts.submissionIdentity.role !== opts.role) throw new Error('Bridge submission identity mismatch');
-    if (opts.reviewerIds && !opts.reviewerIds.has(opts.submissionIdentity.agent)) throw new BridgeError('IDENTITY_UNKNOWN', `Submission identity names reviewer ${String(opts.submissionIdentity.agent).slice(0, 80)}, which is not in this run's reviewers file`);
+    if (!opts.reviewerIds?.has(opts.submissionIdentity.agent)) throw new BridgeError('IDENTITY_UNKNOWN', `Submission identity names reviewer ${String(opts.submissionIdentity.agent).slice(0, 80)}, which is not in this run's reviewers file`);
   }
   return opts;
+}
+
+function loadReviewerIds({ reportDir, reviewersFile }) {
+  let listed;
+  try { listed = readReportJson(reportDir, path.relative(reportDir, reviewersFile)); }
+  catch { throw new BridgeError('IDENTITY_UNKNOWN', 'This run has no readable reviewers file inside the report directory, so reviewer identity cannot be checked'); }
+  if (!Array.isArray(listed?.reviewers)) throw new BridgeError('IDENTITY_UNKNOWN', 'Reviewers file has no reviewers list');
+  return new Set(listed.reviewers.map(reviewer => reviewer?.id).filter(id => typeof id === 'string'));
 }
 
 // The tool list for a role comes from bridge-tools-<role>.mjs.
@@ -148,9 +154,6 @@ export async function handleRpcMessage(ctx, msg) {
     if (method === 'tools/list') return { jsonrpc: '2.0', id, result: { tools: toolDefinitions(ctx.role) } };
     if (method === 'tools/call') {
       try {
-        if (ctx.finalizeOnly && !ctx.budget && !['submit_audit_report', 'submit_crosscheck_report'].includes(params?.name)) {
-          throw new Error('Report finalization only: inspection is disabled. Submit supported findings and disclose coverage gaps.');
-        }
         const text = await callBridgeTool(ctx, params?.name, params?.arguments || {});
         return { jsonrpc: '2.0', id, result: { content: [{ type: 'text', text: String(text) }], isError: false } };
       } catch (toolErr) {

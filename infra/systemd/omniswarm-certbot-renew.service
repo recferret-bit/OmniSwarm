@@ -1,0 +1,18 @@
+[Unit]
+Description=Renew the OmniSwarm TLS certificate and reload nginx
+Documentation=file:/srv/omniswarm/current/infra/README.md
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/srv/omniswarm/current/infra/deploy/certbot.sh renew
+Environment=DOCKER_CONFIG=/run/omniswarm-certbot/docker
+RuntimeDirectory=omniswarm-certbot
+RuntimeDirectoryMode=0700
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/etc/letsencrypt /srv/omniswarm/acme
+ReadWritePaths=-/run/docker.sock
+ProtectHome=yes
+PrivateTmp=yes
