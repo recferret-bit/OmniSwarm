@@ -1,9 +1,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import crypto from 'node:crypto';
 import { spawnSync, spawn } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { openPrivateOutput, privateDirectory, writePrivateOutput } from '../admission-common.mjs';
+import { sha256Hex as hash } from '../../scripts/hash-util.mjs';
+
+export { openPrivateOutput };
 
 export const PIN = '092d3acd6bec3e3a14bdc7e7a2810ab628ab759d';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -15,18 +18,11 @@ const UPSTREAM_VERSION = '0.162.1';
 const MEMBER = 'omniswarm-review';
 const FILES = ['Cargo.toml', 'NOTICE', 'review-instruction.txt', 'src/lib.rs', 'src/main.rs', 'src/contract.rs', 'src/policy.rs', 'src/runtime.rs', 'src/runtime_config.rs', 'tests/startup_gate.rs', 'tests/runtime_gate.rs'];
 export const NATIVE_DEPENDENCIES = ['anyhow', 'codex-config', 'codex-core', 'codex-exec-server', 'codex-extension-api', 'codex-features', 'codex-login', 'codex-protocol', 'codex-state', 'codex-utils-absolute-path', 'core_test_support', 'serde', 'serde_json', 'sha2', 'tempfile', 'tokio', 'toml', 'wiremock'];
-const hash = (value) => crypto.createHash('sha256').update(value).digest('hex');
-
-function privateDirectory(dir) {
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
-  const stat = fs.lstatSync(dir);
-  if (!stat.isDirectory() || stat.isSymbolicLink() || stat.uid !== process.getuid() || (stat.mode & 0o077)) throw new Error('native_cache_not_private');
-}
 export function nativeIdentity() {
   const scripts = path.resolve(HERE, '../../scripts');
   const inputs = [
     ...FILES.map((name) => [name, path.join(HERE, name)]),
-    ...['build.mjs', 'admit.mjs', 'source-pin.json'].map((name) => [name, path.join(HERE, name)]),
+    ...['build.mjs', 'admit.mjs', 'source-pin.json', '../admission-common.mjs'].map((name) => [name, path.join(HERE, name)]),
     ...fs.readdirSync(scripts).filter((name) => name.endsWith('.mjs')).sort().map((name) => [`scripts/${name}`, path.join(scripts, name)]),
     ['bin/audit', path.resolve(HERE, '../../bin/audit')],
   ];
@@ -43,20 +39,6 @@ export function withoutNativeEntry(lock) {
   if (at < 0) return lock;
   const next = lock.indexOf('\n[[package]]\n', at + marker.length);
   return `${lock.slice(0, at)}${next < 0 ? '' : lock.slice(next + 1)}`;
-}
-export function openPrivateOutput(file) {
-  privateDirectory(path.dirname(file));
-  const fd = fs.openSync(file, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK, 0o600);
-  try {
-    const stat = fs.fstatSync(fd);
-    if (!stat.isFile() || stat.nlink !== 1 || stat.uid !== process.getuid() || (stat.mode & 0o077)) throw new Error('native_output_file_rejected');
-    fs.ftruncateSync(fd, 0);
-    return fd;
-  } catch (err) { fs.closeSync(fd); throw err; }
-}
-function writePrivateOutput(file, bytes) {
-  const fd = openPrivateOutput(file);
-  try { fs.writeFileSync(fd, bytes); } finally { fs.closeSync(fd); }
 }
 export function validateSourceExtras(names) {
   const allowed = new Set([...FILES, 'UPSTREAM_LICENSE', 'UPSTREAM_NOTICE'].map((name) => `codex-rs/${MEMBER}/${name}`));

@@ -3,7 +3,8 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { prepare, nativeIdentity, PIN, SOURCE_REVISION } from './build.mjs';
-import { openPrivateOutput, runGate } from '../codex-review/build.mjs';
+import { runGate } from '../codex-review/build.mjs';
+import { openPrivateOutput, privateDirectory as ownerOnlyDirectory } from '../admission-common.mjs';
 import { REVIEW_IMAGE } from '../../scripts/worker-isolation.mjs';
 import { grokDockerControl, GROK_AUTH_VOLUME, GROK_DOCKER_IMAGE, GROK_DOCKER_LABEL, prepareGrokDocker } from '../../scripts/model-cli-grok-docker.mjs';
 import { ConnectorError } from '../../scripts/model-cli-claude.mjs';
@@ -12,11 +13,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const CACHE = path.resolve(HERE, '../.cache/grok-docker');
 const SOURCE = path.resolve(HERE, `../.cache/grok-${PIN}`);
 const RECEIPT = path.join(CACHE, 'runtime.json');
-function privateDirectory(dir) {
-  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
-  const stat = fs.lstatSync(dir);
-  if (!stat.isDirectory() || stat.isSymbolicLink() || stat.uid !== process.getuid() || stat.mode & 0o077) throw new ConnectorError('grok_docker_cache_rejected');
-}
+const privateDirectory = (dir) => ownerOnlyDirectory(dir, () => new ConnectorError('grok_docker_cache_rejected'));
 export async function setupGrokDocker() {
   privateDirectory(CACHE);
   // Invalidate an old image receipt before preparing changed inputs.
