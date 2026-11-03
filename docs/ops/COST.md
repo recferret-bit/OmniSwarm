@@ -24,7 +24,7 @@ The hosted preset is `hosted` in `engine/omniswarm.config.example.json`. The ope
 | Assignment | round-robin, 2 passes | preset `assign`, `passes` |
 | Tool budget | 30 tool turns per reviewer per pass, plus a short grace | preset `toolBudget` |
 | Debate | 2 rounds, at most 25 clusters, 12 tool turns per debate turn | config `debate` defaults |
-| Cost ceiling | `maxCostUsd: 25` | preset |
+| Cost ceiling | `maxCostUsd: 25` per reviewer, whole run | preset |
 
 How much one review can call:
 - **Reviewer tool loops:** 6 reviewers × 2 passes = 12 loops, each at most 30 turns. Every turn resends the conversation so far, so input tokens grow with each turn.
@@ -32,10 +32,11 @@ How much one review can call:
 - **Price reference:** Opus is $4 per million input tokens and $20 per million output tokens (OD-04). Take the other models' prices from the OpenRouter catalog and the Z.ai price list when you measure. Do not guess them.
 
 **Ceiling, read carefully.**
-- `maxCostUsd` stops a tool loop once the `usage.cost` it has summed reaches $25 (`engine/scripts/provider-openai-compat.mjs`, `runToolLoop`).
-- `docs/spec/ORCHESTRATION.md` describes it as a cap for the whole run. As implemented, each loop counts only its own spend. So 12 reviewer loops plus the debate and judge calls can, in the worst case, add up to many times $25.
-- Until that is settled, the hard stops are the monthly spend limit on the OpenRouter key (set it on the OpenRouter dashboard) and the prepaid balance on the Z.ai pay-as-you-go key. Set both before the first hosted run (`docs/ops/OWNER_TASKS.md`).
-- The W12 wave file (W12-18) asks for a total under `--max-cost-usd 15`, but the preset says 25. One of the two needs to change. That is the lead's call.
+- The ceiling is per reviewer for the whole run: every API turn adds its `usage.cost` to `spentUsd` in `harness/budget-<reviewer>.json` under the budget lock (`docs/spec/ORCHESTRATION.md` §3).
+- At $25 the running loop stops with `stop: cost`; that reviewer's remaining passes and surfaces are skipped and recorded as `cost_ceiling` in `budget-health.json`.
+- Worst case for one review is 6 reviewers × $25 = $150, plus the debate and judge loops, each capped at $25 on its own spend.
+- The hard stops stay the monthly spend limit on the OpenRouter key and the prepaid balance on the Z.ai pay-as-you-go key. Set both before the first hosted run (`docs/ops/OWNER_TASKS.md`).
+- 25 is the spec value; W12-18's 15 is superseded.
 
 Testnet requests pay 1 testnet NEAR (OD-08), which is worth nothing. Every review is a real cost to the owner, and the API's limits (`MAX_QUEUE`, `REQUESTS_PER_DAY`, the nginx rate limits) are the only throttle on it.
 
