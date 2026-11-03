@@ -60,7 +60,7 @@ The worker spawns `./bin/audit`, which builds and runs the review sandbox on the
 | `/etc/omniswarm/worker.env` | `env/worker.env.example` | systemd, for the worker units | `DATABASE_URL` (127.0.0.1), `WORKER_CONCURRENCY`, `REPORTS_ROOT`, chain settings |
 | `/etc/omniswarm/providers.env` | `env/providers.env.example` | systemd, for the worker units | `ZAI_API_KEY`, `OPENROUTER_API_KEY` |
 | `/etc/omniswarm/operator-key.json` | (W10) | systemd `LoadCredential=` → worker only (`OPERATOR_KEY_FILE=%d/operator-key`) | function-call key |
-| `/etc/omniswarm/ops.env` | `env/ops.env.example` | systemd, for the health, prune and log-hygiene timers | alert webhook, heartbeat URL, thresholds, retention |
+| `/etc/omniswarm/ops.env` | `env/ops.env.example` | systemd, for the health, prune and log-hygiene timers | alert webhook, heartbeat URL, thresholds |
 | `/etc/omniswarm/omniswarm.config.json` (optional) | `engine/omniswarm.config.example.json` | `release.sh` copies it into each release; the worker resolves `HOSTED_PRESET` from it | engine presets (not secret) |
 
 - Empty values in the examples must be set by the owner. Every compose reference to one is `${VAR:?}`, so `docker compose up` refuses to start without it. The gate proves this for each variable separately.
@@ -213,7 +213,7 @@ The stub (`test/stub/`) stands in for the apps because the bring-up must not dep
 | Timer | Script | Does |
 |---|---|---|
 | `omniswarm-health.timer`, every minute | `deploy/health.sh` | Checks `/api/health` and `/api/ready` through nginx on 127.0.0.1, the worker units and pg-boss's live-worker count, and disk use (alarm at 80 %). After 2 failed runs in a row it restarts unhealthy containers, starts stopped ones (`up --no-recreate`) or resets failed workers, and alerts once. It alerts once more on recovery. Green runs ping `OMNI_HEARTBEAT_URL`. See `docs/ops/UPTIME.md` |
-| `omniswarm-prune.timer`, daily | `deploy/prune.sh` | Removes `RUNS_ROOT` attempt dirs with nothing newer than 30 days, but only from 2026-12-31 on; published reports are never pruned. Also removes engine staging leftovers older than 2 days, images of releases no longer on disk, and dangling images and build cache older than 7 days |
+| `omniswarm-prune.timer`, daily | `deploy/prune.sh` | Removes engine staging leftovers older than 2 days, images of releases no longer on disk, and dangling images and build cache older than 7 days. `RUNS_ROOT` and orphaned published reports are left to the worker's own hygiene (`apps/api`, `KEEP_RUNS`) |
 | `omniswarm-log-hygiene.timer`, daily | `deploy/log-hygiene.sh` | Searches 24 h of the `omniswarm-*` journal, every compose container's log, and recent engine `worker.log` files. It looks for the exact values of the secrets in `/etc/omniswarm` (and the operator key), and for GitHub-token, provider-key, NEAR-secret-key and PEM shapes. It prints `HIT <rule> in <source>`, never the text, and alerts |
 
 Log retention:

@@ -71,8 +71,12 @@ export function checkContract(input) {
   for (const name of stack.keys()) {
     if (!baseRefs.has(name)) errors.push(`${declared(name, 'stack.env.example')} is declared but no compose file reads it`);
   }
+  // The local stack's foreground worker command (compose/local.sh) may read dev-only values too.
+  const devScripts = input.devScripts || '';
   for (const name of dev.keys()) {
-    if (!stack.has(name) && !devRefs.has(name)) errors.push(`${declared(name, 'dev.env.example')} is neither a stack variable nor read by compose.dev.yml`);
+    if (!stack.has(name) && !devRefs.has(name) && !new RegExp(`omni_env_value ${name}\\b`).test(devScripts)) {
+      errors.push(`${declared(name, 'dev.env.example')} is neither a stack variable nor read by compose.dev.yml or compose/local.sh`);
+    }
   }
 
   for (const [file, vars] of [['stack.env.example', stack], ['worker.env.example', worker], ['providers.env.example', providers], ['dev.env.example', dev], ['ops.env.example', input.ops || new Map()]]) {
@@ -86,7 +90,9 @@ export function checkContract(input) {
   }
   for (const [service, def] of Object.entries(composeJson.services || {})) {
     for (const name of Object.keys(def.environment || {})) {
-      if (providers.has(name) || PROVIDER_NAME.test(name)) errors.push(`compose service ${service} receives provider variable ${name}; keys belong to the worker only`);
+      // Any *_API_KEY, and every name providers.env declares (a *_BASE_URL like
+      // REPORTS_BASE_URL is app config, not a provider setting).
+      if (providers.has(name) || /_API_KEY$/.test(name)) errors.push(`compose service ${service} receives provider variable ${name}; keys belong to the worker only`);
     }
   }
 
@@ -138,6 +144,7 @@ function loadInput(composeJsonPath) {
     apiExample: parseEnv(read('apps/api/.env.example')),
     baseRefs: composeRefs(base),
     devRefs: composeRefs(read('infra/compose/compose.dev.yml')),
+    devScripts: read('infra/compose/local.sh'),
     workerUnitEnv: unitEnv(read('infra/systemd/omniswarm-worker@.service')),
     composeJson: composeJsonPath ? JSON.parse(fs.readFileSync(composeJsonPath, 'utf8')) : { services: {} },
   };

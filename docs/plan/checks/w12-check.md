@@ -9,7 +9,7 @@ Wave file: [`../waves/W12-remote-host.md`](../waves/W12-remote-host.md).
 - Docker running (compose v2), Node 24, `openssl`, `curl`. Nothing in step 1 contacts a host or a provider.
 - Step 1 uses:
   - loopback ports `18480`, `18443` and `55873` (`infra/env/dev.env.example`)
-  - compose project `omniswarm-infra-check`
+  - compose project `omniswarm-infra-check-<pid>`; a port held by another stack is moved to the next free one for that run
   - two cached check images, `omniswarm-infra-check/{systemd,hosts}`, built once from Debian trixie
 
   It removes everything it started, volumes included.
@@ -34,7 +34,7 @@ Wave file: [`../waves/W12-remote-host.md`](../waves/W12-remote-host.md).
      checker unit tests: pass 30
      deploy, release, certbot, backup, restore, smoke, health, prune and log-hygiene dry runs print their plans
      health.sh: repair + alert on the 2nd failure only, one recovery alert, heartbeat only when green, workers and disk
-     prune.sh: runs kept until OMNI_PRUNE_NOT_BEFORE, then only dirs with nothing newer than 30 days; ...
+     prune.sh: stale engine staging, images of pruned releases, old build cache; RUNS_ROOT left to the worker
      log-hygiene.sh: exact secret values and key shapes found in journal, container and engine logs; names only in output; one alert
    systemd
      systemd-analyze verify ok (13 units)
@@ -88,7 +88,7 @@ Wave file: [`../waves/W12-remote-host.md`](../waves/W12-remote-host.md).
 9. **Logs and retention.**
    - `sudo systemctl start omniswarm-log-hygiene` then `journalctl -u omniswarm-log-hygiene -n 3` shows `clean: N log source(s), last 24h, M secret value(s) and 4 shapes`.
    - `journalctl --disk-usage` is under 1 G.
-   - `sudo /srv/omniswarm/current/infra/deploy/prune.sh --dry-run` prints `runs: kept (pruning starts 2026-12-31)` before that date.
+   - `sudo /srv/omniswarm/current/infra/deploy/prune.sh --dry-run` prints the staging and image removals it would make.
    - `systemctl list-timers 'omniswarm-*'` lists the backup, certbot-renew, health, prune and log-hygiene timers.
 10. **CI deploy (optional).** Set up the `production` environment (`docs/ops/OWNER_TASKS.md` section 10).
     - Every push runs job `plan` (dry runs only, no secrets).

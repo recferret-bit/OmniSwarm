@@ -23,7 +23,9 @@ case "${1:-}" in
 stack up: https://$(omni_env_value OMNI_DOMAIN):$port/  (CA: $STATE/tls/live/$(omni_env_value OMNI_DOMAIN)/fullchain.pem)
 worker (foreground, from the repo root):
   DATABASE_URL=postgres://omniswarm:\$(grep ^POSTGRES_PASSWORD= $env_file | cut -d= -f2)@127.0.0.1:$(omni_env_value OMNI_PG_PORT)/omniswarm \\
-  REPORTS_ROOT=$STATE/reports ENGINE_ROOT=$(cd "$INFRA/.." && pwd) HOSTED_PRESET=scripted \\
+  REPORTS_ROOT=$STATE/reports REPORTS_BASE_URL=https://$(omni_env_value OMNI_REPORTS_DOMAIN):$port ENGINE_ROOT=$(cd "$INFRA/.." && pwd) \\
+  CONTRACT_ID=$(omni_env_value CONTRACT_ID) HOSTED_PRESET=$(omni_env_value HOSTED_PRESET) \\
+  CHAIN_ADAPTER=$(omni_env_value CHAIN_ADAPTER) GITHUB_ADAPTER=$(omni_env_value GITHUB_ADAPTER) ENGINE_RUNNER=$(omni_env_value ENGINE_RUNNER) \\
   npm run worker -w @omniswarm/api
 EOF
     ;;

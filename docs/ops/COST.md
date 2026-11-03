@@ -47,7 +47,7 @@ Testnet requests pay 1 testnet NEAR (OD-08), which is worth nothing. Every revie
 | api / web images | Docker data root | about 430 MB / 410 MB per release, mostly shared layers | images of pruned releases are removed daily (`prune.sh`) |
 | Releases | `/srv/omniswarm/releases` | source about 1.3 MB per release, plus `node_modules` for the api workspace and `engine/runtime` | newest 3 kept (`release.sh`) |
 | Published reports | `/srv/omniswarm/reports` | one folder per review (HTML and JSON; a few MB, measure with `du -sh` after the first run) | never pruned: attestations point at them |
-| Private attempt dirs | `/srv/omniswarm/work/runs` | per attempt: the engine's report copy, `result.json`, and `worker.log` (at most `ENGINE_LOG_MAX_BYTES`, 5 MB) | pruned after `OMNI_RUNS_KEEP_DAYS` (30), from `OMNI_PRUNE_NOT_BEFORE` (2026-12-31) on |
+| Private attempt dirs | `/srv/omniswarm/work/runs` | per attempt: the engine's report copy, `result.json`, and `worker.log` (at most `ENGINE_LOG_MAX_BYTES`, 5 MB) | the worker's own hygiene keeps the newest `KEEP_RUNS` (20) finished requests and removes the rest (`apps/api`) |
 | Engine staging | `/srv/omniswarm/work/{tmp,targets}` | the target checkout while a review runs (at most `MAX_REPO_KB`, 200 MB) | crash leftovers pruned after 2 days |
 | Postgres | volume `pgdata` | kilobytes per request | none needed at demo scale |
 | Backups | `/srv/omniswarm/backup` | 1 database dump + 1 reports tarball per night | newest 7 of each (`backup.sh`); the reports tarball grows with the reports |

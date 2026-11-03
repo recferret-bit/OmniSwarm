@@ -22,8 +22,8 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 . "$HERE/provision-lib.sh"
 HOSTS="$OMNI_INFRA/hosts"
 
-DOCKER_KEY_FPR=9DC858229FC7DD38854AE2D88D81803C0EBFCD88    # Docker Release (CE deb)
-NODESOURCE_KEY_FPR=6F71F525282841EEDAF851B42F59B5F99B1BE0B4 # NodeSource (NSolid)
+DOCKER_SIGNER_FPR=9DC858229FC7DD38854AE2D88D81803C0EBFCD88    # Docker Release (CE deb)
+NODESOURCE_SIGNER_FPR=6F71F525282841EEDAF851B42F59B5F99B1BE0B4 # NodeSource (NSolid)
 NODE_MAJOR=24
 BASE_PACKAGES=(ca-certificates curl gnupg rsync git openssl nftables fail2ban python3-systemd unattended-upgrades apt-listchanges)
 DOCKER_PACKAGES=(docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin)
@@ -86,9 +86,9 @@ install_packages() {
   missing="$(missing_packages "${BASE_PACKAGES[@]}")"
   # shellcheck disable=SC2086 # word list on purpose
   [ -z "$missing" ] || { omni_run apt-get update -q; apt_install $missing; }
-  apt_repo docker "https://download.docker.com/linux/$id/gpg" "$DOCKER_KEY_FPR" \
+  apt_repo docker "https://download.docker.com/linux/$id/gpg" "$DOCKER_SIGNER_FPR" \
     "deb [arch=$arch signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/$id $codename stable"
-  apt_repo nodesource https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key "$NODESOURCE_KEY_FPR" \
+  apt_repo nodesource https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key "$NODESOURCE_SIGNER_FPR" \
     "deb [arch=$arch signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_$NODE_MAJOR.x nodistro main"
   missing="$(missing_packages "${DOCKER_PACKAGES[@]}" nodejs)"
   if [ -n "$missing" ]; then

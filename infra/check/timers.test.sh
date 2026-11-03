@@ -91,21 +91,17 @@ echo "  health.sh: repair + alert on the 2nd failure only, one recovery alert, h
 
 # --- prune.sh -----------------------------------------------------------------
 runs="$T/srv/work/runs"
-mkdir -p "$runs/old-req/1" "$runs/new-req/1" "$runs/mixed-req/1" "$T/srv/work/tmp/stale" "$T/srv/work/tmp/fresh" "$T/srv/releases/check-1"
-for d in old-req mixed-req; do touch "$runs/$d/1/worker.log"; done
+mkdir -p "$runs/old-req/1" "$runs/new-req/1" "$T/srv/work/tmp/stale" "$T/srv/work/tmp/fresh" "$T/srv/releases/check-1"
 touch "$runs/new-req/1/worker.log"
-touch -t 202501010000 "$runs/old-req/1/worker.log" "$runs/old-req/1" "$runs/old-req" "$runs/mixed-req/1" "$runs/mixed-req" "$T/srv/work/tmp/stale"
+touch -t 202501010000 "$runs/old-req/1" "$runs/old-req" "$T/srv/work/tmp/stale"
 printf 'check-1\ngone-1\n<none>\n' > "$S/images"
-printf 'RUNS_ROOT=%s\n' "$runs" > "$T/worker.env"
-export OMNI_WORKER_ENV_FILE="$T/worker.env"
 : > "$calls"
-OMNI_PRUNE_NOT_BEFORE=2999-01-01 bash "$INFRA/deploy/prune.sh" 2>/dev/null
-[ -d "$runs/old-req" ] || fail "prune removed a run before OMNI_PRUNE_NOT_BEFORE"
+bash "$INFRA/deploy/prune.sh" 2>/dev/null
 [ ! -e "$T/srv/work/tmp/stale" ] && [ -d "$T/srv/work/tmp/fresh" ] || fail "prune: stale staging dir kept or fresh one removed"
+[ -d "$runs/old-req" ] || fail "prune removed a RUNS_ROOT dir (the worker's hygiene owns those)"
 [ "$(count 'docker image rm omniswarm/api:gone-1')" = 1 ] && [ "$(count 'image rm omniswarm/api:check-1')" = 0 ] || fail "prune: images of live releases removed, or dead ones kept"
-OMNI_PRUNE_NOT_BEFORE=2000-01-01 bash "$INFRA/deploy/prune.sh" 2>/dev/null
-[ ! -e "$runs/old-req" ] && [ -d "$runs/new-req" ] && [ -d "$runs/mixed-req" ] || fail "prune: wrong runs removed after the date"
-echo "  prune.sh: runs kept until OMNI_PRUNE_NOT_BEFORE, then only dirs with nothing newer than 30 days; stale staging; dead release images"
+[ "$(count 'docker builder prune -f --filter until=168h')" = 1 ] || fail "prune: build cache not pruned"
+echo "  prune.sh: stale engine staging, images of pruned releases, old build cache; RUNS_ROOT left to the worker"
 
 # --- log-hygiene.sh -------------------------------------------------------------
 gh="ghp_$(printf 'Z%.0s' $(seq 1 36))"

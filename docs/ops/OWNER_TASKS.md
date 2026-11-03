@@ -45,7 +45,12 @@ You need `near` (near-cli-rs 0.30) and `cargo-near` on your machine, not on the 
   OWNER=<you>.testnet bash contracts/review-registry/scripts/deploy-testnet.sh --execute
   ```
   This creates `review-registry.<you>.testnet` (the contract) and `operator.<you>.testnet`, deploys with price 1 NEAR, adds the operator's function-call key, and reads back `get_price`. Override `CONTRACT`, `OPERATOR`, `TREASURY`, `PRICE_YOCTO` or `OPERATOR_ALLOWANCE` in the environment if you need other values.
-- [ ] Check the operator key: `near account list-keys operator.<you>.testnet network-config testnet now` must show one function-call key for `review-registry.<you>.testnet`, limited to `mark_running`, `attest` and `refund`.
+- [ ] Check the operator key: `near account list-keys operator.<you>.testnet network-config testnet now` must show one function-call key for `review-registry.<you>.testnet`, limited to `mark_running`, `attest`, `refund` and `report_address`.
+- [ ] **Already deployed with an older key?** A function-call key issued before registry v0.3.0 lacks `report_address`, so the worker's abuse reports fail. Re-issue it:
+  1. Run the `near account add-key operator.<you>.testnet grant-function-call-access …` line that `deploy-testnet.sh --dry-run` prints (step 5). It lists all four methods.
+  2. Point `operator-key.json` at the new key (next task), and run `secrets.sh`.
+  3. Restart the workers.
+  4. Delete the old key: `near account delete-keys operator.<you>.testnet public-keys <old ed25519:…> network-config testnet sign-with-keychain send`. Check the syntax with `near account delete-keys --help` first.
 - [ ] Copy the operator key file that step 5 wrote under `~/.near-credentials/testnet/` (named `operator.<you>.testnet.json`, or a `<public key>.json` inside `operator.<you>.testnet/`) to `~/.omniswarm/env/operator-key.json`. It holds `account_id`, `public_key` and `private_key`. Its `public_key` must be the function-call key from the check above. Never copy the contract account's own key: that is the upgrade key, and it stays offline in your keychain.
 - [ ] Hand over:
   - `CONTRACT_ID=review-registry.<you>.testnet` in `stack.env` **and** in `worker.env`
@@ -61,7 +66,7 @@ You need `near` (near-cli-rs 0.30) and `cargo-near` on your machine, not on the 
   mkdir -p -m 700 ~/.omniswarm/env
   for f in stack worker providers ops; do install -m 600 infra/env/$f.env.example ~/.omniswarm/env/$f.env; done
   ```
-- [ ] `HOSTED_PRESET` in `stack.env` and in `worker.env` (equal): `hosted` for the six API reviewers (OD-04), or `demo` for a first deploy that spends nothing.
+- [ ] `HOSTED_PRESET` in `stack.env` and in `worker.env` (equal): the examples say `hosted`, the six API reviewers (OD-04). Use `demo` for a first deploy that spends nothing. Leave `OMNI_API_NODE_ENV=production`, `CHAIN_ADAPTER=near` and `GITHUB_ADAPTER=live` as they are: production refuses the test adapters.
 - [ ] Optional: `~/.omniswarm/env/omniswarm.config.json`, your copy of `engine/omniswarm.config.example.json` with your own presets or `prices`. Without it, each release uses the example file, which defines `hosted` and `demo`.
 - [ ] Check without copying anything: `node infra/deploy/secrets-check.mjs ~/.omniswarm/env`. It lists each variable name with a fingerprint and refuses:
   - an empty required value
