@@ -19,7 +19,23 @@ RUN npm ci --ignore-scripts --no-audit --no-fund --workspace @omniswarm/web \
  && npm cache clean --force
 
 FROM deps AS build
-ENV NEXT_TELEMETRY_DISABLED=1
+# NEXT_PUBLIC_* values are inlined at build time; .env files are excluded from
+# the context, so pass them as build args (infra/env/web.env.example).
+ARG NEXT_PUBLIC_NETWORK=testnet
+ARG NEXT_PUBLIC_CONTRACT_ID
+ARG NEXT_PUBLIC_INTAKE_RECIPIENT
+ARG NEXT_PUBLIC_RPC_URL
+ARG NEXT_PUBLIC_EXPLORER_URL=https://testnet.nearblocks.io
+ARG NEXT_PUBLIC_WALLET=real
+ARG NEXT_PUBLIC_API_MOCK=0
+ENV NEXT_TELEMETRY_DISABLED=1 \
+    NEXT_PUBLIC_NETWORK=$NEXT_PUBLIC_NETWORK \
+    NEXT_PUBLIC_CONTRACT_ID=$NEXT_PUBLIC_CONTRACT_ID \
+    NEXT_PUBLIC_INTAKE_RECIPIENT=$NEXT_PUBLIC_INTAKE_RECIPIENT \
+    NEXT_PUBLIC_RPC_URL=$NEXT_PUBLIC_RPC_URL \
+    NEXT_PUBLIC_EXPLORER_URL=$NEXT_PUBLIC_EXPLORER_URL \
+    NEXT_PUBLIC_WALLET=$NEXT_PUBLIC_WALLET \
+    NEXT_PUBLIC_API_MOCK=$NEXT_PUBLIC_API_MOCK
 COPY packages/schemas ./packages/schemas
 COPY apps/web ./apps/web
 RUN npm run build --workspace @omniswarm/web \

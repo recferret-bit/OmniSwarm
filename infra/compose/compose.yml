@@ -122,6 +122,12 @@ services:
     build:
       context: ../..
       dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_NETWORK: ${NEXT_PUBLIC_NETWORK:-testnet}
+        NEXT_PUBLIC_CONTRACT_ID: ${NEXT_PUBLIC_CONTRACT_ID:?set NEXT_PUBLIC_CONTRACT_ID (must equal the API CONTRACT_ID)}
+        NEXT_PUBLIC_INTAKE_RECIPIENT: ${NEXT_PUBLIC_INTAKE_RECIPIENT:?set NEXT_PUBLIC_INTAKE_RECIPIENT}
+        NEXT_PUBLIC_RPC_URL: ${NEXT_PUBLIC_RPC_URL:?set NEXT_PUBLIC_RPC_URL}
+        NEXT_PUBLIC_EXPLORER_URL: ${NEXT_PUBLIC_EXPLORER_URL:-https://testnet.nearblocks.io}
     environment:
       PORT: "3000"
       HOSTNAME: 0.0.0.0
