@@ -87,6 +87,8 @@ jobs:
         run: npm ci
       - if: steps.has.outputs.present == 'true'
         run: npm run test:landing
+      - if: steps.has.outputs.present == 'true'
+        run: npm run guard --workspace apps/web
 
   contract:
     runs-on: ubuntu-latest
