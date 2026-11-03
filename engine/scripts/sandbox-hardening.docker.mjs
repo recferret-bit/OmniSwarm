@@ -82,6 +82,10 @@ test('hardening: the hostile fixture cannot influence what reviewers see (six in
     assert.equal(await exec("process.stdout.write(require('node:fs').readlinkSync('/proc/self/exe'))"), '/usr/local/bin/node');
     assert.equal(await sh('stat -c "%U:%G %a" /work /work/bin'), 'root:root 755\nroot:root 755');
     assert.ok(!(await sh('ls /work/bin')).split('\n').includes('node'), 'no planted node in /work/bin');
+    // BRIDGE_PATH starts with /usr/local/cargo/bin. The image itself (not only the read-only root) keeps it, CARGO_HOME
+    // and RUSTUP_HOME unwritable by uid 10001; the rust base image ships them 0777.
+    assert.equal(await sh('stat -c "%U:%G %a" /usr/local/cargo/bin /usr/local/cargo /usr/local/rustup'), 'root:root 755\nroot:root 755\nroot:root 755');
+    assert.equal(await sh('find /usr/local/cargo /usr/local/rustup ! -type l -perm -o+w -print -quit'), '', 'no world-writable file under CARGO_HOME or RUSTUP_HOME');
     // Every bridge call ran under the absolute path; a planted node would have left its marker.
     await callBridgeTool(ctx, 'list_files', {});
     assert.equal(await sh('test -e /tmp/hostile-node-ran && echo ran || echo absent'), 'absent', 'the planted node never ran');

@@ -168,7 +168,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends redis-server \
     && rm -rf /var/lib/apt/lists/* \
     && redis-server --version
 
+# NEAR build verification (the catalog's near-build kind): `cargo near build non-reproducible-wasm` runs offline
+# through the fixed runner after network disconnection. It is provisioned here, never installed during a review.
+# 0.22.0 is the current stable release. Its prebuilt Linux tarballs need glibc 2.38+, and bookworm ships 2.36,
+# so it is built from the locked crates.io source. No ledger feature: the sandbox never signs.
+ARG CARGO_NEAR_VERSION=0.22.0
+RUN rustup target add wasm32-unknown-unknown --toolchain 1.99.1 \
+    && cargo install cargo-near --version "${CARGO_NEAR_VERSION}" --locked --no-default-features \
+    && cargo near --version
+
 RUN useradd --create-home --uid 10001 --shell /usr/sbin/nologin sandbox
+
+# The rust base image leaves CARGO_HOME and RUSTUP_HOME world-writable (0777). The bridge PATH starts with
+# /usr/local/cargo/bin, so neither tree may be writable by uid 10001 even if the root filesystem were not read-only.
+RUN chmod -R go-w /usr/local/cargo /usr/local/rustup \
+    && test -z "$(find /usr/local/cargo /usr/local/rustup ! -type l -perm -o+w -print -quit)"
 
 COPY entrypoint.sh /usr/local/bin/sandbox-entrypoint
 RUN chmod 755 /usr/local/bin/sandbox-entrypoint
