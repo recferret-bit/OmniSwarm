@@ -49,6 +49,13 @@ describe('crash recovery with real worker processes', NEEDS_DB, () => {
     await t?.db.drop();
   });
 
+  /** The re-run used a fresh dir `1`; dir `0` may already be pruned by the maintenance cron's hygiene. */
+  const secondAttemptDir = (id: string) => {
+    const dirs = fs.readdirSync(path.join(t.config.storage.runsRoot, id)).sort();
+    assert.ok(dirs.includes('1') && dirs.every((dir) => dir === '0' || dir === '1'), `attempt dirs: ${dirs}`);
+    assert.ok(fs.existsSync(path.join(t.config.storage.runsRoot, id, '1', 'result.json')), 'attempt 2 ran in its own dir');
+  };
+
   const done = (id: string) => until(async () => {
     const row = await findRequest(api.deps.pool, id);
     return row?.status === 'done' ? row : null;
@@ -68,7 +75,7 @@ describe('crash recovery with real worker processes', NEEDS_DB, () => {
     children.push(second);
     const row = await done(request.requestId);
     assert.equal(row.attempts, 2);
-    assert.deepEqual(fs.readdirSync(path.join(t.config.storage.runsRoot, request.requestId)).sort(), ['0', '1']);
+    secondAttemptDir(request.requestId);
     const events = await chainEvents(api.deps.pool, request.requestHash);
     assert.equal(events.filter((event) => event === 'review_attested').length, 1);
     assert.equal(events.filter((event) => event === 'review_running').length, 1);
@@ -118,7 +125,7 @@ describe('crash recovery with real worker processes', NEEDS_DB, () => {
     children.push(next);
     const row = await done(request.requestId);
     assert.equal(row.attempts, 2);
-    assert.deepEqual(fs.readdirSync(path.join(t.config.storage.runsRoot, request.requestId)).sort(), ['0', '1']);
+    secondAttemptDir(request.requestId);
     assert.equal((await chainEvents(api.deps.pool, request.requestHash)).filter((event) => event === 'review_attested').length, 1);
     await stop(next);
   });

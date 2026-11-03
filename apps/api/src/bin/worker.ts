@@ -24,9 +24,7 @@ const boss = createBoss(config, 'worker');
 boss.on('error', (error) => log.error({ err: error }, 'pg-boss error'));
 await boss.start();
 const shutdown = new AbortController();
-await startWorker(boss, { ...core, engine, boss, log: config.queue.workerId ? log.child({ workerId: config.queue.workerId }) : log }, shutdown.signal);
-log.info({ concurrency: config.queue.concurrency, engine: engine.kind, chain: core.chain.kind }, 'worker ready');
-
+// Installed before the first job can be claimed, so a SIGTERM never meets the default handler mid-job.
 onShutdown(log, async () => {
   // Forward SIGTERM to running engines now; their jobs are released (worker.ts) for another worker.
   shutdown.abort();
@@ -34,3 +32,5 @@ onShutdown(log, async () => {
   await core.chain.close();
   await core.pool.end();
 }, (config.queue.stopTimeoutS + 30) * 1000);
+await startWorker(boss, { ...core, engine, boss, log: config.queue.workerId ? log.child({ workerId: config.queue.workerId }) : log }, shutdown.signal);
+log.info({ concurrency: config.queue.concurrency, engine: engine.kind, chain: core.chain.kind }, 'worker ready');
