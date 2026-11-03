@@ -31,7 +31,7 @@ export function HowItWorks() {
         {STEPS.map((step) => (
           <li key={step.title}>
             <h3>{step.title}</h3>
-            <p>{step.body} <a href={`${REPO_URL}/blob/main/RULES.md#${step.anchor}`}>Rules</a></p>
+            <p>{step.body} <a href={`${REPO_URL}/blob/main/docs/RULES.md#${step.anchor}`}>Rules</a></p>
           </li>
         ))}
       </ol>
