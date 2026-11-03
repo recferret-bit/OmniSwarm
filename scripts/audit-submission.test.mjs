@@ -64,6 +64,7 @@ test('identity file cannot point outside the report or silently change reviewer 
   const f = fixture(t);
   const file = path.join(f.root, 'identity.json');
   fs.writeFileSync(file, JSON.stringify(f.identity));
+  fs.writeFileSync(path.join(f.root, 'harness/reviewers.json'), JSON.stringify({ version: 1, reviewers: [{ id: 'agy' }, { id: 'grok' }] }));
   const flags = ['--report-dir', f.root, '--role', 'auditor', '--agent', 'agy', '--auditor', 'agy-s3-logic', '--surface', 'S3', '--identity-file', file];
   assert.deepEqual(parseBridgeArgs(flags).submissionIdentity, f.identity);
   assert.throws(() => parseBridgeArgs([...flags.slice(0, -1), '/tmp/outside-identity.json']));
@@ -108,7 +109,14 @@ test('W02-02: the bridge accepts reviewer ids listed in harness/reviewers.json a
   assert.throws(() => parseBridgeArgs(rogueFlags), /IDENTITY_UNKNOWN/);
   // The reviewers file cannot be taken from outside the report directory.
   assert.throws(() => parseBridgeArgs([...flags.slice(0, -1), '/tmp/reviewers.json']));
-  // A run without the flag keeps the pattern-only check, so older callers still start.
+  // Without the flag the run's own harness/reviewers.json is checked; without that file the bridge refuses (fail closed).
   fs.writeFileSync(identityFile, JSON.stringify(identity));
-  assert.doesNotThrow(() => parseBridgeArgs(flags.slice(0, -2)));
+  assert.equal(parseBridgeArgs(flags.slice(0, -2)).submissionIdentity.agent, id);
+  fs.writeFileSync(identityFile, JSON.stringify(rogue));
+  assert.throws(() => parseBridgeArgs(rogueFlags.slice(0, -2)), /IDENTITY_UNKNOWN/);
+  fs.writeFileSync(identityFile, JSON.stringify(identity));
+  fs.rmSync(path.join(f.root, 'harness/reviewers.json'));
+  assert.throws(() => parseBridgeArgs(flags.slice(0, -2)), /IDENTITY_UNKNOWN: This run has no readable reviewers file/);
+  fs.writeFileSync(path.join(f.root, 'harness/reviewers.json'), JSON.stringify({ version: 1 }));
+  assert.throws(() => parseBridgeArgs(flags.slice(0, -2)), /IDENTITY_UNKNOWN: Reviewers file has no reviewers list/);
 });
