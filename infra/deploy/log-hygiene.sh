@@ -7,8 +7,8 @@
 # Looks for:
 #   - the exact value of every secret in /etc/omniswarm/*.env (names with SECRET, TOKEN,
 #     PASSWORD, _KEY, WEBHOOK or HEARTBEAT; values of 12+ characters) and the operator key
-#   - secret shapes: GitHub tokens, provider API keys (the same shapes as tools/secret-sweep.sh),
-#     NEAR ed25519 secret keys, PEM private keys
+#   - secret shapes: GitHub tokens and provider API keys (tools/secret-shapes.txt, shared with
+#     tools/secret-sweep.sh), NEAR ed25519 secret keys, PEM private keys
 # Prints "clean", or one "HIT <rule> in <source>" line per finding and never the matching text;
 # a hit exits 1 and sends one alert (omni_alert).
 set -euo pipefail
@@ -29,10 +29,16 @@ done
 since="${hours}h"
 
 SECRET_VAR='(SECRET|TOKEN|PASSWORD|_KEY$|_KEY_|WEBHOOK|HEARTBEAT)'
-# rule name -> extended regex. Keep the provider shapes in step with tools/secret-sweep.sh.
-RULES=(
-  "github-token|ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{60,}"
-  "provider-key|sk-ant-[A-Za-z0-9_-]{40,}|sk-proj-[A-Za-z0-9_-]{40,}|sk-or-v1-[0-9a-f]{64}|xai-[A-Za-z0-9]{70,}|[0-9a-f]{32}\\.[A-Za-z0-9]{16}"
+# rule name -> extended regex. The GitHub and provider key shapes are tools/secret-shapes.txt, shared
+# with tools/secret-sweep.sh; the NEAR and PEM shapes are for logs only.
+SHAPES="$(dirname "$0")/../../tools/secret-shapes.txt"
+[ -r "$SHAPES" ] || omni_die "key shapes file $SHAPES is missing"
+RULES=()
+while IFS= read -r rule; do
+  case "$rule" in '' | '#'*) continue ;; esac
+  RULES+=("$rule")
+done <"$SHAPES"
+RULES+=(
   "near-secret-key|ed25519:[1-9A-HJ-NP-Za-km-z]{80,}"
   "pem-private-key|-----BEGIN [A-Z ]*PRIVATE KEY-----"
 )

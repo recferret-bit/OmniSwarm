@@ -1,11 +1,14 @@
 // The one pass loop (W04-05). The Docker orchestrator and the host runner both drive a job's passes through
 // runReviewerPasses; only `runPass` (how one turn reaches a session) differs between them.
 // Per pass: archive the previous pass's submission, brief with the files still unread, run the turn, write
-// the raw usage row, and record a health row. A cost stop skips the reviewer's later passes. A failed pass
-// ends the job's loop and restores the last committed pass, so earlier work is never thrown away.
+// the raw usage row, and record a health row. The cost ceiling is per reviewer for the whole run: once its
+// spend in harness/budget-<reviewer>.json (every pass and surface, bridge-budget.mjs) reaches maxCostUsd, or a
+// pass stopped on cost, the reviewer's remaining passes are skipped and budget health records the stop. A
+// failed pass ends the job's loop and restores the last committed pass, so earlier work is never thrown away.
 import fs from 'node:fs';
 import path from 'node:path';
 import { readReportJson } from './report-files.mjs';
+import { spentUsd } from './bridge-budget.mjs';
 import { archivePassSubmission, passCalls, writePassUsage } from './review-passes.mjs';
 import { passRole, renderBrief } from './review-briefs.mjs';
 
@@ -58,6 +61,17 @@ function skipPass({ out, reviewerId, surface, pass }) {
   writePassUsage(out, { reviewerId, surface: surfaceSlug(surface), pass, role: passRole(pass), calls: 0, stop: 'cost', costSource: 'none', startedAt: at, endedAt: at, skipped: 'cost_ceiling' });
 }
 
+// The reviewer's run-wide spend has reached the ceiling (another surface, an earlier process, a resumed run).
+function overCeiling(out, reviewerId, maxCostUsd) {
+  return maxCostUsd != null && spentUsd(out, reviewerId) >= maxCostUsd;
+}
+
+// Budget health for a job whose passes the ceiling skipped, unless one of its passes already recorded the
+// cost stop. Without a submission the report is INCOMPLETE (verification-health.mjs budgetHealth).
+function ceilingRow({ out, name, reviewerId, pass, maxCostUsd }) {
+  return { reviewer: reviewerId, job: name, pass, stop: 'cost', reason: 'cost_ceiling', submitted: fs.existsSync(submissionFile(out, name)), spentUsd: spentUsd(out, reviewerId), maxCostUsd };
+}
+
 // runPass({ pass, brief, resume }) -> session result ({code, failureReason?, stop?, directory?, stopReason?}).
 // A result with stopReason 'reused' is a committed job from --resume-from: nothing more to run.
 // Without budgets (requests from before W04) the job is one plain turn.
@@ -66,13 +80,18 @@ export async function runReviewerPasses({ out, name, reviewerId, surface, budget
     const result = await runPass({ pass: null, brief: '', resume: false });
     return { passesCompleted: result.code === 0 ? 1 : 0, result, health: [], servedModel: null };
   }
-  const { passes, toolBudget } = budgets;
+  const { passes, toolBudget, maxCostUsd = null } = budgets;
   const health = [];
   let completed = startPass - 1;
   let result = { code: 0, skipped: true };
   let servedModel = null;
   for (let pass = startPass; pass <= passes; pass++) {
-    if (ceilings.has(reviewerId)) { skipPass({ out, reviewerId, surface, pass }); continue; }
+    if (ceilings.has(reviewerId) || overCeiling(out, reviewerId, maxCostUsd)) {
+      ceilings.add(reviewerId);
+      if (!health.some((row) => row.stop === 'cost')) health.push(ceilingRow({ out, name, reviewerId, pass, maxCostUsd }));
+      for (let rest = pass; rest <= passes; rest++) skipPass({ out, reviewerId, surface, pass: rest });
+      break;
+    }
     if (pass > startPass) archivePassSubmission(out, name, pass - 1);
     const brief = renderBrief({ pass, passes, toolBudget, filesRead: passCalls(out, reviewerId, surface, pass - 1).filesRead || [], files });
     const startedAt = new Date().toISOString();

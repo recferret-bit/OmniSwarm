@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { createBeforeCall, decideCall, loadBudget } from './bridge-budget.mjs';
+import { costLedger, createBeforeCall, decideCall, loadBudget, spentUsd } from './bridge-budget.mjs';
 import { withFileLock } from './fs-lock.mjs';
 
 test('reads count and submits do not, and a new bridge continues the count', async () => {
@@ -60,6 +60,26 @@ test('one reviewer on several surfaces in parallel bridges never loses a count',
   const saved = loadBudget(root, 'cli-claude-opus');
   for (let i = 1; i <= bridges; i++) assert.equal(saved.passes[`s${i}:1`]?.calls, calls, `surface s${i}`);
   assert.deepEqual(fs.readdirSync(path.join(root, 'harness')).filter((name) => name.includes('.lock')), [], 'every lock is released');
+});
+
+test('the run-wide spend of one reviewer adds up across parallel surface processes and survives call counting', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'budget-spend-'));
+  const module = new URL('./bridge-budget.mjs', import.meta.url).href;
+  const [surfaces, turns] = [3, 20];
+  const child = (surface) => new Promise((resolve, reject) => {
+    const program = `const { costLedger, createBeforeCall } = await import(${JSON.stringify(module)});
+      const ledger = costLedger(${JSON.stringify(root)}, 'key-zai-glm-5-3');
+      const hook = createBeforeCall({ reportDir: ${JSON.stringify(root)}, reviewerId: 'key-zai-glm-5-3', surface: '${surface}', pass: 1, toolBudget: 200 });
+      for (let i = 0; i < ${turns}; i++) { await ledger.add(0.25); await hook({ pendingArgs: { path: 'f' + i + '.rs' } }, 'read_file'); }`;
+    const proc = spawn(process.execPath, ['--input-type=module', '-e', program], { stdio: ['ignore', 'ignore', 'pipe'] });
+    let err = '';
+    proc.stderr.on('data', (chunk) => { err += chunk; });
+    proc.on('close', (code) => (code === 0 ? resolve() : reject(new Error(err))));
+  });
+  await Promise.all(Array.from({ length: surfaces }, (_, i) => child(`S${i + 1}`)));
+  assert.equal(spentUsd(root, 'key-zai-glm-5-3'), surfaces * turns * 0.25);
+  assert.equal(await costLedger(root, 'key-zai-glm-5-3').add(0), 15, 'add(0) reads the total');
+  for (let i = 1; i <= surfaces; i++) assert.equal(loadBudget(root, 'key-zai-glm-5-3').passes[`s${i}:1`]?.calls, turns);
 });
 
 test('a lock left by a dead process is broken; a live holder is waited for', async () => {
