@@ -48,6 +48,17 @@ export type ErrorCode =
   | 'INVALID_TRANSITION'
   | 'REFUND_NOT_ALLOWED'
   | 'REQUEST_NOT_FOUND';
+/**
+ * 202 refund_queued: the API recorded the refund and a worker (the only operator-key holder) sends it. 200 refunded: already refunded; refundTx is null when the tx hash was not recorded.
+ */
+export type AdminRefundResponse =
+  | {
+      status: 'refund_queued';
+    }
+  | {
+      status: 'refunded';
+      refundTx: string | null;
+    };
 
 export interface IntakeApi {
   'account-id'?: AccountId;
@@ -233,12 +244,6 @@ export interface HealthResponse {
     rpc: boolean;
     contract: boolean;
   };
-}
-export interface AdminRefundResponse {
-  /**
-   * null when the contract had already refunded (a retry after the tx was sent)
-   */
-  refundTx: string | null;
 }
 export interface ReadyResponse {
   ok: boolean;
