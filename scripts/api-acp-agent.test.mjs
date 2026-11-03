@@ -6,6 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runReviewSession } from './agent-session.mjs';
 import { buildApiLaunch } from './provider-api-launch.mjs';
+import { ApiAcpAgent, McpClient } from './api-acp-agent.mjs';
 import { presetFor } from './provider-openai-compat.mjs';
 
 const FIXTURE = path.join(path.dirname(fileURLToPath(import.meta.url)), 'provider-fixtures', 'w03');
@@ -87,4 +88,64 @@ test('a mismatched served model fails the session as model_mismatch', async () =
   }, { launch: h.launch, heartbeatMs: 60_000 });
   assert.equal(result.code, 1);
   assert.equal(result.failureReason, 'model_mismatch');
+});
+
+test('a request with no recorded replay fails as live_required, not provider_error', async () => {
+  const replay = fs.mkdtempSync(path.join(os.tmpdir(), 'replay-empty-'));
+  const h = harness({ OMNI_HTTP_REPLAY: replay });
+  const result = await runReviewSession({
+    directory: h.directory,
+    identity: { agent: 'key-zai-glm-5-3', family: 'key', provider: 'zai', model: 'glm-5.3', role: 'auditor', sourceDigest: 'e'.repeat(64), assignmentDigest: 'f'.repeat(64) },
+    bridgeArgs: [h.envFile], prompt: 'Review.', env: h.env, logFile: path.join(h.root, 'live.log'),
+  }, { launch: h.launch, heartbeatMs: 60_000 });
+  assert.equal(result.code, 1);
+  assert.equal(result.failureReason, 'live_required');
+});
+
+// A bridge stub: `body` runs once per request frame `m` (an object with an id).
+function stubBridge(root, body) {
+  const file = path.join(root, 'bridge.mjs');
+  const loop = [
+    "let b = '';",
+    "process.stdin.on('data', (c) => { b += c; let i;",
+    "  while ((i = b.indexOf(String.fromCharCode(10))) >= 0) { const l = b.slice(0, i); b = b.slice(i + 1);",
+    '    if (!l.trim()) continue; const m = JSON.parse(l); if (m.id == null) continue;',
+    `    ${body}`,
+    '  } });',
+  ];
+  fs.writeFileSync(file, loop.join('\n'));
+  return file;
+}
+
+test('the MCP client rejects pending calls when the bridge exits', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mcp-exit-'));
+  const client = new McpClient(process.execPath, [stubBridge(root, 'process.exit(3);')], { PATH: '/bin' });
+  await assert.rejects(client.request('tools/list'), /mcp_unavailable/);
+  await assert.rejects(client.request('tools/list'), /mcp_unavailable/);
+});
+
+test('the MCP client refuses a frame over 4 MiB', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mcp-big-'));
+  const client = new McpClient(process.execPath, [stubBridge(root, "process.stdout.write('x'.repeat(5 * 1024 * 1024));")], { PATH: '/bin' });
+  await assert.rejects(client.request('tools/list'), /protocol_error/);
+  await client.stop();
+});
+
+test('a scripted pass whose submit the bridge rejected is not recorded as submitted', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'scripted-reject-'));
+  fs.chmodSync(root, 0o700);
+  const reply = [
+    "const submit = m.method === 'tools/call' && m.params.name.startsWith('submit');",
+    "const r = m.method === 'initialize' ? { protocolVersion: '2024-11-05', capabilities: { tools: {} } }",
+    "  : m.method === 'tools/list' ? { tools: [] }",
+    "  : { content: [{ type: 'text', text: submit ? 'Tool error: invalid report' : 'ok' }], isError: submit };",
+    "process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: m.id, result: r }) + String.fromCharCode(10));",
+  ].join(' ');
+  const agent = new ApiAcpAgent({ mode: 'scripted', strategy: 'baseline', model: 'baseline', cwd: root, surface: 'S1', mcp: { command: process.execPath, args: [stubBridge(root, reply)], env: { PATH: '/bin' } } }, () => {});
+  const { sessionId } = await agent.request('session/new', { cwd: root });
+  const result = await agent.request('session/prompt', { sessionId, prompt: [{ type: 'text', text: 'Pass 1' }] });
+  assert.equal(result.stopReason, 'end_turn');
+  const saved = JSON.parse(fs.readFileSync(path.join(root, 'api-session.json'), 'utf8'));
+  assert.equal(saved.stop, 'error');
+  assert.equal(saved.failure, 'submit_rejected');
 });

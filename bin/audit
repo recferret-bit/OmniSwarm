@@ -41,8 +41,9 @@ parse_flags() {
       --agents|-a) REVIEWER_ARGS+=(--agents "${2:?$1 needs a list}"); shift 2 ;;
       --reviewers|--config|--preset|--assign|--orchestrator|--alternate-judge|--passes|--tool-budget|--max-cost-usd|--model|--models|--model-claude|--model-grok|--model-agy|--model-codex)
         REVIEWER_ARGS+=("$1" "${2:?$1 needs a value}"); shift 2 ;;
+      --claude-model|--grok-model|--agy-model|--codex-model)
+        agent="${1#--}"; REVIEWER_ARGS+=("--model-${agent%-model}" "${2:?$1 needs a value}"); shift 2 ;;
       --plan) PLAN=1; shift ;;
-      --verbose) shift ;;
       --resume-from) RESUME_FROM="${2:?--resume-from needs a report directory}"; shift 2 ;;
       --test-artifacts) TEST_ARTIFACTS="${2:?--test-artifacts needs a Cargo target directory}"; shift 2 ;;
       --restart-failed) RESTART_FAILED=1; shift ;;
@@ -187,21 +188,24 @@ Options (run):
   --restart-failed         With --resume-from, review failed assignments in new sessions; provider refusals, quotas and login errors remain blocked
   -s, --surface <id>       s1..s6 or all (default: all)
   -o, --out <dir>          report directory (default: reports/<timestamp>-<repo>)
-  --reviewers <list>       comma-separated reviewer specs <family>:<provider>:<model>[#label]; family cli (claude, codex, grok, agy),
-                           later key, openrouter, scripted. Example: cli:claude:opus,cli:codex:gpt-6.1-sol
+  --reviewers <list>       comma-separated reviewer specs <family>:<provider>:<model>[#label]. Families: cli (claude, codex, grok, agy,
+                           claude-zai), key (zai), openrouter (<vendor>/<model>), scripted (fixture strategies, demo only).
+                           Example: cli:claude:opus,cli:codex:gpt-6.1-sol,key:zai:glm-5.3,openrouter:qwen/qwen3.8-max-0902
   --config <file>          run config (default: ./omniswarm.config.json in the OmniSwarm checkout, if present); see omniswarm.config.example.json
   --preset <name>          a preset from the config file (local-subscriptions, api-only, mixed, hosted, demo)
   --assign <mode>          matrix (every reviewer x every surface; default with --reviewers/--preset up to 8 reviewers)
                            or round-robin (one reviewer per surface; default with --agents)
-  --orchestrator <spec|recommended>   orchestrator model; recorded and planned now, used from W06
-  --alternate-judge <spec>            judge for same-vendor conflicts; recorded now, used from W06
-  --passes <n>             passes per reviewer (default 2); --tool-budget <n> bridge calls per pass (default 40); both recorded now, enforced from W04
+  --orchestrator <spec|recommended>   model that runs the debate and general-review phases
+  --alternate-judge <spec>            judge for same-vendor conflicts
+  --passes <n>             passes per reviewer, 1-5 (default 2)
+  --tool-budget <n>        inspection calls per pass, 5-200 (default 40), plus 3 calls to submit; enforced by the bridge and each session
+  --max-cost-usd <usd>     stop a reviewer's API spend at this ceiling; its later passes are skipped and recorded
   Flags override the preset, the preset overrides the config file, the file overrides the defaults.
   -a, --agents <list>      alias: comma-separated subset of claude,grok,agy,codex (default: claude,grok,agy,codex), each a cli: reviewer
   --model <slug>           alias: use this model for every selected agent
   --models <list>          alias, per vendor: claude=<slug>,grok=<slug>,agy=<slug>,codex=<slug>
-  --model-claude <slug>    alias, one vendor. Also --model-grok, --model-agy, --model-codex
-                           precedence: --model-<vendor>, then --models, then --model, then the default
+  --claude-model <slug>    one vendor's model. Also --grok-model, --agy-model, --codex-model (aliases: --model-<vendor>)
+                           precedence: --<vendor>-model, then --models, then --model, then the default
   --resume-from <report>   continue saved source-review sessions with matching workflow, source, reviewers, models and assignments
   --plan                   print the reviewer table, assignment, budgets and orchestrator, then exit before the harness (exit 2 if a family is not installed)
 
@@ -212,7 +216,7 @@ Surfaces:
   s4, config   Secrets, config & infrastructure
   s5, deps     Dependencies & supply chain
   s6, client   Client & web surface
-  all          distribute s1..s6 across the enabled agents
+  all          every surface (matrix: each reviewer reviews each one; round-robin: one reviewer per surface)
 
 Examples:
   audit check-agents

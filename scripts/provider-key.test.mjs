@@ -7,7 +7,7 @@ import { families } from './reviewer-families.mjs';
 import { parseReviewerSpec } from './reviewer-registry.mjs';
 import { dockerClientEnv } from './bridge-tools-common.mjs';
 import { keyFingerprint } from './reviewer-env.mjs';
-import { vendorOfOpenRouter } from './provider-openrouter.mjs';
+import { vendorOfOpenRouterModel as vendorOfOpenRouter } from './reviewer-registry.mjs';
 
 test('a zai reviewer receives only its key and the bridge env receives neither key', () => {
   const work = fs.mkdtempSync(path.join(os.tmpdir(), 'api-launch-'));

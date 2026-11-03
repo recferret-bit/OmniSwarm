@@ -19,7 +19,14 @@ Wave file: [`../waves/W03-api-reviewers.md`](../waves/W03-api-reviewers.md). Abo
 
 See three rows, no key value: `key-zai-glm-5-3` family `key` vendor `zai` model `glm-5.3` env `ZAI_API_KEY,ZAI_BASE_URL` transport `api-acp`; `openrouter-qwen-qwen3-8-max-0902` vendor `alibaba` env `OPENROUTER_API_KEY`; `scripted-baseline` vendor `scripted`. Exit 0. Ran on this branch; the id keeps the `-0902` suffix.
 
-**2. Replay (automated only).** `node --test scripts/provider-openai-compat.test.mjs scripts/http-replay.test.mjs` passes with no network. The recorded bodies are under `scripts/provider-fixtures/w03/`.
+**2. Replay.** With dummy keys and the relative replay path the docs give:
+
+```sh
+OMNI_DEMO_HOST=1 OMNI_HTTP_REPLAY=scripts/provider-fixtures/w03 ZAI_API_KEY=zk-test OPENROUTER_API_KEY=or-test \
+  ./bin/audit run --repo scripts/demo-fixture --reviewers key:zai:glm-5.3,openrouter:qwen/qwen3.8-max-0902 --surface s1 --passes 1 --out <out>
+```
+
+See exit 0 and two submissions; the OpenRouter replay reads a file, searches, then submits. `npm run check:w03` runs exactly this. Until the lead lands the `audit-submission.mjs` model-id change (OpenRouter ids contain `/`), that test is marked `todo` and the OpenRouter submit is refused by the bridge.
 
 **3. Scripted reviewers.** Where:
 

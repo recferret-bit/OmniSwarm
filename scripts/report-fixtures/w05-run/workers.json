@@ -44,22 +44,22 @@
       "turnCode": 0
     },
     {
-      "name": "openrouter-qwen-qwen3-8-max-s1-auth",
-      "adapter": "openrouter-qwen-qwen3-8-max",
+      "name": "openrouter-qwen-qwen3-8-max-0902-s1-auth",
+      "adapter": "openrouter-qwen-qwen3-8-max-0902",
       "surface": "S1",
       "state": "collected",
       "turnCode": 0
     },
     {
-      "name": "openrouter-qwen-qwen3-8-max-s2-input",
-      "adapter": "openrouter-qwen-qwen3-8-max",
+      "name": "openrouter-qwen-qwen3-8-max-0902-s2-input",
+      "adapter": "openrouter-qwen-qwen3-8-max-0902",
       "surface": "S2",
       "state": "collected",
       "turnCode": 0
     },
     {
-      "name": "openrouter-qwen-qwen3-8-max-s3-logic",
-      "adapter": "openrouter-qwen-qwen3-8-max",
+      "name": "openrouter-qwen-qwen3-8-max-0902-s3-logic",
+      "adapter": "openrouter-qwen-qwen3-8-max-0902",
       "surface": "S3",
       "state": "collected",
       "turnCode": 0

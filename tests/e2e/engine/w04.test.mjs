@@ -6,6 +6,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { budgetHealth } from '../../../scripts/verification-health.mjs';
+import { runOrchestratedAudit } from '../../../scripts/docker-agent-orchestrator.mjs';
+import { commitSubmission } from '../../../scripts/audit-submission.mjs';
+import { keyFingerprint } from '../../../scripts/reviewer-env.mjs';
+import { parseReviewerList } from '../../../scripts/reviewer-registry.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const run = (args, env = {}) => spawnSync(path.join(ROOT, 'bin', 'audit'), args, { cwd: ROOT, encoding: 'utf8', env: { ...process.env, ...env }, timeout: 180_000 });
@@ -54,10 +58,47 @@ test('a priced replay under the cost ceiling records stop cost and skips pass 2'
   const second = JSON.parse(fs.readFileSync(path.join(out, 'harness', 'usage', 'key-zai-glm-5-3', 's1-pass-2.json'), 'utf8'));
   assert.equal(first.stop, 'cost');
   assert.equal(second.skipped, 'cost_ceiling');
+  const metaText = fs.readFileSync(path.join(out, 'meta.json'), 'utf8');
+  assert.equal(JSON.parse(metaText).reviewers[0].keyFingerprint, keyFingerprint('zk-test'), 'host runs record the key fingerprint');
+  assert.equal(metaText.includes('zk-test'), false);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(out, 'harness', 'budget-health.json'), 'utf8')).state, 'INCOMPLETE', 'a cost stop without a report is recorded, not hidden');
+});
+
+test('Docker path: budgets and prices reach every session, each pass is recorded, a failed pass keeps the last one', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'w04-docker-'));
+  const target = path.join(root, 'source');
+  fs.mkdirSync(target);
+  fs.writeFileSync(path.join(target, 'source.js'), 'export const inert = true;\n');
+  const seen = [];
+  const review = async (options) => {
+    const { identity, bridgeArgs, directory } = options;
+    const out = bridgeArgs[bridgeArgs.indexOf('--report-dir') + 1];
+    const pass = bridgeArgs.includes('--pass') ? Number(bridgeArgs[bridgeArgs.indexOf('--pass') + 1]) : null;
+    seen.push({ name: identity.name, pass, toolBudget: options.budgets?.toolBudget, maxCostUsd: options.budgets?.maxCostUsd, prices: options.prices });
+    fs.mkdirSync(directory, { recursive: true });
+    fs.writeFileSync(path.join(directory, 'state.json'), JSON.stringify({ identity, sessionId: identity.name }));
+    if (identity.name === 'scripted-lazy-s1-auth' && pass === 2) return { code: 1, failureReason: 'turn_incomplete', sessionId: identity.name, directory, elapsedMs: 1, observedExitCode: 0 };
+    const payload = identity.role === 'auditor'
+      ? [{ title: `Pass ${pass} ${identity.name}`, surface: 'S1', severity: 'low', confidence: 'probable', location: ['source.js:1'], impact: 'Fixture', preconditions: 'Fixture', analysis: 'Read source.js:1', validation: 'Fixture only', attack: [], poc: '', fix: 'Fixture' }, { verified_safe: [] }]
+      : JSON.parse(fs.readFileSync(path.join(out, 'crosscheck', `${identity.agent}.json`), 'utf8')).map((row) => ({ id: row.id, verdict: 'upheld', reason: 'Fixture', evidence: ['source.js:1'] }));
+    commitSubmission(out, identity.name, identity, payload);
+    return { code: 0, stop: 'submitted', sessionId: identity.name, directory, elapsedMs: 1, observedExitCode: 0 };
+  };
+  const out = path.join(root, 'report');
+  const prices = { zai: { 'glm-5.3': { inPerMTok: 1, outPerMTok: 2 } } };
+  await runOrchestratedAudit({ target, out, surface: 's1', reviewers: parseReviewerList(['scripted:baseline', 'scripted:lazy']), budgets: { passes: 2, toolBudget: 5, maxCostUsd: 1 }, prices }, { review, startSandbox: async () => ({ container: 'inert', hostRunDir: out, stop: async () => {} }) });
+  assert.ok(seen.length >= 4 && seen.every((call) => call.toolBudget === 5 && call.maxCostUsd === 1 && call.prices === prices));
+  const jobs = JSON.parse(fs.readFileSync(path.join(out, 'workers.json'), 'utf8')).jobs;
+  assert.equal(jobs.find((job) => job.name === 'scripted-baseline-s1-auth').passesCompleted, 2);
+  assert.equal(jobs.find((job) => job.name === 'scripted-lazy-s1-auth').passesCompleted, 1);
+  for (const pass of [1, 2]) assert.ok(fs.existsSync(path.join(out, 'harness', 'usage', 'scripted-baseline', `s1-pass-${pass}.json`)));
+  assert.match(JSON.parse(fs.readFileSync(path.join(out, 'auditors', 'scripted-lazy-s1-auth.json'), 'utf8'))[0].title, /^Pass 1 /);
+  assert.ok(fs.existsSync(path.join(out, 'harness', 'budget-health.json')));
+  fs.rmSync(root, { recursive: true, force: true });
 });
 
 test('grok plan shows max-turns derived from the budget', () => {
-  const result = run(['run', '--repo', 'scripts/demo-fixture', '--reviewers', 'cli:grok:grok-4.7', '--tool-budget', '10', '--passes', '1', '--plan', '--verbose']);
+  const result = run(['run', '--repo', 'scripts/demo-fixture', '--reviewers', 'cli:grok:grok-4.7', '--tool-budget', '10', '--passes', '1', '--plan']);
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /--max-turns 13/);
 });

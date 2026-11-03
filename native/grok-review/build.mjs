@@ -1,10 +1,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { openPrivateOutput, runGate } from '../codex-review/build.mjs';
+import { runGate } from '../codex-review/build.mjs';
+import { openPrivateOutput, privateDirectory as ownerOnlyDirectory } from '../admission-common.mjs';
+import { sha256Hex as hash } from '../../scripts/hash-util.mjs';
 import { overlaySource, LOGIN_MANAGER, LOGIN_RESOLVER, SAMPLER_CLIENT, ROUTING, AUTH_MODULE, LOGIN_CONFIG, CONFIG_LIB, MDM, ERROR_MODULE } from './overlays.mjs';
 
 export const PIN = '2bdd1d6a6369de0e8c68132ea4539e9abd9e14a8';
@@ -33,7 +34,6 @@ const INPUTS = {
 export const NATIVE_DEPENDENCIES = ['chrono','futures-util','indexmap','libc','serde','serde_json','sha2','tempfile','tokio','toml','tracing','wiremock','xai-dirs','xai-grok-config','xai-grok-http','xai-grok-login','xai-grok-sampler','xai-grok-sampling-types','xai-grok-shell-base','xai-grok-version'];
 const OVERLAY_PATHS = [LOGIN_MANAGER, LOGIN_RESOLVER, SAMPLER_CLIENT, ROUTING, LOGIN_CONFIG, CONFIG_LIB, MDM];
 const PROTOC_SHA256 = 'bdc43e54153911f625a50baf7d4f6bc05008712964141baedd5a61122f93a016';
-const hash = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
 export function routingModule(source) {
   const start=source.indexOf('pub(crate) fn inject_url_derived_headers(');
   const end=source.indexOf('\nfn resolve_hidden_default_web_search_sampling_config(',start);
@@ -47,17 +47,13 @@ export function nativeIdentity() {
   const scripts=path.resolve(HERE,'../../scripts');
   const recipeInputs=[
     ...packageInputs,
-    ...['build.mjs','Dockerfile','Dockerfile.dockerignore','docker.mjs','overlays.mjs','overlays/text_review.rs','overlays/error_classifier.rs','source-pin.json','admit.mjs','../codex-review/build.mjs','../codex-review/admit.mjs'].map((name)=>[name,hash(fs.readFileSync(path.join(HERE,name)))]),
+    ...['build.mjs','Dockerfile','Dockerfile.dockerignore','docker.mjs','overlays.mjs','overlays/text_review.rs','overlays/error_classifier.rs','source-pin.json','admit.mjs','../codex-review/build.mjs','../codex-review/admit.mjs','../admission-common.mjs'].map((name)=>[name,hash(fs.readFileSync(path.join(HERE,name)))]),
     ...fs.readdirSync(scripts).filter((name)=>name.endsWith('.mjs')).sort().map((name)=>[`scripts/${name}`,hash(fs.readFileSync(path.join(scripts,name)))]),
     ['bin/audit',hash(fs.readFileSync(path.resolve(HERE,'../../bin/audit')))],
   ];
   return {packageDigest:hash(JSON.stringify(packageInputs)),recipeDigest:hash(JSON.stringify(recipeInputs))};
 }
-function privateDirectory(dir) {
-  if(!fs.existsSync(dir))fs.mkdirSync(dir,{recursive:true,mode:0o700});
-  const stat=fs.lstatSync(dir);
-  if(!stat.isDirectory()||stat.isSymbolicLink()||stat.uid!==process.getuid()||(stat.mode&0o077))throw new Error('grok_cache_not_private');
-}
+const privateDirectory=(dir)=>ownerOnlyDirectory(dir,'grok_cache_not_private');
 function write(file,bytes) {
   // Preserve mtimes for identical inputs so preparation does not rebuild the
   // entire native dependency graph after a transport-only change.

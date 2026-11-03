@@ -1,0 +1,12 @@
+# Next.js build output (production, e2e and guard builds)
+/.next/
+/.next-*/
+/out/
+next-env.d.ts
+*.tsbuildinfo
+
+# Copied from msw at dev/e2e start by scripts/msw-worker.mjs; never shipped
+/public/mockServiceWorker.js
+
+# Local overrides of the committed .env defaults
+.env*.local

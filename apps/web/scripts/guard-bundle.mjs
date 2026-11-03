@@ -1,36 +1,60 @@
+// `npm run guard`: builds production (NEXT_PUBLIC_WALLET=real, mocks off) into
+// .next-guard and fails if the mock wallet, MSW, the mock controls, the recorded
+// sample attestation hash or any key-shaped string reached first-party output.
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { listFiles, scan } from './bundle-scan.mjs';
 
-const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const built = spawnSync('npx', ['vite', 'build'], { cwd: root, encoding: 'utf8' });
-if (built.status !== 0) {
-  console.error(built.stderr || built.stdout);
-  process.exit(built.status || 1);
-}
-const walletSource = fs.readFileSync(path.join(root, 'src/mock-wallet.ts'), 'utf8');
-for (const token of ['MockConnector', 'ed25519:']) {
-  if (!walletSource.includes(token)) {
-    console.error(`mock wallet is missing ${token}; the bundle guard would not be checking a real connector`);
-    process.exit(1);
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const distDir = '.next-guard';
+const env = { ...process.env, NEXT_PUBLIC_WALLET: 'real', NEXT_PUBLIC_API_MOCK: '0', NEXT_DIST_DIR: distDir, NEXT_TELEMETRY_DISABLED: '1' };
+
+function run(args) {
+  const result = spawnSync(process.execPath, args, { cwd: root, env, encoding: 'utf8' });
+  if (result.status !== 0) {
+    console.error(result.stdout, result.stderr);
+    process.exit(result.status || 1);
   }
 }
-const dist = path.join(root, 'dist');
-const files = [];
-const walk = (dir) => {
-  for (const name of fs.readdirSync(dir)) {
-    const full = path.join(dir, name);
-    if (fs.statSync(full).isDirectory()) walk(full);
-    else files.push(full);
+
+// The guard is only meaningful if the dev sources still carry the tokens it bans.
+const sources = { 'src/mocks/wallet.ts': ['MockConnector', 'ed25519:'], 'src/mocks/MockPanel.tsx': ['Tamper the report', 'Mock mode (dev only)'] };
+for (const [file, tokens] of Object.entries(sources)) {
+  const text = fs.readFileSync(path.join(root, file), 'utf8');
+  for (const token of tokens) {
+    if (!text.includes(token)) {
+      console.error(`${file} no longer contains "${token}"; update the guard so it still checks the real mock code`);
+      process.exit(1);
+    }
   }
-};
-walk(dist);
-const banned = [/ed25519:/, /(?<![A-Za-z])sk-/, /ghp_/, /github_pat_/, /OPENROUTER/, /ZAI_/, /MockConnector/];
-const text = files.filter((file) => file.endsWith('.js') || file.endsWith('.css') || file.endsWith('.html')).map((file) => fs.readFileSync(file, 'utf8')).join('\n');
-const hits = banned.filter((token) => token.test(text)).map(String);
-if (hits.length) {
-  console.error(`production bundle contains ${hits.join(', ')}`);
+}
+
+fs.rmSync(path.join(root, distDir), { recursive: true, force: true });
+run(['scripts/msw-worker.mjs']);
+run([createRequire(import.meta.url).resolve('next/dist/bin/next'), 'build']);
+
+if (fs.existsSync(path.join(root, 'public/mockServiceWorker.js'))) {
+  console.error('public/mockServiceWorker.js exists in a production build');
   process.exit(1);
 }
-console.log(`production bundle checked (${files.length} files), no mock connector or key-shaped strings`);
+const out = path.join(root, distDir);
+const files = [
+  ...listFiles(path.join(out, 'static')),
+  ...listFiles(path.join(out, 'server/app')),
+  ...listFiles(path.join(out, 'server/chunks')),
+  ...listFiles(path.join(root, 'public')),
+];
+const sampleHash = JSON.parse(fs.readFileSync(path.join(root, 'public/sample/attestation.json'), 'utf8')).report_sha256;
+const hits = scan(files.filter((file) => !file.includes(`${path.sep}public${path.sep}sample${path.sep}`)), [sampleHash]);
+if (!files.some((file) => file.includes(`${path.sep}static${path.sep}`))) {
+  console.error('no client bundle found; the build output layout changed');
+  process.exit(1);
+}
+if (hits.length) {
+  for (const hit of hits) console.error(`${path.relative(root, hit.file)}: ${hit.rule}`);
+  process.exit(1);
+}
+console.log(`production bundle checked (${files.length} files): no mock wallet, MSW, mock controls, fixture hash or key-shaped strings`);

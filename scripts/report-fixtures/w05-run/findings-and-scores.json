@@ -53,26 +53,26 @@
       ]
     },
     {
-      "title": "openrouter-qwen-qwen3-8-max S2 finding 1",
+      "title": "openrouter-qwen-qwen3-8-max-0902 S2 finding 1",
       "severity": "high",
       "surface": "S2",
       "status": "MODEL_ASSERTION",
       "score": 40,
       "claimIds": [
-        "openrouter-qwen-qwen3-8-max-s2-input#0"
+        "openrouter-qwen-qwen3-8-max-0902-s2-input#0"
       ],
       "locations": [
         "src/lib.rs:30"
       ]
     },
     {
-      "title": "openrouter-qwen-qwen3-8-max S3 finding 1",
+      "title": "openrouter-qwen-qwen3-8-max-0902 S3 finding 1",
       "severity": "high",
       "surface": "S3",
       "status": "MODEL_ASSERTION",
       "score": 40,
       "claimIds": [
-        "openrouter-qwen-qwen3-8-max-s3-logic#0"
+        "openrouter-qwen-qwen3-8-max-0902-s3-logic#0"
       ],
       "locations": [
         "src/lib.rs:30"

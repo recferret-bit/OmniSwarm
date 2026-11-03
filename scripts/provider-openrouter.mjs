@@ -2,14 +2,6 @@
 import { buildApiLaunch } from './provider-api-launch.mjs';
 import { presetFor } from './provider-openai-compat.mjs';
 
-const ORG_VENDORS = { anthropic: 'anthropic', openai: 'openai', 'x-ai': 'xai', xai: 'xai', google: 'google', qwen: 'alibaba', 'z-ai': 'zai' };
-
-export function vendorOfOpenRouter(model) {
-  const org = String(model || '').split('/')[0].toLowerCase();
-  if (!String(model || '').includes('/')) return 'openrouter';
-  return ORG_VENDORS[org] || org.replace(/[^a-z0-9-]+/g, '-');
-}
-
 const preset = presetFor('openrouter');
 
 function launch(reviewer, ctx) {
@@ -24,5 +16,5 @@ export const family = {
   available: (_reviewer, env = process.env) => Boolean(env.OPENROUTER_API_KEY),
   launch,
   envAllowlist: () => preset.envAllowlist,
-  vendorOf: (_provider, model) => vendorOfOpenRouter(model),
+  fingerprintEnv: () => preset.keyEnv,
 };

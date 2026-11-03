@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { modelMatches, presetFor, runToolLoop } from './provider-openai-compat.mjs';
+import { buildApiLaunch } from './provider-api-launch.mjs';
 
 function scriptedFetch(steps) {
   const calls = [];
@@ -21,6 +25,23 @@ function scriptedFetch(steps) {
 
 const toolCall = (id, name, args) => ({ id, type: 'function', function: { name, arguments: JSON.stringify(args) } });
 const message = (model, calls) => ({ model, choices: [{ message: { role: 'assistant', content: null, tool_calls: calls } }], usage: { prompt_tokens: 3, completion_tokens: 2 } });
+
+test('the loop transcript records each message once, not the whole conversation every turn', async (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'loop-transcript-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const transcriptPath = path.join(dir, 'loop-transcript.jsonl');
+  const { fetch } = scriptedFetch([
+    { body: message('glm-5.3', [toolCall('a', 'read_file', { path: 'src/lib.rs' })]) },
+    { body: message('glm-5.3', [toolCall('b', 'search_code', { pattern: 'owner' })]) },
+    { body: message('glm-5.3', [toolCall('c', 'submit_audit_report', { findings: [] })]) },
+  ]);
+  const result = await runToolLoop({ baseUrl: 'https://example.invalid/v1', model: 'glm-5.3', callTool: async (name) => `${name} text`, brief: 'Review S1', fetchImpl: fetch, transcriptPath });
+  assert.equal(result.stop, 'submitted');
+  const rows = fs.readFileSync(transcriptPath, 'utf8').trim().split('\n').map((line) => JSON.parse(line));
+  assert.deepEqual(rows.map((row) => row.request.messagesFrom), [0, 1, 3]);
+  assert.deepEqual(rows.map((row) => row.request.messages.length), [1, 2, 2], 'only the messages added since the previous turn');
+  assert.equal(rows.flatMap((row) => row.request.messages).filter((m) => m.role === 'user').length, 1);
+});
 
 test('a 3-turn script executes each tool call and stops on submit', async () => {
   const seen = [];
@@ -97,4 +118,51 @@ test('a served model that is not the requested model stops as model_mismatch', a
   assert.equal(result.failure, 'model_mismatch');
   assert.equal(result.servedModel, 'glm-5.1');
   assert.equal(result.stop, 'error');
+});
+
+test('the last turn forces the submit tool of the reviewer role', async () => {
+  for (const [submitTool, expected] of [[undefined, 'submit_audit_report'], ['submit_crosscheck_report', 'submit_crosscheck_report']]) {
+    const { fetch, calls } = scriptedFetch([
+      { body: message('glm-5.3', [toolCall('c1', 'read_file', { path: 'a' })]) },
+      { body: message('glm-5.3', [toolCall('c2', 'read_file', { path: 'b' })]) },
+      { body: message('glm-5.3', [toolCall('c3', expected, { verdicts: [] })]) },
+    ]);
+    const result = await runToolLoop({
+      baseUrl: 'https://example.invalid/v1', apiKey: 'k', model: 'glm-5.3', tools: [], maxTurns: 3, ...(submitTool ? { submitTool } : {}),
+      callTool: async () => 'ok', brief: 'review', fetchImpl: fetch, sleep: async () => {},
+    });
+    assert.equal(result.stop, 'submitted');
+    assert.equal(calls[0].body.tool_choice, undefined);
+    assert.equal(calls[1].body.tool_choice, undefined);
+    assert.deepEqual(calls[2].body.tool_choice, { type: 'function', function: { name: expected } });
+  }
+  await assert.rejects(runToolLoop({ baseUrl: 'https://example.invalid/v1', model: 'm', callTool: async () => '', submitTool: 'read_file' }), /unknown submit tool/);
+});
+
+test('a crosscheck launch configures the crosscheck submit tool', () => {
+  const work = fs.mkdtempSync(path.join(os.tmpdir(), 'api-role-'));
+  const env = { PATH: '/bin', HOME: '/tmp', ZAI_API_KEY: 'zk-test' };
+  for (const [role, tool] of [['auditor', 'submit_audit_report'], ['crosscheck', 'submit_crosscheck_report']]) {
+    buildApiLaunch({ provider: 'zai', model: 'glm-5.3' }, { workDir: work, env, role, toolBudget: 5 }, presetFor('zai'));
+    const config = JSON.parse(fs.readFileSync(path.join(work, 'api-launch.json'), 'utf8'));
+    assert.equal(config.submitTool, tool);
+    assert.equal(config.maxTurns, 8);
+  }
+});
+
+test('a tool call with malformed arguments is answered with an error, not sent to the bridge', async () => {
+  const seen = [];
+  const bad = { id: 'c1', type: 'function', function: { name: 'read_file', arguments: '{not json' } };
+  const { fetch, calls } = scriptedFetch([
+    { body: message('glm-5.3', [bad]) },
+    { body: message('glm-5.3', [toolCall('c2', 'submit_audit_report', { findings: [] })]) },
+  ]);
+  const result = await runToolLoop({
+    baseUrl: 'https://example.invalid/v1', apiKey: 'k', model: 'glm-5.3', tools: [],
+    callTool: async (name) => { seen.push(name); return 'ok'; }, brief: 'review', fetchImpl: fetch, sleep: async () => {},
+  });
+  assert.equal(result.stop, 'submitted');
+  assert.deepEqual(seen, ['submit_audit_report']);
+  const reply = calls[1].body.messages.find((row) => row.role === 'tool' && row.tool_call_id === 'c1');
+  assert.match(reply.content, /Tool error: invalid tool arguments/);
 });
