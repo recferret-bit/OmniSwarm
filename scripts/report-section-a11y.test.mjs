@@ -3,8 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { STATUS_COLORS } from './report-sections/registry.mjs';
-import { ORANGE_PILL_TEXT } from './report-sections/status-legend.mjs';
-import { SCRIPTS, read, renderV2 } from './report-cards-fixtures.mjs';
+import { SCRIPTS, read, renderLegacy, renderV2 } from './report-cards-fixtures.mjs';
 
 function channel(hex, index) {
   const value = parseInt(hex.slice(index, index + 2), 16) / 255;
@@ -32,7 +31,10 @@ test('status pill tokens and the CSS tone classes meet WCAG AA contrast', () => 
     const ratio = contrast(vars[tone], vars[`${tone}-pale`]);
     assert.ok(ratio >= 4.5, `pill ${tone} on ${tone}-pale ${ratio.toFixed(2)}`);
   }
-  assert.ok(contrast(ORANGE_PILL_TEXT, vars['orange-pale']) >= 4.5, 'v2 orange pill text');
+  // Orange pills (medium severity, bundled claim, severity spread) on legacy and v2 pages alike.
+  assert.match(css, /^\.pill\.orange \{ color: var\(--orange-ink\); \}$/m);
+  assert.ok(contrast(vars['orange-ink'], vars['orange-pale']) >= 4.5, `orange pill text ${contrast(vars['orange-ink'], vars['orange-pale']).toFixed(2)}`);
+  assert.ok(read(renderLegacy(), 'report.html').includes('.pill.orange { color: var(--orange-ink); }'), 'legacy pages embed the darker orange pill text');
 });
 
 test('v2 pages have one main, native disclosures, pressed state, labelled badges and no heading skips', () => {
@@ -45,7 +47,6 @@ test('v2 pages have one main, native disclosures, pressed state, labelled badges
     assert.equal(/<details[^>]*aria-expanded/.test(html), false, `${rel}: a static aria-expanded on <details> goes stale`);
   }
   const report = read(dir, 'report.html');
-  assert.ok(report.includes(`.pill.orange{color:${ORANGE_PILL_TEXT}}`));
   assert.match(report, /<details class="disclosure debate"><summary>Debate<\/summary>/);
   assert.match(report, /data-cross-filter="DISPUTED"[^>]*aria-pressed="false"/);
   assert.match(report, /data-status-filter="LIKELY"[^>]*aria-pressed="false"/);
