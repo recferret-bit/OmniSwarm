@@ -21,7 +21,6 @@
     "test:contract": "node tools/gate.mjs test:contract contracts/review-registry/Cargo.toml -- cargo test --manifest-path contracts/review-registry/Cargo.toml",
     "test:e2e": "node tools/gate.mjs test:e2e e2e/package.json -- npm test --prefix e2e --",
     "check:infra": "node tools/gate.mjs check:infra infra/check.sh -- bash infra/check.sh",
-    "eval:golden": "node tools/gate.mjs eval:golden eval/run.mjs -- node eval/run.mjs",
     "check:all": "npm run test:schemas && npm run test:intake && npm run test:landing && npm run test:contract && npm run test:e2e && npm run check:infra && node scripts/harness.mjs --self-test && npm test",
     "check:w00": "node tools/check-w00.mjs",
     "check:w01": "node --test scripts/reviewer-*.test.mjs scripts/orchestrator-phases.test.mjs scripts/run-config.test.mjs && node scripts/harness.mjs --self-test && npm test",

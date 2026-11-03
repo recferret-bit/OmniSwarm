@@ -23,3 +23,6 @@ eval/runs/
 
 # operator run config (copy of omniswarm.config.example.json)
 omniswarm.config.json
+
+# Cargo build output
+target/
