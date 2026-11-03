@@ -14,7 +14,7 @@ export const errorResponse = z.strictObject({
   error: z.strictObject({ code: z.enum(ERROR_CODES as [string, ...string[]]), message: z.string().min(1).max(2000), retryable: z.boolean() }),
 });
 
-export const challengeRequest = z.strictObject({}).optional();
+export const challengeRequest = z.strictObject({}).nullish();
 export const challengeResponse = z.strictObject({ nonce, expiresAt: timestamp });
 
 export const quoteRequest = z.strictObject({ repoUrl: z.string().min(1).max(300), network, ref: z.string().min(1).max(200).optional() });
@@ -51,6 +51,10 @@ export const requestListResponse = z.strictObject({
 export const guardQuery = z.strictObject({ account: accountId, network: network.optional() });
 export const guardVerdictResponse = z.strictObject({
   verdict: z.enum(['allow', 'warn', 'block']), reasons: z.array(z.string().min(1)), signals: z.record(z.string(), z.unknown()),
+  attestation: z.strictObject({
+    requestHash: sha256Hex, reportSha256: sha256Hex, reportUri: https, deployed: accountId.nullable().optional(), codeHash: z.string().min(1).max(128).nullable().optional(),
+    maxSeverity: z.enum(['critical', 'high', 'medium', 'low', 'info', 'none']),
+  }).optional(),
 });
 
 export const healthResponse = z.strictObject({

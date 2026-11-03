@@ -1,8 +1,11 @@
 // Composition root: the only module that picks concrete adapters. Test adapters (mock chain, recorded
 // GitHub, mock engine) are imported lazily and refused in production, so a production process never
 // even loads them.
+import fs from 'node:fs';
 import path from 'node:path';
+import type { RecordedChain } from '@omniswarm/guard';
 import type { ChainPort } from './chain/port.ts';
+import { chainReader, guardPort, type GuardPort } from './modules/guard/guard.port.ts';
 import type { Config } from './config/load.ts';
 import { createPool, type Pool } from './db/pool.ts';
 import type { EngineRunner } from './engine/port.ts';
@@ -56,6 +59,16 @@ export async function createEngine(config: Config, env: NodeJS.ProcessEnv = proc
     root: config.engine.root, env: engineEnv(env, [...preset.envNames, ...config.engine.envPassthrough]),
     timeoutS: config.engine.timeoutS, killGraceS: config.engine.killGraceS, logMaxBytes: config.engine.logMaxBytes,
   });
+}
+
+export async function createGuardPort(config: Config, chain: ChainPort): Promise<GuardPort> {
+  if (chain.kind === 'mock') {
+    refuseInProduction(config, 'the recorded guard reader');
+    const { createRecordedReader } = await import('@omniswarm/guard/recorded-reader');
+    const records = JSON.parse(fs.readFileSync(path.join(APP_ROOT, 'test/fixtures/guard/records.json'), 'utf8')) as RecordedChain;
+    return guardPort(createRecordedReader(records));
+  }
+  return guardPort(chainReader(chain));
 }
 
 export interface CoreDeps { config: Config; pool: Pool; clock: Clock; chain: ChainPort }

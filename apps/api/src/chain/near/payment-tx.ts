@@ -50,3 +50,14 @@ export function panicReason(raw: unknown): string | null {
   if (!failed(response)) return null;
   return /ERR_[A-Z_]+/.exec(JSON.stringify(response))?.[0] ?? 'ERR_TX_FAILED';
 }
+
+/** The JSON value a successful call returned (`status.SuccessValue`, base64), or undefined. */
+export function returnValue(raw: unknown): unknown {
+  const value = ((raw ?? {}) as TxResponse).status?.SuccessValue;
+  if (typeof value !== 'string' || value === '') return undefined;
+  try {
+    return JSON.parse(Buffer.from(value, 'base64').toString('utf8'));
+  } catch {
+    return undefined;
+  }
+}

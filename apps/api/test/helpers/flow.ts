@@ -47,7 +47,7 @@ export function sign(dev: DevWallet, nonce: string, overrides: Partial<{ repo: s
 
 export function sessionCookie(reply: Reply): string {
   const cookie = reply.headers.get('set-cookie')?.split(';')[0];
-  assert.ok(cookie?.startsWith('sid='), 'sid cookie set');
+  if (!cookie?.startsWith('sid=')) assert.fail('sid cookie set');
   return cookie;
 }
 

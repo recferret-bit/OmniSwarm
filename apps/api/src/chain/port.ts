@@ -23,7 +23,12 @@ export interface ChainAttestation {
   reportUri: string;
   deployed: string | null;
   codeHash: string | null;
-  maxSeverity: string;
+  maxSeverity: Severity;
+  blockHeight: number;
+  /** Block time of the attest call (registry v0.2). */
+  blockTimestampMs: number | null;
+  /** The `deployed` account confirmed (or paid for) this review. */
+  bindingConfirmed: boolean;
 }
 
 /** A FINAL `request_review` payment transaction as read from the chain. */
@@ -48,6 +53,9 @@ export interface AttestArgs {
   maxSeverity: Severity;
 }
 
+/** `view_account.code_hash` of an account without a contract. */
+export const EMPTY_CODE_HASH = '11111111111111111111111111111111';
+
 export interface ChainHealth { rpc: boolean; contract: boolean }
 
 export interface ChainPort {
@@ -61,9 +69,13 @@ export interface ChainPort {
   getRequest(requestHash: string): Promise<ChainRequest | null>;
   getAttestation(requestHash: string): Promise<ChainAttestation | null>;
   getPrice(): Promise<bigint>;
-  /** `view_account(...).code_hash`; null when the account does not exist. */
-  viewCodeHash(accountId: string): Promise<string | null>;
-  /** Operator calls. Each returns the FINAL tx hash. */
+  /** `view_account` at final finality; null when the account does not exist. */
+  viewAccount(accountId: string): Promise<{ codeHash: string } | null>;
+  /** Latest attestation whose binding the account confirmed (the guard's view). */
+  getAttestationForAccount(accountId: string): Promise<ChainAttestation | null>;
+  /** Timestamp of a block by height, in milliseconds. */
+  blockTimestampMs(height: number): Promise<number>;
+  /** Operator calls. Each returns the FINAL tx hash. `refund` throws when the transfer bounced. */
   markRunning(requestHash: string): Promise<string>;
   attest(args: AttestArgs): Promise<string>;
   refund(requestHash: string): Promise<string>;

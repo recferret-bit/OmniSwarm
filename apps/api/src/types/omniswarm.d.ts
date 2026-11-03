@@ -27,7 +27,3 @@ declare module '@omniswarm/schemas/nep413' {
   export function b58encode(bytes: Uint8Array): string;
   export function b58decode(text: string): Uint8Array;
 }
-
-declare module '@omniswarm/guard' {
-  export function verdictFor(account: string): { verdict: 'allow' | 'warn' | 'block'; reasons: string[]; account: string };
-}

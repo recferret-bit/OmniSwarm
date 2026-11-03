@@ -5,11 +5,10 @@ import os from 'node:os';
 import path from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { loadConfig, type Config } from '../../src/config/load.ts';
-import { createCore, createEngine, createGitHub, type CoreDeps } from '../../src/container.ts';
+import { createCore, createEngine, createGitHub, createGuardPort, type CoreDeps } from '../../src/container.ts';
 import { migrateAll } from '../../src/db/deploy.ts';
 import { buildAdminApp, buildApp } from '../../src/http/app.ts';
 import type { ApiDeps } from '../../src/http/deps.ts';
-import { packageGuard } from '../../src/modules/guard/guard.port.ts';
 import { EventHub } from '../../src/modules/progress/event-hub.ts';
 import { createBoss, type PgBoss } from '../../src/queue/boss.ts';
 import type { Clock } from '../../src/shared/clock.ts';
@@ -36,7 +35,7 @@ export function testEnv(databaseUrl: string, overrides: Record<string, string> =
     SESSION_SECRET: 'test-session-secret-0123456789abcdef0123', ADMIN_TOKEN, INTAKE_RECIPIENT: RECIPIENT, CONTRACT_ID: CONTRACT,
     CHAIN_ADAPTER: 'mock', GITHUB_ADAPTER: 'recorded', ENGINE_RUNNER: 'mock', MOCK_ENGINE_STEP_MS: '20',
     RUNS_ROOT: path.join(dir, 'runs'), REPORTS_ROOT: path.join(dir, 'published'), REPORTS_BASE_URL: 'https://reports.test',
-    QUEUE_HEARTBEAT_S: '10', QUEUE_MONITOR_S: '1', QUEUE_RETRY_DELAY_S: '0', PROGRESS_POLL_MS: '50', PATH: process.env.PATH ?? '',
+    QUEUE_HEARTBEAT_S: '10', QUEUE_MONITOR_S: '1', QUEUE_RETRY_DELAY_S: '0', PROGRESS_POLL_MS: '50', RATE_LIMIT_PER_MINUTE: '10000', PATH: process.env.PATH ?? '',
     HOME: process.env.HOME ?? '', ...overrides,
   };
 }
@@ -62,7 +61,7 @@ export async function startApi(env: Record<string, string>, clock?: Clock): Prom
   await boss.start();
   const events = new EventHub(config.db.url, log);
   await events.start();
-  const deps: ApiDeps = { ...core, github: await createGitHub(config), guard: packageGuard, boss, events, log };
+  const deps: ApiDeps = { ...core, github: await createGitHub(config), guard: await createGuardPort(config, core.chain), boss, events, log };
   const app = await buildApp(deps, { sseKeepAliveMs: 1000 });
   const base = await app.listen({ host: '127.0.0.1', port: 0 });
   return {

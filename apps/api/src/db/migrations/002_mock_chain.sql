@@ -41,6 +41,9 @@ CREATE TABLE mock_chain_attestation (
   deployed text,
   code_hash text,
   max_severity text NOT NULL,
+  block_height bigint NOT NULL,
+  block_timestamp_ms bigint NOT NULL,
+  binding_confirmed boolean NOT NULL,
   tx_hash text NOT NULL
 );
 

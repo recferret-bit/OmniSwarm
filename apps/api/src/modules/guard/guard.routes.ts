@@ -7,5 +7,5 @@ export const guardRoutes: FastifyPluginAsyncZod<{ deps: ApiDeps }> = async (app,
   app.get('/api/guard/verdict', {
     config: perMinute(deps.config.http.rateLimitPerMinute),
     schema: { summary: 'Agent guard verdict for a NEAR account', querystring: guardQuery, response: { 200: guardVerdictResponse, 400: errorResponse } },
-  }, async (request) => deps.guard.verdict(request.query.account, request.query.network ?? deps.config.intake.network));
+  }, async (request) => deps.guard.verdict(request.query.account));
 };

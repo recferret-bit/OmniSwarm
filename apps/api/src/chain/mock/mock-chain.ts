@@ -7,6 +7,7 @@ import type { Db, Pool } from '../../db/pool.ts';
 import { AppError } from '../../shared/errors.ts';
 import { ChainRejectedError, chainUnavailable } from '../errors.ts';
 import type { AttestArgs, ChainAttestation, ChainPort, ChainRequest, KeyPermission, PaymentTx } from '../port.ts';
+import { fromContractAttestation, type ContractAttestation } from '../near/attestation.ts';
 
 export interface MockChainOptions {
   contractId: string;
@@ -15,6 +16,9 @@ export interface MockChainOptions {
   /** Test hook: never return after this write lands, so a test can kill the process mid-call. */
   hangAfter: 'attest' | 'refund' | null;
 }
+
+const ATTESTATION_COLUMNS = `request_hash, repo, commit_sha AS commit, report_sha256, report_uri, deployed, code_hash, max_severity,
+  block_height::int AS block_height, block_timestamp_ms::float8 AS block_timestamp_ms, binding_confirmed`;
 
 export function mockTxHash(seed: string): string {
   return b58encode(crypto.createHash('sha256').update(seed).digest());
@@ -71,13 +75,22 @@ export class MockChainAdapter implements ChainPort {
 
   async getAttestation(requestHash: string): Promise<ChainAttestation | null> {
     await this.#guard();
-    const result = await this.#db.query('SELECT * FROM mock_chain_attestation WHERE request_hash = $1', [requestHash]);
-    const row = result.rows[0];
-    if (!row) return null;
-    return {
-      requestHash, repo: row.repo, commit: row.commit_sha, reportSha256: row.report_sha256, reportUri: row.report_uri,
-      deployed: row.deployed, codeHash: row.code_hash, maxSeverity: row.max_severity,
-    };
+    const result = await this.#db.query<ContractAttestation>(
+      `SELECT ${ATTESTATION_COLUMNS} FROM mock_chain_attestation WHERE request_hash = $1`, [requestHash]);
+    return result.rows[0] ? fromContractAttestation(result.rows[0]) : null;
+  }
+
+  async getAttestationForAccount(accountId: string): Promise<ChainAttestation | null> {
+    await this.#guard();
+    const result = await this.#db.query<ContractAttestation>(
+      `SELECT ${ATTESTATION_COLUMNS} FROM mock_chain_attestation WHERE deployed = $1 AND binding_confirmed ORDER BY block_height DESC LIMIT 1`,
+      [accountId]);
+    return result.rows[0] ? fromContractAttestation(result.rows[0]) : null;
+  }
+
+  async blockTimestampMs(): Promise<number> {
+    await this.#guard();
+    return Date.now();
   }
 
   async getPrice(): Promise<bigint> {
@@ -85,10 +98,10 @@ export class MockChainAdapter implements ChainPort {
     return BigInt(this.#options.priceYocto);
   }
 
-  async viewCodeHash(accountId: string): Promise<string | null> {
+  async viewAccount(accountId: string): Promise<{ codeHash: string } | null> {
     await this.#guard();
     const result = await this.#db.query<{ code_hash: string }>('SELECT code_hash FROM mock_chain_account WHERE account = $1', [accountId]);
-    return result.rows[0]?.code_hash ?? null;
+    return result.rows[0] ? { codeHash: result.rows[0].code_hash } : null;
   }
 
   async markRunning(requestHash: string): Promise<string> {
@@ -98,11 +111,15 @@ export class MockChainAdapter implements ChainPort {
 
   async attest(args: AttestArgs): Promise<string> {
     await this.#guard();
+    if ((args.deployed === null) !== (args.codeHash === null)) throw new ChainRejectedError('ERR_DEPLOYED_PAIR');
     const txHash = await this.#transition(args.requestHash, 'attest', ['Pending', 'Running'], 'Done', args, async (client, tx) => {
+      // As in the contract: the binding is confirmed when the deployed account paid for the review.
       await client.query(
-        `INSERT INTO mock_chain_attestation (request_hash, repo, commit_sha, report_sha256, report_uri, deployed, code_hash, max_severity, tx_hash)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-        [args.requestHash, args.repo, args.commit, args.reportSha256, args.reportUri, args.deployed, args.codeHash, args.maxSeverity, tx]);
+        `INSERT INTO mock_chain_attestation (request_hash, repo, commit_sha, report_sha256, report_uri, deployed, code_hash, max_severity,
+           block_height, block_timestamp_ms, binding_confirmed, tx_hash)
+         SELECT $1,$2,$3,$4,$5,$6,$7,$8, (SELECT count(*) FROM mock_chain_tx), $9, r.account = $6, $10
+         FROM mock_chain_request r WHERE r.request_hash = $1`,
+        [args.requestHash, args.repo, args.commit, args.reportSha256, args.reportUri, args.deployed, args.codeHash, args.maxSeverity, Date.now(), tx]);
       await client.query(`INSERT INTO mock_chain_event (event, request_hash, data) VALUES ('review_attested', $1, $2)`,
         [args.requestHash, JSON.stringify({ report_sha256: args.reportSha256 })]);
     });

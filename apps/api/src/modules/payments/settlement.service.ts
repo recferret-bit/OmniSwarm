@@ -2,7 +2,7 @@
 // advisory lock and asks the contract first, so a retry after a crash (or an admin refund racing the
 // worker) never sends a second attest or refund, and never overwrites an attestation.
 import { ChainRejectedError } from '../../chain/errors.ts';
-import type { ChainPort, Severity } from '../../chain/port.ts';
+import { EMPTY_CODE_HASH, type ChainPort, type Severity } from '../../chain/port.ts';
 import { withAdvisoryLock, type Pool } from '../../db/pool.ts';
 import { findRequest, transition, type RequestRow } from '../../db/repositories/requests.ts';
 import type { Clock } from '../../shared/clock.ts';
@@ -86,10 +86,12 @@ export async function attestRequest(deps: SettlementDeps, requestId: string, att
         throw new AttestationConflictError(`chain attests ${existing?.reportSha256 ?? 'nothing'}, published report is ${row.report_sha256}`);
       }
     } else if (onChain?.status === 'Pending' || onChain?.status === 'Running') {
-      const codeHash = row.deployed ? await deps.chain.viewCodeHash(row.deployed) : null;
+      // The contract takes `deployed` and `code_hash` together or not at all; an account without code is not bound.
+      const account = row.deployed ? await deps.chain.viewAccount(row.deployed) : null;
+      const codeHash = account && account.codeHash !== EMPTY_CODE_HASH ? account.codeHash : null;
       attestTx = await deps.chain.attest({
         requestHash: row.request_hash, repo: row.repo, commit: row.commit_sha, reportSha256: row.report_sha256,
-        reportUri: attestation.reportUri, deployed: row.deployed, codeHash, maxSeverity: attestation.maxSeverity,
+        reportUri: attestation.reportUri, deployed: codeHash ? row.deployed : null, codeHash, maxSeverity: attestation.maxSeverity,
       });
     } else {
       throw new ChainRejectedError('ERR_BAD_STATUS', `the contract holds this request as ${onChain?.status ?? 'unknown'}`);

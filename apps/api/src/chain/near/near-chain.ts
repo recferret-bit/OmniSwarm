@@ -5,11 +5,11 @@ import { Account, FailoverRpcError, FailoverRpcProvider, JsonRpcProvider, action
 import { AccessKeyDoesNotExistError, AccountDoesNotExistError, UnknownTransactionError } from 'near-api-js/rpc-errors';
 import { ChainRejectedError, chainUnavailable } from '../errors.ts';
 import type { AttestArgs, ChainAttestation, ChainPort, ChainRequest, KeyPermission, PaymentTx } from '../port.ts';
-import { panicReason, parsePaymentTx } from './payment-tx.ts';
+import { fromContractAttestation, type ContractAttestation } from './attestation.ts';
+import { panicReason, parsePaymentTx, returnValue } from './payment-tx.ts';
 
 const FINAL = { finality: 'final' } as const;
 const GAS = 30_000_000_000_000n;
-const NO_CODE = '11111111111111111111111111111111';
 
 export interface NearChainOptions {
   rpcUrls: string[];
@@ -81,13 +81,19 @@ export class NearChainAdapter implements ChainPort {
   }
 
   async getAttestation(requestHash: string): Promise<ChainAttestation | null> {
-    const row = await this.#view<Record<string, string | null>>('get_attestation', { request_hash: requestHash });
-    if (!row) return null;
-    return {
-      requestHash: String(row.request_hash), repo: String(row.repo), commit: String(row.commit),
-      reportSha256: String(row.report_sha256), reportUri: String(row.report_uri), deployed: row.deployed ?? null,
-      codeHash: row.code_hash ?? null, maxSeverity: String(row.max_severity),
-    };
+    const row = await this.#view<ContractAttestation>('get_attestation', { request_hash: requestHash });
+    return row ? fromContractAttestation(row) : null;
+  }
+
+  async getAttestationForAccount(accountId: string): Promise<ChainAttestation | null> {
+    const row = await this.#view<ContractAttestation>('get_attestation_for_account', { account: accountId });
+    return row ? fromContractAttestation(row) : null;
+  }
+
+  async blockTimestampMs(height: number): Promise<number> {
+    const block = await this.#read(() => this.#provider.viewBlock({ blockId: height }));
+    if (!block) throw chainUnavailable(new Error(`block ${height} not found`));
+    return Math.floor(Number(block.header.timestamp_nanosec) / 1e6);
   }
 
   async getPrice(): Promise<bigint> {
@@ -96,9 +102,9 @@ export class NearChainAdapter implements ChainPort {
     return BigInt(price);
   }
 
-  async viewCodeHash(accountId: string): Promise<string | null> {
+  async viewAccount(accountId: string): Promise<{ codeHash: string } | null> {
     const view = await this.#read(() => this.#provider.viewAccount({ accountId, blockQuery: FINAL }));
-    return view && view.code_hash !== NO_CODE ? view.code_hash : null;
+    return view ? { codeHash: view.code_hash } : null;
   }
 
   markRunning(requestHash: string): Promise<string> {
@@ -112,8 +118,9 @@ export class NearChainAdapter implements ChainPort {
     });
   }
 
+  // v0.2: refund resolves to false when the transfer bounced; the contract then restored the request.
   refund(requestHash: string): Promise<string> {
-    return this.#call('refund', { request_hash: requestHash });
+    return this.#call('refund', { request_hash: requestHash }, true);
   }
 
   async close(): Promise<void> {}
@@ -127,13 +134,13 @@ export class NearChainAdapter implements ChainPort {
   }
 
   // One key signs every write, so writes from this process are serialized to keep its nonce in order.
-  #call(method: string, args: Record<string, unknown>): Promise<string> {
-    const run = this.#writes.then(() => this.#send(method, args));
+  #call(method: string, args: Record<string, unknown>, expectTrue = false): Promise<string> {
+    const run = this.#writes.then(() => this.#send(method, args, expectTrue));
     this.#writes = run.catch(() => {});
     return run;
   }
 
-  async #send(method: string, args: Record<string, unknown>): Promise<string> {
+  async #send(method: string, args: Record<string, unknown>, expectTrue: boolean): Promise<string> {
     let response: unknown;
     try {
       response = await this.#operator().signAndSendTransaction({
@@ -145,6 +152,7 @@ export class NearChainAdapter implements ChainPort {
     }
     const reason = panicReason(response);
     if (reason) throw new ChainRejectedError(reason);
+    if (expectTrue && returnValue(response) !== true) throw new ChainRejectedError('ERR_TRANSFER_FAILED', `${method} transfer did not land`);
     return String((response as { transaction?: { hash?: string } }).transaction?.hash ?? '');
   }
 }
