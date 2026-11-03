@@ -1,12 +1,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import crypto from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
-import { readReportJson, writeReportFile, validateAuditor, validCrosscheckRow } from './report-contract.mjs';
+import { sha256Hex } from './hash-util.mjs';
+import { readReportJson, writeReportFile } from './report-files.mjs';
+import { validateAuditor, validCrosscheckRow } from './report-contract-auditor.mjs';
 import { REVIEWER_ID_PATTERN, isReviewerId, validModelId } from './reviewer-registry.mjs';
 
 const stable = value => Array.isArray(value) ? value.map(stable) : value && typeof value === 'object' ? Object.fromEntries(Object.keys(value).sort().map(key => [key, stable(value[key])])) : value;
-const fingerprint = value => crypto.createHash('sha256').update(JSON.stringify(stable(value))).digest('hex');
+const fingerprint = value => sha256Hex(JSON.stringify(stable(value)));
 // Session names per role. Auditors and cross-checkers commit a canonical submission; debaters and the
 // orchestrator commit a debate inbox entry (debate-inbox.mjs) under the same identity rules.
 const ROLE_NAME = {

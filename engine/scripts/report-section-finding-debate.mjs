@@ -1,9 +1,9 @@
 // Per-finding Debate disclosure: every anonymized turn with its citation chips (✓ only when the checker
 // verified that citation for this cluster), the judge's rationale and the final status. The card is joined to
 // its debate cluster by claim id (row.debateClusterId), never by position.
-import { esc } from '../report-cards.mjs';
-import { statusPill } from './status-legend.mjs';
-import { citationState, turnsOf } from './v2-data.mjs';
+import { esc } from './report-cards.mjs';
+import { statusPill } from './report-section-status-legend.mjs';
+import { citationState, turnsOf } from './report-section-v2-data.mjs';
 
 function turnHtml(data, turn) {
   const chips = (turn.citations || []).map((citation) => {

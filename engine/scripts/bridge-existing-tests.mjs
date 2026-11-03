@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { testCounts, missingTestArtifact } from './scanner-evidence.mjs';
-import { readReportJson, writeReportFile } from './report-contract.mjs';
+import { readReportJson, writeReportFile } from './report-files.mjs';
 import { REVIEW_WORKFLOW, selectExistingTest, EXISTING_TEST_RUNNER } from './review-workflow.mjs';
 import { withExistingTestLock } from './existing-test-lock.mjs';
 import { selectTestArtifacts } from './test-artifacts.mjs';

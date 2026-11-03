@@ -1,7 +1,7 @@
 // Archive a committed pass so the next pass can submit a replacement, and write the raw usage row.
 import fs from 'node:fs';
 import path from 'node:path';
-import { writeReportFile } from './report-contract.mjs';
+import { writeReportFile } from './report-files.mjs';
 import { loadBudget, passKey } from './bridge-budget.mjs';
 
 export function archivePassSubmission(root, name, passIndex) {
@@ -34,6 +34,3 @@ export function passCalls(root, reviewerId, surface, pass) {
   return budget.passes[passKey(surface, pass)] || { calls: 0, filesRead: [], finalizeOnlyAt: null };
 }
 
-export function sumCost(usage) {
-  return (usage || []).reduce((total, row) => total + (Number(row.cost) || 0), 0);
-}

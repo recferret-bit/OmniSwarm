@@ -1,7 +1,7 @@
 // Findings toolbar extras: final-status chips and a reviewer select. They combine with the severity buttons,
 // surface tiles and search in report-cards-browser.mjs (one filter state).
-import { esc } from '../report-cards.mjs';
-import { FINAL } from './status-legend.mjs';
+import { esc } from './report-cards.mjs';
+import { FINAL } from './report-section-status-legend.mjs';
 
 export const section = {
   id: 'finding-filters',

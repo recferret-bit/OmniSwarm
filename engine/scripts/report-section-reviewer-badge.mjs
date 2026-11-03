@@ -1,6 +1,6 @@
 // Reviewer badge and usage strip, shared by findings-by-model, reviewers.html and the per-reviewer pages.
 // Not a section (exports no `section`). An unknown cost shows as —, never as $0.
-import { esc } from '../report-cards.mjs';
+import { esc } from './report-cards.mjs';
 
 function badgeText(row) {
   return [row.family, row.vendor, row.model].filter(Boolean).join(' · ');

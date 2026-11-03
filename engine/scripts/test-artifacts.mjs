@@ -1,7 +1,7 @@
-import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { writeReportFile } from './report-contract.mjs';
+import { sha256Hex } from './hash-util.mjs';
+import { writeReportFile } from './report-files.mjs';
 
 // Explicit operator input, kept separate from the text-only source snapshot.
 // Import program bytes and Anchor IDL only; never import generated deployment keypairs.
@@ -44,7 +44,7 @@ export function stageTestArtifacts(directory, reportDir, sourceDigest) {
       fs.chmodSync(path.dirname(staged), 0o755);
       fs.chmodSync(path.dirname(path.dirname(staged)), 0o755);
       fs.writeFileSync(staged, bytes, { mode: 0o644, flag: 'wx' });
-      files.push({ path: relative, sha256: crypto.createHash('sha256').update(bytes).digest('hex'), bytes: bytes.length });
+      files.push({ path: relative, sha256: sha256Hex(bytes), bytes: bytes.length });
     }
   }
   if (!files.length) throw new Error('No deploy/*.so or idl/*.json test artifacts were supplied');

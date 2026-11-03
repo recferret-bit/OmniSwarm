@@ -5,7 +5,7 @@
 // ends the job's loop and restores the last committed pass, so earlier work is never thrown away.
 import fs from 'node:fs';
 import path from 'node:path';
-import { readReportJson } from './report-contract.mjs';
+import { readReportJson } from './report-files.mjs';
 import { archivePassSubmission, passCalls, writePassUsage } from './review-passes.mjs';
 import { passRole, renderBrief } from './review-briefs.mjs';
 

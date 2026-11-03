@@ -1,6 +1,6 @@
 // Status tokens: six final statuses from the debate (AGREED is the triage shortcut) and the five peer-review
 // statuses verify-and-adjudicate.mjs emits. Foreground on white; the a11y test fails a token under 4.5:1.
-import { esc } from '../report-cards.mjs';
+import { esc } from './report-cards.mjs';
 
 export const FINAL = ['AGREED', 'CONFIRMED', 'LIKELY', 'DISPUTED', 'REFUTED', 'INSUFFICIENT_EVIDENCE'];
 export const LEGACY = ['MODEL_AGREEMENT', 'MODEL_ASSERTION', 'UPHELD_REVIEW', 'PARTIAL_REVIEW', 'REFUTED_REVIEW'];

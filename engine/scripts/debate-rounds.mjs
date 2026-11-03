@@ -23,17 +23,19 @@ async function debateCluster(cluster, participants, ctx, seed) {
   const seen = new Set(cluster.evidence.filter((row) => row.valid).map(citationKey));
   const previous = new Map(authors.map((id) => [id, 'upheld']));
   const turns = [];
+  // An expected turn that never arrives (or does not validate) is a gap and a `missing` trace row.
+  const missing = (speaker, round, role, reason) => {
+    ctx.record.gaps.push({ clusterId: cluster.id, anonId: map[speaker], round, reason });
+    ctx.record.trace.push({ phase: 'debate', template: TEMPLATE[role], clusterId: cluster.id, round, anonId: map[speaker], stop: 'missing', reason });
+  };
   const speak = async (speaker, round, role) => {
     const raw = await ctx.voices.get(speaker)({ role, round, cluster, turns, anonId: map[speaker] });
-    if (!raw || raw.unavailable || typeof raw.argument !== 'string') {
-      ctx.record.gaps.push({ clusterId: cluster.id, anonId: map[speaker], round, reason: raw?.unavailable || 'invalid_turn' });
-      return;
-    }
+    if (!raw || raw.unavailable || typeof raw.argument !== 'string') return missing(speaker, round, role, raw?.unavailable || 'invalid_turn');
     const citations = checkTurnCitations(ctx.reader, raw.citations, cluster.anchors);
     const turn = classifyArgument({ round, clusterId: cluster.id, role, anonId: map[speaker], verdict: raw.verdict, citations, argument: stripIdentity(raw.argument, ctx.names) }, { seen, previous: previous.get(speaker) ?? null });
     const body = publicTurn(turn);
     const check = validate('debate-round', body);
-    if (!check.ok) { ctx.record.gaps.push({ clusterId: cluster.id, anonId: map[speaker], round, reason: 'invalid_turn' }); return; }
+    if (!check.ok) return missing(speaker, round, role, 'invalid_turn');
     turns.push({ ...turn, speaker, speakerVendor: ctx.vendors.get(speaker) || speaker });
     writeJson(ctx.out, `debate/round-${round}/${map[speaker]}-${cluster.id}.json`, body);
     citations.forEach((row) => ctx.record.citations.push({ ...row, clusterId: cluster.id, anonId: map[speaker], round }));

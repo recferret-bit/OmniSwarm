@@ -1,7 +1,7 @@
 // HTML for reviewers.html and reviewers/<id>/report.html, in the shared report shell (report-cards-shell.mjs):
 // today's finding cards, the severity filter and search, and a fresh CSP nonce on every render.
 import { esc, findingCard, findingsToolbar, severityCounts } from './report-cards.mjs';
-import { money, reviewerBadge, usageStrip } from './report-sections/reviewer-badge.mjs';
+import { money, reviewerBadge, usageStrip } from './report-section-reviewer-badge.mjs';
 
 const APPROACH = { cli: 'Approach 1 · Local subscription', key: 'Approach 2 · API key', openrouter: 'Approach 3 · OpenRouter', scripted: 'Demo', nearai: 'NEAR AI' };
 

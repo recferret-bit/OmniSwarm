@@ -8,7 +8,7 @@ import { loadAuditorFindings, peerClaims } from './crosscheck.mjs';
 import { normalizeCrosscheckPayload, renderMarkdownFromFindings } from './docker-mcp-bridge.mjs';
 import { buildAuditorPrompt, buildCrosscheckPrompt } from './orchestrator-prompts.mjs';
 import { resumePassStart } from './orchestrator-resume.mjs';
-import { writeReportFile } from './report-contract.mjs';
+import { writeReportFile } from './report-files.mjs';
 import { runReviewerPasses } from './reviewer-pass-loop.mjs';
 import { hostLogRel } from './sandbox-host-paths.mjs';
 import { budgetHealth } from './verification-health.mjs';

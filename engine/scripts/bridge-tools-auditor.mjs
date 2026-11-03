@@ -1,4 +1,4 @@
-import { validateAuditor } from './report-contract.mjs';
+import { validateAuditor } from './report-contract-auditor.mjs';
 import { commitSubmission, deriveSubmission } from './audit-submission.mjs';
 import { SAFE_ANNOTATIONS, BridgeError, objSchema, strProp, boolProp, strArr, normalizeCitation, commonToolDefinitions, commonHandlers } from './bridge-tools-common.mjs';
 

@@ -1,6 +1,6 @@
 // findings-by-model.html before v2: each adapter's own raw findings, counted by severity. A cluster in
 // findings-and-scores.json is shared, so it is the wrong count here.
-import { adapterOf } from './report-contract.mjs';
+import { adapterOf } from './report-contract-auditor.mjs';
 import { esc, severityLevel } from './report-cards.mjs';
 import { reviewersOfMeta } from './reviewer-registry.mjs';
 

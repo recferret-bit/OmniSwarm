@@ -33,6 +33,62 @@ export function createCodexNativeAdapter(options = {}) {
   return createNativeReviewAdapter({ ...options, model: options.model === undefined ? DEFAULT_CODEX_MODEL : options.model }, CODEX_PROFILE);
 }
 
+// A private (0700) per-session working directory; removal re-checks it is the same directory.
+function openSessionDirectory(prefix) {
+  const cwd = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), prefix)));
+  fs.chmodSync(cwd, 0o700);
+  return { cwd, identity: fs.lstatSync(cwd) };
+}
+
+function removeSessionDirectory({ cwd, identity }) {
+  const stat = fs.lstatSync(cwd);
+  if (stat.isSymbolicLink() || stat.ino !== identity.ino || stat.dev !== identity.dev) throw new ConnectorError('native_session_cleanup_unverified');
+  fs.rmSync(cwd, { recursive: true, force: true });
+}
+
+// The broker environment plus only the profile's own keys; TMPDIR is the private session directory.
+function sessionEnvironment(environment, profile, cwd) {
+  const env = brokerEnvironment(environment);
+  delete env.CLAUDE_CONFIG_DIR;
+  for (const key of profile.environmentKeys) if (typeof environment[key] === 'string') env[key] = environment[key];
+  env.TMPDIR = cwd;
+  return env;
+}
+
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
+  promise.catch(() => {});
+  return { promise, resolve, reject };
+}
+
+// One native protocol frame against the session so far: {blocked: {reason, diagnostic}}, {header} or {answer}.
+// Anything off-contract throws, and the caller stops the session as native_protocol_rejected.
+function classifyFrame(event, { header, request, answer }, profile, checkOnly) {
+  if (event.state === 'blocked_or_incomplete') {
+    const hasDiagnostic = profile.diagnostics && Object.hasOwn(event, 'diagnostic');
+    exactKeys(event, ['version', 'state', 'reason', ...(hasDiagnostic ? ['diagnostic'] : [])]);
+    if (event.version !== 1) throw new Error('native protocol version rejected');
+    const diagnostic = hasDiagnostic ? providerDiagnostic(event.diagnostic) : undefined;
+    if (hasDiagnostic && !diagnostic) throw new Error('native diagnostic rejected');
+    return { blocked: { reason: profile.reasons.has(event.reason) ? event.reason : 'native_runtime_failed', diagnostic } };
+  }
+  if (!header) {
+    exactKeys(event, ['version', 'state', 'provider', 'authMethod', 'sourceCommit', ...profile.inventories, ...(profile.sourceRevision ? ['sourceRevision'] : []), 'clientReportedModel']);
+    if (event.version !== 1 || event.state !== 'preflight_ready' || event.provider !== profile.provider || event.authMethod !== profile.authMethod || event.sourceCommit !== profile.sourceCommit
+      || (profile.sourceRevision && event.sourceRevision !== profile.sourceRevision)
+      || profile.inventories.some((key) => !Array.isArray(event[key]) || event[key].length)
+      || !modelName(event.clientReportedModel)) throw new Error('preflight rejected');
+    return { header: event };
+  }
+  exactKeys(event, ['version', 'state', 'provider', 'clientReportedModel', 'result']);
+  if (checkOnly || !request || answer || event.version !== 1 || event.state !== 'result' || event.provider !== profile.provider
+    || !(profile.allowUnknownModel && event.clientReportedModel === null) && !modelName(event.clientReportedModel)) throw new Error('result rejected');
+  validateResult(event.result, request);
+  return { answer: { review: event.result, cliReportedModel: event.clientReportedModel } };
+}
+
 // Shared internal transport only. Public CLI profile selection supplies fixed descriptors.
 export function createNativeReviewAdapter({ model, environment = process.env, executable, checkOnly = false } = {}, profile) {
   if (!modelName(model)) throw new ConnectorError('requested_model_rejected');
@@ -41,22 +97,12 @@ export function createNativeReviewAdapter({ model, environment = process.env, ex
       if (signal?.aborted) throw new ConnectorError('connector_cancelled');
       let admitted;
       try { admitted = executable ? { executable } : await profile.resolveBinary(); } catch { throw new ConnectorError(profile.admissionError); }
-      const cwd = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), profile.tempPrefix)));
-      fs.chmodSync(cwd, 0o700);
-      const identity = fs.lstatSync(cwd);
-      const env = brokerEnvironment(environment);
-      delete env.CLAUDE_CONFIG_DIR;
-      for (const key of profile.environmentKeys) if (typeof environment[key] === 'string') env[key] = environment[key];
-      env.TMPDIR = cwd;
+      const directory = openSessionDirectory(profile.tempPrefix);
+      const { cwd } = directory;
+      const env = sessionEnvironment(environment, profile, cwd);
       const child = spawn(admitted.executable, admitted.args || [checkOnly ? '--check' : '--review', '--model', model], { cwd, env, detached: true, stdio: ['pipe', 'pipe', 'pipe'] });
-      let readyResolve;
-      let readyReject;
-      const ready = new Promise((yes, no) => { readyResolve = yes; readyReject = no; });
-      ready.catch(() => {});
-      let completedResolve;
-      let completedReject;
-      const completed = new Promise((yes, no) => { completedResolve = yes; completedReject = no; });
-      completed.catch(() => {});
+      const { promise: ready, resolve: readyResolve, reject: readyReject } = deferred();
+      const { promise: completed, resolve: completedResolve, reject: completedReject } = deferred();
       let header;
       let answer;
       let request;
@@ -81,30 +127,13 @@ export function createNativeReviewAdapter({ model, environment = process.env, ex
       const abort = () => stop('connector_cancelled');
       const decoder = new TextDecoder('utf-8', { fatal: true });
       const frame = (line) => {
-        const event = JSON.parse(line);
-        if (event.state === 'blocked_or_incomplete') {
-          const hasDiagnostic = profile.diagnostics && Object.hasOwn(event, 'diagnostic');
-          exactKeys(event, ['version', 'state', 'reason', ...(hasDiagnostic ? ['diagnostic'] : [])]);
-          if (event.version !== 1) throw new Error('native protocol version rejected');
-          const diagnostic = hasDiagnostic ? providerDiagnostic(event.diagnostic) : undefined;
-          if (hasDiagnostic && !diagnostic) throw new Error('native diagnostic rejected');
-          stop(profile.reasons.has(event.reason) ? event.reason : 'native_runtime_failed', diagnostic);
-        } else if (!header) {
-          exactKeys(event, ['version', 'state', 'provider', 'authMethod', 'sourceCommit', ...profile.inventories, ...(profile.sourceRevision ? ['sourceRevision'] : []), 'clientReportedModel']);
-          if (event.version !== 1 || event.state !== 'preflight_ready' || event.provider !== profile.provider || event.authMethod !== profile.authMethod || event.sourceCommit !== profile.sourceCommit
-            || (profile.sourceRevision && event.sourceRevision !== profile.sourceRevision)
-            || profile.inventories.some((key) => !Array.isArray(event[key]) || event[key].length)
-            || !modelName(event.clientReportedModel)) throw new Error('preflight rejected');
-          header = event;
+        const next = classifyFrame(JSON.parse(line), { header, request, answer }, profile, checkOnly);
+        if (next.blocked) stop(next.blocked.reason, next.blocked.diagnostic);
+        else if (next.header) {
+          header = next.header;
           clearTimeout(timer);
-          readyResolve(event);
-        } else {
-          exactKeys(event, ['version', 'state', 'provider', 'clientReportedModel', 'result']);
-          if (checkOnly || !request || answer || event.version !== 1 || event.state !== 'result' || event.provider !== profile.provider
-            || !(profile.allowUnknownModel && event.clientReportedModel === null) && !modelName(event.clientReportedModel)) throw new Error('result rejected');
-          validateResult(event.result, request);
-          answer = { review: event.result, cliReportedModel: event.clientReportedModel };
-        }
+          readyResolve(header);
+        } else answer = next.answer;
       };
       deadline(55_000);
       child.stdin.on('error', () => {});
@@ -160,9 +189,7 @@ export function createNativeReviewAdapter({ model, environment = process.env, ex
       } finally {
         if (child.exitCode === null && child.signalCode === null) stop('connector_cancelled');
         await completed.catch(() => {});
-        const stat = fs.lstatSync(cwd);
-        if (stat.isSymbolicLink() || stat.ino !== identity.ino || stat.dev !== identity.dev) throw new ConnectorError('native_session_cleanup_unverified');
-        fs.rmSync(cwd, { recursive: true, force: true });
+        removeSessionDirectory(directory);
       }
     },
   };

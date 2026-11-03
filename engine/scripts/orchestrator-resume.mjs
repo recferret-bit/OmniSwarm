@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { digest } from './agent-session-store.mjs';
 import { commitSubmission, readCanonicalSubmission } from './audit-submission.mjs';
-import { readReportJson, readReportText, writeReportFile } from './report-contract.mjs';
+import { readReportJson, readReportText, writeReportFile } from './report-files.mjs';
 import { REVIEW_WORKFLOW } from './review-workflow.mjs';
 import { hostLogRel } from './sandbox-host-paths.mjs';
 

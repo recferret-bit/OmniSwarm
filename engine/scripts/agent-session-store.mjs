@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
-import { readReportJson, writeReportFile } from './report-contract.mjs';
+import { readReportJson, writeReportFile } from './report-files.mjs';
 import { sha256Hex } from './hash-util.mjs';
 import { SessionError } from './agent-rpc.mjs';
 import { isReviewerId, validModelId } from './reviewer-registry.mjs';

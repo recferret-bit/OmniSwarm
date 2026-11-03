@@ -11,7 +11,7 @@ import { digest } from './agent-session-store.mjs';
 import { deriveSubmission, readCanonicalSubmission } from './audit-submission.mjs';
 import { digestTree } from './bridge-tools-common.mjs';
 import { renderMarkdownFromFindings } from './docker-mcp-bridge.mjs';
-import { writeReportFile } from './report-contract.mjs';
+import { writeReportFile } from './report-files.mjs';
 import { REVIEW_WORKFLOW } from './review-workflow.mjs';
 import { families } from './reviewer-families.mjs';
 import { publishReviewers } from './reviewer-publish.mjs';

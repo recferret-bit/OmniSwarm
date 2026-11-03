@@ -4,7 +4,7 @@ import { sha256Hex } from './hash-util.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { canonicalJson } from '../../packages/schemas/canonical-json.mjs';
-import { readReportJson } from './report-contract.mjs';
+import { readReportJson } from './report-files.mjs';
 import { writeJson } from './report-util-files.mjs';
 
 const NAME = /^[a-z0-9][a-z0-9-]{0,160}$/;

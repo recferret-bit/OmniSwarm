@@ -16,15 +16,12 @@
  * and provides surface-tailored check plans for the MCP bridge and agent orchestrator.
  */
 
-import fs from 'node:fs';
 import path from 'node:path';
 import { detectEcosystems, isProductionPath } from './stack-detect.mjs';
+import { SKIP_DIRS as WALK_SKIP_DIRS, matchLines, readText, rel as relPath, walk } from './harness-walk.mjs';
 
-const SKIP_DIRS = new Set([
-  'node_modules', 'target', 'dist', 'build', '.git', 'vendor', 'coverage', '.next',
-  '__pycache__', 'harness-fixtures', '.cargo', 'reports',
-]);
-const MAX_FILE = 512 * 1024;
+// The harness skip list plus reports/, walked in name order so the plan is stable across file systems.
+const SKIP_DIRS = new Set([...WALK_SKIP_DIRS, 'reports']);
 const MAX_LEADS_PER_RULE = 25;
 
 const CODE_EXT = new Set([
@@ -258,40 +255,12 @@ export const DOMAIN_SPECS = [
   },
 ];
 
-function walkFiles(root, onFile) {
-  const stack = [root];
-  while (stack.length) {
-    const dir = stack.pop();
-    let entries;
-    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { continue; }
-    for (const ent of entries.sort((a, b) => a.name.localeCompare(b.name))) {
-      if (ent.isSymbolicLink()) continue;
-      const full = path.join(dir, ent.name);
-      if (ent.isDirectory()) {
-        if (!SKIP_DIRS.has(ent.name)) stack.push(full);
-      } else if (ent.isFile()) {
-        onFile(full);
-      }
-    }
-  }
-}
-
-function relPath(root, file) {
-  return path.relative(root, file).split(path.sep).join('/');
-}
-
+// The first maxHits matches as {line, snippet}; the snippet is the trimmed source line, at most 140 characters.
 function findLineMatches(text, regex, maxHits) {
-  const flags = regex.flags.includes('g') ? regex.flags : `${regex.flags}g`;
-  const re = new RegExp(regex.source, flags);
-  const out = [];
-  let m;
-  while ((m = re.exec(text)) !== null) {
-    const lineNum = text.slice(0, m.index).split('\n').length;
-    const lineText = (text.split('\n')[lineNum - 1] || '').trim().slice(0, 140);
-    out.push({ line: lineNum, snippet: lineText });
-    if (out.length >= maxHits) break;
-  }
-  return out;
+  const found = matchLines(text, regex, maxHits);
+  if (!found.length) return [];
+  const lines = text.split('\n');
+  return found.map((line) => ({ line, snippet: (lines[line - 1] || '').trim().slice(0, 140) }));
 }
 
 export function analyzeStackAndPlans(targetRoot) {
@@ -316,20 +285,16 @@ export function analyzeStackAndPlans(targetRoot) {
   // Application code is read first so lead caps are not consumed by tests, docs and helper scripts,
   // and a domain counts as detected only when production code (not a test or doc) carries its markers.
   const candidates = [];
-  walkFiles(root, (file) => {
+  walk(root, (file) => {
     const ext = path.extname(file).toLowerCase();
     const base = path.basename(file);
     if (!CODE_EXT.has(ext) && base !== 'Anchor.toml' && base !== 'Cargo.toml' && base !== 'package.json') return;
     candidates.push({ file, production: isProductionPath(relPath(root, file)) });
-  });
+  }, { skipDirs: SKIP_DIRS, sorted: true });
   candidates.sort((a, b) => Number(b.production) - Number(a.production));
   for (const { file, production } of candidates) {
-    let st;
-    try { st = fs.lstatSync(file); } catch { continue; }
-    if (!st.isFile() || st.size === 0 || st.size > MAX_FILE) continue;
-    let text;
-    try { text = fs.readFileSync(file, 'utf8'); } catch { continue; }
-    if (text.includes('\0')) continue;
+    const text = readText(file);
+    if (text == null || text.includes('\0')) continue;
 
     scannedFiles++;
     const rel = relPath(root, file);
@@ -411,7 +376,7 @@ export const PYTHON_CHECKS = {
   api_dto_abuse: ['FastAPI: every route should declare `response_model` (or return an explicit schema); flag returning ORM objects, `**row.__dict__`, `.dict()` of internal models, verbose `HTTPException(detail=...)` and debug tracebacks/`DEBUG=True` responses.'],
 };
 
-export function renderEcosystemLines(profile) {
+function renderEcosystemLines(profile) {
   const eco = profile.ecosystems;
   if (!eco) return [];
   const row = (name, e, extra = '') => `- **${name}**: ${e.detected ? 'DETECTED' : 'absent'}${e.sourceFiles != null ? ` (${e.sourceFiles} production source files${e.testFiles ? `, ${e.testFiles} test/script files` : ''})` : ''}${extra}`;

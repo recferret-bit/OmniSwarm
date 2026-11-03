@@ -6,7 +6,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
-import { expectedAuditors, loadAuditors, providerOf, validateAuditor, readReportText, writeReportFile } from './report-contract.mjs';
+import { adapterOf, expectedAuditors, loadAuditors, validateAuditor, readReportText, writeReportFile } from './report-contract.mjs';
 import { commitSubmission } from './audit-submission.mjs';
 import { digest } from './agent-session-store.mjs';
 import { loadAuditorFindings } from './crosscheck.mjs';
@@ -71,11 +71,12 @@ test('strict schema rejects malformed evidence rather than salvaging it', () => 
   assert.throws(() => validateAuditor([{ verified_safe: [{ control: 'Review', how_attacked: 'Read', holds: 'true' }] }], 'claude-s1-auth'));
 });
 
-test('adapter names are exact and unknown filenames are not vendors', () => {
-  assert.equal(providerOf('claude-s1-auth'), 'anthropic');
-  assert.equal(providerOf('codex-s1-auth'), 'openai');
-  assert.equal(providerOf('gpt-extra'), null);
-  assert.equal(providerOf('unrelated-grok-report'), null);
+test('job names are exact: an unknown filename or a surface/slug mismatch names no reviewer', () => {
+  assert.equal(adapterOf('claude-s1-auth'), 'claude');
+  assert.equal(adapterOf('cli-codex-gpt-6-1-sol-s4-config'), 'cli-codex-gpt-6-1-sol');
+  assert.equal(adapterOf('claude-s2-auth'), null);
+  assert.equal(adapterOf('gpt-extra'), null);
+  assert.equal(adapterOf('unrelated-grok-report'), null);
 });
 
 test('expected inventory follows single-surface and breadth-first contracts', () => {

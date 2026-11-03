@@ -1,7 +1,7 @@
 // Rail 06: general-review.md as inert markup, then coverage, open disagreements, methodology and one
 // contribution row per reviewer. Links are kept only when they point inside the page.
-import { esc } from '../report-cards.mjs';
-import { DISCLAIMER } from '../debate-general-review.mjs';
+import { esc } from './report-cards.mjs';
+import { DISCLAIMER } from './debate-general-review.mjs';
 
 function markdownBlock(block) {
   const lines = block.split('\n');
