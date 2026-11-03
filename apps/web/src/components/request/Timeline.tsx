@@ -3,7 +3,7 @@ import type { Status } from '@/lib/api/schema.gen';
 const HAPPY: Status[] = ['awaiting_payment', 'queued', 'running', 'publishing', 'done'];
 const LABEL: Record<Status, string> = {
   awaiting_payment: 'Awaiting payment', queued: 'Queued', running: 'Running', publishing: 'Publishing',
-  done: 'Done', failed: 'Failed', refunded: 'Refunded',
+  done: 'Done', failed: 'Failed', refunded: 'Refunded', expired: 'Expired (not paid)',
 };
 
 export function statusLabel(status: Status): string {
