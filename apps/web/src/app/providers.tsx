@@ -1,47 +1,46 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useRequestFlow } from '@/stores/request-flow';
 import { useWallet } from '@/stores/wallet';
 
-// Both comparisons are literals the bundler folds: with mocks off, the MSW
-// worker, the handlers and the mock panel are never emitted.
-const startMocks = process.env.NEXT_PUBLIC_API_MOCK === '1'
-  ? () => import('../mocks/browser').then((mod) => mod.startMocks())
+// A literal the bundler folds: with mocks off, the MSW worker, the handlers and
+// the mock panel are never emitted (npm run guard checks the build output).
+const MockBoot = process.env.NEXT_PUBLIC_API_MOCK === '1'
+  ? dynamic(() => import('../mocks/MockBoot'), { ssr: false })
   : null;
-const MockPanel = process.env.NEXT_PUBLIC_API_MOCK === '1' ? dynamic(() => import('../mocks/MockPanel'), { ssr: false }) : null;
 
 let booting: Promise<void> | null = null;
 
 // Once per page load, even when StrictMode mounts the provider twice.
 function bootstrap(): Promise<void> {
-  booting ??= boot();
+  booting ??= (async () => {
+    await useRequestFlow.persist.rehydrate();
+    const flow = useRequestFlow.getState();
+    // A reload during "Confirming" resumes confirming the same transaction.
+    if (flow.step === 'confirming' && flow.txHash) void flow.confirm();
+    void useWallet.getState().restore();
+  })();
   return booting;
 }
 
-async function boot() {
-  if (startMocks) await startMocks();
-  await useRequestFlow.persist.rehydrate();
-  const flow = useRequestFlow.getState();
-  // A reload during "Confirming" resumes confirming the same transaction.
-  if (flow.step === 'confirming' && flow.txHash) void flow.confirm();
-  void useWallet.getState().restore();
-}
-
 export function Providers({ children }: { children: ReactNode }) {
-  const [ready, setReady] = useState(startMocks === null);
+  const [network, setNetwork] = useState(MockBoot === null);
+  const [ready, setReady] = useState(false);
+  const onMocksReady = useCallback(() => setNetwork(true), []);
 
   useEffect(() => {
+    if (!network) return undefined;
     let live = true;
-    bootstrap().finally(() => { if (live) setReady(true); });
+    void bootstrap().finally(() => { if (live) setReady(true); });
     return () => { live = false; };
-  }, []);
+  }, [network]);
 
   return (
     <>
-      {ready ? children : <p role="status" className="boot">Starting…</p>}
-      {MockPanel ? <MockPanel /> : null}
+      {MockBoot === null || ready ? children : <p role="status" className="boot">Starting…</p>}
+      {MockBoot ? <MockBoot onReady={onMocksReady} /> : null}
     </>
   );
 }

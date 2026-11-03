@@ -7,7 +7,7 @@ import { clock, readState, stamp, type MockRequest } from '../db';
 import { REVIEWERS, snapshotAt, STEP_MS } from '../state-machine';
 import { apiError } from './intake';
 
-const TERMINAL = new Set(['done', 'failed', 'refunded']);
+const TERMINAL = new Set(['done', 'refunded']);
 
 function find(id: string): MockRequest | undefined {
   return readState().requests.find((row) => row.id === id);

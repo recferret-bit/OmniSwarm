@@ -1,6 +1,11 @@
 // Types for the isomorphic helpers in packages/schemas (plain .mjs, no .d.ts yet).
 // The signatures mirror canonical-message.mjs, canonical-json.mjs and nep413.mjs.
 
+// Node-only validator (reads the schema files with fs); used by tests, never by the app.
+declare module '@omniswarm/schemas' {
+  export function validate(name: string, value: unknown): { ok: boolean; errors: string[] };
+}
+
 declare module '@omniswarm/schemas/canonical-message' {
   export interface CanonicalRequestFields {
     account: string;

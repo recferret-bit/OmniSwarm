@@ -6,7 +6,8 @@ import { toAppError, type AppErrorCode } from '@/lib/api/errors';
 import type { ProgressEvent, RequestStatusResponse, Status } from '@/lib/api/schema.gen';
 
 export const POLL_MS = 5_000;
-export const TERMINAL: readonly Status[] = ['done', 'failed', 'refunded'];
+// `failed` is not final: a failed paid review moves on to `refunded` (INTAKE section 4).
+export const TERMINAL: readonly Status[] = ['done', 'refunded'];
 export type LiveMode = 'connecting' | 'live' | 'polling' | 'closed';
 
 export interface RequestView {
