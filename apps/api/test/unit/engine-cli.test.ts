@@ -95,7 +95,9 @@ test('2 MB of output does not block the engine and the log is capped', async () 
 test('a hung engine is killed at the timeout (process group, SIGTERM then SIGKILL)', async () => {
   const root = fakeEngine(`process.on('SIGTERM', () => {}); require('node:child_process').spawn('sleep', ['60'], { stdio: 'ignore' }); setInterval(() => {}, 1000);`);
   const started = Date.now();
-  const result = await runner(root, { timeoutS: 1, killGraceS: 1 }).run(input(root), new AbortController().signal);
+  // timeoutS leaves node time to install the SIGTERM handler even on a loaded host; with 1 s the
+  // SIGTERM could land before the handler and the escalation to SIGKILL went untested (flaky).
+  const result = await runner(root, { timeoutS: 3, killGraceS: 1 }).run(input(root), new AbortController().signal);
   assert.equal(result.timedOut, true);
   assert.equal(result.signal, 'SIGKILL');
   assert.ok(Date.now() - started < 10_000);
