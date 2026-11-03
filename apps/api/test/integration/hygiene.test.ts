@@ -34,8 +34,10 @@ describe('disk hygiene after real runs', NEEDS_DB, () => {
       await worker.close();
     }
     const { storage } = loadConfig('worker', t.env);
+    // The worker's own maintenance cron may already have pruned some dirs at a minute boundary.
+    const before = fs.readdirSync(storage.runsRoot).length;
     const result = await runHygiene(storage, statusLookup(api.deps.pool));
-    assert.equal(result.runsRemoved, 5);
+    assert.equal(result.runsRemoved, Math.max(0, before - storage.keepRuns));
     assert.equal(fs.readdirSync(storage.runsRoot).length, 20);
     assert.equal(fs.readdirSync(storage.reportsRoot).filter((name) => name !== '.staging').length, 25);
     assert.deepEqual(await runHygiene(storage, statusLookup(api.deps.pool)), { runsRemoved: 0, attemptsRemoved: 0, reportsRemoved: 0, stagingRemoved: 0 });
