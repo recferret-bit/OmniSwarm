@@ -4,10 +4,11 @@ import assert from 'node:assert/strict';
 import http from 'node:http';
 import { after, before, describe, test } from 'node:test';
 import { appendProgress } from '../../src/db/repositories/progress.ts';
-import { transition } from '../../src/db/repositories/requests.ts';
+import { chainEvents } from '../../src/chain/mock/mock-ledger.ts';
+import { findRequest, transition } from '../../src/db/repositories/requests.ts';
 import { call, conforms, createRequest, queuedRequest } from '../helpers/flow.ts';
 import { NEEDS_DB } from '../helpers/db.ts';
-import { ADMIN_TOKEN, migratedDb, startAdmin, startApi, until, type ApiStack, type TestDb } from '../helpers/stack.ts';
+import { ADMIN_TOKEN, migratedDb, startAdmin, startApi, startWorkerInProcess, until, type ApiStack, type TestDb } from '../helpers/stack.ts';
 
 function sse(url: string): { events: any[]; ended: Promise<void>; close(): void } {
   const events: any[] = [];
@@ -92,12 +93,27 @@ describe('two API replicas on one database', NEEDS_DB, () => {
       assert.equal((await call(a.base, path, { method: 'POST', headers: { 'x-admin-token': ADMIN_TOKEN } })).status, 404, 'not on the public app');
       assert.equal((await call(admin.base, path, { method: 'POST' })).status, 401);
       assert.equal((await call(admin.base, path, { method: 'POST', headers: { 'x-admin-token': `${ADMIN_TOKEN}x` } })).status, 401);
+      const queuedRefund = await call(admin.base, path, { method: 'POST', headers: { 'x-admin-token': ADMIN_TOKEN } });
+      assert.equal(queuedRefund.status, 202, JSON.stringify(queuedRefund.body));
+      assert.deepEqual(queuedRefund.body, { status: 'refund_queued' }, 'the API records the refund; it holds no key to send it');
+      conforms('admin-refund-response', queuedRefund.body);
+      assert.equal((await findRequest(a.deps.pool, queued.requestId))?.status, 'queued');
+      const twice = await call(admin.base, path, { method: 'POST', headers: { 'x-admin-token': ADMIN_TOKEN } });
+      assert.equal(twice.status, 202);
+      const jobs = await a.deps.pool.query(`SELECT count(*)::int AS n FROM pgboss.job WHERE name = 'refund' AND singleton_key = $1`, [queued.requestHash]);
+      assert.equal(jobs.rows[0].n, 1, 'one refund job per request');
+      const worker = await startWorkerInProcess({ ...t.env, MOCK_ENGINE_STEP_MS: '3000' });
+      try {
+        await until(async () => (await findRequest(a.deps.pool, queued.requestId))?.status === 'refunded', 30_000);
+      } finally {
+        await worker.close();
+      }
       const refunded = await call(admin.base, path, { method: 'POST', headers: { 'x-admin-token': ADMIN_TOKEN } });
-      assert.equal(refunded.status, 200, JSON.stringify(refunded.body));
+      assert.equal(refunded.status, 200);
       conforms('admin-refund-response', refunded.body);
+      assert.equal(refunded.body.status, 'refunded');
       assert.ok(refunded.body.refundTx);
-      const again = await call(admin.base, path, { method: 'POST', headers: { 'x-admin-token': ADMIN_TOKEN } });
-      assert.deepEqual(again.body, refunded.body, 'a second refund is idempotent');
+      assert.equal((await chainEvents(a.deps.pool, queued.requestHash)).filter((e) => e === 'review_refunded').length, 1);
       const unpaid = await createRequest(a.base, a.deps.pool);
       const denied = await call(admin.base, `/api/admin/requests/${unpaid.requestId}/refund`, { method: 'POST', headers: { 'x-admin-token': ADMIN_TOKEN } });
       assert.equal(denied.status, 409);

@@ -41,8 +41,8 @@ export const envSchema = z.object({
   LANDING_ORIGIN: z.url().optional(),
 
   NETWORK: z.enum(['testnet', 'mainnet']).default('testnet'),
-  PRICE_YOCTO_TESTNET: z.string().regex(YOCTO).default('1000000000000000000000000'),
-  PRICE_YOCTO_MAINNET: z.string().regex(YOCTO).optional(),
+  // Price on NETWORK. Testnet defaults to 1 NEAR (OD-08); mainnet has no default, so it stays off unless priced.
+  PRICE_YOCTO: z.string().regex(YOCTO).optional(),
   INTAKE_RECIPIENT: z.string().regex(ACCOUNT_ID).optional(),
   CONTRACT_ID: z.string().regex(ACCOUNT_ID).optional(),
   MAX_REPO_KB: int(1, 10_000_000).default(204_800),
@@ -56,9 +56,10 @@ export const envSchema = z.object({
   REQUESTS_PER_DAY: int(1, 1000).default(5),
 
   CHAIN_ADAPTER: z.enum(['mock', 'near']).optional(),
-  NEAR_RPC_URLS: list,
-  NEAR_OPERATOR_ACCOUNT_ID: z.string().regex(ACCOUNT_ID).optional(),
-  NEAR_OPERATOR_KEY_PATH: absPath.optional(),
+  RPC_URLS: list,
+  // Worker only (INTAKE section 5). The account id comes from the key file's account_id unless set here.
+  OPERATOR_KEY_FILE: absPath.optional(),
+  OPERATOR_ACCOUNT_ID: z.string().regex(ACCOUNT_ID).optional(),
   MOCK_CHAIN_FAIL_RATE: z.coerce.number().min(0).max(1).default(0),
   MOCK_CHAIN_HANG_AFTER: z.enum(['attest', 'refund']).optional(),
 
@@ -81,6 +82,7 @@ export const envSchema = z.object({
   REPORTS_ROOT: absPath.default(path.join(REPO_ROOT, 'reports/intake/published')),
   REPORTS_BASE_URL: z.url().refine((url) => url.startsWith('https://'), 'must be https').default('https://reports.localhost'),
 
+  WORKER_ID: z.string().regex(/^[A-Za-z0-9._@-]{1,64}$/).optional(),
   WORKER_CONCURRENCY: int(1, 8).default(1),
   WORKER_STOP_TIMEOUT_S: int(1, 3600).default(120),
   QUEUE_EXPIRE_S: int(60, 86_400).default(7200),

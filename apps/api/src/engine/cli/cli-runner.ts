@@ -1,7 +1,8 @@
-// CliEngineRunner: spawns ./bin/audit from the repository root with an argv array (no shell) and an
+// CliEngineRunner: spawns $ENGINE_ROOT/bin/audit with cwd ENGINE_ROOT with an argv array (no shell) and an
 // allow-listed environment, drains its output into a capped host-only log, and on timeout or abort
 // sends SIGTERM to the whole process group, then SIGKILL after a grace period.
 import { spawn } from 'node:child_process';
+import path from 'node:path';
 import type { EngineRunInput, EngineRunResult, EngineRunner } from '../port.ts';
 import { AUDIT_BIN, auditArgv } from './argv.ts';
 import { CappedLog } from './log-sink.ts';
@@ -39,10 +40,12 @@ export class CliEngineRunner implements EngineRunner {
       let timedOut = false;
       let aborted = false;
       let killTimer: NodeJS.Timeout | undefined;
-      const child = spawn(AUDIT_BIN, argv, {
+      // An absolute $ENGINE_ROOT/bin/audit: the worker's own cwd (apps/api) never decides what runs.
+      const bin = path.join(this.#options.root, AUDIT_BIN);
+      const child = spawn(bin, argv, {
         cwd: this.#options.root, shell: false, env: this.#options.env, detached: true, stdio: ['ignore', 'pipe', 'pipe'],
       });
-      log.note(`spawned pid ${child.pid ?? '-'}: ${AUDIT_BIN} ${argv.join(' ')}`);
+      log.note(`spawned pid ${child.pid ?? '-'}: ${bin} ${argv.join(' ')}`);
       log.drain(child.stdout);
       log.drain(child.stderr);
       const stop = (why: 'timeout' | 'abort') => {

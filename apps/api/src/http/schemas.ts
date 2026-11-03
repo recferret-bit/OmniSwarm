@@ -63,4 +63,7 @@ export const healthResponse = z.strictObject({
 });
 export const readyResponse = z.strictObject({ ok: z.boolean(), db: z.boolean(), queue: z.boolean(), migrations: z.boolean() });
 
-export const adminRefundResponse = z.strictObject({ refundTx: z.string().min(1).nullable() });
+export const adminRefundResponse = z.discriminatedUnion('status', [
+  z.strictObject({ status: z.literal('refunded'), refundTx: z.string().min(1).nullable() }),
+  z.strictObject({ status: z.literal('refund_queued') }),
+]);

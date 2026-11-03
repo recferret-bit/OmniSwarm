@@ -11,9 +11,8 @@ const BASE = {
   DATABASE_URL: 'postgres://u:p@127.0.0.1:1/db', SESSION_SECRET: 's'.repeat(40), INTAKE_RECIPIENT: 'omniswarm.testnet', CONTRACT_ID: 'registry.testnet',
 };
 const PROD = {
-  ...BASE, NODE_ENV: 'production', ADMIN_TOKEN: 't'.repeat(40), CHAIN_ADAPTER: 'near', NEAR_RPC_URLS: 'https://rpc.testnet.fastnear.com',
-  GITHUB_ADAPTER: 'live', ENGINE_RUNNER: 'cli', REPORTS_BASE_URL: 'https://reports.example', NEAR_OPERATOR_ACCOUNT_ID: 'operator.testnet',
-  NEAR_OPERATOR_KEY_PATH: '/etc/omniswarm/operator.key',
+  ...BASE, NODE_ENV: 'production', ADMIN_TOKEN: 't'.repeat(40), RPC_URLS: 'https://rpc.testnet.fastnear.com',
+  REPORTS_BASE_URL: 'https://reports.example', OPERATOR_KEY_FILE: '/run/credentials/omniswarm-worker@1/operator-key',
 };
 
 function issue(role: Parameters<typeof loadConfig>[0], env: Record<string, string | undefined>): string {
@@ -46,7 +45,10 @@ test('production refuses test adapters, a missing admin token and insecure cooki
   assert.equal(issue('worker', PROD), '');
   assert.match(issue('api', { ...PROD, ADMIN_TOKEN: undefined }), /ADMIN_TOKEN is required in production/);
   assert.match(issue('api', { ...PROD, CHAIN_ADAPTER: 'mock' }), /CHAIN_ADAPTER must be "near"/);
-  assert.match(issue('api', { ...PROD, CHAIN_ADAPTER: undefined }), /CHAIN_ADAPTER/);
+  assert.equal(loadConfig('api', PROD).chain.adapter, 'near', 'production defaults to the real adapters');
+  assert.equal(loadConfig('worker', PROD).engine.runner, 'cli');
+  assert.match(issue('worker', { ...PROD, OPERATOR_KEY_FILE: undefined }), /OPERATOR_KEY_FILE is required/);
+  assert.equal(issue('api', { ...PROD, OPERATOR_KEY_FILE: undefined }), '', 'the API never needs the operator key');
   assert.match(issue('api', { ...PROD, GITHUB_ADAPTER: 'recorded' }), /GITHUB_ADAPTER/);
   assert.match(issue('worker', { ...PROD, ENGINE_RUNNER: 'mock' }), /ENGINE_RUNNER/);
   assert.match(issue('worker', { ...PROD, REPORTS_BASE_URL: undefined }), /REPORTS_BASE_URL/);

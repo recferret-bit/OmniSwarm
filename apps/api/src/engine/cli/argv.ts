@@ -4,7 +4,8 @@
 import path from 'node:path';
 import type { EngineRunInput } from '../port.ts';
 
-export const AUDIT_BIN = './bin/audit';
+/** Resolved against ENGINE_ROOT (the repository root), which is also the child's cwd. */
+export const AUDIT_BIN = 'bin/audit';
 export const AUDIT_FLAGS = ['--github', '--ref', '--preset', '--out'] as const;
 
 const REPO = /^[A-Za-z0-9-]{1,39}\/[A-Za-z0-9._-]{1,100}$/;

@@ -1,11 +1,12 @@
 // NearChainAdapter: the registry contract over NEAR JSON-RPC with near-api-js 7. Reads use
 // finality "final"; the payment tx is read with wait_until FINAL; operator writes are signed with
-// the function-call key from NEAR_OPERATOR_KEY_PATH and wait for FINAL.
-import { Account, FailoverRpcError, FailoverRpcProvider, JsonRpcProvider, actions, type KeyPairSigner, type Provider } from 'near-api-js';
+// the function-call key from OPERATOR_KEY_FILE (worker only) and wait for FINAL.
+import { Account, FailoverRpcError, FailoverRpcProvider, JsonRpcProvider, actions, type Provider } from 'near-api-js';
 import { AccessKeyDoesNotExistError, AccountDoesNotExistError, UnknownTransactionError } from 'near-api-js/rpc-errors';
 import { ChainRejectedError, chainUnavailable } from '../errors.ts';
 import type { AttestArgs, ChainAttestation, ChainPort, ChainRequest, KeyPermission, PaymentTx } from '../port.ts';
 import { fromContractAttestation, type ContractAttestation } from './attestation.ts';
+import type { OperatorKey } from './operator-key.ts';
 import { panicReason, parsePaymentTx, returnValue } from './payment-tx.ts';
 
 const FINAL = { finality: 'final' } as const;
@@ -14,9 +15,10 @@ const GAS = 30_000_000_000_000n;
 export interface NearChainOptions {
   rpcUrls: string[];
   contractId: string;
+  /** Overrides the key file's account_id. */
   operatorAccountId: string | null;
-  /** Loaded on the first write, so a read-only API process never touches the key file. */
-  operatorSigner: (() => KeyPairSigner) | null;
+  /** Worker only: loaded on the first write. The API passes null and can never sign (INTAKE section 5). */
+  operator: (() => OperatorKey) | null;
 }
 
 function isNotFound(error: unknown): boolean {
@@ -127,9 +129,11 @@ export class NearChainAdapter implements ChainPort {
 
   #operator(): Account {
     if (this.#account) return this.#account;
-    const { operatorAccountId, operatorSigner } = this.#options;
-    if (!operatorAccountId || !operatorSigner) throw new Error('operator writes need NEAR_OPERATOR_ACCOUNT_ID and NEAR_OPERATOR_KEY_PATH');
-    this.#account = new Account(operatorAccountId, this.#provider, operatorSigner());
+    if (!this.#options.operator) throw new Error('this process holds no operator key (OPERATOR_KEY_FILE is worker-only)');
+    const key = this.#options.operator();
+    const accountId = this.#options.operatorAccountId ?? key.accountId;
+    if (!accountId) throw new Error('set OPERATOR_ACCOUNT_ID or use a key file with account_id');
+    this.#account = new Account(accountId, this.#provider, key.signer);
     return this.#account;
   }
 
@@ -141,9 +145,10 @@ export class NearChainAdapter implements ChainPort {
   }
 
   async #send(method: string, args: Record<string, unknown>, expectTrue: boolean): Promise<string> {
+    const operator = this.#operator();
     let response: unknown;
     try {
-      response = await this.#operator().signAndSendTransaction({
+      response = await operator.signAndSendTransaction({
         receiverId: this.contractId, actions: [actions.functionCall(method, args, GAS, 0n)],
         waitUntil: 'FINAL', throwOnFailure: false, retries: 3,
       });

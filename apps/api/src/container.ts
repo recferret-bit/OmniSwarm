@@ -17,7 +17,8 @@ function refuseInProduction(config: Config, what: string): void {
   if (config.env === 'production') throw new Error(`${what} is a test adapter and cannot run with NODE_ENV=production`);
 }
 
-export async function createChain(config: Config, pool: Pool): Promise<ChainPort> {
+/** `operator: true` only in the worker: the API process never loads the operator key. */
+export async function createChain(config: Config, pool: Pool, options: { operator?: boolean } = {}): Promise<ChainPort> {
   if (config.chain.adapter === 'mock') {
     refuseInProduction(config, 'CHAIN_ADAPTER=mock');
     const { MockChainAdapter } = await import('./chain/mock/mock-chain.ts');
@@ -27,11 +28,11 @@ export async function createChain(config: Config, pool: Pool): Promise<ChainPort
     });
   }
   const { NearChainAdapter } = await import('./chain/near/near-chain.ts');
-  const { loadOperatorSigner } = await import('./chain/near/operator-key.ts');
-  const keyPath = config.chain.operatorKeyPath;
+  const { loadOperatorKey } = await import('./chain/near/operator-key.ts');
+  const keyFile = options.operator ? config.chain.operatorKeyFile : null;
   return new NearChainAdapter({
     rpcUrls: config.chain.rpcUrls, contractId: config.intake.contractId, operatorAccountId: config.chain.operatorAccountId,
-    operatorSigner: keyPath ? () => loadOperatorSigner(keyPath) : null,
+    operator: keyFile ? () => loadOperatorKey(keyFile) : null,
   });
 }
 
@@ -73,7 +74,7 @@ export async function createGuardPort(config: Config, chain: ChainPort): Promise
 
 export interface CoreDeps { config: Config; pool: Pool; clock: Clock; chain: ChainPort }
 
-export async function createCore(config: Config, clock: Clock = systemClock): Promise<CoreDeps> {
+export async function createCore(config: Config, clock: Clock = systemClock, options: { operator?: boolean } = {}): Promise<CoreDeps> {
   const pool = createPool(config.db.url, config.db.poolMax);
-  return { config, pool, clock, chain: await createChain(config, pool) };
+  return { config, pool, clock, chain: await createChain(config, pool, options) };
 }

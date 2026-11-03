@@ -18,7 +18,7 @@ await events.start();
 const app = await buildApp({ ...core, github: await createGitHub(config), guard: await createGuardPort(config, core.chain), boss, events, log });
 await app.listen({ host: config.http.host, port: config.http.port });
 
-const admin = config.admin.token ? await buildAdminApp({ ...core, log }, config.admin.token) : null;
+const admin = config.admin.token ? await buildAdminApp({ ...core, log, boss }, config.admin.token) : null;
 if (admin) await admin.listen({ host: config.admin.host, port: config.admin.port });
 else log.warn('ADMIN_TOKEN is not set: the admin listener is disabled');
 

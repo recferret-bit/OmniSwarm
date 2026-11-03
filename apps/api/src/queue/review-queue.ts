@@ -10,6 +10,8 @@ export const REVIEW_QUEUE = 'review';
 /** Jobs that exhausted their retries (a worker died twice): settled as an infra failure. */
 export const REVIEW_DEAD_QUEUE = 'review-dead';
 export const MAINTENANCE_QUEUE = 'maintenance';
+/** Admin refunds: recorded by the API, signed and sent by a worker (the only holder of the operator key). */
+export const REFUND_QUEUE = 'refund';
 
 export interface ReviewJob {
   requestId: string;
@@ -56,6 +58,7 @@ export async function installQueues(boss: PgBoss, config: Config): Promise<void>
   };
   await ensure(REVIEW_DEAD_QUEUE, { policy: 'standard', retryLimit: 3, retryDelay: 30 });
   await ensure(REVIEW_QUEUE, reviewQueueOptions(config));
+  await ensure(REFUND_QUEUE, { policy: 'exclusive', retryLimit: 5, retryDelay: 30, retryBackoff: true, expireInSeconds: 600 });
   await ensure(MAINTENANCE_QUEUE, { policy: 'exclusive', retryLimit: 0, expireInSeconds: 300 });
 }
 
@@ -64,4 +67,20 @@ export async function enqueueReview(boss: PgBoss, tx: Db, job: ReviewJob): Promi
   assertReviewJob(job);
   const db = { executeSql: (text: string, values?: unknown[]) => tx.query(text, values as unknown[]) };
   return boss.send(REVIEW_QUEUE, job, { singletonKey: job.requestHash, db });
+}
+
+export interface RefundJob { requestId: string; requestHash: string }
+
+export function assertRefundJob(data: unknown): RefundJob {
+  const job = data as Partial<RefundJob> | null;
+  if (!job || !/^[0-9a-f-]{36}$/.test(String(job.requestId)) || !/^[0-9a-f]{64}$/.test(String(job.requestHash))) {
+    throw new JobContractError('refund job payload rejected');
+  }
+  return { requestId: String(job.requestId), requestHash: String(job.requestHash) };
+}
+
+/** One pending refund job per request, sent inside the caller's transaction. */
+export async function enqueueRefund(boss: PgBoss, tx: Db, job: RefundJob): Promise<string | null> {
+  const db = { executeSql: (text: string, values?: unknown[]) => tx.query(text, values as unknown[]) };
+  return boss.send(REFUND_QUEUE, assertRefundJob(job), { singletonKey: job.requestHash, db });
 }

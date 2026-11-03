@@ -11,7 +11,7 @@ import { after, test } from 'node:test';
 import { KeyPair } from 'near-api-js';
 import { ChainRejectedError } from '../../src/chain/errors.ts';
 import { NearChainAdapter } from '../../src/chain/near/near-chain.ts';
-import { loadOperatorSigner } from '../../src/chain/near/operator-key.ts';
+import { loadOperatorKey } from '../../src/chain/near/operator-key.ts';
 import { AppError } from '../../src/shared/errors.ts';
 import { APP_ROOT } from '../../src/shared/paths.ts';
 
@@ -57,8 +57,8 @@ function registry(call: Call): Answer {
   return { error: { name: 'REQUEST_VALIDATION_ERROR', cause: { name: 'METHOD_NOT_FOUND', info: { method_name: call.method } }, code: -32601, message: 'Method not found' } };
 }
 
-function adapter(urls: string[], signer: (() => ReturnType<typeof loadOperatorSigner>) | null = null) {
-  return new NearChainAdapter({ rpcUrls: urls, contractId: 'registry.testnet', operatorAccountId: 'operator.testnet', operatorSigner: signer });
+function adapter(urls: string[], operator: (() => ReturnType<typeof loadOperatorKey>) | null = null) {
+  return new NearChainAdapter({ rpcUrls: urls, contractId: 'registry.testnet', operatorAccountId: null, operator });
 }
 
 test('reads: tx with wait_until FINAL, views with finality final, key permission and accounts', async () => {
@@ -103,7 +103,8 @@ test('operator writes sign with the key file, wait for FINAL and read the refund
   fs.writeFileSync(keyFile, JSON.stringify({ account_id: 'operator.testnet', private_key: KeyPair.fromRandom('ed25519').toString() }), { mode: 0o600 });
   let sendResult = REC.refund_true;
   const server = await rpc((call) => (call.method === 'send_tx' ? { result: sendResult } : registry(call)));
-  const chain = adapter([server.url], () => loadOperatorSigner(keyFile));
+  const chain = adapter([server.url], () => loadOperatorKey(keyFile));
+  await assert.rejects(adapter([server.url]).refund(H), /holds no operator key/, 'a process without the key cannot sign');
   assert.equal(await chain.refund(H), REC.refund_true.transaction.hash);
   const sent = server.calls.find((c) => c.method === 'send_tx');
   assert.equal(sent?.params.wait_until, 'FINAL');
@@ -113,5 +114,5 @@ test('operator writes sign with the key file, wait for FINAL and read the refund
   await assert.rejects(chain.markRunning(H), (error: unknown) => error instanceof ChainRejectedError && error.reason === 'ERR_BAD_STATUS');
   assert.ok(!JSON.stringify(server.calls).includes(fs.readFileSync(keyFile, 'utf8').slice(30, 60)), 'the secret never goes over the wire');
   fs.chmodSync(keyFile, 0o644);
-  assert.throws(() => loadOperatorSigner(keyFile), /must not be readable/);
+  assert.throws(() => loadOperatorKey(keyFile), /must not be readable/);
 });

@@ -63,7 +63,7 @@ export async function buildApp(deps: ApiDeps, options: { sseKeepAliveMs?: number
   return app;
 }
 
-export async function buildAdminApp(deps: CoreDeps & { log: Logger }, token: string): Promise<FastifyInstance> {
+export async function buildAdminApp(deps: CoreDeps & { log: Logger; boss: ApiDeps['boss'] }, token: string): Promise<FastifyInstance> {
   const app = base(deps.log.child({ listener: 'admin' }), false);
   await app.register(adminRoutes, { deps, token });
   return app;

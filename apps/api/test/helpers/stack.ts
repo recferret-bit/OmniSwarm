@@ -75,7 +75,7 @@ export async function startApi(env: Record<string, string>, clock?: Clock): Prom
   };
 }
 
-export async function startAdmin(deps: CoreDeps & { log: ApiDeps['log'] }): Promise<{ base: string; close(): Promise<void> }> {
+export async function startAdmin(deps: CoreDeps & { log: ApiDeps['log']; boss: ApiDeps['boss'] }): Promise<{ base: string; close(): Promise<void> }> {
   const app = await buildAdminApp(deps, ADMIN_TOKEN);
   const base = await app.listen({ host: deps.config.admin.host, port: 0 });
   return { base, close: () => app.close() };
@@ -86,7 +86,7 @@ export interface WorkerStack { boss: PgBoss; core: CoreDeps; close(): Promise<vo
 export async function startWorkerInProcess(env: Record<string, string>): Promise<WorkerStack> {
   const config = loadConfig('worker', env);
   const log = createLogger(config.logLevel, 'test-worker');
-  const core = await createCore(config);
+  const core = await createCore(config, undefined, { operator: true });
   const engine = await createEngine(config, env);
   const boss = createBoss(config, 'worker');
   await boss.start();

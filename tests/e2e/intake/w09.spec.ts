@@ -134,13 +134,13 @@ describe('W09 queue and worker @hack', NEEDS_DB, () => {
     await waitFor(async () => (await status(queued[0]!.requestId))?.status === 'running');
     const positions = await Promise.all(queued.slice(1).map(async (q) => (await call(base, `/api/requests/${q.requestId}`)).body.position));
     assert.deepEqual(positions, [1, 2]);
-    step(9, 'admin refund: running -> refunded, done -> 409, no token -> 401');
+    step(9, 'admin refund: running -> queued for a worker -> refunded, done -> 409, no token -> 401');
     const running = queued[0]!;
     const path9 = `/api/admin/requests/${running.requestId}/refund`;
     assert.equal((await call(adminBase, path9, { method: 'POST' })).status, 401);
     const refunded = await call(adminBase, path9, { method: 'POST', headers: { 'x-admin-token': ADMIN_TOKEN } });
-    assert.equal(refunded.status, 200, JSON.stringify(refunded.body));
-    assert.equal((await status(running.requestId)).status, 'refunded');
+    assert.equal(refunded.status, 202, JSON.stringify(refunded.body));
+    assert.equal((await until(running.requestId, ['refunded'])).status, 'refunded', 'a worker sends the queued refund');
     await until(queued[2]!.requestId, ['done']);
     const done = await call(adminBase, `/api/admin/requests/${queued[2]!.requestId}/refund`, { method: 'POST', headers: { 'x-admin-token': ADMIN_TOKEN } });
     assert.equal(done.status, 409);

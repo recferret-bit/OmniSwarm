@@ -91,6 +91,23 @@ describe('crash recovery with real worker processes', NEEDS_DB, () => {
     await stop(recovering);
   });
 
+  test('SIGTERM aborts the running engine at once, exits 0, and another worker finishes the job', async () => {
+    const request = await queuedRequest(api.base, api.deps.pool);
+    const slow = workerProcess({ ...t.env, MOCK_ENGINE_STEP_MS: '20000' });
+    children.push(slow);
+    await until(async () => (await findRequest(api.deps.pool, request.requestId))?.status === 'running', 30_000);
+    const started = Date.now();
+    await stop(slow);
+    assert.equal(slow.exitCode, 0);
+    assert.ok(Date.now() - started < 15_000, `stopped in ${Date.now() - started} ms, not after the 20 s engine step`);
+    const next = workerProcess(t.env);
+    children.push(next);
+    const row = await done(request.requestId);
+    assert.equal(row.attempts, 2);
+    assert.equal((await chainEvents(api.deps.pool, request.requestHash)).filter((event) => event === 'review_attested').length, 1);
+    await stop(next);
+  });
+
   test('two worker processes race for three jobs: each runs exactly once', async () => {
     const requests = [await queuedRequest(api.base, api.deps.pool), await queuedRequest(api.base, api.deps.pool), await queuedRequest(api.base, api.deps.pool)];
     const env = { ...t.env, MOCK_ENGINE_STEP_MS: '100', WORKER_CONCURRENCY: '2' };

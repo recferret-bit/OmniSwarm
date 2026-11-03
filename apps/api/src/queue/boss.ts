@@ -12,7 +12,7 @@ export function createBoss(config: Config, role: BossRole): PgBoss {
     schema: BOSS_SCHEMA,
     max: role === 'worker' ? config.queue.concurrency + 3 : 3,
     application_name: `omniswarm-${role}`,
-    instanceName: `omniswarm-${role}`,
+    instanceName: config.queue.workerId && role === 'worker' ? `omniswarm-worker-${config.queue.workerId}` : `omniswarm-${role}`,
     migrate: role === 'install',
     createSchema: role === 'install',
     // Only workers expire jobs, fail jobs with a missed heartbeat and run cron schedules.

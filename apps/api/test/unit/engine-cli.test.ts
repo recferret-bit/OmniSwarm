@@ -48,7 +48,7 @@ test('the hosted preset gets only its provider keys; intake secrets never reach 
   const root = fakeEngine(`${RECORD}\nfs.mkdirSync(process.argv[process.argv.indexOf('--out') + 1], { recursive: true });`, config);
   const env = {
     PATH: process.env.PATH ?? '', HOME: os.homedir(), DATABASE_URL: 'postgres://secret', SESSION_SECRET: 'x'.repeat(40), ADMIN_TOKEN: 'y'.repeat(40),
-    GITHUB_TOKEN: 'ghp_secret', NEAR_OPERATOR_KEY_PATH: '/etc/omniswarm/operator.key', PROBE_SECRET_KEY: 'leak', ANTHROPIC_API_KEY: 'not-in-preset',
+    GITHUB_TOKEN: 'ghp_secret', OPERATOR_KEY_FILE: '/run/credentials/operator-key', PROBE_SECRET_KEY: 'leak', ANTHROPIC_API_KEY: 'not-in-preset',
     ZAI_API_KEY: 'zai-key', OPENROUTER_API_KEY: 'or-key', INTAKE_RECIPIENT: 'omniswarm.testnet', CONTRACT_ID: 'registry.testnet',
     ENGINE_RUNNER: 'cli', ENGINE_ROOT: root, HOSTED_PRESET: 'hosted',
   };
@@ -67,7 +67,7 @@ test('the hosted preset gets only its provider keys; intake secrets never reach 
   }
   assert.match(fs.readFileSync(run.logPath, 'utf8'), /spawned pid/);
   assert.throws(() => assertPassable(['DATABASE_URL']), /may not be passed/);
-  assert.throws(() => assertPassable(['NEAR_OPERATOR_KEY_PATH']), /may not be passed/);
+  assert.throws(() => assertPassable(['OPERATOR_KEY_FILE']), /may not be passed/);
 });
 
 test('presets with CLI subscriptions or an unvetted orchestrator are refused', () => {
