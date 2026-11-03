@@ -5,8 +5,9 @@
 #   --execute   run the same commands with near-cli-rs and cargo-near
 #
 # Without a flag it refuses (exit 2). Keys go to the near-cli keychain; nothing prints a
-# secret key. Flag spelling follows near-cli-rs 0.2x (`--contract-account-id`,
-# `--function-names`); it was not checked against an installed `near --help` here.
+# secret key. Subcommands and flags were checked against the near-cli-rs 0.30.0 source
+# (`--allowance`, `--contract-account-id`, `--function-names`, `fund-myself`,
+# `save-to-legacy-keychain`, `with-init-call`), not against a running `near` binary.
 #
 # Accounts (override through the environment):
 #   OWNER     full-access account that pays for and signs everything (also the default treasury)

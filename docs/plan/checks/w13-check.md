@@ -13,10 +13,10 @@ npm test -w @omniswarm/guard
 npm run typecheck -w @omniswarm/guard
 ```
 
-59 tests pass and `tsc` (checkJs, strict) is clean. Covered:
+62 tests pass and `tsc` (checkJs, strict) is clean. Covered:
 
 - A 16-row engine table: block > warn > allow, every reason code; no combination with an unavailable signal is `allow`; thresholds come from the policy.
-- `check()` for 12 recorded accounts. Each response validates against `intake-api#guard-verdict-response`, with no extra fields and `signals` present. The attestation is in `attestation.schema.json` shape. Drift reports both hashes. An attestation with `binding_confirmed: false` is ignored. Each reader outage gives `warn` with `SIGNAL_UNAVAILABLE`. The blocklist still blocks during an outage. The local blocklist works. Invalid ids are rejected. `httpSource` sends account, network and `x-guard-key` and rejects bad answers.
+- `check()` for 13 recorded accounts. Freshness uses the attested `block_timestamp_ms` and falls back to a block lookup for older records. Each response validates against `intake-api#guard-verdict-response`, with no extra fields and `signals` present. The attestation is in `attestation.schema.json` shape. Drift reports both hashes. An attestation with `binding_confirmed: false` is ignored. Each reader outage gives `warn` with `SIGNAL_UNAVAILABLE`. The blocklist still blocks during an outage. The local blocklist works. Invalid ids are rejected. `httpSource` sends account, network and `x-guard-key` and rejects bad answers.
 - Wrapper: the receiver is checked, not the signer; an async `block` is awaited and the signer spy stays at 0; `onWarn` must return exactly `true` (false, undefined, 1, `'yes'` and `{}` all decline; `true` reaches the signer once); a throwing lookup goes to `onWarn`; every transaction in a batch is checked before any is signed; a payee in `ft_transfer.receiver_id` or `pay_out.receiver` (including near-api-js byte args) is checked; only intercepted methods are exposed.
 - Demo: the agent extracts the injected line; guard on gives `refused_before_signing`; `--no-guard` builds the same transaction and logs `would_send`; a benign ticket reaches the dry signer once; the committed example logs match the current output.
 

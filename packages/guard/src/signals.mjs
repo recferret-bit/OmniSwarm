@@ -76,7 +76,8 @@ export async function collectSignals(reader, accountId, now) {
  */
 async function ageOf(reader, attestation, now, unavailable) {
   try {
-    const at = await reader.getBlockTimestampMs(attestation.block_height);
+    const recorded = attestation.block_timestamp_ms;
+    const at = typeof recorded === 'number' ? recorded : await reader.getBlockTimestampMs(attestation.block_height);
     return Math.max(0, Math.floor((now() - at) / DAY_MS));
   } catch {
     unavailable.push('attestationAge');

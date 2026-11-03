@@ -43,7 +43,7 @@ app.get('/api/guard/verdict', async (request) => {
 | `getAttestationForAccount(id)` | registry view `get_attestation_for_account` (finality `final`) | contract attestation or `null` |
 | `isReported(id)` | shared blocklist (registry `is_reported` once it exists, or the API's approved reports) | `boolean` |
 | `getAccountAgeDays(id)` | indexer first-seen block (FastNEAR) | days |
-| `getBlockTimestampMs(height)` | RPC `block` by height | ms |
+| `getBlockTimestampMs(height)` | RPC `block` by height (archival for old heights) | ms. Only called when the attestation lacks `block_timestamp_ms` (registry v0.2 records it) |
 
 Any method may reject. That signal is then `null`, its name is listed in `signals.unavailable`, and the reasons include `SIGNAL_UNAVAILABLE`. An unavailable signal never yields `allow`.
 

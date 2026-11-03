@@ -25,6 +25,15 @@ test('block is decided by an async lookup that is awaited before the signer', as
   assert.equal(calls.length, 0);
 });
 
+test('reasons from a remote source that are not known codes are kept', async () => {
+  const { calls, signer } = spySigner();
+  const remote = createGuard({ source: async () => ({ verdict: 'block', reasons: ['custom text', 'REPORTED'], signals: {} }) });
+  const verdict = await remote.checkIntent(transferIntent('clean.testnet'));
+  assert.deepEqual(verdict.reasons, ['REPORTED', 'custom text']);
+  await assert.rejects(remote.wrap(signer).signAndSendTransaction(transferIntent('clean.testnet')), /REPORTED, custom text/);
+  assert.equal(calls.length, 0);
+});
+
 test('allow reaches the signer once with the same params', async () => {
   const { calls, signer } = spySigner();
   const intent = transferIntent('clean.testnet');

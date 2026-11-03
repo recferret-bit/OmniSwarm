@@ -65,6 +65,8 @@ pub struct Attestation {
     pub code_hash: Option<String>,
     pub max_severity: String,
     pub block_height: u64,
+    /// Block time of the attest call, so freshness needs no archival block lookup.
+    pub block_timestamp_ms: u64,
     /// True only when the `deployed` account itself proved control: it paid the request,
     /// or it called `confirm_binding`. `get_attestation_for_account` returns only these.
     pub binding_confirmed: bool,

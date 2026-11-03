@@ -8,6 +8,7 @@ const guard = (options = {}) => createGuard({ reader: reader(options.fail), now:
 
 const EXPECTED = {
   'clean.testnet': ['allow', ['ATTESTED_CLEAN']],
+  'legacy-clean.testnet': ['allow', ['ATTESTED_CLEAN']],
   'critical.testnet': ['block', ['ATTESTED_CRITICAL_STILL_DEPLOYED']],
   'changed.testnet': ['warn', ['CODE_CHANGED_SINCE_REVIEW']],
   'stale.testnet': ['warn', ['ATTESTATION_STALE', 'ATTESTED_CLEAN']],
@@ -64,13 +65,18 @@ test('an unconfirmed binding is ignored even if a reader returns it', async () =
 test('reader outages become SIGNAL_UNAVAILABLE, never a throw and never allow', async () => {
   const methods = ['getAccount', 'getAttestationForAccount', 'isReported', 'getAccountAgeDays', 'getBlockTimestampMs'];
   for (const method of methods) {
-    const result = await guard({ fail: new Set([method]) }).check('clean.testnet');
+    const result = await guard({ fail: new Set([method]) }).check('legacy-clean.testnet');
     assert.equal(result.verdict, 'warn', method);
     assert.ok(result.reasons.includes('SIGNAL_UNAVAILABLE'), method);
     assert.equal(result.signals.unavailable.length, 1, method);
   }
   const down = await guard({ fail: new Set(methods) }).check('clean.testnet');
   assert.deepEqual([down.verdict, down.reasons], ['warn', ['SIGNAL_UNAVAILABLE']]);
+});
+
+test('freshness uses the attested block_timestamp_ms without a block lookup', async () => {
+  const result = await guard({ fail: new Set(['getBlockTimestampMs']) }).check('clean.testnet');
+  assert.deepEqual([result.verdict, result.signals.attestationAgeDays, result.signals.unavailable], ['allow', 10, []]);
 });
 
 test('an outage cannot hide a block from the blocklist', async () => {

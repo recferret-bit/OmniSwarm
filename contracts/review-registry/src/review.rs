@@ -84,6 +84,7 @@ impl Contract {
             code_hash,
             max_severity,
             block_height: env::block_height(),
+            block_timestamp_ms: env::block_timestamp_ms(),
             binding_confirmed,
         };
         self.requests.insert(request_hash.clone(), request);

@@ -39,7 +39,7 @@ fn review_attested_carries_the_full_attestation() {
     let data = &event("review_attested")["data"][0];
     let expected = serde_json::to_value(contract.get_attestation(HASH.to_string()).unwrap()).unwrap();
     assert_eq!(data, &expected);
-    for field in ["report_sha256", "max_severity", "deployed", "code_hash", "binding_confirmed", "repo", "commit"] {
+    for field in ["report_sha256", "max_severity", "deployed", "code_hash", "binding_confirmed", "repo", "commit", "block_timestamp_ms"] {
         assert!(data.get(field).is_some(), "{field}");
     }
 }

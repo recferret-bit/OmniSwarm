@@ -22,6 +22,7 @@ pub(super) const HASH2: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
 pub(super) const CODE_HASH: &str = "8iTgRHpmMG2DzuPFDyBXTSkdxJMKmdNfmYo1sJUFKVNS";
 pub(super) const CONTRACT: &str = "review-registry.testnet";
 pub(super) const BALANCE: u128 = 100 * ONE_NEAR;
+pub(super) const BLOCK_TIME_NS: u64 = 1_792_497_600_000_000_000;
 /// Storage the mock reports at the start of every call, and its stake at the test byte cost.
 pub(super) const STORAGE_BYTES: u64 = 300_000;
 pub(super) const STAKE: u128 = STORAGE_BYTES as u128 * 10u128.pow(19);
@@ -39,7 +40,8 @@ pub(super) fn context(predecessor: &str, deposit: u128) -> VMContextBuilder {
         .attached_deposit(NearToken::from_yoctonear(deposit))
         .account_balance(NearToken::from_yoctonear(BALANCE))
         .storage_usage(STORAGE_BYTES)
-        .block_height(10);
+        .block_height(10)
+        .block_timestamp(BLOCK_TIME_NS);
     builder
 }
 

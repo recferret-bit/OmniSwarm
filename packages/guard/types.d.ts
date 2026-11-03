@@ -24,6 +24,8 @@ export interface ChainAttestation {
   code_hash: string | null;
   max_severity: 'critical' | 'high' | 'medium' | 'low' | 'info' | 'none';
   block_height: number;
+  /** Block time of the attest call (registry v0.2). Absent in older records: the guard then asks `getBlockTimestampMs`. */
+  block_timestamp_ms?: number;
   binding_confirmed: boolean;
 }
 
@@ -37,7 +39,7 @@ export interface ChainReader {
   isReported(accountId: string): Promise<boolean>;
   /** Days since the account was first seen (indexer). */
   getAccountAgeDays(accountId: string): Promise<number>;
-  /** Block timestamp in milliseconds, for attestation freshness. */
+  /** Block timestamp in milliseconds. Used for freshness only when the attestation has no `block_timestamp_ms`. */
   getBlockTimestampMs(height: number): Promise<number>;
 }
 

@@ -123,6 +123,7 @@ fn requester_paying_as_the_deployed_account_binds_at_once() {
     let found = contract.get_attestation_for_account(id("dex.testnet")).unwrap();
     assert!(found.binding_confirmed);
     assert_eq!(found.code_hash.as_deref(), Some(CODE_HASH));
+    assert_eq!(found.block_timestamp_ms, BLOCK_TIME_NS / 1_000_000);
 }
 
 #[test]

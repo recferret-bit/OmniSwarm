@@ -17,7 +17,7 @@ JSON arguments and results as the API (`apps/api`) and the guard see them over R
   "report_sha256": "<64 lower hex>", "report_uri": "https://…",
   "deployed": "dex.testnet" | null, "code_hash": "<base58, 32-44 chars>" | null,
   "max_severity": "critical|high|medium|low|info|none", "block_height": 10,
-  "binding_confirmed": true
+  "block_timestamp_ms": 1792497600000, "binding_confirmed": true
 }
 
 // Config
@@ -94,7 +94,7 @@ A contract account with no access keys and no code path to `confirm_binding` can
 ## Changes since v0.1.0 (for the API team)
 
 1. `near-sdk` 5.5.0 → 5.30.0, `store` collections, storage prefixes in a `BorshStorageKey` enum. This is a new state layout. v0.1.0 was never deployed, so there is no migration.
-2. `Attestation.binding_confirmed: bool` added. `get_attestation_for_account` now returns only confirmed bindings.
+2. `Attestation.binding_confirmed: bool` and `Attestation.block_timestamp_ms: u64` (block time of the attest call, for the guard's freshness check without an archival `block` query) added. `get_attestation_for_account` now returns only confirmed bindings.
 3. `attest` validates every argument (errors above). `deployed` and `code_hash` must be both present or both null.
 4. `refund` and `withdraw` now return a promise that resolves to `bool`. With `wait_until: FINAL` the tx outcome's final value is that `bool`.
 5. `get_attestations_for_repo` takes optional `from_index` and `limit`. `{repo}` alone still works, but returns at most 20 entries.

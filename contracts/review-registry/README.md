@@ -39,6 +39,6 @@ bash contracts/review-registry/scripts/deploy-testnet.sh --execute   # the owner
 
 The commands build the wasm, create `review-registry.<owner>` and `operator.<owner>` funded by the owner, deploy with `new(owner, operator.<owner>, treasury, 1 NEAR)`, add the operator function-call key, and read `get_price`. New keys go to the near-cli keychain. The operator key goes to the legacy keychain (`~/.near-credentials/testnet/`) so the owner can move it into the host env file. No command prints a secret key. `OWNER`, `CONTRACT`, `OPERATOR`, `TREASURY`, `PRICE_YOCTO` and `OPERATOR_ALLOWANCE` override the defaults. A unit test checks that the key lands on the operator named in `new`, and that the key's method list equals `OPERATOR_METHODS`.
 
-The near-cli-rs flag spelling (`--contract-account-id`, `--function-names`) has not been checked against an installed `near --help` on this host.
+Subcommands and flags were checked against the near-cli-rs 0.30.0 source from crates.io. `near` itself is not installed on this host, so the commands have not been run.
 
 Explorer: `https://testnet.nearblocks.io/address/review-registry.<owner>.testnet` once deployed.

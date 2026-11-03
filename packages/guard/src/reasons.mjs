@@ -33,11 +33,12 @@ export function worst(levels) {
 }
 
 /**
- * Sorts reason codes into the canonical order and drops duplicates.
+ * Known codes in canonical order, then any other reason strings (for example text from a
+ * remote source) in their original order. Duplicates are dropped.
  * @param {Iterable<string>} codes
  * @returns {string[]}
  */
 export function orderReasons(codes) {
   const set = new Set(codes);
-  return REASON_CODES.filter((code) => set.has(code));
+  return [...REASON_CODES.filter((code) => set.has(code)), ...[...set].filter((code) => !(code in REASONS))];
 }

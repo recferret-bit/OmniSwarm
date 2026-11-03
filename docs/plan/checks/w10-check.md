@@ -34,7 +34,7 @@ bash contracts/review-registry/scripts/deploy-testnet.sh --dry-run
 
 Prints six commands: `cargo near build`, create `review-registry.<owner>` and `operator.<owner>` (`fund-myself`, keys saved to the keychain), deploy with `new(owner, operator.<owner>, treasury, 1 NEAR)`, add the function-call key **on the operator account** for `mark_running, attest, refund`, and read `get_price`. No command prints a secret key. Without a flag the script exits 2. `--execute` runs the same commands for the owner. The unit tests run the dry run and check that the key's account is the `operator` in `new`, and that its method list equals the contract's `OPERATOR_METHODS`.
 
-Flag spelling follows near-cli-rs (`--contract-account-id`, `--function-names`); `near` is not installed here, so check it against `near account add-key --help` before `--execute`.
+Subcommands and flags were checked against the near-cli-rs 0.30.0 source (`--allowance`, `--contract-account-id`, `--function-names`, `fund-myself … save-to-keychain sign-as`, `save-to-legacy-keychain`, `with-init-call … prepaid-gas … attached-deposit`). `near` is not installed here, so the commands have not been run.
 
 ## Automated checks
 
