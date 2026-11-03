@@ -28,8 +28,8 @@ The owner's rule — **each agent iterates a fixed number of times** — holds f
 - [x] `--passes`, `--tool-budget`, `--max-cost-usd` flags and config — W04-02
 - [x] Bridge budget counter per reviewer and pass, files-read map — W04-03
 - [x] Finalize-only switch at N + grace 3 (`finalizeOnly`, R-15) — W04-04
-- [x] Exactly-P pass loop in the review phase — W04-05
-- [x] Pass brief roles discover / self-verify / deepen — W04-06
+- [ ] Exactly-P pass loop in the review phase — W04-05
+- [ ] Pass brief roles discover / self-verify / deepen — W04-06
 - [x] ACP-side call counting, "submit now" correction, cancel — W04-07
 - [x] Grok `--max-turns`, Claude turn-flag probe — W04-08
 - [x] API loop bound with forced submit on the last turn — W04-09

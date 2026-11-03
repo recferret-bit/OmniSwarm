@@ -33,31 +33,66 @@ app.get('/api/guard/verdict', async (request) => {
 });
 ```
 
-`createRecordedReader(records)` from `@omniswarm/guard/recorded-reader` is a reader over recorded answers, for tests and the API's mock-chain mode.
+`createRecordedReader(records)` and `createRecordedAgeSource(createdAtMs)` from `@omniswarm/guard/recorded-reader` answer from recorded data, for tests and the API's mock-chain mode. `records.reports` (account → registry Report) counts as reported and feeds `getReport`.
 
 ### ChainReader port
+
+`createGuard({ reader })` is unchanged. The two optional methods are new; a reader without them still type-checks and works.
 
 | Method | Source | Returns |
 |---|---|---|
 | `getAccount(id)` | RPC `view_account` | `{codeHash}` or `null` when the account does not exist |
-| `getAttestationForAccount(id)` | registry view `get_attestation_for_account` (finality `final`) | contract attestation or `null` |
-| `isReported(id)` | shared blocklist (registry `is_reported` once it exists, or the API's approved reports) | `boolean` |
-| `getAccountAgeDays(id)` | indexer first-seen block (FastNEAR) | days |
+| `getAttestationForAccount(id)` | registry view `get_attestation_for_account {account}` (finality `final`) | contract attestation or `null` |
+| `isReported(id)` | registry view `is_reported {account_id}` (contract v0.3, the shared blocklist) | `boolean`. Any other value counts as unavailable, not as `false` |
+| `getReport(id)` **optional** | registry view `get_report {account_id}` | registry Report or `null`. Asked only for a reported account; the evidence goes to `signals.report` |
+| `getAccountAgeDays(id)` **optional** | older form of the age signal | days. `accountAge` (below) wins when both are given |
 | `getBlockTimestampMs(height)` | RPC `block` by height (archival for old heights) | ms. Only called when the attestation lacks `block_timestamp_ms` (registry v0.2 records it) |
 
-Any method may reject. That signal is then `null`, its name is listed in `signals.unavailable`, and the reasons include `SIGNAL_UNAVAILABLE`. An unavailable signal never yields `allow`.
+Any method may reject. That signal is then `null`, its name is listed in `signals.unavailable`, and the reasons include `SIGNAL_UNAVAILABLE`. An unavailable signal never yields `allow`. A missing optional method is not an error: without `getReport` the verdict still blocks, just without `signals.report` (`{evidenceUri, reason, reportedAtMs, reporter}`).
+
+`registryReader(view)` builds the three registry methods from one view call, `view(method, args) → parsed JSON` against the registry at finality `final`. It uses the exact v0.3 method and argument names and rejects any answer of the wrong shape:
+
+```ts
+import { createGuard, registryReader } from '@omniswarm/guard';
+const reader = {
+  ...registryReader((method, args) => chain.viewRegistry(method, args)),   // is_reported, get_report, get_attestation_for_account
+  getAccount: (id) => chain.viewAccount(id),
+  getBlockTimestampMs: (h) => chain.blockTimestampMs(h),
+};
+```
+
+The API can keep its own `getAttestationForAccount` mapping. Only `isReported` (and optionally `getReport`) has to move from the `async () => false` stub to the registry.
+
+### Account age (optional `AccountAgeSource` port)
+
+Without an indexer the creation time is unknown. Then `accountAge` is in `signals.unavailable`, and an account that would otherwise be allowed gets `warn`. That is the behaviour when nothing is configured.
+
+```ts
+interface AccountAgeSource { getCreatedAtMs(accountId: string): Promise<number | null> }   // null = unknown → unavailable
+createGuard({ reader, accountAge });
+```
+
+The production option is behind a flag in `@omniswarm/guard/account-age`:
+
+```ts
+import { accountAgeFromConfig } from '@omniswarm/guard/account-age';
+const accountAge = accountAgeFromConfig({ provider: env.GUARD_ACCOUNT_AGE ?? 'off', network: env.NEAR_NETWORK, apiKey: env.NEARBLOCKS_API_KEY });
+// 'off' (default) → undefined; 'nearblocks' → GET https://api[-testnet].nearblocks.io/v1/account/{id}
+```
+
+The NearBlocks source sends `Authorization: Bearer <apiKey>` when a key is given and times out after 5 s. Non-2xx answers and wrong shapes reject. Known creation times are cached for a day (10 000 entries) to stay under the public rate limit. It reads `account[0].created.block_timestamp` (nanoseconds). That shape comes from the NearBlocks v1 reference. It was **not** checked against the live API from this repository, where tests use a fake `fetch` only, so confirm it once before turning the flag on. The env names above are suggestions for the API's config; the guard reads no environment itself.
 
 ## Rules (INTAKE §7)
 
 | Reason | Level | When |
 |---|---|---|
-| `REPORTED` | block | on the shared blocklist or the guard's local `blocklist` |
+| `REPORTED` | block | `isReported` is `true` (registry `is_reported`), or the account is on the guard's local `blocklist` |
 | `ATTESTED_CRITICAL_STILL_DEPLOYED` | block | confirmed attestation with `critical`/`high` and the live code hash equals the attested one |
 | `CODE_CHANGED_SINCE_REVIEW` | warn | live code hash differs from the attested one (both are in `signals`) |
 | `CONTRACT_NOT_REVIEWED` | warn | a contract with no confirmed attestation, including an attestation whose `binding_confirmed` is false |
 | `ATTESTATION_STALE` | warn | attestation older than `maxAttestAgeDays` (default 180) |
 | `ACCOUNT_TOO_NEW` | warn | younger than `minAgeDays` (default 30), or the account does not exist |
-| `SIGNAL_UNAVAILABLE` | warn | any reader call failed |
+| `SIGNAL_UNAVAILABLE` | warn | any reader or age-source call failed, or no age source is configured |
 | `ATTESTED_CLEAN` | allow | confirmed attestation below `high`, code unchanged |
 | `NOT_A_CONTRACT` | allow | plain account (empty code hash) |
 
@@ -84,3 +119,10 @@ The guard holds no key and signs nothing. An agent should hold a function-call k
 ## Changes for the API (from 0.0.0)
 
 `verdictFor` and `DEMO_ACCOUNTS` (a static demo table) are gone from the main export. Use `createGuard({ reader }).check(account)` as above. The verdict no longer has `account`, and it now has `signals`, as the schema requires. `wrap(signer, {onWarn, lookup}).sign(action)` is replaced by `guard.wrap(signer, {onWarn})` with the real signer methods.
+
+## Changes for the API (registry v0.3)
+
+- `ChainReader.isReported` should call the registry view `is_reported {account_id}` instead of returning `false`. `registryReader(view)` does that and checks the answer.
+- New optional `ChainReader.getReport`: a reported verdict then carries `signals.report` with the evidence link.
+- `ChainReader.getAccountAgeDays` is now optional. New `createGuard({ accountAge })` option and `@omniswarm/guard/account-age` (`accountAgeFromConfig`, flag `off` by default).
+- New export `registryReader`. `createRecordedReader` also takes `records.reports`, and `createRecordedAgeSource` is new.

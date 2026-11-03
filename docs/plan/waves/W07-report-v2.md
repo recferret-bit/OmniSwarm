@@ -60,14 +60,14 @@ A string-snapshot harness proves that old runs render byte-identical. New sectio
 
 - [x] Section registry + v2/legacy fixtures — W07-01
 - [x] HTML string-snapshot harness — W07-02
-- [x] Generator refactored onto the registry with zero visual change — W07-03
+- [ ] Generator refactored onto the registry with zero visual change — W07-03
 - [x] Status pills + legend for final and legacy statuses — W07-04
 - [x] Family/vendor badge + usage/cost component — W07-05
 - [x] Overview general-review hero — W07-06
 - [x] Rail 06 General review — W07-07
 - [x] Rail 05 Cross-check — W07-08
 - [x] Per-finding debate timeline — W07-09
-- [x] De-anonymize toggle (H+) — W07-10
+- [ ] De-anonymize toggle (H+) — W07-10
 - [x] `reviewers.html` index — W07-11
 - [x] Per-reviewer pages in the shared look — W07-12
 - [x] `findings-by-model.html` keyed by reviewer id — W07-13
@@ -75,7 +75,7 @@ A string-snapshot harness proves that old runs render byte-identical. New sectio
 - [x] PDF pages — W07-15
 - [x] CSP nonce test — W07-16
 - [x] Accessibility pass — W07-17
-- [x] Top-level `report.md` summary (H+) — W07-18
+- [ ] Top-level `report.md` summary (H+) — W07-18
 - [x] v2 snapshots + docs — W07-19
 - [x] Integration with a real W06 run — W07-20
 - [x] Wave check + tag — W07-21

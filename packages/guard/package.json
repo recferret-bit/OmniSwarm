@@ -12,6 +12,10 @@
     "./recorded-reader": {
       "types": "./recorded-reader.d.mts",
       "default": "./src/recorded-reader.mjs"
+    },
+    "./account-age": {
+      "types": "./account-age.d.mts",
+      "default": "./src/account-age.mjs"
     }
   },
   "scripts": {

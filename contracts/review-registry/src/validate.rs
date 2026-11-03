@@ -3,12 +3,14 @@
 use near_sdk::{env, AccountId};
 
 /// Methods the operator function-call key may call. `scripts/deploy-testnet.sh` grants exactly these.
-pub const OPERATOR_METHODS: [&str; 3] = ["mark_running", "attest", "refund"];
+pub const OPERATOR_METHODS: [&str; 4] = ["mark_running", "attest", "refund", "report_address"];
 
 /// `max_severity` values, same enum as `attestation.schema.json`.
 pub const SEVERITIES: [&str; 6] = ["critical", "high", "medium", "low", "info", "none"];
 
-pub(crate) const MAX_REPORT_URI: usize = 2000;
+pub(crate) const MAX_URI: usize = 2000;
+/// A report reason is at most 280 characters (Unicode scalar values, so at most 1120 bytes).
+pub(crate) const MAX_REASON_CHARS: usize = 280;
 pub(crate) const MAX_PAGE: u32 = 50;
 pub(crate) const DEFAULT_PAGE: u32 = 20;
 const BASE58: &[u8] = b"123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
@@ -51,10 +53,24 @@ pub(crate) fn require_repo(value: &str) {
 }
 
 /// `https://` followed by at least one visible ASCII character, at most 2000 bytes in total.
-pub(crate) fn require_report_uri(value: &str) {
+fn is_https_uri(value: &str) -> bool {
     let rest = value.strip_prefix("https://").unwrap_or("");
-    let ok = !rest.is_empty() && value.len() <= MAX_REPORT_URI && rest.bytes().all(|b| b.is_ascii_graphic());
-    require(ok, "ERR_REPORT_URI");
+    !rest.is_empty() && value.len() <= MAX_URI && rest.bytes().all(|b| b.is_ascii_graphic())
+}
+
+pub(crate) fn require_report_uri(value: &str) {
+    require(is_https_uri(value), "ERR_REPORT_URI");
+}
+
+pub(crate) fn require_evidence_uri(value: &str) {
+    require(is_https_uri(value), "ERR_EVIDENCE_URI");
+}
+
+/// Free text from an owner-reviewed report: 1 to 280 characters, not only whitespace, no
+/// control characters (so no newlines that could forge log lines in a client).
+pub(crate) fn require_reason(value: &str) {
+    let ok = !value.trim().is_empty() && value.chars().count() <= MAX_REASON_CHARS && !value.chars().any(char::is_control);
+    require(ok, "ERR_REASON");
 }
 
 pub(crate) fn require_severity(value: &str) {

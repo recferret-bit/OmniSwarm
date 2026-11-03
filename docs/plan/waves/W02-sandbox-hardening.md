@@ -37,7 +37,7 @@ Code under review can no longer influence what reviewers see. A hostile fixture 
 - [x] R-04 host-only lifecycle and logs — W02-08
 - [x] R-07 structured failure classification — W02-09
 - [x] R-09 remove the non-identity submit path — W02-10
-- [x] R-08 AGY hook preflight — W02-11
+- [ ] R-08 AGY hook preflight — W02-11
 - [x] R-12 truncation marker — W02-12
 - [x] R-16 temp prefixes — W02-14
 - [x] Bridge never receives keys (env test) — W02-15
