@@ -1,0 +1,37 @@
+{
+  "note": "Mock-chain snapshot for the offline demo. Same shape as recorded RPC answers; these accounts were not read from testnet.",
+  "recordedAt": "2026-11-03T12:00:00.000Z",
+  "accounts": {
+    "demo-payments.owner.testnet": { "code_hash": "8iTgRHpmMG2DzuPFDyBXTSkdxJMKmdNfmYo1sJUFKVNS", "age_days": 60 },
+    "clean-dex.owner.testnet": { "code_hash": "GKot5hBsd81kMupNCXHaqbhv3huEbxAFMLnpcX2hniwn", "age_days": 400 },
+    "attacker.testnet": { "code_hash": "11111111111111111111111111111111", "age_days": 2 }
+  },
+  "attestations": {
+    "demo-payments.owner.testnet": {
+      "request_hash": "1111111111111111111111111111111111111111111111111111111111111111",
+      "repo": "omniswarm/demo-payments",
+      "commit": "0123456789abcdef0123456789abcdef01234567",
+      "report_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+      "report_uri": "https://reports.example/demo-payments/index.json",
+      "deployed": "demo-payments.owner.testnet",
+      "code_hash": "8iTgRHpmMG2DzuPFDyBXTSkdxJMKmdNfmYo1sJUFKVNS",
+      "max_severity": "low",
+      "block_height": 2000,
+      "binding_confirmed": true
+    },
+    "clean-dex.owner.testnet": {
+      "request_hash": "3333333333333333333333333333333333333333333333333333333333333333",
+      "repo": "omniswarm/clean-dex",
+      "commit": "89abcdef0123456789abcdef0123456789abcdef",
+      "report_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+      "report_uri": "https://reports.example/clean-dex/index.json",
+      "deployed": "clean-dex.owner.testnet",
+      "code_hash": "GKot5hBsd81kMupNCXHaqbhv3huEbxAFMLnpcX2hniwn",
+      "max_severity": "none",
+      "block_height": 2001,
+      "binding_confirmed": true
+    }
+  },
+  "reported": ["attacker.testnet"],
+  "blockTimestampsMs": { "2000": 1792497600000, "2001": 1792497600000 }
+}

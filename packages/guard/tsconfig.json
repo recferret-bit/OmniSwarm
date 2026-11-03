@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "allowJs": true,
+    "checkJs": true,
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "types": []
+  },
+  "include": ["index.mjs", "index.d.mts", "types.d.ts", "recorded-reader.d.mts", "src", "demo/attack/agent.mjs", "demo/attack/log.mjs"]
+}
