@@ -1,0 +1,111 @@
+name: deploy
+
+# Deploy of a tagged release to the host over ssh (W12-15). Never runs on pull requests.
+#
+#   push               job `plan`: the deploy, rollback and smoke dry runs. No secrets,
+#                      no environment, contacts nothing.
+#   workflow_dispatch  job `deploy`: in the `production` environment (the owner sets
+#                      required reviewers and limits it to protected branches/tags),
+#                      runs infra/deploy/deploy.sh <tag> (or --rollback), then smoke.sh.
+#
+# Environment `production` holds, by name (docs/ops/OWNER_TASKS.md "CI deploy"):
+#   secrets.DEPLOY_SSH_KEY      private key of the deploy user (provision.sh --deploy-user)
+#   secrets.DEPLOY_KNOWN_HOSTS  the host's known_hosts lines, verified by the owner
+#   vars.DEPLOY_HOST            ssh host name or address
+#   vars.DEPLOY_USER            ssh user (default: deploy)
+#   vars.OMNI_DOMAIN            app hostname the smoke test checks
+#   vars.NETWORK                network /api/health must report (default: testnet)
+# Expressions reach scripts only through `env:`, never inline in `run:`.
+
+on:
+  push:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to deploy (an existing git tag, e.g. wave-12). Ignored for a rollback.
+        required: false
+        type: string
+      rollback:
+        description: Flip the host back to the previous release instead
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Deploy plan (dry run, contacts nothing)
+        run: bash infra/deploy/deploy.sh --dry-run deploy-host.invalid "$GITHUB_SHA"
+      - name: Rollback plan
+        run: bash infra/deploy/deploy.sh --dry-run deploy-host.invalid --rollback
+      - name: Smoke plan
+        run: bash infra/deploy/smoke.sh --dry-run --network testnet omniswarm.example
+
+  deploy:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 60
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          # deploy.sh resolves refs/tags/<tag> locally to name the release.
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+      - name: Check the inputs
+        env:
+          TAG: ${{ inputs.tag }}
+          ROLLBACK: ${{ inputs.rollback }}
+        run: |
+          if [ "$ROLLBACK" = true ]; then exit 0; fi
+          [[ "$TAG" =~ ^[A-Za-z0-9._-]{1,64}$ ]] || { echo "::error::give a tag ([A-Za-z0-9._-]) or set rollback"; exit 1; }
+          git rev-parse --verify --quiet "refs/tags/$TAG^{commit}" >/dev/null || { echo "::error::no git tag $TAG"; exit 1; }
+      - name: Load the deploy key into an agent (never written to disk)
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+        run: |
+          if [ -z "$DEPLOY_SSH_KEY" ] || [ -z "$DEPLOY_KNOWN_HOSTS" ] || [ -z "$DEPLOY_HOST" ]; then
+            echo "::error::set DEPLOY_SSH_KEY, DEPLOY_KNOWN_HOSTS and DEPLOY_HOST in the production environment"; exit 1
+          fi
+          install -d -m 0700 ~/.ssh
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          printf 'Host omniswarm-deploy\n  HostName %s\n  User %s\n  StrictHostKeyChecking yes\n  IdentityAgent %s\n' \
+            "$DEPLOY_HOST" "${DEPLOY_USER:-deploy}" "$RUNNER_TEMP/ssh-agent.sock" > ~/.ssh/config
+          chmod 0600 ~/.ssh/known_hosts ~/.ssh/config
+          eval "$(ssh-agent -a "$RUNNER_TEMP/ssh-agent.sock")" > /dev/null
+          printf '%s\n' "$DEPLOY_SSH_KEY" | ssh-add -q -
+      - name: Deploy
+        env:
+          TAG: ${{ inputs.tag }}
+          ROLLBACK: ${{ inputs.rollback }}
+        run: |
+          if [ "$ROLLBACK" = true ]; then
+            bash infra/deploy/deploy.sh omniswarm-deploy --rollback
+          else
+            bash infra/deploy/deploy.sh omniswarm-deploy "$TAG"
+          fi
+      - name: Smoke
+        env:
+          OMNI_DOMAIN: ${{ vars.OMNI_DOMAIN }}
+          NETWORK: ${{ vars.NETWORK }}
+        run: bash infra/deploy/smoke.sh --network "${NETWORK:-testnet}" "$OMNI_DOMAIN"
+      - name: Drop the key
+        if: always()
+        run: SSH_AUTH_SOCK="$RUNNER_TEMP/ssh-agent.sock" ssh-add -D 2>/dev/null || true

@@ -1,7 +1,8 @@
 #!/bin/bash
 # Runs shellcheck on every infra shell script and hadolint on every Dockerfile infra
-# builds, both from pinned images so laptop and CI agree; then the checker
-# unit tests and the deploy/smoke dry runs.
+# builds and actionlint on the workflows, all from pinned images so laptop and
+# CI agree; then the checker unit tests, the deploy/smoke/timer dry runs and
+# the host-timer scripts against stubs (timers.test.sh).
 set -euo pipefail
 # shellcheck source=infra/check/lib.sh
 . "$(dirname "$0")/lib.sh"
@@ -28,6 +29,12 @@ for f in "${dockerfiles[@]}"; do
   grep -q '^HEALTHCHECK ' "$f" || check_fail "$f: no HEALTHCHECK"
 done
 check_log "hadolint ok; final stages non-root, bases digest-pinned, healthchecks present (${#dockerfiles[@]} Dockerfiles)"
+
+# Workflows: actionlint (schema, expressions, shellcheck on run: scripts) on every
+# workflow, then the deploy workflow's own policy (workflow-policy.mjs).
+docker run --rm -v "$ROOT:/repo:ro" -w /repo "$ACTIONLINT_IMAGE" -no-color -oneline || check_fail "actionlint"
+node "$CHECK_DIR/workflow-policy.mjs" .github/workflows/deploy.yml || check_fail "deploy workflow policy"
+check_log "actionlint ok (.github/workflows); deploy.yml: dispatch-only, protected environment, pinned actions"
 
 node --test "$CHECK_DIR"/*.test.mjs > "$CHECK_TMP/node-test.log" 2>&1 || { cat "$CHECK_TMP/node-test.log"; check_fail "infra checker unit tests"; }
 check_log "checker unit tests: $(grep -E '^. pass ' "$CHECK_TMP/node-test.log" | tr -d 'ℹ ' | sed 's/pass/pass /')"

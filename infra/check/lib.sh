@@ -8,6 +8,7 @@ ROOT="$(cd "$INFRA/.." && pwd)"
 
 SHELLCHECK_IMAGE=koalaman/shellcheck:v0.11.0@sha256:61862eba1fcf09a484ebcc6feea46f1782532571a34ed51fedf90dd25f925a8d
 HADOLINT_IMAGE=hadolint/hadolint:v2.15.1@sha256:32dac94127fd60b7b7e3fbfc65e1383b9b5e25c9bfd7b8536de7a539fe68a12d
+ACTIONLINT_IMAGE=rhysd/actionlint:1.7.7@sha256:887a259a5a534f3c4f36cb02dca341673c6089431057242cdc931e9f133147e9
 NGINX_IMAGE=nginx:1.30.6-alpine3.24@sha256:0e52bd054126cdc040b1276c0af347aeb02a41b9cfe305d6094767ac30e97949
 SYSTEMD_CHECK_IMAGE=omniswarm-infra-check/systemd:trixie-20261027-2
 # Bump a tag when its Dockerfile changes, so cached images are rebuilt.
