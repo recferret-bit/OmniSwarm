@@ -1,41 +1,86 @@
 #!/usr/bin/env node
-// Compare debate, union and majority vote on the golden repos using the scripted reviewers.
+// Golden eval (ORCHESTRATION 7): union, majority vote and the debate, all computed from the same scripted
+// submissions on every eval/golden repo. Writes eval/RESULTS.md, including the OD-14 default-rounds decision.
+// Offline only; real models (OMNI_LIVE=1) are not wired here yet.
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { runGolden } from '../scripts/debate-run.mjs';
+import { buildClusters } from '../scripts/debate-cluster.mjs';
+import { sourceReader } from '../scripts/debate-citations.mjs';
+import { offlinePlan } from '../scripts/debate-plan.mjs';
+import { runDebateStages } from '../scripts/debate-run.mjs';
+import { runPanel, STRATEGIES } from './panel.mjs';
+import { decideDefaultRounds, rates, retainedBy, score, sum } from './metrics.mjs';
 
-const root = path.join(path.dirname(fileURLToPath(import.meta.url)), 'golden');
-const outRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), 'runs');
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const GOLDEN = path.join(HERE, 'golden');
+const RUNS = path.join(HERE, 'runs');
+const MODES = ['union', 'majority', 'debate-1', 'debate-2'];
 
-function hit(expected, title) {
-  return (expected.bugs || []).some((bug) => title.toLowerCase().includes('withdraw') && bug.class.includes('owner'));
-}
-
-const rows = [];
-for (const name of fs.readdirSync(root)) {
-  const dir = path.join(root, name);
-  if (!fs.existsSync(path.join(dir, 'expected.json')) || !fs.existsSync(path.join(dir, 'src', 'lib.rs'))) continue;
-  const expected = JSON.parse(fs.readFileSync(path.join(dir, 'expected.json'), 'utf8'));
-  const out = path.join(outRoot, name);
+async function debate(dir, panel, rounds, out) {
   fs.rmSync(out, { recursive: true, force: true });
-  const result = runGolden(dir, out, { rounds: 2, seed: 1 });
-  const retained = result.adjudication.filter((row) => ['CONFIRMED', 'LIKELY', 'DISPUTED'].includes(row.finalStatus));
-  const debateHits = retained.filter((row) => hit(expected, result.clusters.find((cluster) => cluster.id === row.clusterId)?.primaryTitle || '')).length;
-  const bugs = Math.max(expected.bugs.length, 1);
-  const recall = debateHits / bugs;
-  const precision = retained.length ? debateHits / retained.length : 0;
-  const round2 = fs.existsSync(path.join(out, 'debate', 'round-2')) ? fs.readdirSync(path.join(out, 'debate', 'round-2')) : [];
-  const conformity = round2.some((file) => JSON.parse(fs.readFileSync(path.join(out, 'debate', 'round-2', file), 'utf8')).conformitySuspect) ? 1 : 0;
-  rows.push({ repo: name, debate: { recall, precision, decoyFp: 0, dedup: 1, conformity, cost: 0 }, union: { recall: 1, precision: 0.5, decoyFp: 0.5, dedup: 1, conformity: 0, cost: 0 }, majority: { recall: 1, precision: 0.5, decoyFp: 0, dedup: 1, conformity: 0, cost: 0 } });
+  fs.mkdirSync(out, { recursive: true });
+  const result = await runDebateStages(offlinePlan({ out, sourceRoot: dir, claims: panel.claims, controls: panel.controls, reviewers: panel.reviewers, rounds }));
+  const turns = [...result.debated.values()].flatMap((row) => row.turns);
+  return { adjudication: result.rows, turns: turns.length, suspect: turns.filter((t) => t.conformitySuspect).length };
 }
-const lines = ['| repo | mode | recall | precision | decoy FP | dedup | conformity | cost |', '|---|---|---:|---:|---:|---:|---:|---:|'];
-for (const row of rows) {
-  for (const mode of ['debate', 'union', 'majority']) {
-    const cell = row[mode];
-    lines.push(`| ${row.repo} | ${mode} | ${cell.recall} | ${cell.precision} | ${cell.decoyFp} | ${cell.dedup} | ${cell.conformity} | ${cell.cost} |`);
+
+async function evalRepo(name) {
+  const dir = path.join(GOLDEN, name);
+  const expected = JSON.parse(fs.readFileSync(path.join(dir, 'expected.json'), 'utf8'));
+  const work = path.join(RUNS, name);
+  const panel = await runPanel(dir, expected, path.join(work, 'panel'));
+  const { clusters } = buildClusters(panel.claims, { reader: sourceReader(dir) });
+  const submitters = new Set(panel.claims.map((c) => c.reviewerId)).size;
+  const row = {
+    union: score(retainedBy('union', clusters), expected),
+    majority: score(retainedBy('majority', clusters, { submitters }), expected),
+  };
+  for (const rounds of [1, 2]) {
+    const run = await debate(dir, panel, rounds, path.join(work, `debate-r${rounds}`));
+    row[`debate-${rounds}`] = { ...score(retainedBy('debate', clusters, { adjudication: run.adjudication }), expected), turns: run.turns, suspect: run.suspect };
   }
+  return { name, row };
 }
-fs.mkdirSync(outRoot, { recursive: true });
-fs.writeFileSync(path.join(path.dirname(root), 'RESULTS.md'), `# Golden eval\n\nCommand: npm run eval:golden\n\nDefault debate rounds: 2\n\n${lines.join('\n')}\n`);
-console.log(lines.join('\n'));
+
+function table(results, totals) {
+  const lines = ['| repo | mode | recall | precision | decoy FP | dedup | conformity | cost USD |', '|---|---|---:|---:|---:|---:|---:|---:|'];
+  const push = (name, counts) => MODES.forEach((mode) => {
+    const r = rates(counts[mode]);
+    lines.push(`| ${name} | ${mode} | ${r.recall} | ${r.precision} | ${r.decoyFp} | ${r.dedup} | ${r.conformity} | ${r.cost} |`);
+  });
+  results.forEach(({ name, row }) => push(name, row));
+  push('**total**', totals);
+  return lines.join('\n');
+}
+
+function commit() {
+  try { return execFileSync('git', ['rev-parse', '--short', 'HEAD'], { cwd: HERE, encoding: 'utf8' }).trim(); } catch { return 'unknown'; }
+}
+
+const repos = fs.readdirSync(GOLDEN).filter((name) => fs.existsSync(path.join(GOLDEN, name, 'expected.json'))).sort();
+const results = [];
+for (const name of repos) results.push(await evalRepo(name));
+const totals = Object.fromEntries(MODES.map((mode) => [mode, sum(results.map(({ row }) => row[mode]))]));
+const decision = decideDefaultRounds({ debate: totals['debate-2'], union: totals.union, majority: totals.majority });
+const text = table(results, totals);
+fs.writeFileSync(path.join(HERE, 'RESULTS.md'), `# Golden eval
+
+Command: \`npm run eval:golden\` · date ${new Date().toISOString().slice(0, 10)} · commit ${commit()}
+
+Reviewers: ${STRATEGIES.map((s) => `scripted:${s}`).join(', ')}; judge scripted:judge. Cost: none (no model was called).
+
+These are scripted reviewers whose answers derive from each repo's expected.json by the fixed policy in
+eval/panel.mjs, so the table measures the debate protocol (citation checks, conformity rule, evidence floor),
+not model skill. The live eval with real models (\`OMNI_LIVE=1\`) is pending.
+
+Default debate rounds: ${decision.rounds}. ${decision.reason}
+
+Union keeps every cluster. Majority keeps clusters reported by more than half of the reviewers that submitted
+a finding. debate-N keeps every cluster the N-round debate did not REFUTE. Totals are micro-averaged.
+
+${text}
+`);
+console.log(text);
+console.log(`Default debate rounds: ${decision.rounds}. ${decision.reason}`);

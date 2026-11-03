@@ -1,13 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { STATUS_COLORS } from './report-sections/registry.mjs';
-
-const scripts = path.dirname(fileURLToPath(import.meta.url));
+import { ORANGE_PILL_TEXT } from './report-sections/status-legend.mjs';
+import { SCRIPTS, read, renderV2 } from './report-cards-fixtures.mjs';
 
 function channel(hex, index) {
   const value = parseInt(hex.slice(index, index + 2), 16) / 255;
@@ -24,28 +21,34 @@ function headings(html) {
   return [...html.matchAll(/<h([1-4])\b/g)].map((match) => Number(match[1]));
 }
 
-test('status pill tokens meet WCAG AA contrast on their background', () => {
+test('status pill tokens and the CSS tone classes meet WCAG AA contrast', () => {
   for (const [token, color] of Object.entries(STATUS_COLORS)) {
     const ratio = contrast(color.fg, color.bg);
     assert.ok(ratio >= 4.5, `${token} contrast ${ratio.toFixed(2)}`);
   }
+  const css = fs.readFileSync(path.join(SCRIPTS, 'report-style.css'), 'utf8');
+  const vars = Object.fromEntries([...css.matchAll(/--([a-z-]+):\s*(#[0-9a-f]{6})/gi)].map((m) => [m[1], m[2]]));
+  for (const tone of ['red', 'green', 'blue']) {
+    const ratio = contrast(vars[tone], vars[`${tone}-pale`]);
+    assert.ok(ratio >= 4.5, `pill ${tone} on ${tone}-pale ${ratio.toFixed(2)}`);
+  }
+  assert.ok(contrast(ORANGE_PILL_TEXT, vars['orange-pale']) >= 4.5, 'v2 orange pill text');
 });
 
-test('v2 pages have one main, disclosure state, and heading levels without skips', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'v2-a11y-'));
-  const built = spawnSync(process.execPath, [path.join(scripts, 'report-fixtures', 'v2-build.mjs'), dir], { encoding: 'utf8' });
-  assert.equal(built.status, 0, built.stderr);
-  const rendered = spawnSync(process.execPath, [path.join(scripts, 'generate-html-report.mjs'), dir], { encoding: 'utf8' });
-  assert.ok(rendered.status === 0 || rendered.status === 2, rendered.stderr);
+test('v2 pages have one main, native disclosures, pressed state, labelled badges and no heading skips', () => {
+  const dir = renderV2();
   for (const rel of ['report.html', 'reviewers.html', 'findings-by-model.html', 'reviewers/key-zai-glm-5-3/report.html']) {
-    const html = fs.readFileSync(path.join(dir, rel), 'utf8');
+    const html = read(dir, rel);
     assert.equal(html.match(/<main\b/g).length, 1, rel);
     const levels = headings(html);
     for (let i = 1; i < levels.length; i++) assert.ok(levels[i] <= levels[i - 1] + 1, `${rel} h${levels[i - 1]} to h${levels[i]}`);
+    assert.equal(/<details[^>]*aria-expanded/.test(html), false, `${rel}: a static aria-expanded on <details> goes stale`);
   }
-  const report = fs.readFileSync(path.join(dir, 'report.html'), 'utf8');
-  assert.match(report, /<details class="disclosure debate"[^>]*aria-expanded="false"/);
+  const report = read(dir, 'report.html');
+  assert.ok(report.includes(`.pill.orange{color:${ORANGE_PILL_TEXT}}`));
+  assert.match(report, /<details class="disclosure debate"><summary>Debate<\/summary>/);
   assert.match(report, /data-cross-filter="DISPUTED"[^>]*aria-pressed="false"/);
-  const index = fs.readFileSync(path.join(dir, 'reviewers.html'), 'utf8');
-  assert.match(index, /aria-label="cli · anthropic/);
+  assert.match(report, /data-status-filter="LIKELY"[^>]*aria-pressed="false"/);
+  assert.match(read(dir, 'reviewers.html'), /aria-label="cli · anthropic · opus"/);
+  assert.match(read(dir, 'reviewers.html'), /<span class="pill" aria-label="openrouter · alibaba · qwen\/qwen3\.8-max-0902">openrouter · alibaba · qwen\/qwen3\.8-max-0902<\/span>/);
 });

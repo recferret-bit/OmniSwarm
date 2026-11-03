@@ -1,23 +1,67 @@
 {
   "clusters": [
     {
-      "id": "CLUSTER-1",
-      "primaryTitle": "Missing owner check",
-      "status": "QUEUED",
-      "rounds": 2,
-      "severity": "high"
-    },
-    {
       "id": "CLUSTER-2",
       "primaryTitle": "Agreed check",
       "status": "AGREED",
+      "severity": "low",
+      "surface": "S1",
+      "claimIds": [
+        "key-zai-glm-5-3-s1-auth#0",
+        "openrouter-qwen-qwen3-8-max-0902-s1-auth#0"
+      ],
       "rounds": 0,
-      "severity": "low"
+      "vendors": [
+        "zai",
+        "alibaba"
+      ]
+    },
+    {
+      "id": "CLUSTER-1",
+      "primaryTitle": "Missing owner check",
+      "status": "QUEUED",
+      "severity": "high",
+      "surface": "S1",
+      "claimIds": [
+        "cli-claude-opus-s1-auth#0"
+      ],
+      "rounds": 2,
+      "vendors": [
+        "anthropic"
+      ]
+    },
+    {
+      "id": "CLUSTER-4",
+      "primaryTitle": "Logged secret",
+      "status": "QUEUED",
+      "severity": "medium",
+      "surface": "S1",
+      "claimIds": [
+        "openrouter-anthropic-claude-opus-5-5-s1-auth#0"
+      ],
+      "rounds": 1,
+      "vendors": [
+        "anthropic"
+      ]
+    },
+    {
+      "id": "CLUSTER-3",
+      "primaryTitle": "Unchecked arithmetic",
+      "status": "CAPPED",
+      "severity": "low",
+      "surface": "S1",
+      "claimIds": [
+        "cli-claude-opus-s1-auth#1"
+      ],
+      "rounds": 0,
+      "vendors": [
+        "anthropic"
+      ]
     }
   ],
   "coverageGaps": [
     {
-      "clusterId": "CLUSTER-9",
+      "clusterId": "CLUSTER-3",
       "reason": "debate_cap"
     }
   ]

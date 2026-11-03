@@ -1,19 +1,14 @@
-// Replaces the debate stub. Scripted runs write debate/ here; other runs leave the stub no-op unless asked.
-import { runGolden } from './debate-run.mjs';
+// Debate rounds over the run's own clusters (ORCHESTRATION 4.1-4.2). No orchestrator, no debate.
+// OMNI_FAULT=debate-round-2 is the W06 fault seam: a coded throw that the phase runner records as a stage failure.
+import { debatePlan, stageError } from './debate-plan.mjs';
+import { debateStage } from './debate-run.mjs';
 
 export const phase = {
   name: 'debate',
-  after: 'crosscheck',
-  optional: true,
   async run(ctx) {
-    const fault = process.env.OMNI_FAULT;
-    if (!ctx.request?.orchestrator && !fault) return;
-    const source = ctx.request?.target;
-    if (!source) return;
-    try { runGolden(source, ctx.output, { rounds: ctx.budgets?.debate?.rounds ?? 2, fault }); }
-    catch (error) {
-      if (ctx.stageFailures && !ctx.stageFailures.includes(error.code || 'debate')) ctx.stageFailures.push(error.code || 'debate');
-      throw error;
-    }
+    const plan = debatePlan(ctx);
+    if (!plan) return;
+    if (process.env.OMNI_FAULT === 'debate-round-2') throw stageError('debate-round-2', 'injected fault: debate-round-2');
+    ctx.debate = { plan, state: await debateStage(plan) };
   },
 };

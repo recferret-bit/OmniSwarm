@@ -1,33 +1,47 @@
 [
   {
+    "clusterId": "CLUSTER-2",
+    "finalStatus": "CONFIRMED",
+    "severity": "low",
+    "severityReason": "Left at the reported severity.",
+    "judge": {
+      "reviewerId": "triage",
+      "vendor": "none",
+      "alternate": false
+    },
+    "rationale": "AGREED at triage.",
+    "validArguments": [],
+    "discardedArguments": []
+  },
+  {
     "clusterId": "CLUSTER-1",
     "finalStatus": "DISPUTED",
     "severity": "high",
     "severityReason": "Left as reported.",
     "judge": {
-      "reviewerId": "scripted-judge",
-      "vendor": "scripted",
-      "alternate": false
+      "reviewerId": "key-zai-glm-5-3",
+      "vendor": "zai",
+      "alternate": true
     },
     "rationale": "Verified quotes disagree.",
     "validArguments": [
-      "Reviewer A"
+      "Reviewer A round 1: refuted"
     ],
     "discardedArguments": [
-      "Reviewer B"
+      "Reviewer B round 1: no_valid_citation"
     ]
   },
   {
-    "clusterId": "CLUSTER-2",
-    "finalStatus": "CONFIRMED",
-    "severity": "low",
-    "severityReason": "Two vendors.",
+    "clusterId": "CLUSTER-4",
+    "finalStatus": "LIKELY",
+    "severity": "medium",
+    "severityReason": "Left as reported.",
     "judge": {
-      "reviewerId": "scripted-judge",
-      "vendor": "scripted",
-      "alternate": false
+      "reviewerId": "key-zai-glm-5-3",
+      "vendor": "zai",
+      "alternate": true
     },
-    "rationale": "Agreed before debate.",
+    "rationale": "Single source, not refuted.",
     "validArguments": [],
     "discardedArguments": []
   }

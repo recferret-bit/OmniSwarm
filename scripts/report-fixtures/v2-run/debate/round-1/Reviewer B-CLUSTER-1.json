@@ -3,7 +3,7 @@
   "clusterId": "CLUSTER-1",
   "role": "challenge",
   "anonId": "Reviewer B",
-  "verdict": "upheld",
+  "verdict": "refuted",
   "citations": [
     {
       "file": "src/lib.rs",

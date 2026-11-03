@@ -3,17 +3,17 @@
     "title": "Missing owner check",
     "surface": "S1",
     "severity": "high",
-    "confidence": "confirmed",
+    "confidence": "probable",
     "location": [
       "src/lib.rs:16"
     ],
-    "impact": "Any caller can withdraw.",
+    "impact": "Missing owner check.",
     "preconditions": "A balance exists.",
     "analysis": "withdraw does not compare the predecessor. reentrancy is not the issue.",
     "validation": "Source inspection.",
     "attack": [],
     "poc": "",
-    "fix": "Compare the predecessor to the owner."
+    "fix": "Add the missing control."
   },
   {
     "title": "Unchecked arithmetic",
@@ -23,13 +23,13 @@
     "location": [
       "src/lib.rs:40"
     ],
-    "impact": "A balance can wrap.",
-    "preconditions": "A large deposit.",
-    "analysis": "The addition is unchecked.",
+    "impact": "Unchecked arithmetic.",
+    "preconditions": "A balance exists.",
+    "analysis": "Source inspection of the cited line.",
     "validation": "Source inspection.",
     "attack": [],
     "poc": "",
-    "fix": "Use checked math."
+    "fix": "Add the missing control."
   },
   {
     "verified_safe": []

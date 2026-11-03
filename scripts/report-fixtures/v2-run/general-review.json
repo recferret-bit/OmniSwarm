@@ -27,7 +27,7 @@
   "contributions": [
     {
       "reviewerId": "cli-claude-opus",
-      "uniqueConfirmed": 1,
+      "uniqueConfirmed": 0,
       "refuted": 0,
       "toolCalls": 4,
       "costUsd": 0
@@ -40,15 +40,15 @@
       "costUsd": 0
     },
     {
-      "reviewerId": "openrouter-qwen-qwen3-8-max",
+      "reviewerId": "openrouter-qwen-qwen3-8-max-0902",
       "uniqueConfirmed": 0,
       "refuted": 0,
       "toolCalls": 4,
       "costUsd": 0
     },
     {
-      "reviewerId": "openrouter-anthropic-claude-opus",
-      "uniqueConfirmed": 0,
+      "reviewerId": "openrouter-anthropic-claude-opus-5-5",
+      "uniqueConfirmed": 1,
       "refuted": 0,
       "toolCalls": 4,
       "costUsd": 0
@@ -65,14 +65,17 @@
     "reviewers": [
       "cli-claude-opus",
       "key-zai-glm-5-3",
-      "openrouter-qwen-qwen3-8-max",
-      "openrouter-anthropic-claude-opus",
+      "openrouter-qwen-qwen3-8-max-0902",
+      "openrouter-anthropic-claude-opus-5-5",
       "scripted-baseline"
     ],
-    "orchestrator": "scripted:judge",
+    "orchestrator": "cli:codex:gpt-5.5",
     "passes": 2,
     "toolBudget": 40,
-    "debateRounds": 2
+    "debateRounds": 2,
+    "judgeAssignment": [
+      "CLUSTER-1: key-zai-glm-5-3 (alternate)"
+    ]
   },
   "disclaimer": "Model agreement and passing checks do not certify security."
 }
