@@ -30,9 +30,8 @@ export function keyFingerprint(secret) {
   return `${hex.slice(0, 4)}${hex.slice(-4)}`;
 }
 
-// `allow` is the family's env allow-list. The fingerprint is taken from the first key-shaped name.
-export function withKeyFingerprint(reviewer, allow, env = process.env) {
-  const name = (allow || []).find((entry) => /(?:_API_KEY|_AUTH_TOKEN)$/.test(entry));
-  const fingerprint = name ? keyFingerprint(env[name]) : null;
+// `keyEnv` is the operator variable that holds this reviewer's key (families.fingerprintEnv), or null.
+export function withKeyFingerprint(reviewer, keyEnv, env = process.env) {
+  const fingerprint = typeof keyEnv === 'string' && keyEnv ? keyFingerprint(env[keyEnv]) : null;
   return fingerprint ? { ...reviewer, keyFingerprint: fingerprint } : reviewer;
 }

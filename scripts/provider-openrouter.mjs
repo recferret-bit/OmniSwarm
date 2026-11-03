@@ -16,4 +16,5 @@ export const family = {
   available: (_reviewer, env = process.env) => Boolean(env.OPENROUTER_API_KEY),
   launch,
   envAllowlist: () => preset.envAllowlist,
+  fingerprintEnv: () => preset.keyEnv,
 };

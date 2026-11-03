@@ -141,4 +141,6 @@ export const family = {
   },
   launch,
   envAllowlist: (reviewer) => (reviewer?.provider === 'claude-zai' ? ['ANTHROPIC_BASE_URL', 'ANTHROPIC_AUTH_TOKEN'] : []),
+  // claude-zai maps the operator's ZAI_API_KEY into ANTHROPIC_AUTH_TOKEN; the fingerprint is of that key.
+  fingerprintEnv: (reviewer) => (reviewer?.provider === 'claude-zai' ? 'ZAI_API_KEY' : null),
 };

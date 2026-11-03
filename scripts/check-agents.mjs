@@ -13,15 +13,14 @@ export function claudeMaxTurnsLine(env = process.env) {
 export function checkReviewerRow(spec, env = process.env) {
   const reviewer = typeof spec === 'string' ? parseReviewerSpec(spec) : spec;
   if (reviewer.family === 'scripted') return { ok: true, line: 'scripted: ok' };
+  const keyName = families.has(reviewer.family) ? families.fingerprintEnv(reviewer) : null;
   if (reviewer.family === 'cli' && reviewer.provider === 'claude-zai') {
     const cli = Boolean(resolveExecutable('claude', env));
-    const key = Boolean(env.ZAI_API_KEY);
-    if (cli && key) return { ok: true, line: 'cli:claude-zai: claude CLI found, ZAI_API_KEY present' };
-    return { ok: false, line: `cli:claude-zai: ${cli ? 'ZAI_API_KEY missing' : 'claude CLI missing'}` };
+    const key = Boolean(env[keyName]);
+    if (cli && key) return { ok: true, line: `cli:claude-zai: claude CLI found, ${keyName} present` };
+    return { ok: false, line: `cli:claude-zai: ${cli ? `${keyName} missing` : 'claude CLI missing'}` };
   }
-  if (reviewer.family === 'key' || reviewer.family === 'openrouter') {
-    const names = families.envAllowlist(reviewer);
-    const keyName = names.find((name) => name.endsWith('_API_KEY')) || names[0] || 'API_KEY';
+  if (keyName && (reviewer.family === 'key' || reviewer.family === 'openrouter')) {
     const label = reviewer.family === 'openrouter' ? 'openrouter' : `key:${reviewer.provider}`;
     if (!env[keyName]) return { ok: false, line: `${label}: ${keyName} missing` };
     return { ok: true, line: `${label}: key present` };

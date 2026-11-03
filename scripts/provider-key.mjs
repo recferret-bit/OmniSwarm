@@ -33,4 +33,8 @@ export const family = {
     try { return presetFor(reviewer.provider).envAllowlist; }
     catch { return []; }
   },
+  fingerprintEnv: (reviewer) => {
+    try { return presetFor(reviewer.provider).keyEnv; }
+    catch { return null; }
+  },
 };
