@@ -49,6 +49,16 @@ test('every tracked env file except .env.example fails, as do reports/ and runti
   }
 });
 
+test('a tracked env file passes only when every line is a NEXT_PUBLIC_* assignment', () => {
+  const pub = '# public\nNEXT_PUBLIC_NETWORK=testnet\n\nNEXT_PUBLIC_API_MOCK=0\n';
+  assert.equal(sweep(repo({ 'apps/web/.env': pub, 'apps/web/.env.development': pub })).status, 0);
+  for (const body of [`${pub}SESSION_SECRET=abc\n`, 'API_ORIGIN=http://127.0.0.1:8080\n', 'export NEXT_PUBLIC_X=1\n']) {
+    const result = sweep(repo({ 'apps/web/.env': body }));
+    assert.equal(result.status, 1, body);
+    assert.match(result.stderr, /or an env file/, body);
+  }
+});
+
 test('gitleaks runs when installed, and its finding fails the sweep', () => {
   const bin = fs.mkdtempSync(path.join(os.tmpdir(), 'fake-gitleaks-'));
   fs.writeFileSync(path.join(bin, 'gitleaks'), '#!/bin/sh\nif [ "$1" = version ]; then echo 8.30.1; exit 0; fi\necho "leak" >&2\nexit 3\n', { mode: 0o755 });
