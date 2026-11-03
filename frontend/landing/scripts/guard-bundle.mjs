@@ -9,6 +9,13 @@ if (built.status !== 0) {
   console.error(built.stderr || built.stdout);
   process.exit(built.status || 1);
 }
+const walletSource = fs.readFileSync(path.join(root, 'src/mock-wallet.ts'), 'utf8');
+for (const token of ['MockConnector', 'ed25519:']) {
+  if (!walletSource.includes(token)) {
+    console.error(`mock wallet is missing ${token}; the bundle guard would not be checking a real connector`);
+    process.exit(1);
+  }
+}
 const dist = path.join(root, 'dist');
 const files = [];
 const walk = (dir) => {
