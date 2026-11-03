@@ -4,15 +4,9 @@ import path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { readReportJson, writeReportFile } from './report-contract.mjs';
 import { SessionError } from './agent-rpc.mjs';
-import { isReviewerId } from './reviewer-registry.mjs';
+import { isReviewerId, validModelId } from './reviewer-registry.mjs';
 
-// Same character set and length as a model in a reviewer spec (packages/schemas reviewer-spec), so an
-// OpenRouter slug such as `qwen/qwen3.8-max-0902` is accepted. A path segment of `.` or `..`, or a leading
-// or trailing `/`, is refused: the model is a label, never a path.
-const MODEL = /^[A-Za-z0-9._:/-]{1,128}$/;
-export function validModelId(model) {
-  return typeof model === 'string' && MODEL.test(model) && model.split('/').every((part) => part && part !== '.' && part !== '..');
-}
+export { validModelId };
 
 export const digest = value => crypto.createHash('sha256').update(typeof value === 'string' ? value : JSON.stringify(value)).digest('hex');
 

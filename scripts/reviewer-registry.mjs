@@ -105,6 +105,15 @@ export function assertUniqueReviewers(list) {
   return list;
 }
 
+// Same character set and length as a model in a reviewer spec (packages/schemas reviewer-spec), so an
+// OpenRouter slug such as `qwen/qwen3.8-max-0902` is accepted. A path segment of `.` or `..`, or a leading
+// or trailing `/`, is refused: the model is a label, never a path. Session stores and submission
+// identities both use this check.
+const MODEL_ID = /^[A-Za-z0-9._:/-]{1,128}$/;
+export function validModelId(model) {
+  return typeof model === 'string' && MODEL_ID.test(model) && model.split('/').every((part) => part && part !== '.' && part !== '..');
+}
+
 // Reviewer-id pattern used wherever a reviewer id is embedded in a job or file name.
 export const REVIEWER_ID_PATTERN = '[a-z0-9][a-z0-9-]{0,80}';
 export const isReviewerId = (value) => typeof value === 'string' && new RegExp(`^${REVIEWER_ID_PATTERN}$`).test(value);
