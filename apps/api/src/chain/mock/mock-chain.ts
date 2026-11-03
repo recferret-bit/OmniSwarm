@@ -106,7 +106,9 @@ export class MockChainAdapter implements ChainPort {
 
   async markRunning(requestHash: string): Promise<string> {
     await this.#guard();
-    return this.#transition(requestHash, 'mark_running', ['Pending'], 'Running', {}, async () => {});
+    return this.#transition(requestHash, 'mark_running', ['Pending'], 'Running', {}, async (client) => {
+      await client.query(`INSERT INTO mock_chain_event (event, request_hash, data) VALUES ('review_running', $1, '{}')`, [requestHash]);
+    });
   }
 
   async attest(args: AttestArgs): Promise<string> {
@@ -117,7 +119,7 @@ export class MockChainAdapter implements ChainPort {
       await client.query(
         `INSERT INTO mock_chain_attestation (request_hash, repo, commit_sha, report_sha256, report_uri, deployed, code_hash, max_severity,
            block_height, block_timestamp_ms, binding_confirmed, tx_hash)
-         SELECT $1,$2,$3,$4,$5,$6,$7,$8, (SELECT count(*) FROM mock_chain_tx), $9, r.account = $6, $10
+         SELECT $1,$2,$3,$4,$5,$6,$7,$8, (SELECT count(*) FROM mock_chain_tx), $9, coalesce(r.account = $6, false), $10
          FROM mock_chain_request r WHERE r.request_hash = $1`,
         [args.requestHash, args.repo, args.commit, args.reportSha256, args.reportUri, args.deployed, args.codeHash, args.maxSeverity, Date.now(), tx]);
       await client.query(`INSERT INTO mock_chain_event (event, request_hash, data) VALUES ('review_attested', $1, $2)`,

@@ -24,9 +24,12 @@ function postgresStore(db: Db): FastifyRateLimitStoreCtor {
       peek(db, `${this.prefix}:${key}`).then((result) => callback(null, result), (error: Error) => callback(error));
     }
 
-    child(routeOptions: { method?: string | string[]; url?: string; path: string; prefix: string; config?: unknown }): FastifyRateLimitStore {
-      const group = (routeOptions.config as { rateLimit?: { groupId?: string } } | undefined)?.rateLimit?.groupId;
-      return new PostgresStore(undefined, group ?? `${[routeOptions.method].flat().join(',')}:${routeOptions.url ?? routeOptions.path}`);
+    // At runtime the plugin passes the merged route params (its typings say route options): one budget
+    // per route, or per groupId.
+    child(options: object): FastifyRateLimitStore {
+      const params = options as { groupId?: string; routeInfo?: { method?: string | string[]; url?: string } };
+      const route = `${[params.routeInfo?.method].flat().join(',')}:${params.routeInfo?.url ?? ''}`;
+      return new PostgresStore(undefined, params.groupId ?? route);
     }
   }
   return PostgresStore;

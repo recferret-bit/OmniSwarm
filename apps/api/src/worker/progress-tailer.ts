@@ -53,7 +53,9 @@ export class ProgressTailer {
   }
 
   start(intervalMs: number): void {
-    this.#timer = setInterval(() => { this.#running = this.#running.then(() => this.tick()).catch(() => {}); }, intervalMs);
+    const poll = () => { this.#running = this.#running.then(() => this.tick()).catch(() => {}); };
+    poll();
+    this.#timer = setInterval(poll, intervalMs);
   }
 
   async tick(): Promise<void> {
