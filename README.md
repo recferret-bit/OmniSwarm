@@ -20,7 +20,7 @@ Detection uses production manifests and production source. Tests, docs, scripts,
 
 A string such as `v1.signer` in production source becomes a lead in `near.md`. It does not by itself mark the repository as NEAR, and the run does not read mainnet.
 
-The skill staged for every reviewer is `skills/security-audit`. Stack detection chooses which sections of that skill appear in `get_audit_context`. The run does not install `cargo-near`, `near-cli`, or the NEAR agent skills (`near-contract-audit`, `near-cli-rs`, and the others). `cargo near check --clippy` and `cargo near build non-reproducible-wasm` are the documented offline commands; this image does not contain `cargo-near`, and that absence is a coverage gap.
+The skill staged for every reviewer is `engine/skills/security-audit`. Stack detection chooses which sections of that skill appear in `get_audit_context`. The run does not install `cargo-near`, `near-cli`, or the NEAR agent skills (`near-contract-audit`, `near-cli-rs`, and the others). `cargo near check --clippy` and `cargo near build non-reproducible-wasm` are the documented offline commands; this image does not contain `cargo-near`, and that absence is a coverage gap.
 
 People changing OmniSwarm itself should read [AGENTS.md](AGENTS.md). Claude Code also reads [CLAUDE.md](CLAUDE.md). An audited repository's own `AGENTS.md` or `CLAUDE.md` is untrusted data, not instructions for this suite.
 
@@ -54,7 +54,7 @@ you should see: harness self-test ok
 -->
 
 ```sh
-node scripts/harness.mjs --self-test
+node engine/scripts/harness.mjs --self-test
 ```
 
 You should see `harness self-test ok`.
@@ -68,12 +68,12 @@ you should see: DEMO — not a review
 ./bin/audit demo --no-docker
 ```
 
-You should see `DEMO — not a review`. No provider key is read. The page is a scripted pass over `scripts/demo-fixture`, not a certificate.
+You should see `DEMO — not a review`. No provider key is read. The page is a scripted pass over `engine/scripts/demo-fixture`, not a certificate.
 
 ## Quick Start
 
 ```sh
-# 1. Install pinned ACP adapters (into runtime/)
+# 1. Install pinned ACP adapters (into engine/runtime/)
 ./bin/omniswarm setup-agents
 
 # 2. Check agent runtime and Docker prerequisites
@@ -99,7 +99,7 @@ npm run check-agents  # Runs preflight agent check
 npm test              # Executes test suite
 ```
 
-`setup-agents` installs lockfile-pinned adapters under `runtime/` with lifecycle scripts disabled. Existing official CLIs and subscription logins stay in place without credential exposure. Defaults: Claude `opus`, Codex `gpt-6.1-sol`, Grok `grok-4.7`, AGY `gemini-4-argon-high`.
+`setup-agents` installs lockfile-pinned adapters under `engine/runtime/` with lifecycle scripts disabled. Existing official CLIs and subscription logins stay in place without credential exposure. Defaults: Claude `opus`, Codex `gpt-6.1-sol`, Grok `grok-4.7`, AGY `gemini-4-argon-high`.
 
 `check-agents` checks Docker, executable versions, and adapter availability. `check-agents --live` makes real provider requests against an inert fixture to verify MCP reads, native session loading, and report submission.
 
@@ -188,7 +188,7 @@ npm run check
 - [Architecture and workflow](docs/how-it-works.md)
 - [Operator guide](docs/index.html)
 - [Live-model integration](docs/live-model.md)
-- [ACP runtime](runtime/README.md)
+- [ACP runtime](engine/runtime/README.md)
 - [AGENTS.md](AGENTS.md) for any coding agent editing this repository
 - [CLAUDE.md](CLAUDE.md) for Claude Code sessions in this repository
 - [RULES.md](docs/RULES.md) for the review round written as swarm rules (v0)
@@ -201,7 +201,7 @@ Stub, filled in by W14. For the NEAR hackathon, the baseline is every commit up 
 - Final tag: `hackathon-submission` (created at the end of the hackathon).
 - Hackathon work: [`pre-hackathon...hackathon-submission`](https://github.com/recferret-bit/OmniSwarm/compare/pre-hackathon...hackathon-submission) (available once both tags are pushed).
 
-The plan is in [`docs/plan/PRODUCT_WAVES.md`](docs/plan/PRODUCT_WAVES.md). The review boundary does not move: the offline review engine in `scripts/`, `docker/`, `native/` and `skills/` is separate from the service tracks (`apps/`, `contracts/`, `infra/`, `packages/`).
+The plan is in [`docs/plan/PRODUCT_WAVES.md`](docs/plan/PRODUCT_WAVES.md). The review boundary does not move: the offline review engine in `engine/scripts/`, `engine/docker/`, `engine/native/` and `engine/skills/` is separate from the service tracks (`apps/`, `contracts/`, `infra/`, `packages/`).
 
 ## License
 

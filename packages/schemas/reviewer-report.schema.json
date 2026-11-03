@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://omniswarm.dev/schemas/reviewer-report.schema.json",
   "title": "reviewer-report",
-  "description": "reviewers/<id>/report.json: one model's findings and verified-safe controls across all its surfaces. Finding fields are today's auditor finding fields (scripts/report-contract.mjs validateAuditor).",
+  "description": "reviewers/<id>/report.json: one model's findings and verified-safe controls across all its surfaces. Finding fields are today's auditor finding fields (engine/scripts/report-contract.mjs validateAuditor).",
   "type": "object",
   "required": ["reviewer", "surfaces", "findings", "verified_safe"],
   "additionalProperties": false,

@@ -4,7 +4,7 @@
 
 ## 1. Boundary
 
-The intake service is a **separate layer**. It may call NEAR RPC, GitHub and the registry contract. It starts reviews only by spawning `./bin/audit run --github <owner>/<repo> --ref <sha> --preset <hosted> --out <dir>` with an argv array. It never passes `--rpc` (rejected anyway), never edits `scripts/`, and never mounts keys into the sandbox. The engine never learns that a review was paid.
+The intake service is a **separate layer**. It may call NEAR RPC, GitHub and the registry contract. It starts reviews only by spawning `./bin/audit run --github <owner>/<repo> --ref <sha> --preset <hosted> --out <dir>` with an argv array. It never passes `--rpc` (rejected anyway), never edits `engine/scripts/`, and never mounts keys into the sandbox. The engine never learns that a review was paid.
 
 ## 2. Stack
 

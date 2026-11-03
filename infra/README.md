@@ -4,7 +4,7 @@
 **Owning waves:** W12 (remote host and deploy).
 **Owned subpaths:** `infra/` (`compose/`, `nginx/`, `systemd/`, `deploy/`, `env/`, `check/`, `bin/`, `test/`), plus `apps/api/Dockerfile` and `apps/web/Dockerfile`.
 **Gate command:** `npm run check:infra` (`bash infra/check.sh`).
-**Boundary:** NEAR RPC, wallets, payments, the GitHub API and the queue live only in `apps/`, `contracts/` and `infra/`. `scripts/`, `docker/`, `native/` and `skills/` stay the offline review engine (AGENTS.md, "Tracks and boundaries"). The sandbox never receives a key.
+**Boundary:** NEAR RPC, wallets, payments, the GitHub API and the queue live only in `apps/`, `contracts/` and `infra/`. `engine/scripts/`, `engine/docker/`, `engine/native/` and `engine/skills/` stay the offline review engine (AGENTS.md, "Tracks and boundaries"). The sandbox never receives a key.
 
 ## What runs where
 
@@ -70,7 +70,7 @@ infra/deploy/deploy.sh <ssh-host> --rollback
 ```
 
 `release.sh activate <id>` runs on the host as root and does these steps in order:
-1. `npm ci --omit=dev --ignore-scripts` for the host worker and `runtime/`.
+1. `npm ci --omit=dev --ignore-scripts` for the host worker and `engine/runtime/`.
 2. Installs the nginx config to `OMNI_NGINX_DIR` and the units to `/etc/systemd/system`.
 3. `compose build` with tag `<id>`.
 4. Issues the first certificate if none exists.
@@ -121,7 +121,7 @@ Static checks:
 - `systemd-analyze verify` in a Debian trixie container with the tree at `/srv/omniswarm/current`
 
 Full mode adds:
-- the api image build: under 300 MB, uid 1000, no `scripts/`, `docker/` or `.env`, and `/app` read-only
+- the api image build: under 300 MB, uid 1000, no `engine/`, `bin/` or `.env`, and `/app` read-only
 - a bring-up on `127.0.0.1:18480/18443` (Postgres on `55873`) of postgres, migrate, api×2, web and nginx, which runs `smoke.sh` against it
 - with the stub: a forged `X-Forwarded-For` does not reach the api, SSE events arrive unbuffered, requests reach every replica, and `--scale api=3` gets traffic without a reload
 - a rolling restart to a new image with 0 failed requests, then a backup and a restore drill

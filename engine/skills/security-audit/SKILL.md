@@ -105,7 +105,7 @@ Peer reviewers inspect the cited source and existing evidence for every assigned
 
 ## Report presentation
 
-Use `./bin/audit html <report-dir>` to regenerate the two standalone HTML pages from saved evidence; presentation changes do not require a new model review. The shared generator is `scripts/generate-html-report.mjs`, with `report-style.css` and `report-cards-browser.mjs` (the filter and search script) beside it.
+Use `./bin/audit html <report-dir>` to regenerate the two standalone HTML pages from saved evidence; presentation changes do not require a new model review. The shared generator is `engine/scripts/generate-html-report.mjs`, with `report-style.css` and `report-cards-browser.mjs` (the filter and search script) beside it.
 
 Keep the report compact: severity totals and surface coverage first, collapsed finding rows with short impact previews, impact and fix on expansion, then source analysis, citations, peer reviews and coverage logs in deeper disclosures. Preserve complete evidence in the disclosures. Use native keyboard-accessible details, severity/surface filters and full-text search. A missing assignment remains visibly incomplete, including on a zero-finding surface.
 

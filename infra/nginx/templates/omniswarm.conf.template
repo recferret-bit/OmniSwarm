@@ -143,7 +143,7 @@ server {
   include /etc/nginx/snippets/headers-common.conf;
   # Reports quote untrusted target text. Each report page also carries its own
   # <meta> CSP that pins scripts to a per-page nonce
-  # (scripts/generate-html-report.mjs); browsers enforce both policies, so the
+  # (engine/scripts/generate-html-report.mjs); browsers enforce both policies, so the
   # inline allowances here only admit what that nonce admits. frame-ancestors
   # and sandbox work only as a header, which is why they are set here.
   add_header Content-Security-Policy "default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors ${OMNI_APP_ORIGIN}; sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox" always;

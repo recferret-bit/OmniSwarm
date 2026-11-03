@@ -125,7 +125,7 @@ Every pass writes raw usage to `harness/usage/<reviewer>/<surface>-pass-<k>.json
 
 ## 5. Brief templates (P3)
 
-Every brief = **Objective · Output schema · Tools and sources · Boundaries**. Review-pass templates live in `scripts/review-briefs.mjs` (W04); challenge/defend/rebut, judge and general-review templates live in `scripts/orchestrator-briefs.mjs` (W06). Both are snapshot-tested.
+Every brief = **Objective · Output schema · Tools and sources · Boundaries**. Review-pass templates live in `engine/scripts/review-briefs.mjs` (W04); challenge/defend/rebut, judge and general-review templates live in `engine/scripts/orchestrator-briefs.mjs` (W06). Both are snapshot-tested.
 - **Review pass k:** objective (surface, pass role), schema `reviewer-report`, tools (bridge read tools, fixed tests), boundaries (no exploits, budget N, "submit no finding if none").
 - **Challenge / defend / rebut:** one cluster only, its quoted evidence, schema `debate-round`, budget 12 calls, "cite file:line + quote or your argument is discarded", devil's-advocate variant.
 - **Judge:** one cluster, evidence + valid arguments only, schema `adjudication`, "insufficient_evidence is allowed".
@@ -160,7 +160,7 @@ reports/<run>/
 
 ## 7. Evaluation (W06)
 
-- `eval/golden/` — 6–10 small repos (Rust/NEAR, Solana, TS, Python), each with seeded bugs (`expected.json`: file, line range, class) and **decoys** (code that looks vulnerable and is safe).
+- `engine/eval/golden/` — 6–10 small repos (Rust/NEAR, Solana, TS, Python), each with seeded bugs (`expected.json`: file, line range, class) and **decoys** (code that looks vulnerable and is safe).
 - `npm run eval:golden -- --reviewers scripted:*` runs offline in CI; with `OMNI_LIVE=1` it runs real models.
 - Metrics: recall, precision, decoy false-positive rate, dedup correctness, **true findings lost in debate** (conformity rate), cost per confirmed finding.
 - Baselines: union of all findings; majority vote without debate. Debate ships as default only if it beats both on precision without losing recall by more than one seeded bug; otherwise default `--debate-rounds 1` (challenge only) and the README says why (P9).
