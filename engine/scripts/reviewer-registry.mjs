@@ -2,7 +2,7 @@
 // A reviewer has an id, a family (how it is launched), a provider (which CLI/API inside the family),
 // a vendor (who trained the model; used for peer and judge conflict rules) and a model.
 // Adapter names appear in this file only as the vendor table and the default models.
-import crypto from 'node:crypto';
+import { sha256Hex } from './hash-util.mjs';
 import { validate } from '../../packages/schemas/index.mjs';
 
 export class ReviewerError extends Error {
@@ -28,7 +28,7 @@ export function reviewerId(text) {
   const slug = String(text).toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/-{2,}/g, '-').replace(/^-+|-+$/g, '');
   if (!slug) throw new ReviewerError('REVIEWER_SPEC_INVALID', 'reviewer id is empty after slugging');
   if (slug.length <= MAX_ID) return slug;
-  const tag = crypto.createHash('sha256').update(slug).digest('hex').slice(0, 6);
+  const tag = sha256Hex(slug).slice(0, 6);
   return `${slug.slice(0, MAX_ID - 7).replace(/-+$/, '')}-${tag}`;
 }
 
