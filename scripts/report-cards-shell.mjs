@@ -8,7 +8,7 @@ import { browserScript } from './report-cards-browser.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
-export function dateLabelOf(meta) {
+function dateLabelOf(meta) {
   const date = meta.date ? new Date(meta.date) : new Date();
   return (Number.isNaN(date.getTime()) ? new Date() : date).toISOString().slice(0, 10);
 }

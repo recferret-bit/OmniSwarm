@@ -17,7 +17,7 @@ function markdownBlock(block) {
   return `<p>${local(block)}</p>`;
 }
 
-export function safeMarkdown(markdown) {
+function safeMarkdown(markdown) {
   return String(markdown || '').split(/(```[\s\S]*?```)/g).map((part) => (part.startsWith('```')
     ? `<pre><code>${esc(part.replace(/^```[^\n]*\n?/, '').replace(/```$/, ''))}</code></pre>`
     : part.split(/\n\s*\n/).filter((block) => block.trim()).map(markdownBlock).join(''))).join('');

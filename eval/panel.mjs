@@ -23,7 +23,7 @@ const claimOf = (title, item, severity) => ({
 const control = (text, item) => ({ control: text, evidence: `${item.file}:${item.startLine}`, holds: true });
 const misses = (bug, strategy) => (bug.missedBy || []).includes(strategy);
 
-export function panelAnswers(expected) {
+function panelAnswers(expected) {
   const { bugs, decoys } = expected;
   return {
     baseline: {

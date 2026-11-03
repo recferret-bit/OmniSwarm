@@ -5,7 +5,7 @@ import { digest } from './agent-session-store.mjs';
 import { readReportJson } from './report-contract.mjs';
 import { readJsonOr, writeJson } from './report-util-files.mjs';
 
-export const DEBATE_READS = ['get_audit_context', 'read_file', 'search_code', 'list_files'];
+const DEBATE_READS = ['get_audit_context', 'read_file', 'search_code', 'list_files'];
 export const DEBATE_TOOL_BUDGET = 12;
 
 export function readToolDefinitions() {
@@ -19,7 +19,7 @@ function identityOf(ctx) {
 }
 
 // The budget decision for one call. Submits never count and are always allowed.
-export function debateBudgetDecision(record, tool, submitTool, budget = DEBATE_TOOL_BUDGET) {
+function debateBudgetDecision(record, tool, submitTool, budget = DEBATE_TOOL_BUDGET) {
   const calls = record?.calls || 0;
   if (tool === submitTool) return { allow: true, record: { calls } };
   if (calls >= budget) return { allow: false, text: `budget exhausted: call ${submitTool} now`, record: { calls } };

@@ -11,7 +11,7 @@ export function severityLevel(raw) {
   return token;
 }
 
-export const toneOf = (level) => ({ critical: 'red', high: 'red', medium: 'orange', low: 'blue', info: 'blue' })[level] || 'blue';
+const toneOf = (level) => ({ critical: 'red', high: 'red', medium: 'orange', low: 'blue', info: 'blue' })[level] || 'blue';
 
 // Format only inert text; source Markdown never supplies links, HTML or attributes.
 export function inline(value) {
@@ -35,7 +35,7 @@ export const citations = (items) => (items?.length ? `<div class="citations">${i
 export const disclosure = (title, body) => `<details class="disclosure"><summary>${esc(title)}</summary>${body}</details>`;
 
 // Merged clusters show how many auditors agreed and where their severities differed.
-export function mergeBadges(f) {
+function mergeBadges(f) {
   const out = [];
   if ((f.claimIds || []).length > 1) out.push(`<span class="pill" title="Claims merged by shared root cause">${f.claimIds.length} claims · ${f.auditorCount || 1} auditor${f.auditorCount > 1 ? 's' : ''}</span>`);
   if ((f.severities || []).length > 1) out.push(`<span class="pill orange" title="Auditors rated this issue differently; the highest rating is used">severity ${esc(f.severities.join(' / '))}</span>`);

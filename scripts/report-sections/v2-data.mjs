@@ -6,12 +6,12 @@ import { readReportText } from '../report-contract.mjs';
 export const FAMILY_ORDER = ['cli', 'key', 'openrouter', 'scripted', 'nearai'];
 const familyRank = (family) => (FAMILY_ORDER.includes(family) ? FAMILY_ORDER.indexOf(family) : FAMILY_ORDER.length);
 
-export function sortedGroups(index) {
+function sortedGroups(index) {
   return [...(index?.groups || [])].sort((a, b) => familyRank(a.family) - familyRank(b.family));
 }
 
 // One row per reviewer, in family order, with family and vendor folded in.
-export function reviewersFromIndex(index) {
+function reviewersFromIndex(index) {
   return sortedGroups(index).flatMap((group) => (group.vendors || []).flatMap((vendor) => (vendor.reviewers || []).map((row) => ({ ...row, family: group.family, vendor: vendor.vendor }))));
 }
 

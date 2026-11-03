@@ -3,7 +3,7 @@
 import { esc, findingCard, findingsToolbar, severityCounts } from './report-cards.mjs';
 import { money, reviewerBadge, usageStrip } from './report-sections/reviewer-badge.mjs';
 
-export const APPROACH = { cli: 'Approach 1 · Local subscription', key: 'Approach 2 · API key', openrouter: 'Approach 3 · OpenRouter', scripted: 'Demo', nearai: 'NEAR AI' };
+const APPROACH = { cli: 'Approach 1 · Local subscription', key: 'Approach 2 · API key', openrouter: 'Approach 3 · OpenRouter', scripted: 'Demo', nearai: 'NEAR AI' };
 
 export function usageLine(reviewer, usage) {
   const served = reviewer.servedModel && reviewer.servedModel !== reviewer.model ? ` (served ${reviewer.servedModel})` : '';

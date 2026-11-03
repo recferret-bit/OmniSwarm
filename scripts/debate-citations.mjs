@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { LINE_TOLERANCE } from './cluster-findings.mjs';
 
-export function normalizeQuote(text) {
+function normalizeQuote(text) {
   return String(text || '').replace(/\s+/g, ' ').trim();
 }
 

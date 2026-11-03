@@ -13,7 +13,7 @@ function sourceDigest(dir) {
   return crypto.createHash('sha256').update(files.map((rel) => `${rel}\0${fs.readFileSync(path.join(dir, rel), 'utf8')}`).join('\0')).digest('hex');
 }
 
-export function problemsOf(name, dir) {
+function problemsOf(name, dir) {
   const expected = JSON.parse(fs.readFileSync(path.join(dir, 'expected.json'), 'utf8'));
   const bugs = expected.bugs || [];
   const decoys = expected.decoys || [];

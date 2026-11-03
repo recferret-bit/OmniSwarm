@@ -26,7 +26,7 @@ export function toolDefinitions() {
   return [...readToolDefinitions(), submit];
 }
 
-export async function submitDebateTurn(ctx, raw) {
+async function submitDebateTurn(ctx, raw) {
   const identity = requireRole(ctx, role);
   const task = assignmentOf(ctx);
   if (task.kind !== 'debate-turn') throw new Error('This session was not assigned a debate turn');

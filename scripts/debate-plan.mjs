@@ -12,10 +12,11 @@ import { rulesSummary } from './debate-general-review.mjs';
 import { recommendedOrchestrator, selectSurfaces } from './reviewer-plan.mjs';
 import { formatReviewerSpec } from './reviewer-registry.mjs';
 import { readJsonOr } from './report-util-files.mjs';
+import { DEFAULTS } from './run-config.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const FIXTURES = [path.join(ROOT, 'scripts', 'demo-fixture'), path.join(ROOT, 'eval', 'golden')];
-export const DEBATE_DEFAULTS = Object.freeze({ rounds: 2, toolBudget: 12, maxClusters: 25 });
+const DEBATE_DEFAULTS = DEFAULTS.debate;
 
 export function stageError(code, message = code) {
   const error = new Error(message);
@@ -23,13 +24,13 @@ export function stageError(code, message = code) {
   return error;
 }
 
-export function isFixtureTarget(target) {
+function isFixtureTarget(target) {
   if (!target) return false;
   const real = fs.existsSync(target) ? fs.realpathSync(target) : path.resolve(target);
   return FIXTURES.some((root) => real === root || real.startsWith(`${root}${path.sep}`));
 }
 
-export function resolveOrchestrator(requested, env = process.env) {
+function resolveOrchestrator(requested, env = process.env) {
   if (!requested) return null;
   if (requested !== 'recommended') return requested;
   const { reviewer, reason } = recommendedOrchestrator({ env });
@@ -46,7 +47,7 @@ function usageOf(out, reviewers) {
 }
 
 // Voices for every reviewer of the run. bridge: the orchestrator ctx (execute), or null offline.
-export function voicesFor(reviewers, { claims, controls, reader, bridge, budget }) {
+function voicesFor(reviewers, { claims, controls, reader, bridge, budget }) {
   return new Map(reviewers.map((reviewer) => {
     if (reviewer.family === 'scripted') {
       return [reviewer.id, scriptedVoice(reviewer.provider, { findings: claims.filter((c) => c.reviewerId === reviewer.id), controls: controls.get(reviewer.id) || [], reader })];

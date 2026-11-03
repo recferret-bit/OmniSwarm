@@ -3,7 +3,7 @@
 // positional CLUSTER-n. A run without debate/ keeps today's rows byte for byte.
 import { readJsonOr } from './report-util-files.mjs';
 
-export const FINAL_MULTIPLIER = { AGREED: 0.9, CONFIRMED: 0.9, LIKELY: 0.7, DISPUTED: 0.6, INSUFFICIENT_EVIDENCE: 0.5, REFUTED: 0 };
+const FINAL_MULTIPLIER = { AGREED: 0.9, CONFIRMED: 0.9, LIKELY: 0.7, DISPUTED: 0.6, INSUFFICIENT_EVIDENCE: 0.5, REFUTED: 0 };
 
 function outcomeOf(cluster, judged) {
   if (cluster.status === 'AGREED') return { finalStatus: 'AGREED', debateRounds: 0, judge: judged?.judge || null, severityReason: judged?.severityReason || null };

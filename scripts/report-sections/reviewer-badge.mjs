@@ -2,7 +2,7 @@
 // Not a section (exports no `section`). An unknown cost shows as —, never as $0.
 import { esc } from '../report-cards.mjs';
 
-export function badgeText(row) {
+function badgeText(row) {
   return [row.family, row.vendor, row.model].filter(Boolean).join(' · ');
 }
 
