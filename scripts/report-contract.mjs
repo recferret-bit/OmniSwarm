@@ -10,6 +10,8 @@ import { readCanonicalSubmission } from './audit-submission.mjs';
 import { CLI_DEFAULT_MODELS, REVIEWER_ID_PATTERN, isReviewerId, reviewersOfMeta, vendorOfJob } from './reviewer-registry.mjs';
 import { validate } from '../packages/schemas/index.mjs';
 import { hostLogRel } from './sandbox-host-paths.mjs';
+import { expectedJobNames } from './reviewer-plan-assign.mjs';
+import { sha256Json } from './hash-util.mjs';
 
 const LEVELS = new Set(['critical', 'high', 'medium', 'low', 'info']);
 const CONFIDENCE = new Set(['confirmed', 'probable']);
@@ -91,6 +93,15 @@ export function readReportText(root, rel, max = MAX_BYTES) {
 }
 
 const record = (x) => x && typeof x === 'object' && !Array.isArray(x);
+// meta.reviewers entries are the parsed spec plus what the run observed: the key fingerprint (first and last
+// 4 hex of sha256, never the key) and the model the provider reported serving.
+function validPublishedReviewer(entry) {
+  if (!record(entry)) return false;
+  const { keyFingerprint, servedModel, ...spec } = entry;
+  if (keyFingerprint !== undefined && !(typeof keyFingerprint === 'string' && /^[a-f0-9]{8}$/.test(keyFingerprint))) return false;
+  if (servedModel !== undefined && !(typeof servedModel === 'string' && servedModel.length > 0 && servedModel.length <= 128)) return false;
+  return validate('reviewer-spec#parsed', spec).ok;
+}
 function normalizeMeta(meta, errors) {
   for (const key of ['name', 'mode', 'source', 'ref', 'commit', 'date']) {
     if (meta[key] != null && (typeof meta[key] !== 'string' || meta[key].length > 2000)) {
@@ -112,7 +123,7 @@ function normalizeMeta(meta, errors) {
   }
   // meta.reviewers (W01) must describe exactly the reviewers named in meta.agents; legacy reports have none.
   if (meta.reviewers != null) {
-    const ok = Array.isArray(meta.reviewers) && meta.reviewers.length && meta.reviewers.every((r) => validate('reviewer-spec#parsed', r).ok)
+    const ok = Array.isArray(meta.reviewers) && meta.reviewers.length && meta.reviewers.every(validPublishedReviewer)
       && JSON.stringify(meta.reviewers.map((r) => r.id).sort()) === JSON.stringify([...meta.agents].sort());
     if (!ok) { errors.push('Invalid reviewer inventory.'); delete meta.reviewers; }
   }
@@ -138,7 +149,7 @@ function verifyCommittedOutput(root, meta, name, data) {
   const identity = readReportJson(root, `harness/identities/${name}.json`);
   const manifest = readReportJson(root, 'source-manifest.json');
   const assignment = readReportJson(root, `harness/assignments/${name}.json`);
-  const assignmentDigest = crypto.createHash('sha256').update(JSON.stringify(assignment)).digest('hex');
+  const assignmentDigest = sha256Json(assignment);
   const reviewer = reviewersOfMeta(meta).find((r) => r.id === identity.agent);
   if (!reviewer || identity.model !== reviewer.model || identity.sourceDigest !== manifest.digest || identity.assignmentDigest !== assignmentDigest) throw new Error('Submission source/model/assignment mismatch');
   if (meta.workflow === REVIEW_WORKFLOW && identity.workflow !== REVIEW_WORKFLOW) throw new Error('Submission workflow mismatch');
@@ -169,36 +180,52 @@ export function validateAuditor(data, name) {
   return data;
 }
 
-// R-02: the bridge records the digest of the /src tree it served at the first read. It must equal the sealed source
-// manifest, or be a subset of it (the sandbox copy drops a few names the snapshot may keep). A run in which nothing was read has no file.
+// R-02: the bridge records the digest of the /src tree it served at the first read, and it must equal the sealed
+// source manifest. /src is `sandbox-lib copyTree` of the sealed snapshot, and every name copyTree drops the snapshot
+// already dropped (report-contract-digest.test.mjs pins that), so a served subset is a different tree, not a benign copy.
+// A run that produced reviewer output without any recorded read fails closed.
 export function sourceReadDigestProblem(root) {
   let served;
   try { served = readReportJson(root, 'harness/source-read-digest.json', 64 * 1024 * 1024); }
-  catch (error) { return error?.code === 'ENOENT' ? null : 'the recorded digest of the served source is unreadable.'; }
+  catch (error) {
+    if (error?.code !== 'ENOENT') return 'the recorded digest of the served source is unreadable.';
+    return hasReviewerOutput(root) ? 'reviewer output exists but the bridge recorded no digest of the source it served.' : null;
+  }
   let manifest;
   try { manifest = readReportJson(root, 'source-manifest.json', 64 * 1024 * 1024); }
   catch { return 'source-manifest.json is missing or invalid, so the served source cannot be checked.'; }
   if (!served || typeof served.digest !== 'string' || !Array.isArray(served.files)) return 'the recorded digest of the served source is malformed.';
   // The file list must hash to the digest it claims before either is compared with the manifest.
-  const recomputed = crypto.createHash('sha256').update(JSON.stringify(served.files)).digest('hex') === served.digest;
-  if (!recomputed) return 'the recorded digest does not match the file list it was computed from.';
-  if (served.digest === manifest.digest) return null;
-  const sealed = new Map((manifest.files || []).map(file => [file.path, file]));
-  const subset = served.files.every(file => sealed.get(file?.path)?.sha256 === file?.sha256 && sealed.get(file.path)?.bytes === file.bytes);
-  return subset ? null : 'the source reviewers read differs from the sealed source manifest.';
+  if (sha256Json(served.files) !== served.digest) return 'the recorded digest does not match the file list it was computed from.';
+  return served.digest === manifest.digest ? null : 'the source reviewers read differs from the sealed source manifest.';
 }
 
+function hasReviewerOutput(root) {
+  if (fs.existsSync(path.join(root, 'submissions'))) return true;
+  try { return fs.readdirSync(path.join(root, 'auditors')).some((name) => name.endsWith('.json')); }
+  catch { return false; }
+}
+
+// W04-15: a budget or cost stop that never submitted makes the report INCOMPLETE. The pass loop writes
+// harness/budget-health.json; a run with budgets whose record is missing or unreadable is not trusted either.
+export function budgetHealthErrors(root, meta) {
+  let health;
+  try { health = readReportJson(root, 'harness/budget-health.json'); }
+  catch (error) {
+    if (error?.code === 'ENOENT' && !(meta.budgets && meta.submissionAuthority === 'mcp_commit' && fs.existsSync(path.join(root, 'submissions')))) return [];
+    return ['BUDGET: harness/budget-health.json is missing or unreadable.'];
+  }
+  if (!record(health) || !['COMPLETE', 'INCOMPLETE'].includes(health.state) || !Array.isArray(health.errors) || !health.errors.every((e) => typeof e === 'string' && e.length <= 300)) return ['BUDGET: harness/budget-health.json is malformed.'];
+  if (health.state === 'INCOMPLETE' && !health.errors.length) return ['BUDGET: budget health is INCOMPLETE without a reason.'];
+  return health.errors.map((e) => `BUDGET: ${e}`);
+}
+
+// The job inventory a report must hold: the same assignment function that launched the jobs (W01-09),
+// applied to the report's own reviewers, surface and assign mode. Reports without `assign` were round-robin.
 export function expectedAuditors(meta) {
   if (Array.isArray(meta.auditors)) return meta.auditors;
   if (!Array.isArray(meta.agents) || !meta.agents.length || !meta.agents.every(isReviewerId)) return [];
-  const ids = meta.surface === 'all' ? SLUGS.map((_, i) => i) : [SLUGS.indexOf(meta.surface)];
-  if (ids[0] === -1) {
-    const match = String(meta.surface || '').match(/^s([1-6])$/i);
-    if (!match) return [];
-    ids[0] = Number(match[1]) - 1;
-  }
-  if (meta.surface === 'all') return ids.map((i) => `${meta.agents[i % meta.agents.length]}-s${i + 1}-${SLUGS[i]}`);
-  return meta.agents.map((a) => `${a}-s${ids[0] + 1}-${SLUGS[ids[0]]}`);
+  return expectedJobNames(meta, meta.agents.map((id) => ({ id })));
 }
 
 export function loadAuditors(root) {
@@ -246,6 +273,7 @@ export function loadAuditors(root) {
     const problem = sourceReadDigestProblem(root);
     if (problem) errors.push(`SOURCE_DIGEST_MISMATCH: ${problem}`);
   }
+  errors.push(...budgetHealthErrors(root, meta));
   for (const name of expected) {
     try {
       const data = validateAuditor(readReportJson(root, `auditors/${name}.json`), name);
