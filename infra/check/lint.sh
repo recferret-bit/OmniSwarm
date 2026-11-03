@@ -11,7 +11,10 @@ cd "$ROOT"
 scripts=()
 while IFS= read -r f; do scripts+=("$f"); done < <(find infra -name '*.sh' -type f | sort)
 docker run --rm -v "$ROOT:/work:ro" -w /work "$SHELLCHECK_IMAGE" --external-sources --severity=style "${scripts[@]}"
-check_log "shellcheck ok (${#scripts[@]} scripts)"
+# systemd units and release.sh exec these directly from a `git archive` tree.
+not_exec="$(find infra -name '*.sh' -type f ! -perm -u+x)"
+[ -z "$not_exec" ] || check_fail "scripts without the executable bit: $not_exec"
+check_log "shellcheck ok (${#scripts[@]} scripts, all executable)"
 
 dockerfiles=(apps/api/Dockerfile apps/web/Dockerfile infra/test/stub/Dockerfile)
 docker run --rm -v "$ROOT:/work:ro" -w /work "$HADOLINT_IMAGE" hadolint --config infra/.hadolint.yaml "${dockerfiles[@]}"
@@ -48,8 +51,14 @@ OMNI_ENV_FILE="$CHECK_TMP/prod.env" OMNI_SRV="$CHECK_TMP/srv" bash infra/deploy/
 for step in 'npm --prefix' 'docker compose' 'run --rm migrate' 'mv -T' '--scale api=2' 'systemctl restart omniswarm-worker@1.service'; do
   grep -qF -- "$step" "$CHECK_TMP/release-plan.txt" || check_fail "release.sh activate --dry-run lacks '$step'"
 done
+for script in "certbot.sh issue" "certbot.sh renew --staging" "backup.sh" "restore.sh drill" "restore.sh live x.dump --yes"; do
+  # shellcheck disable=SC2086 # "<script> <args>" split on purpose
+  OMNI_ENV_FILE="$CHECK_TMP/prod.env" OMNI_SRV="$CHECK_TMP/srv" bash infra/deploy/$script --dry-run > "$CHECK_TMP/plan.txt" 2>&1 \
+    || { cat "$CHECK_TMP/plan.txt"; check_fail "$script --dry-run"; }
+  grep -q '^+ docker compose' "$CHECK_TMP/plan.txt" || check_fail "$script --dry-run printed no compose command"
+done
 bash infra/deploy/smoke.sh --dry-run omniswarm.example > "$CHECK_TMP/smoke-plan.txt"
 for step in health ready web-root admin-blocked reports-csp rate-limit; do
   grep -qF "[$step]" "$CHECK_TMP/smoke-plan.txt" || check_fail "smoke.sh --dry-run lacks the $step check"
 done
-check_log "deploy.sh, release.sh and smoke.sh dry runs print the full plan"
+check_log "deploy, release, certbot, backup, restore and smoke dry runs print their plans"
