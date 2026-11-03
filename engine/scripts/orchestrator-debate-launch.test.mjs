@@ -61,7 +61,11 @@ function setup(t) {
     return ok(identity, options);
   };
   const startSandbox = async ({ out }) => ({ container: 'inert', hostRunDir: out, stop: async () => {} });
-  const request = { target: DEMO_FIXTURE, out: path.join(root, 'report'), surface: 's1', reviewers: [ZAI, QWEN], orchestrator: JUDGE, budgets: BUDGETS };
+  // The vault source only: the fixture's catalogued suites (client tests, NEAR build checks) need a real container.
+  const target = path.join(root, 'target');
+  fs.mkdirSync(path.join(target, 'src'), { recursive: true });
+  fs.copyFileSync(path.join(DEMO_FIXTURE, 'src/lib.rs'), path.join(target, 'src/lib.rs'));
+  const request = { target, out: path.join(root, 'report'), surface: 's1', reviewers: [ZAI, QWEN], orchestrator: JUDGE, budgets: BUDGETS };
   return { calls, review, startSandbox, request };
 }
 
