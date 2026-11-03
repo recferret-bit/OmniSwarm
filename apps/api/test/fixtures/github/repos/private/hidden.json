@@ -1,0 +1,11 @@
+{
+  "id": 14060217,
+  "name": "hidden",
+  "full_name": "private/hidden",
+  "private": true,
+  "archived": false,
+  "disabled": false,
+  "size": 10,
+  "default_branch": "main",
+  "visibility": "private"
+}

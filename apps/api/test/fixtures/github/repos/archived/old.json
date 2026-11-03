@@ -1,0 +1,11 @@
+{
+  "id": 27179895,
+  "name": "old",
+  "full_name": "archived/old",
+  "private": false,
+  "archived": true,
+  "disabled": false,
+  "size": 10,
+  "default_branch": "main",
+  "visibility": "public"
+}

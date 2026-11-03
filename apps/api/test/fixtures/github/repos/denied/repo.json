@@ -1,0 +1,11 @@
+{
+  "id": 6067392,
+  "name": "repo",
+  "full_name": "denied/repo",
+  "private": false,
+  "archived": false,
+  "disabled": false,
+  "size": 10,
+  "default_branch": "main",
+  "visibility": "public"
+}

@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "jobs": [
+    {
+      "name": "scripted-baseline",
+      "adapter": "scripted:baseline",
+      "state": "collected",
+      "turnCode": 0
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "executiveSummary": "One medium finding.",
+  "riskPosture": "critical-exposure",
+  "topFindings": [
+    {
+      "clusterId": "c1",
+      "title": "Unchecked transfer still deployed",
+      "severity": "critical",
+      "finalStatus": "CONFIRMED"
+    }
+  ],
+  "coverage": [],
+  "openDisagreements": [],
+  "contributions": [],
+  "methodology": "fixture",
+  "disclaimer": "fixture"
+}

@@ -1,33 +1,24 @@
-import crypto from 'node:crypto';
-import { b58encode } from '../src/lib.ts';
-import { createPool, getRequest, migrate, putMockPayment } from '../src/store.ts';
+// Dev script (W08 demo step 6): put the requester's payable `request_review` on the MOCK chain and
+// print its tx hash. `node apps/api/scripts/mock-pay.ts <requestId> [--amount yocto] [--signer acct]`
+import { payRequestReview } from '../src/chain/mock/mock-ledger.ts';
+import { createPool } from '../src/db/pool.ts';
+import { findRequest } from '../src/db/repositories/requests.ts';
+import { databaseUrl, devOnly, flags } from './cli.ts';
 
-function arg(name: string, fallback = '') {
-  const index = process.argv.indexOf(`--${name}`);
-  return index === -1 ? fallback : process.argv[index + 1] || fallback;
+devOnly('mock-pay');
+const { values, positionals } = flags({ amount: { type: 'string' }, signer: { type: 'string' } }, 'mock-pay.ts <requestId> [--amount yocto] [--signer account]');
+const pool = createPool(databaseUrl(), 1);
+try {
+  const row = positionals[0] ? await findRequest(pool, positionals[0]) : null;
+  if (!row) {
+    process.stderr.write('request not found\n');
+    process.exit(1);
+  }
+  const amount = values.amount ?? row.price_yocto;
+  const txHash = await payRequestReview(pool, {
+    signer: values.signer ?? row.account, receiver: process.env.CONTRACT_ID ?? 'review-registry.mock', requestHash: row.request_hash, depositYocto: amount,
+  });
+  process.stdout.write(`${JSON.stringify({ txHash, requestHash: row.request_hash, amount })}\n`);
+} finally {
+  await pool.end();
 }
-
-const databaseUrl = process.env.DATABASE_URL || arg('database-url');
-const requestId = process.argv[2] && !process.argv[2].startsWith('--') ? process.argv[2] : arg('request');
-if (!databaseUrl || !requestId) {
-  console.error('usage: mock-pay.ts <requestId> [--amount yocto]');
-  process.exit(1);
-}
-const pool = createPool(databaseUrl);
-await migrate(pool);
-const row = await getRequest(pool, requestId);
-if (!row) {
-  console.error('request not found');
-  process.exit(1);
-}
-const amount = arg('amount', row.price_yocto);
-const txHash = b58encode(crypto.randomBytes(32)).slice(0, 44);
-await putMockPayment(pool, {
-  txHash,
-  requestHash: row.request_hash,
-  account: row.account,
-  receiver: process.env.CONTRACT_ID || 'review-registry.mock',
-  amount,
-});
-await pool.end();
-process.stdout.write(`${JSON.stringify({ txHash, requestHash: row.request_hash, amount })}\n`);

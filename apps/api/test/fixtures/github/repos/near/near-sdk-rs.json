@@ -1,0 +1,11 @@
+{
+  "id": 24395630,
+  "name": "near-sdk-rs",
+  "full_name": "near/near-sdk-rs",
+  "private": false,
+  "archived": false,
+  "disabled": false,
+  "size": 12000,
+  "default_branch": "master",
+  "visibility": "public"
+}
