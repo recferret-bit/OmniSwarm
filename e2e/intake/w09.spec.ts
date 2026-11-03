@@ -11,7 +11,10 @@ import { attestationCount, createPool, getRequest, insertRequest, migrate, queue
 import { auditArgv, drainOne } from '../../backend/intake/src/worker.ts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const DATABASE_URL = process.env.DATABASE_URL || 'postgres://omniswarm:omniswarm@127.0.0.1:55432/omniswarm';
+// These specs reset (TRUNCATE) the database they are given. There is no default URL, so
+// they never touch a developer's own Postgres: set DATABASE_URL to a throwaway database.
+const DATABASE_URL = process.env.DATABASE_URL || '';
+const NEEDS_DB = DATABASE_URL ? {} : { skip: 'DATABASE_URL is not set; these specs TRUNCATE their database, so point it at a throwaway Postgres to run them' };
 const SHA = 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2';
 
 const AUDIT_BIN = `#!/usr/bin/env node
@@ -57,7 +60,7 @@ test('audit argv is the engine command and never includes --rpc', () => {
   assert.throws(() => auditArgv({ repo: 'near/near-sdk-rs', ref: SHA, preset: 'scripted', out: '/tmp/out --rpc' }), /rejected/);
 });
 
-test('mock worker spawns ./bin/audit, attests once, refunds infra once, and resumes a pre-attest kill', async () => {
+test('mock worker spawns ./bin/audit, attests once, refunds infra once, and resumes a pre-attest kill', NEEDS_DB, async () => {
   const pool = createPool(DATABASE_URL);
   await migrate(pool);
   await reset(pool);

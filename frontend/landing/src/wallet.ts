@@ -1,4 +1,4 @@
-import { canonicalRequestMessage, requestHash } from '../../../shared/schemas/canonical-message.mjs';
+import { canonicalRequestMessage, requestHash } from '@omniswarm/schemas/canonical-message';
 import { randomNonce } from './nep413.ts';
 
 export const INTAKE_RECIPIENT = 'omniswarm.testnet';

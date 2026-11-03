@@ -8,7 +8,10 @@ import { createPool, reset } from '../../backend/intake/src/store.ts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const INTAKE = path.join(ROOT, 'backend/intake');
-const DATABASE_URL = process.env.DATABASE_URL || 'postgres://omniswarm:omniswarm@127.0.0.1:55432/omniswarm';
+// These specs reset (TRUNCATE) the database they are given. There is no default URL, so
+// they never touch a developer's own Postgres: set DATABASE_URL to a throwaway database.
+const DATABASE_URL = process.env.DATABASE_URL || '';
+const NEEDS_DB = DATABASE_URL ? {} : { skip: 'DATABASE_URL is not set; these specs TRUNCATE their database, so point it at a throwaway Postgres to run them' };
 const SHA = 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2';
 
 function run(script: string, args: string[]) {
@@ -19,7 +22,7 @@ function run(script: string, args: string[]) {
   });
 }
 
-test('challenge, quote, NEP-413 pay, rejections and reconcile', async () => {
+test('challenge, quote, NEP-413 pay, rejections and reconcile', NEEDS_DB, async () => {
   const clock = { ms: Date.now(), now() { return this.ms; } };
   const app = await createApp({ databaseUrl: DATABASE_URL, sessionSecret: 'test-session-secret', clock });
   const pool = createPool(DATABASE_URL);

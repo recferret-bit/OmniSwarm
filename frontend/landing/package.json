@@ -10,6 +10,7 @@
     "guard": "node scripts/guard-bundle.mjs"
   },
   "dependencies": {
+    "@omniswarm/schemas": "*",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },

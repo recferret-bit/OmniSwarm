@@ -1,11 +1,10 @@
 // Pure intake rules: quote URLs, NEP-413 payload, session cookies, rate limit.
 // No sockets. HTTP and Postgres stay in app.ts and store.ts.
 import crypto from 'node:crypto';
-import { canonicalRequestMessage, requestHash } from '../../../shared/schemas/canonical-message.mjs';
+import { canonicalRequestMessage, requestHash } from '@omniswarm/schemas/canonical-message';
+import { b58decode as decodeBase58, b58encode, nep413Payload as payloadBytes } from '@omniswarm/schemas/nep413';
 
 export const PRICE_YOCTO = '1000000000000000000000000';
-const TAG = 2147484061;
-const B58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
 
 export class AppError extends Error {
   status: number;
@@ -53,61 +52,16 @@ export function quoteRepo(repoUrl: string, maxKb: number) {
   return { normalizedRepo: repo, commitSha: row.sha };
 }
 
-export function b58encode(bytes: Uint8Array): string {
-  let zeros = 0;
-  while (zeros < bytes.length && bytes[zeros] === 0) zeros += 1;
-  const digits = [0];
-  for (let i = zeros; i < bytes.length; i++) {
-    let carry = bytes[i];
-    for (let j = 0; j < digits.length; j++) {
-      carry += digits[j] << 8;
-      digits[j] = carry % 58;
-      carry = Math.floor(carry / 58);
-    }
-    while (carry > 0) {
-      digits.push(carry % 58);
-      carry = Math.floor(carry / 58);
-    }
-  }
-  let out = '1'.repeat(zeros);
-  for (let i = digits.length - 1; i >= 0; i--) out += B58[digits[i]];
-  return out;
-}
+// The payload and base58 come from @omniswarm/schemas/nep413 (shared with the browser).
+// These wrappers keep the Buffer return type the intake code and its callers use.
+export { b58encode };
 
 export function b58decode(text: string): Buffer {
-  let zeros = 0;
-  while (zeros < text.length && text[zeros] === '1') zeros += 1;
-  const bytes = [0];
-  for (let i = zeros; i < text.length; i++) {
-    const value = B58.indexOf(text[i]);
-    if (value < 0) throw new Error('invalid base58');
-    let carry = value;
-    for (let j = 0; j < bytes.length; j++) {
-      carry += bytes[j] * 58;
-      bytes[j] = carry & 0xff;
-      carry >>= 8;
-    }
-    while (carry > 0) {
-      bytes.push(carry & 0xff);
-      carry >>= 8;
-    }
-  }
-  while (bytes.length > 1 && bytes[bytes.length - 1] === 0) bytes.pop();
-  return Buffer.concat([Buffer.alloc(zeros), Buffer.from(bytes.reverse())]);
-}
-
-function borshString(value: string): Buffer {
-  const body = Buffer.from(value, 'utf8');
-  const len = Buffer.alloc(4);
-  len.writeUInt32LE(body.length);
-  return Buffer.concat([len, body]);
+  return Buffer.from(decodeBase58(text));
 }
 
 export function nep413Payload(message: string, nonce: Buffer, recipient: string): Buffer {
-  if (nonce.length !== 32) throw new Error('nonce must be 32 bytes');
-  const tag = Buffer.alloc(4);
-  tag.writeUInt32LE(TAG);
-  return Buffer.concat([tag, borshString(message), nonce, borshString(recipient), Buffer.from([0])]);
+  return Buffer.from(payloadBytes(message, nonce, recipient));
 }
 
 const SPKI = Buffer.from('302a300506032b6570032100', 'hex');

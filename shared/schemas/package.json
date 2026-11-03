@@ -1,13 +1,15 @@
 {
   "name": "@omniswarm/schemas",
   "version": "0.1.0",
-  "description": "JSON Schemas (draft 2020-12 subset) and a dependency-free validator for the OmniSwarm cross-track contract",
+  "description": "JSON Schemas (draft 2020-12 subset), a dependency-free validator, and the canonical-message, canonical-json and NEP-413 helpers for the OmniSwarm cross-track contract",
   "type": "module",
   "private": true,
   "main": "index.mjs",
   "exports": {
     ".": "./index.mjs",
     "./canonical-message": "./canonical-message.mjs",
+    "./canonical-json": "./canonical-json.mjs",
+    "./nep413": "./nep413.mjs",
     "./*.schema.json": "./*.schema.json"
   },
   "license": "MIT"

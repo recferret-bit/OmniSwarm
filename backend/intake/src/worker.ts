@@ -5,6 +5,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { canonicalJson, reportDocument } from '@omniswarm/schemas/canonical-json';
 import * as store from './store.ts';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -19,17 +20,12 @@ export function auditArgv(job: { repo: string; ref: string; preset: string; out:
   return argv;
 }
 
-export function canonicalJson(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map((item) => canonicalJson(item)).join(',')}]`;
-  if (value && typeof value === 'object') {
-    const record = value as Record<string, unknown>;
-    return `{${Object.keys(record).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key])}`).join(',')}}`;
-  }
-  return JSON.stringify(value);
-}
+// The report hash is sha256 over reportDocument (@omniswarm/schemas/canonical-json),
+// the same bytes the review page recomputes with Web Crypto.
+export { canonicalJson };
 
 export function reportSha256(findings: unknown, general: unknown) {
-  return crypto.createHash('sha256').update(canonicalJson(findings) + canonicalJson(general ?? {})).digest('hex');
+  return crypto.createHash('sha256').update(reportDocument(findings, general)).digest('hex');
 }
 
 export function hashReportDir(dir: string) {

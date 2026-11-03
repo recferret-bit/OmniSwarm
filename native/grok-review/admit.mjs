@@ -6,7 +6,9 @@ import { PIN, SOURCE_REVISION, prepare, nativeIdentity } from './build.mjs';
 import { openPrivateOutput, runGate } from '../codex-review/build.mjs';
 
 const HERE=path.dirname(fileURLToPath(import.meta.url));
-const ROOT=path.resolve(HERE,'../../..');
+// The repository root (native/grok-review/../..); the node and docker gates run its scripts/ suites.
+const ROOT=path.resolve(HERE,'../..');
+export const ADMISSION_SCRIPTS=path.join(ROOT,'scripts');
 const BUILD=path.resolve(HERE,'../.cache/grok-build');
 const SOURCE=path.resolve(HERE,`../.cache/grok-${PIN}`);
 const BINARY=path.join(BUILD,'target/debug/omniswarm-grok-review');
@@ -31,7 +33,7 @@ export async function admit(){
   write({version:1,admission:false,sourceCommit:PIN,reason:'grok_admission_in_progress'});
   const {env,metadata}=prepare();
   const identity=nativeIdentity();
-  const scripts=path.join(ROOT,'audit/scripts');
+  const scripts=ADMISSION_SCRIPTS;
   const testEnv={};
   for(const key of ['HOME','USER','PATH','LANG','LC_ALL','TMPDIR','DOCKER_CONTEXT','DOCKER_HOST','DOCKER_CONFIG','DOCKER_TLS_VERIFY','DOCKER_CERT_PATH'])if(typeof process.env[key]==='string')testEnv[key]=process.env[key];
   const node=[process.execPath,'--test','--test-concurrency=1','--test-reporter=tap'];

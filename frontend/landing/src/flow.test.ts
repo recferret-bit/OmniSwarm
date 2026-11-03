@@ -5,7 +5,7 @@ import { App } from './App.tsx';
 import { HERO, initialState, nextTimeline, payOffered, reduce } from './flow.ts';
 import { ATTESTED_SHA256, REPORT_FINDINGS, REPORT_GENERAL, TAMPED_FINDINGS, digestReport } from './report-doc.ts';
 import { connectAccount, signQuote } from './wallet.ts';
-import { requestHash } from '../../../shared/schemas/canonical-message.mjs';
+import { requestHash } from '@omniswarm/schemas/canonical-message';
 
 describe('landing flow', () => {
   it('shows the hero and a sample report with no wallet', () => {

@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import Fastify, { type FastifyInstance } from 'fastify';
-import { requestHash } from '../../../shared/schemas/canonical-message.mjs';
-import { verdictFor } from '../../../packages/guard/index.mjs';
+import { requestHash } from '@omniswarm/schemas/canonical-message';
+import { verdictFor } from '@omniswarm/guard';
 import {
   AppError, PRICE_YOCTO, b58decode, decodeKey, fail, quoteRepo, rateLimit, readSession, sessionToken, verifyNep413, yoctoLess,
 } from './lib.ts';

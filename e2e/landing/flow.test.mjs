@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
 import { b58decode, decodeKey, verifyNep413 } from '../../backend/intake/src/lib.ts';
 import { reportSha256 } from '../../backend/intake/src/worker.ts';
-import { requestHash } from '../../shared/schemas/canonical-message.mjs';
+import { requestHash } from '@omniswarm/schemas/canonical-message';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const LANDING = path.join(ROOT, 'frontend/landing');

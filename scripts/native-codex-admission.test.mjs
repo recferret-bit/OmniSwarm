@@ -3,8 +3,10 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 import { PIN, nativeIdentity, runGate } from '../native/codex-review/build.mjs';
-import { ADMISSION_GATES, matchesAdmission, gateWasExecuted } from '../native/codex-review/admit.mjs';
+import { ADMISSION_GATES, ADMISSION_SCRIPTS, matchesAdmission, gateWasExecuted } from '../native/codex-review/admit.mjs';
+import { ADMISSION_SCRIPTS as GROK_ADMISSION_SCRIPTS } from '../native/grok-review/admit.mjs';
 import { parseStaticReview, staticCliReview } from './static-cli-review.mjs';
 import { parseConnectorArgs } from './terminal-model-connector.mjs';
 import { nativeFixture } from './codex-native-fixtures.mjs';
@@ -15,6 +17,14 @@ test('runtime admission requires every gate and current package/recipe/binary id
   assert.equal(matchesAdmission(receipt,identity),true);
   for (const patch of [{admission:false},{version:2},{sourceCommit:'b'.repeat(40)},{packageDigest:'changed'},{recipeDigest:'changed'},{binarySha256:null},{gates:[]},{gates:receipt.gates.map((gate) => ({...gate,passed:false}))}]) {
     assert.equal(matchesAdmission({...receipt,...patch},identity),false);
+  }
+});
+test('native admission node and docker gates run this repository\'s scripts/ suites', () => {
+  const scripts = path.dirname(fileURLToPath(import.meta.url));
+  for (const dir of [ADMISSION_SCRIPTS, GROK_ADMISSION_SCRIPTS]) {
+    assert.equal(dir, scripts);
+    assert.ok(fs.readdirSync(dir).some((name) => name.endsWith('.test.mjs')));
+    for (const name of ['worker-isolation', 'terminal-relay', 'terminal-model-connector', 'static-cli-review', 'grok-docker']) assert.ok(fs.existsSync(path.join(dir, `${name}.docker.mjs`)), name);
   }
 });
 test('explicit native profile is distinct from the unmodified installed Codex CLI', () => {

@@ -1,0 +1,73 @@
+{
+  "note": "Recorded from the intake signer (lib.ts) and the browser payload (nep413.ts) before they shared this module; both produced these bytes. base58 keeps the existing all-zero quirk: \"\" encodes to \"1\" and decodes back to one zero byte.",
+  "payloads": [
+    {
+      "message": "{\"account\":\"alice.testnet\",\"commit\":\"a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2\",\"deployed\":null,\"network\":\"testnet\",\"nonce\":\"AAAA\",\"preset\":\"scripted\",\"repo\":\"near/near-sdk-rs\",\"v\":1}",
+      "nonceHex": "0707070707070707070707070707070707070707070707070707070707070707",
+      "recipient": "omniswarm.testnet",
+      "payloadHex": "9d010080b60000007b226163636f756e74223a22616c6963652e746573746e6574222c22636f6d6d6974223a2261316232633364346535663661316232633364346535663661316232633364346535663661316232222c226465706c6f796564223a6e756c6c2c226e6574776f726b223a22746573746e6574222c226e6f6e6365223a2241414141222c22707265736574223a227363726970746564222c227265706f223a226e6561722f6e6561722d73646b2d7273222c2276223a317d0707070707070707070707070707070707070707070707070707070707070707110000006f6d6e69737761726d2e746573746e657400",
+      "sha256": "fe0751859bdedc634643c9f46af65f10050d8564019696a192ee8d8c5d70c69d"
+    },
+    {
+      "message": "",
+      "nonceHex": "0000000000000000000000000000000000000000000000000000000000000000",
+      "recipient": "",
+      "payloadHex": "9d0100800000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "sha256": "7667d9ccc139223815d96cd434a4eba750a55b9322ecb32f679bb0c551c30378"
+    },
+    {
+      "message": "héllo ✓ 世界",
+      "nonceHex": "c6cba14837cd12163779fa75709ed17117237870f44ea62ebdfb382db9c682d1",
+      "recipient": "review-registry.mock",
+      "payloadHex": "9d0100801100000068c3a96c6c6f20e29c9320e4b896e7958cc6cba14837cd12163779fa75709ed17117237870f44ea62ebdfb382db9c682d1140000007265766965772d72656769737472792e6d6f636b00",
+      "sha256": "43d3d482a506d25d7f166c1112fc70f1a87e06755a85703ded4473ec39b911aa"
+    }
+  ],
+  "base58": [
+    {
+      "hex": "",
+      "text": "1",
+      "decodedHex": "0000"
+    },
+    {
+      "hex": "00",
+      "text": "11",
+      "decodedHex": "000000"
+    },
+    {
+      "hex": "000000",
+      "text": "1111",
+      "decodedHex": "0000000000"
+    },
+    {
+      "hex": "000001",
+      "text": "112",
+      "decodedHex": "000001"
+    },
+    {
+      "hex": "ff",
+      "text": "5Q",
+      "decodedHex": "ff"
+    },
+    {
+      "hex": "00fffe",
+      "text": "1LUu",
+      "decodedHex": "00fffe"
+    },
+    {
+      "hex": "a6f3d2dffa0852360c880e24840addf076c791838da89c1e655c0477e1f68790",
+      "text": "CEiKNctK48FbEjxxme3mgDshq8V1M3BuyMMYRM3LwKEw",
+      "decodedHex": "a6f3d2dffa0852360c880e24840addf076c791838da89c1e655c0477e1f68790"
+    },
+    {
+      "hex": "001d3cbf8ed384d7d7a0de8f23bb4ae472f0c87509ebaff7b0912463260d1a14",
+      "text": "1Srk1tE4vfrWYrY8h915HpxW8Rzw5LEyegrvvVrsW4s",
+      "decodedHex": "001d3cbf8ed384d7d7a0de8f23bb4ae472f0c87509ebaff7b0912463260d1a14"
+    },
+    {
+      "hex": "0073ec266d4fb4adbf3d104aa714f9f11032fd8ab6d8829fc40b52c86f6485d7928cc2ebd4646f3fe3f374be11d905bf4be275fa86f3889d82a9f7dc5e41dd32",
+      "text": "1XTRN2RJN5MfCYf2UTVo8dcmei94CvVB2BBWvvograKBRzTW7RaDH79KZ4NSHQNUNLf3DwSbhdsgmDYptsM2d21",
+      "decodedHex": "0073ec266d4fb4adbf3d104aa714f9f11032fd8ab6d8829fc40b52c86f6485d7928cc2ebd4646f3fe3f374be11d905bf4be275fa86f3889d82a9f7dc5e41dd32"
+    }
+  ]
+}

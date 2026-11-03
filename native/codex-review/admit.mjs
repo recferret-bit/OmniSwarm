@@ -6,7 +6,10 @@ import { PIN, nativeIdentity, prepareNativeSource, openPrivateOutput, runGate } 
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const CACHE = path.resolve(HERE, '../.cache');
-const ROOT = path.resolve(HERE, '../../..');
+// The repository root (native/codex-review/../..). The node and docker gates run
+// the repo's own scripts/ suites from here.
+const ROOT = path.resolve(HERE, '../..');
+export const ADMISSION_SCRIPTS = path.join(ROOT, 'scripts');
 const WORKSPACE = path.join(CACHE, `codex-${PIN}/codex-rs`);
 const BINARY = path.join(CACHE, 'target/debug/omniswarm-codex-review');
 const RECEIPT = path.join(CACHE, 'runtime-admission.json');
@@ -44,7 +47,7 @@ export async function admitNative() {
   writeReceipt({version:1,admission:false,sourceCommit:PIN,reason:'native_admission_in_progress'});
   const { env, metadata } = prepareNativeSource();
   const node = [process.execPath, '--test', '--test-concurrency=1'];
-  const scripts = path.join(ROOT, 'audit/scripts');
+  const scripts = ADMISSION_SCRIPTS;
   // Test fixtures may use the operator's existing Docker context; this context
   // is never part of a broker environment or mounted inside a worker.
   const testEnv = {};
