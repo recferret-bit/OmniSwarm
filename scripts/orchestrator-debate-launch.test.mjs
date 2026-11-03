@@ -41,6 +41,11 @@ function setup(t) {
     const out = arg(bridgeArgs, '--report-dir');
     calls.push({ identity, bridgeArgs });
     if (identity.role === 'auditor') {
+      // What the API shim records for a priced reviewer; the other reviewer reports no cost at all.
+      if (identity.agent === ZAI.id) {
+        fs.mkdirSync(path.join(options.directory, 'workspace'), { recursive: true });
+        fs.writeFileSync(path.join(options.directory, 'workspace', 'api-session.json'), JSON.stringify({ usage: [{ prompt_tokens: 7, completion_tokens: 3, cost: 0.02, costSource: 'estimated' }] }));
+      }
       commitSubmission(out, identity.name, identity, [...(identity.agent === ZAI.id ? [WITHDRAW] : []), { verified_safe: [] }]);
       return ok(identity, options);
     }
@@ -73,7 +78,10 @@ test('debate turns, the judge and the general review launch through the bridge; 
   assert.deepEqual(readReportJson(out, 'harness/reviewers.json').judges.map((j) => j.id), [JUDGE.id]);
   const [row] = readReportJson(out, 'debate/adjudication.json');
   assert.deepEqual([row.finalStatus, row.judge.reviewerId, row.judge.alternate], ['CONFIRMED', JUDGE.id, false]);
-  assert.equal(readReportJson(out, 'general-review.json').executiveSummary, 'One confirmed access-control finding.');
+  const general = readReportJson(out, 'general-review.json');
+  assert.equal(general.executiveSummary, 'One confirmed access-control finding.');
+  // A cost is shown only where a pass priced it; an unpriced reviewer is null, not a fabricated 0.
+  assert.deepEqual(general.contributions.map((row) => [row.reviewerId, row.costUsd]), [[ZAI.id, 0.02], [QWEN.id, null]]);
   for (const name of names) {
     assert.ok(readReportJson(out, `harness/bridge-${name}.json`).some((e) => e.tool.startsWith('submit_')), name);
     assert.equal(readReportJson(out, `harness/debate-budget-${name}.json`).calls, 1, `${name}: the read counts against the debate budget`);

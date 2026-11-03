@@ -45,6 +45,18 @@ test('recommended orchestrator follows the OD-05 order and says why', () => {
   assert.equal(parseReviewerSpec('cli:claude:opus').family, 'cli');
 });
 
+test('the plan prints the alternate judge pickJudge would use: explicit, default, none, or not used', () => {
+  const budgets = { passes: 1, toolBudget: 40, debate: { rounds: 2, maxClusters: 25, toolBudget: 12 }, maxCostUsd: null };
+  const plan = (extra) => renderPlan({ reviewers: two, assign: 'matrix', budgets, ...extra }).text;
+  assert.match(plan({ orchestrator: parseReviewerSpec('cli:claude:opus') }), /^Alternate judge: cli:codex:gpt-6\.1-sol \(default: first run reviewer of another vendor than anthropic\)$/m);
+  assert.match(plan({ orchestrator: parseReviewerSpec('cli:claude:opus'), alternateJudge: parseReviewerSpec('key:zai:glm-5.3') }), /^Alternate judge: key:zai:glm-5\.3$/m);
+  assert.match(renderPlan({ reviewers: [two[0]], assign: 'matrix', budgets, orchestrator: parseReviewerSpec('cli:claude:sonnet') }).text, /^Alternate judge: none \(no run reviewer of another vendor than anthropic; its clusters stay DISPUTED, no_independent_judge\)$/m);
+  assert.match(plan({ orchestrator: parseReviewerSpec('scripted:judge') }), /^Alternate judge: not used/m);
+  assert.match(plan({}), /^Orchestrator: none \(no debate or general review\)$/m);
+  assert.doesNotMatch(plan({}), /Alternate judge/);
+  assert.doesNotMatch(plan({ orchestrator: parseReviewerSpec('cli:claude:opus') }), /No phase uses it yet/);
+});
+
 test('legacy header labels stay adapter names for cli-only unique providers', () => {
   assert.deepEqual(headerLabels(two), { agents: 'claude codex', models: 'claude=opus codex=gpt-6.1-sol' });
   assert.equal(headerLabels(parseReviewerList(['cli:claude:a', 'cli:claude:b'])).agents, 'cli-claude-a cli-claude-b');

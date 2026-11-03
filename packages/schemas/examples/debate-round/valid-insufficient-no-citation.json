@@ -1,0 +1,9 @@
+{
+  "round": 1,
+  "clusterId": "c-001",
+  "role": "challenge",
+  "anonId": "Reviewer B",
+  "verdict": "insufficient_evidence",
+  "citations": [],
+  "argument": "My review did not cover this code path."
+}

@@ -11,6 +11,7 @@ set -euo pipefail
 #   orchestrate.sh --target <dir> --out <dir> [--name <slug>] [--surface s1..s6|all]
 #                  [--reviewers <spec,spec>] [--config <file>] [--preset <name>] [--assign matrix|round-robin]
 #                  [--orchestrator <spec|recommended>] [--alternate-judge <spec>] [--passes N] [--tool-budget N]
+#                  [--debate-rounds N] [--debate-max-clusters N] [--debate-tool-budget N]
 #                  [--agents a,b] [--model <slug>] [--models a=<slug>,b=<slug>] [--model-<agent> <slug>]   aliases for cli: reviewers
 #                  [--mode local|remote] [--source <path|url>] [--ref <ref>] [--commit <sha>] [--plan]
 #                  [--rpc <https URL>]   rejected: source review does not contact deployed RPCs
@@ -30,7 +31,7 @@ while [[ $# -gt 0 ]]; do
     --out) OUTPUT_DIR="$2"; shift 2 ;;
     --name) TARGET_NAME="$2"; shift 2 ;;
     --surface) SURFACE="$2"; shift 2 ;;
-    --agents|--reviewers|--config|--preset|--assign|--orchestrator|--alternate-judge|--passes|--tool-budget|--max-cost-usd|--model|--models|--model-claude|--model-grok|--model-agy|--model-codex)
+    --agents|--reviewers|--config|--preset|--assign|--orchestrator|--alternate-judge|--passes|--tool-budget|--max-cost-usd|--debate-rounds|--debate-max-clusters|--debate-tool-budget|--model|--models|--model-claude|--model-grok|--model-agy|--model-codex)
       [ $# -ge 2 ] || { echo "orchestrate: $1 needs a value" >&2; exit 1; }
       RC_ARGS+=("$1" "$2"); shift 2 ;;
     --mode) TARGET_MODE="$2"; shift 2 ;;
@@ -87,7 +88,8 @@ fi
 RESOLVED_FILE="$(mktemp "${TMPDIR:-/tmp}/audit-reviewers.XXXXXX")"
 REQUEST_FILE=""
 trap 'rm -f -- "$RESOLVED_FILE" ${REQUEST_FILE:+"$REQUEST_FILE"}' EXIT
-node "$SCRIPT_DIR/run-config.mjs" resolve ${RC_ARGS[@]+"${RC_ARGS[@]}"} >"$RESOLVED_FILE" || exit 2
+# --target lets run-config refuse the scripted judge on anything but an OmniSwarm fixture (scripted_judge_demo_only).
+node "$SCRIPT_DIR/run-config.mjs" resolve --target "$TARGET_DIR" ${RC_ARGS[@]+"${RC_ARGS[@]}"} >"$RESOLVED_FILE" || exit 2
 { IFS= read -r AGENT_LABELS; IFS= read -r MODEL_LINE; } < <(node "$SCRIPT_DIR/reviewer-plan.mjs" header "$RESOLVED_FILE")
 
 echo "=========================================================="

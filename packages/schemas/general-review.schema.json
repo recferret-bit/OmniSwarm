@@ -60,7 +60,7 @@
           "uniqueConfirmed": { "type": "integer", "minimum": 0 },
           "refuted": { "type": "integer", "minimum": 0 },
           "toolCalls": { "type": "integer", "minimum": 0 },
-          "costUsd": { "type": "number", "minimum": 0 }
+          "costUsd": { "type": ["number", "null"], "minimum": 0, "description": "null when no pass reported or estimated a cost (CLI subscriptions, scripted reviewers)" }
         }
       }
     },

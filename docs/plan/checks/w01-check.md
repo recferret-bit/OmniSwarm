@@ -31,7 +31,7 @@ See: the four `cli` reviewers, `matrix (24 jobs)`. Add `--passes 3`: `Budgets: p
 
 **5. Recommended orchestrator.**
 `./bin/audit run --repo <F> --agents claude --orchestrator recommended --plan`
-See: `Orchestrator: recommended -> cli:claude:opus; first choice of the OD-05 order is available. No phase uses it yet.` (On a machine without the `claude` CLI on PATH it says `none available (...)`.)
+See: `Orchestrator: recommended -> cli:claude:opus; first choice of the OD-05 order is available. It runs the debate and general-review phases.` and the `Alternate judge:` line. (On a machine without the `claude` CLI on PATH it says `none available (...)`.)
 
 **6. Crash during cross-check (R-03).**
 `node --test --test-name-pattern="crash during cross-check" scripts/docker-agent-orchestrator.test.mjs`

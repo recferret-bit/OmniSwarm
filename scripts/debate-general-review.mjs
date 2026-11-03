@@ -37,7 +37,7 @@ function contributions(reviewers, rows, clusters, usage) {
   return reviewers.map((reviewer) => {
     const authored = rows.filter((row) => byId.get(row.clusterId)?.authors.includes(reviewer.id));
     const sole = authored.filter((row) => byId.get(row.clusterId).authors.length === 1 && ['CONFIRMED', 'LIKELY'].includes(row.finalStatus));
-    const spent = usage.get(reviewer.id) || { calls: 0, cost: 0 };
+    const spent = usage.get(reviewer.id) || { calls: 0, cost: null };
     return { reviewerId: reviewer.id, uniqueConfirmed: sole.length, refuted: authored.filter((row) => row.finalStatus === 'REFUTED').length, toolCalls: spent.calls, costUsd: spent.cost };
   });
 }
@@ -73,7 +73,7 @@ export function generalReviewMarkdown(general) {
   lines.push(...(general.topFindings.length ? general.topFindings.map((row) => `- [${row.clusterId}](#finding-${row.clusterId}) ${row.title}: ${row.finalStatus} (${row.severity})`) : ['- None adjudicated.']));
   if (general.openDisagreements.length) lines.push('', '## Open disagreements', '', ...general.openDisagreements.map((row) => `- ${row.clusterId}: ${row.summary}`));
   lines.push('', '## Contributions', '', '| Reviewer | Unique confirmed | Refuted | Tool calls | Cost USD |', '|---|---|---|---|---|');
-  lines.push(...general.contributions.map((row) => `| ${row.reviewerId} | ${row.uniqueConfirmed} | ${row.refuted} | ${row.toolCalls} | ${row.costUsd} |`));
+  lines.push(...general.contributions.map((row) => `| ${row.reviewerId} | ${row.uniqueConfirmed} | ${row.refuted} | ${row.toolCalls} | ${row.costUsd ?? '—'} |`));
   lines.push('', DISCLAIMER, '');
   return lines.join('\n');
 }
