@@ -8,6 +8,8 @@ GITLEAKS_PINNED="8.30.1"
 # Planted, inert test values that gitleaks' generic rule matches. Fingerprint: commit:file:rule:line.
 GITLEAKS_ALLOW=(
   "20913d67d6d9d76a95fbc11f1ee9c70b7fff3610:tests/e2e/intake/w09.spec.ts:generic-api-key:16"
+  # NodeSource apt signing-key fingerprint (public), renamed in a later commit.
+  "36a2c7e9b48fc7a386f0cdd18c91c97a4d892813:infra/deploy/provision.sh:generic-api-key:26"
 )
 
 tracked="$(git ls-files)"
