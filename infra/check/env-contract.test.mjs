@@ -56,9 +56,36 @@ test('a provider key in any compose service is an error', () => {
   assert.ok(errors.includes('compose service api receives provider variable OPENROUTER_API_KEY; keys belong to the worker only'), errors.join('\n'));
 });
 
+test('REPORTS_BASE_URL in the api is app config, not a provider variable', () => {
+  const composeJson = { services: { api: { environment: { DATABASE_URL: 'u', SESSION_SECRET: 's', NETWORK: 't', REPORTS_BASE_URL: 'https://r' } } } };
+  const { errors } = checkContract(input({ composeJson, apiExample: parseEnv('DATABASE_URL=x\nSESSION_SECRET=x\nNETWORK=testnet\nWORKER_CONCURRENCY=1\nREPORTS_BASE_URL=\n') }));
+  assert.ok(!errors.some((e) => e.includes('provider variable')), errors.join('\n'));
+  const leaked = checkContract(input({ composeJson: { services: { api: { environment: { ZAI_BASE_URL: 'x' } } } } , providers: parseEnv('ZAI_API_KEY=\nZAI_BASE_URL=\n') })).errors;
+  assert.ok(leaked.includes('compose service api receives provider variable ZAI_BASE_URL; keys belong to the worker only'), leaked.join('\n'));
+});
+
 test('a non-provider name in providers.env.example is an error', () => {
   const { errors } = checkContract(input({ providers: parseEnv('ZAI_API_KEY=\nDATABASE_URL=\n') }));
   assert.ok(errors.includes('DATABASE_URL (providers.env.example) is not a provider variable (<PROVIDER>_API_KEY or _BASE_URL)'));
+});
+
+test('ops.env.example: host-timer settings are OMNI_*, read by a deploy script, and URLs stay empty', () => {
+  const hostScripts = 'omni_fetch OMNI_HEARTBEAT_URL\nAFTER="${OMNI_HEALTH_RESTART_AFTER:-2}"\n';
+  assert.deepEqual(checkContract(input({ ops: parseEnv('OMNI_HEARTBEAT_URL=\nOMNI_HEALTH_RESTART_AFTER=2\n'), hostScripts })).errors, []);
+  const { errors } = checkContract(input({
+    ops: parseEnv('OMNI_HEARTBEAT_URL=https://hc-ping.com/real-uuid\nOMNI_UNUSED=1\nALERT_TO=x\nOMNI_DOMAIN=\n'), hostScripts,
+  }));
+  assert.ok(errors.includes('OMNI_HEARTBEAT_URL (ops.env.example) has a value; URLs in examples must be empty'), errors.join('\n'));
+  assert.ok(errors.includes('OMNI_UNUSED (ops.env.example) is declared but no infra/deploy script reads it'), errors.join('\n'));
+  assert.ok(errors.includes('ALERT_TO (ops.env.example) is not an OMNI_* host setting'), errors.join('\n'));
+  assert.ok(errors.includes('OMNI_DOMAIN (ops.env.example) is also declared in stack.env.example'), errors.join('\n'));
+});
+
+test('a dev-only value must be read by compose.dev.yml or by the local worker command', () => {
+  const dev = parseEnv('OMNI_DOMAIN=omniswarm.localhost\nOMNI_HTTP_PORT=18480\nENGINE_RUNNER=mock\n');
+  const unread = checkContract(input({ dev })).errors;
+  assert.ok(unread.includes('ENGINE_RUNNER (dev.env.example) is neither a stack variable nor read by compose.dev.yml or compose/local.sh'), unread.join('\n'));
+  assert.deepEqual(checkContract(input({ dev, devScripts: 'ENGINE_RUNNER=$(omni_env_value ENGINE_RUNNER)' })).errors, []);
 });
 
 test('requiredUnset lists the :? variables the owner must fill', () => {

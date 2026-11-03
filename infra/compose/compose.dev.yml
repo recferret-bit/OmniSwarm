@@ -8,6 +8,10 @@ services:
     ports:
       - "127.0.0.1:${OMNI_PG_PORT:?set OMNI_PG_PORT (dev.env.example)}:5432"
 
+  api:
+    environment:
+      REPORTS_BASE_URL: https://${OMNI_REPORTS_DOMAIN:?set OMNI_REPORTS_DOMAIN}:${OMNI_HTTPS_PORT:?set OMNI_HTTPS_PORT (dev.env.example)}
+
   nginx:
     ports:
       - "127.0.0.1:${OMNI_HTTP_PORT:?set OMNI_HTTP_PORT (dev.env.example)}:80"

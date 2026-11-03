@@ -1,0 +1,20 @@
+[Unit]
+Description=OmniSwarm log sweep for leaked secrets (journal, containers, engine logs)
+Documentation=file:/srv/omniswarm/current/infra/README.md
+After=docker.service
+
+[Service]
+Type=oneshot
+# Root: reads the secret values in /etc/omniswarm to look for them; prints names only.
+ExecStart=/srv/omniswarm/current/infra/deploy/log-hygiene.sh
+EnvironmentFile=-/etc/omniswarm/ops.env
+Environment=DOCKER_CONFIG=/run/omniswarm-log-hygiene/docker
+RuntimeDirectory=omniswarm-log-hygiene
+RuntimeDirectoryMode=0700
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=-/run/docker.sock
+ProtectHome=yes
+PrivateTmp=yes
+Nice=10
+IOSchedulingClass=idle

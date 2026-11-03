@@ -8,6 +8,11 @@ services:
     ports:
       - "127.0.0.1:5432:5432"
 
+  api:
+    environment:
+      # Links in GET /api/reports/:id; the worker attests the same prefix.
+      REPORTS_BASE_URL: https://${OMNI_REPORTS_DOMAIN:?set OMNI_REPORTS_DOMAIN in the stack env file}
+
   nginx:
     ports:
       - "80:80"

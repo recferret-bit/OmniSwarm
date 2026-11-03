@@ -71,11 +71,15 @@ export function checkContract(input) {
   for (const name of stack.keys()) {
     if (!baseRefs.has(name)) errors.push(`${declared(name, 'stack.env.example')} is declared but no compose file reads it`);
   }
+  // The local stack's foreground worker command (compose/local.sh) may read dev-only values too.
+  const devScripts = input.devScripts || '';
   for (const name of dev.keys()) {
-    if (!stack.has(name) && !devRefs.has(name)) errors.push(`${declared(name, 'dev.env.example')} is neither a stack variable nor read by compose.dev.yml`);
+    if (!stack.has(name) && !devRefs.has(name) && !new RegExp(`omni_env_value ${name}\\b`).test(devScripts)) {
+      errors.push(`${declared(name, 'dev.env.example')} is neither a stack variable nor read by compose.dev.yml or compose/local.sh`);
+    }
   }
 
-  for (const [file, vars] of [['stack.env.example', stack], ['worker.env.example', worker], ['providers.env.example', providers], ['dev.env.example', dev]]) {
+  for (const [file, vars] of [['stack.env.example', stack], ['worker.env.example', worker], ['providers.env.example', providers], ['dev.env.example', dev], ['ops.env.example', input.ops || new Map()]]) {
     for (const [name, value] of vars) {
       if (SECRET_NAME.test(name) && value !== '') errors.push(`${declared(name, file)} has a value; secrets in examples must be empty`);
     }
@@ -86,9 +90,13 @@ export function checkContract(input) {
   }
   for (const [service, def] of Object.entries(composeJson.services || {})) {
     for (const name of Object.keys(def.environment || {})) {
-      if (providers.has(name) || PROVIDER_NAME.test(name)) errors.push(`compose service ${service} receives provider variable ${name}; keys belong to the worker only`);
+      // Any *_API_KEY, and every name providers.env declares (a *_BASE_URL like
+      // REPORTS_BASE_URL is app config, not a provider setting).
+      if (providers.has(name) || /_API_KEY$/.test(name)) errors.push(`compose service ${service} receives provider variable ${name}; keys belong to the worker only`);
     }
   }
+
+  checkOps(input, errors);
 
   const api = serviceEnv(composeJson, 'api');
   const delivered = new Set([...api, ...serviceEnv(composeJson, 'migrate'), ...worker.keys(), ...providers.keys(), ...workerUnitEnv]);
@@ -99,6 +107,19 @@ export function checkContract(input) {
     if (!apiExample.has(name) && !PROCESS_VARS.has(name)) warnings.push(`infra sets ${name} for the api/worker, but apps/api/.env.example does not declare it`);
   }
   return { errors, warnings };
+}
+
+// ops.env.example feeds the host timers (health, prune, log hygiene), never a
+// container: every name is OMNI_*, owned by no other file, read by an
+// infra/deploy script, and URLs (webhooks carry tokens) stay empty.
+function checkOps({ ops = new Map(), stack, hostScripts = '' }, errors) {
+  for (const [name, value] of ops) {
+    const where = `${name} (ops.env.example)`;
+    if (!name.startsWith('OMNI_')) errors.push(`${where} is not an OMNI_* host setting`);
+    if (stack.has(name)) errors.push(`${where} is also declared in stack.env.example`);
+    if (!new RegExp(`\\b${name}\\b`).test(hostScripts)) errors.push(`${where} is declared but no infra/deploy script reads it`);
+    if (/_URL$/.test(name) && value !== '') errors.push(`${where} has a value; URLs in examples must be empty`);
+  }
 }
 
 // Required compose variables whose example value is empty: the owner must set
@@ -118,9 +139,12 @@ function loadInput(composeJsonPath) {
     dev: parseEnv(read('infra/env/dev.env.example')),
     worker: parseEnv(read('infra/env/worker.env.example')),
     providers: parseEnv(read('infra/env/providers.env.example')),
+    ops: parseEnv(read('infra/env/ops.env.example')),
+    hostScripts: fs.readdirSync(path.join(INFRA, 'deploy')).filter((f) => f.endsWith('.sh')).map((f) => read(`infra/deploy/${f}`)).join('\n'),
     apiExample: parseEnv(read('apps/api/.env.example')),
     baseRefs: composeRefs(base),
     devRefs: composeRefs(read('infra/compose/compose.dev.yml')),
+    devScripts: read('infra/compose/local.sh'),
     workerUnitEnv: unitEnv(read('infra/systemd/omniswarm-worker@.service')),
     composeJson: composeJsonPath ? JSON.parse(fs.readFileSync(composeJsonPath, 'utf8')) : { services: {} },
   };

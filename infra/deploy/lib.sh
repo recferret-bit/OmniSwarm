@@ -32,10 +32,35 @@ omni_run() {
   fi
 }
 
-# omni_env_value <NAME>: a value from the stack env file (last assignment wins).
+# omni_env_value <NAME> [file]: a value from the stack env file, or another env
+# file (last assignment wins; empty when unset).
 omni_env_value() {
-  [ -r "$OMNI_ENV_FILE" ] || { [ "$OMNI_DRY_RUN" = 1 ] && { printf '<%s>' "$1"; return 0; }; omni_die "cannot read $OMNI_ENV_FILE"; }
-  grep -E "^$1=" "$OMNI_ENV_FILE" | tail -n 1 | cut -d= -f2-
+  local file="${2:-$OMNI_ENV_FILE}"
+  [ -r "$file" ] || { [ "$OMNI_DRY_RUN" = 1 ] && { printf '<%s>' "$1"; return 0; }; omni_die "cannot read $file"; }
+  { grep -E "^$1=" "$file" || true; } | tail -n 1 | cut -d= -f2-
+}
+
+# omni_fetch <url-variable-name> [curl args...]: request the URL held in that
+# variable. The URL goes to curl on stdin (-K -), so it never shows up in argv,
+# `ps` or a dry-run plan. No-op when the variable is empty.
+omni_fetch() {
+  local name="$1"; shift
+  local url="${!name:-}"
+  [ -n "$url" ] || return 0
+  if [ "$OMNI_DRY_RUN" = 1 ]; then printf '+ curl -fsS %s <%s>\n' "$*" "$name"; return 0; fi
+  printf 'url = "%s"\n' "$url" | curl -fsS --max-time 10 --proto '=https,http' -o /dev/null -K - "$@"
+}
+
+# omni_alert <event> <message>: an "ALERT" line in the journal and, when
+# OMNI_ALERT_WEBHOOK_URL is set, a JSON POST {"text","content"} to it (Slack
+# reads text, Discord content). Messages are ours: check names and reasons.
+omni_alert() {
+  local text json
+  text="omniswarm $(hostname 2>/dev/null || echo host) $1: $2"
+  omni_log "ALERT $1: $2"
+  json="$(printf '%s' "$text" | tr -d '\000-\037' | sed 's/\\/\\\\/g; s/"/\\"/g')"
+  omni_fetch OMNI_ALERT_WEBHOOK_URL -H 'content-type: application/json' --data "{\"text\":\"$json\",\"content\":\"$json\"}" \
+    || omni_log "alert webhook failed"
 }
 
 omni_current_release() {

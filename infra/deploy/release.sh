@@ -16,6 +16,7 @@ set -euo pipefail
 . "$(dirname "$0")/lib.sh"
 
 KEEP_RELEASES=3
+ENGINE_CONFIG="${OMNI_ENGINE_CONFIG:-/etc/omniswarm/omniswarm.config.json}"
 cmd="${1:-}"; shift || true
 release=""
 api_replicas=""
@@ -47,8 +48,22 @@ install_host_deps() {
   omni_run npm --prefix "$dir/engine/runtime" ci --ignore-scripts --no-audit --no-fund
 }
 
+# The worker resolves HOSTED_PRESET from <release>/omniswarm.config.json and refuses
+# to start without it; the file is gitignored, so a `git archive` release lacks it.
+# The owner's copy wins; otherwise the release's own example (it defines `hosted`
+# and `demo`) is used.
+install_engine_config() {
+  local dir="$1" src="$ENGINE_CONFIG"
+  if [ ! -r "$src" ] && [ "$OMNI_DRY_RUN" = 0 ]; then
+    src="$dir/engine/omniswarm.config.example.json"
+    omni_log "no $ENGINE_CONFIG: using the release's engine/omniswarm.config.example.json"
+  fi
+  omni_run install -m 0644 -o root -g root "$src" "$dir/omniswarm.config.json"
+}
+
 install_host_config() {
   local dir="$1" nginx_dir
+  install_engine_config "$dir"
   nginx_dir="$(omni_env_value OMNI_NGINX_DIR)"
   # nginx mounts a stable path, so pruning old releases never pulls its
   # config out from under it.
@@ -104,7 +119,8 @@ roll_services() {
   omni_compose up -d --no-deps --wait nginx
   omni_nginx_reload
   restart_workers "$workers"
-  omni_run systemctl enable --now omniswarm-backup.timer omniswarm-certbot-renew.timer
+  omni_run systemctl enable --now omniswarm-backup.timer omniswarm-certbot-renew.timer \
+    omniswarm-health.timer omniswarm-prune.timer omniswarm-log-hygiene.timer
 }
 
 prune_releases() {

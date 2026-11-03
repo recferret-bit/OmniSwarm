@@ -22,13 +22,29 @@ APPS="${CHECK_APPS:-stub}"
 
 state="$CHECK_TMP/stack"
 env_file="$(bash "$INFRA/compose/dev-env.sh" "$state")"
-export OMNI_PROJECT=omniswarm-infra-check OMNI_PROFILE=dev OMNI_ENV_FILE="$env_file" OMNI_SRV="$state/srv"
+# A project name of its own, so a second gate run on this machine (another
+# worktree) neither collides with nor tears down this one.
+export OMNI_PROJECT="omniswarm-infra-check-$$" OMNI_PROFILE=dev OMNI_ENV_FILE="$env_file" OMNI_SRV="$state/srv"
 export OMNI_RELEASE=check-1 OMNI_BACKUP_DIR="$state/backup"
 [ "$APPS" = stub ] && export OMNI_COMPOSE_EXTRA="$INFRA/compose/compose.stub.yml"
 # shellcheck source=infra/deploy/lib.sh
 . "$INFRA/deploy/lib.sh"
 
 env_get() { grep -E "^$1=" "$env_file" | tail -n 1 | cut -d= -f2-; }
+port_busy() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
+# The dev ports (dev.env.example) may be held by another stack or another gate
+# run: move each busy one to the next free port in this run's own env file.
+for name in OMNI_HTTP_PORT OMNI_HTTPS_PORT OMNI_PG_PORT; do
+  want="$(env_get "$name")"; port="$want"
+  while port_busy "$port"; do
+    port=$((port + 1))
+    [ "$port" -lt $((want + 50)) ] || check_fail "127.0.0.1:$want..$port are all in use; free one or change $name in infra/env/dev.env.example"
+  done
+  if [ "$port" != "$want" ]; then
+    check_log "127.0.0.1:$want is in use; $name=$port for this run"
+    sed -i.bak "s/^$name=.*/$name=$port/" "$env_file" && rm -f "$env_file.bak"
+  fi
+done
 HTTP="$(env_get OMNI_HTTP_PORT)"; HTTPS="$(env_get OMNI_HTTPS_PORT)"; PG="$(env_get OMNI_PG_PORT)"
 DOMAIN="$(env_get OMNI_DOMAIN)"; REPORTS="$(env_get OMNI_REPORTS_DOMAIN)"
 APP="https://$DOMAIN:$HTTPS"
@@ -37,12 +53,6 @@ curl_opts=(--silent --show-error --max-time 10 --cacert "$CACERT"
   --resolve "$DOMAIN:$HTTPS:127.0.0.1" --resolve "$REPORTS:$HTTPS:127.0.0.1"
   --resolve "$DOMAIN:$HTTP:127.0.0.1" --resolve "$REPORTS:$HTTP:127.0.0.1")
 get() { curl "${curl_opts[@]}" "$@"; }
-
-for port in "$HTTP" "$HTTPS" "$PG"; do
-  if (exec 3<>"/dev/tcp/127.0.0.1/$port") 2>/dev/null; then
-    check_fail "port 127.0.0.1:$port is in use; change it in infra/env/dev.env.example"
-  fi
-done
 
 teardown() {
   omni_compose down --volumes --remove-orphans --timeout 5 >/dev/null 2>&1 || true

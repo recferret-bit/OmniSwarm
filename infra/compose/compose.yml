@@ -25,6 +25,20 @@ x-app: &app
   restart: unless-stopped
   logging: *logging
 
+# The api image and its adapters. Production (the default) refuses every test
+# adapter; the local stack builds with OMNI_API_NODE_ENV=development and names
+# CHAIN_ADAPTER=mock (infra/env/dev.env.example). migrate needs the same
+# adapters: in production mode it drops the mock tables.
+x-api-build: &api-build
+  context: ../..
+  dockerfile: apps/api/Dockerfile
+  args:
+    NODE_ENV: ${OMNI_API_NODE_ENV:-production}
+
+x-api-adapters: &api-adapters
+  CHAIN_ADAPTER: ${CHAIN_ADAPTER:-near}
+  GITHUB_ADAPTER: ${GITHUB_ADAPTER:-live}
+
 services:
   postgres:
     image: postgres:16.15-alpine3.24@sha256:0cefaabd882e42bcb2a2f3dc56d3ce4770560ba62fd7f197f1a2e008fd5731ab
@@ -59,11 +73,10 @@ services:
   migrate:
     <<: *app
     image: omniswarm/api:${OMNI_RELEASE:?set OMNI_RELEASE (infra/deploy/lib.sh does)}
-    build:
-      context: ../..
-      dockerfile: apps/api/Dockerfile
+    build: *api-build
     command: ["exec-script", "apps/api", "db:migrate"]
     environment:
+      <<: *api-adapters
       DATABASE_URL: postgres://omniswarm:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in the stack env file}@postgres:5432/omniswarm
     depends_on:
       postgres:
@@ -79,10 +92,9 @@ services:
   api:
     <<: *app
     image: omniswarm/api:${OMNI_RELEASE:?set OMNI_RELEASE (infra/deploy/lib.sh does)}
-    build:
-      context: ../..
-      dockerfile: apps/api/Dockerfile
+    build: *api-build
     environment:
+      <<: *api-adapters
       HOST: 0.0.0.0
       PORT: "8787"
       # Admin listener: container loopback only, never published or proxied.
@@ -103,7 +115,12 @@ services:
       PRICE_YOCTO: ${PRICE_YOCTO:?set PRICE_YOCTO in the stack env file}
       MAX_REPO_KB: ${MAX_REPO_KB:?set MAX_REPO_KB in the stack env file}
       HOSTED_PRESET: ${HOSTED_PRESET:?set HOSTED_PRESET in the stack env file}
+      # GET /api/reports/:id reads the published index (reviewers, general
+      # review); the worker writes it, the api only reads it.
+      REPORTS_ROOT: /srv/omniswarm/reports
     expose: ["8787"]
+    volumes:
+      - ${OMNI_REPORTS_DIR:?set OMNI_REPORTS_DIR in the stack env file}:/srv/omniswarm/reports:ro
     tmpfs:
       - /tmp:size=64m,mode=1777
     deploy:

@@ -1,0 +1,16 @@
+# /etc/fail2ban/jail.d/omniswarm.local (infra/deploy/provision.sh).
+# sshd failures are read from the journal. Bans go into fail2ban's own
+# nftables table, next to the omniswarm table (infra/hosts/omniswarm.nft).
+[DEFAULT]
+banaction = nftables[type=multiport]
+banaction_allports = nftables[type=allports]
+backend = systemd
+
+[sshd]
+enabled = true
+mode = aggressive
+maxretry = 4
+findtime = 10m
+bantime = 1h
+bantime.increment = true
+bantime.maxtime = 1w

@@ -1,5 +1,6 @@
 #!/bin/bash
-# `systemd-analyze verify` on every unit in infra/systemd/, inside a Debian
+# `systemd-analyze verify` on every unit in infra/systemd/ and the host units
+# provision.sh installs (infra/hosts/*.service), inside a Debian
 # trixie container with the release tree mounted at /srv/omniswarm/current,
 # so ExecStart paths resolve exactly as on the host. Then checks the worker
 # unit keeps the properties the plan requires.
@@ -14,7 +15,7 @@ if ! docker image inspect "$SYSTEMD_CHECK_IMAGE" >/dev/null 2>&1; then
 fi
 
 units=()
-for f in "$INFRA"/systemd/*; do units+=("/srv/omniswarm/current/infra/systemd/$(basename "$f")"); done
+for f in "$INFRA"/systemd/* "$INFRA"/hosts/*.service; do units+=("/srv/omniswarm/current/${f#"$ROOT"/}"); done
 # Templates are verified through an instance name.
 docker run --rm --network none -v "$ROOT:/srv/omniswarm/current:ro" "$SYSTEMD_CHECK_IMAGE" sh -c '
   set -e

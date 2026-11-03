@@ -49,6 +49,7 @@ step "compose + env contract" compose.sh
 step "nginx" nginx.sh
 step "lint + dry runs" lint.sh
 step "systemd" systemd.sh
+step "hosts (provisioning)" hosts.sh
 if [ "$mode" = full ]; then
   step "api image" images.sh
   step "bring-up ($CHECK_APPS apps)" bring-up.sh
