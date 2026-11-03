@@ -13,7 +13,13 @@ cargo clippy --manifest-path contracts/review-registry/Cargo.toml --all-targets 
 
 The unit tests run on near-sdk's mock VM (`unit-testing` is a dev-dependency only). They cover every access rule, state transition, validation code, the storage and reserve rules, the refund and withdraw transfers (receiver and exact yocto amount from the created receipts), both failure callbacks, the binding rules, the report registry (access, validation, one report per account, retraction, pagination across a retraction, and its storage against the reserve), pagination, parsed NEP-297 events, and the deploy script's dry run.
 
-Two rules live in generated wasm glue, so the mock VM cannot exercise them: `#[init]` rejecting a second `new`, and `#[private]` rejecting outside callers of the callbacks. A near-workspaces sandbox suite would cover them. It is not here because it needs the `wasm32-unknown-unknown` target, `cargo-near`, and a downloaded `near-sandbox` binary, none of which this host has offline. The review sandbox never installs them either (AGENTS.md).
+Two rules live in generated wasm glue, so the mock VM cannot exercise them: `#[init]` rejecting a second `new`, and `#[private]` rejecting outside callers of the callbacks. The near-workspaces suite covers them on a local `near-sandbox` node:
+
+```sh
+bash contracts/review-registry/scripts/test-sandbox.sh    # root: npm run test:contract:sandbox
+```
+
+`tests/workspaces.rs` (feature `sandbox`, so plain `cargo test` and the wasm build never compile `near-workspaces`) covers `request_review` → `mark_running` → `attest` → `get_attestation_for_account`, a refund that pays the requester exactly the deposit, a refund to a deleted account whose callback returns `false` and restores `Pending` and `locked`, a second `new` rejected, both callbacks rejecting outside callers, and report/retract with the operator check. It needs `rustup target add wasm32-unknown-unknown`, and the first run downloads the sandbox binary (or set `NEAR_SANDBOX_BIN_PATH`). No `cargo-near` needed: the script builds with `cargo build --target wasm32-unknown-unknown --release` and `--cfg near`, which is what cargo-near passes. **Without `--cfg near`, near-sdk 5.30 compiles its off-chain code paths into the wasm, so every `env::panic_str` becomes a bare `unreachable` trap.** The access rules still hold (the call fails), but every error code is lost. The review sandbox never installs any of this (AGENTS.md).
 
 ## Money
 
