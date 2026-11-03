@@ -32,18 +32,27 @@ docs/       plan, spec, hackathon, RULES.md
 | Contract peer rule | lead step | the report contract now expects cross-checks only from another vendor, the same rule the orchestrator uses; the Docker demo had ended INCOMPLETE because same-vendor scripted reviewers "owed" cross-checks nobody launched |
 | Engine move | lead step | engine under `engine/`; `bin/audit` sets REPO_ROOT and AUDIT_ROOT; reports and config stay at the repo root |
 
-## Gates at the end
+## Second round (2026-11-04)
 
-`npm run check:all` (schemas 149, tools 16, intake 56 + 1 live-only skip, web 53 + typecheck, contract 70, e2e 5, infra, harness self-test, engine 453), `check:w03..w07`, `check:w13`, `eval:golden`, `tools/screener-check.sh`, `infra/check.sh --apps=real` (api ×2, web, nginx, postgres, all smoke checks), sandbox hardening + worker isolation Docker tests 17/17.
+| Track | Branch merged | Headline |
+|---|---|---|
+| Demo | fix/demo-green | fixture lockfiles + client suite; image provisions cargo-near 0.22.0 and wasm32 (go-w cargo dirs); catalogued `near-build`/`near-clippy` checks; demo-only "verification limited by design" verdict (real targets still exit 2); deterministic eval RESULTS.md; sandbox-inside split |
+| Quality | fix/quality (+ audit-plans split) | flat `report-section-*` modules; report-contract, worker-supervisor, audit-plans split; helper dedup; dead exports removed; judge brief, per-role forced submit and missing-turn trace fixes |
+| NEAR | fix/near2 | contract v0.3.0 abuse-report blocklist (`report_address`, `is_reported`, …); near-workspaces sandbox suite (6 scenarios); guard `registryReader` and optional account-age port |
+| API | fix/api2 | SIGTERM keeps the job's retry; payment replay `{status, position\|null}`; cost ledger; disk hygiene; guard reports with owner approval and worker-signed `report_address`; `GET /api/reports/:id`; mock tables only in mock mode |
+| Infra | fix/infra2 | idempotent provisioning + nftables firewall; SECURITY.md; secrets check; health/prune/log-hygiene timers; dispatch-only CI deploy; UPTIME/COST/OWNER_TASKS docs |
+| Docs | fix/docs | README and SUBMISSION from code, generated eval table, RULES.md from code, wave ticks matching reality |
+| Sync / final | fix/sync, fix/final | web mocks and INTAKE spec match the API; scrubbed API logs; run-wide per-reviewer cost ceiling ($25); shared secret shapes |
 
-## Still open
+## Gates at the end (HEAD of review/full-pass)
 
-- Native Codex/Grok admission receipts are invalidated by the engine changes: run `node engine/native/codex-review/admit.mjs --admit` and `node engine/native/grok-review/admit.mjs --admit` once.
-- NEAR adapter and contract have not run against testnet; near-workspaces tests need the wasm toolchain and a sandbox binary.
-- Guard: no account-age signal (no indexer) and no on-chain `report_address`/`is_reported` yet, so contracts get at most `warn`.
-- Binding proof shows account control, not that the deployed code was built from the reviewed commit (needs a reproducible-build check).
-- A SIGTERM-interrupted job spends its one retry; `/api/ledger` and report disk hygiene not built.
-- W12 rows: provisioning, firewall, SECURITY.md, CI deploy, uptime, COST.md, OWNER_TASKS.md.
-- W14 content: README sections (real review, hosted demo, NEAR table, disclosures, eval table), SUBMISSION.md fields, dogfood review + attestation.
-- The demo ends `INCOMPLETE VERIFICATION` with review outputs validated: the fixture has no test suite or lockfile and the sandbox has no cargo-near/WASM target. The `--no-docker` host demo has no test catalog or scanners at all.
-- `eval:golden` rewrites `engine/eval/RESULTS.md` with the current commit on every run.
+`check:w00` … `check:w14` all exit 0 (W02 with `OMNI_REQUIRE_HARDENING=1`): schemas 164, tools 23, engine 473, intake 73 + 1 live-only skip, intake e2e 6/7, web 57 + e2e 5, contract 86 + clippy + dry run, guard 84, infra ok. `npm run test:docker` 34/34. `infra/check.sh --apps=real` ok. `npm run test:contract:sandbox` 6/6. `./bin/audit demo --surface s1` (Docker) exits 0 with the single by-design NEAR sandbox gap. `tools/screener-check.sh` ok (gitleaks clean).
+
+## Still open (owner steps: docs/ops/OWNER_TASKS.md)
+
+- Testnet deploy of the registry, re-issue of the operator key with `report_address`, and a live run of the NEAR adapter.
+- Native Codex/Grok admission (`node engine/native/{codex,grok}-review/admit.mjs --admit`) — builds the pinned upstream sources; never admitted before.
+- Dogfood review with real models, the video, SUBMISSION.md owner fields, SECURITY.md contact address, real contract ids and domains in the env files.
+- Binding proof shows account control, not code provenance (needs a reproducible-build check).
+- Host-only W12 steps (w12-check.md 2–10), off-box backups, a measured cost run.
+- Guard-report jobs that hit `ERR_RESERVE` have no alert; account age via NearBlocks is off by default and its response shape is unverified.
