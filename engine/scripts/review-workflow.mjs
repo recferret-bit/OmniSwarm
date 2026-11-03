@@ -24,8 +24,23 @@ export function testCommand(kind) {
   // Python suites that start disposable PostgreSQL/Redis servers outgrow the Cargo budget.
   if (kind === 'pytest') return { command: PYTHON_TEST_INTERPRETER, args: ['-m', 'pytest', '-p', 'no:cacheprovider', '-q', '--tb=line'], timeoutMs: 1800000 };
   if (kind === 'shell') return { command: 'bash', args: ['--noprofile', '--norc', './test.sh'], timeoutMs: 900000 };
+  // NEAR build verification. cargo-near and wasm32-unknown-unknown are provisioned in the image; the runner adds
+  // the offline environment. No ABI step: it would load the native build of the contract.
+  if (kind === 'near-build') return { command: 'cargo', args: ['near', 'build', 'non-reproducible-wasm', '--locked', '--no-abi'], timeoutMs: 900000 };
+  if (kind === 'near-clippy') return { command: 'cargo', args: ['clippy', '--locked', '--offline', '--target', 'wasm32-unknown-unknown'], timeoutMs: 900000 };
   throw new Error('Unsupported existing test runner');
 }
+
+// Build checks share the fixed runner and catalog with the suites, but pass on a verified build, not on test counts.
+export const NEAR_BUILD_KINDS = Object.freeze(['near-build', 'near-clippy']);
+export const NEAR_BUILD_ARTIFACT = /^near-build artifact: \S+\.wasm sha256 [a-f0-9]{64} bytes [1-9]\d*$/m;
+// cargo test on a near-sdk package can start near-sandbox or deploy to testnet; it is never an offline suite.
+export const nearSandboxGap = (cwd) => `NEAR contract tests in ${cwd} are a local-sandbox coverage gap. cargo test can start near-sandbox or deploy to testnet and is not run offline.`;
+const nearLibraryGap = (cwd) => `NEAR build verification unavailable in ${cwd}: the near-sdk crate is not a cdylib contract, so cargo near build does not apply; clippy and WASM compilation were not run.`;
+const isCdylib = (text) => { try { return (tomlFacts(text).facts.get('["lib","crate-type"]') || []).includes('cdylib'); } catch { return false; } };
+const catalogEntry = (manifest, files, kind, cwd, file, description) => ({
+  id: `test-${hash(`${manifest.digest}:${kind}:${cwd}`).slice(0, 24)}`, kind, cwd, files: [{ path: file, sha256: files.get(file).sha256 }], description,
+});
 
 const NEAR_NPM_NOT_OFFLINE = ['@defuse-protocol/one-click-sdk-typescript', '@defuse-protocol/intents-sdk', '@near-intents-agent-api/sdk'];
 const VENDORED_MANIFEST = /(?:^|\/)(?:node_modules|vendor|target|dist|build)\//;
@@ -49,7 +64,6 @@ export function buildExistingTestCatalog(snapshot, manifest) {
     if (info.error) unresolvedCargoDirs.push(path.posix.dirname(file.path));
     if (isNearCargo(info, true)) nearContractDirs.push(path.posix.dirname(file.path));
   }
-  if (nearContractDirs.length) coverageGaps.push('NEAR build verification unavailable: cargo-near and the WASM target are not provisioned; clippy and WASM compilation were not run.');
   for (const file of manifest.files) {
     const cwd = path.posix.dirname(file.path);
     const name = path.posix.basename(file.path);
@@ -73,14 +87,17 @@ export function buildExistingTestCatalog(snapshot, manifest) {
         const workspace = /^\s*\[workspace\]/m.test(text);
         if (workspace && unresolvedCargoDirs.some(dir => cwd === '.' || dir.startsWith(`${cwd}/`))) { coverageGaps.push(`Cargo workspace in ${cwd} contains an unresolved manifest; tests are not catalogued.`); continue; }
         const containsNear = workspace && nearContractDirs.some((dir) => cwd === '.' ? dir !== '.' : dir.startsWith(`${cwd}/`));
-        if (selfNear || containsNear) coverageGaps.push(`NEAR contract tests in ${cwd} are a local-sandbox coverage gap. cargo test can start near-sandbox or deploy to testnet and is not run offline.`);
+        if (selfNear || containsNear) coverageGaps.push(nearSandboxGap(cwd));
         else kind = 'cargo';
+        if (nearContractDirs.includes(cwd) && isNearCargo(info) && /^\s*\[package\]/m.test(text) && tests.length < 126) {
+          if (!isCdylib(text)) coverageGaps.push(nearLibraryGap(cwd));
+          else for (const [build, label] of [['near-build', 'NEAR WASM build (cargo near build non-reproducible-wasm)'], ['near-clippy', 'NEAR clippy for wasm32-unknown-unknown']]) tests.push(catalogEntry(manifest, files, build, cwd, file.path, `${label} in ${cwd}`));
+        }
       }
     } else if (name === 'test.sh') kind = 'shell';
     if (!kind) continue;
-    const id = `test-${hash(`${manifest.digest}:${kind}:${cwd}`).slice(0, 24)}`;
-    tests.push({ id, kind, cwd, files: [{ path: file.path, sha256: files.get(file.path).sha256 }], description: `${kind} existing tests in ${cwd}` });
-    if (tests.length === 128) break;
+    tests.push(catalogEntry(manifest, files, kind, cwd, file.path, `${kind} existing tests in ${cwd}`));
+    if (tests.length >= 128) break;
   }
   // One pytest suite per Python project directory (the nearest ancestor holding a dependency manifest).
   const projects = new Set(manifest.files.filter(file => PY_PROJECT_FILE.test(path.posix.basename(file.path))).map(file => path.posix.dirname(file.path)));
@@ -138,7 +155,7 @@ ${isNearCargo.toString()}
   const fd=fs.openSync(target,fs.constants.O_WRONLY|fs.constants.O_CREAT|fs.constants.O_NOFOLLOW|fs.constants.O_NONBLOCK,0o644);
   try{const stat=fs.fstatSync(fd);if(!stat.isFile()||stat.nlink!==1)throw Error('Test artifact destination changed');fs.ftruncateSync(fd,0);fs.writeFileSync(fd,bytes)}finally{fs.closeSync(fd)}
  }
- const programs=[],builds=['cargo','bash'].includes(entry.command);
+ const programs=[],builds=['cargo','bash'].includes(entry.command)&&!String(entry.kind||'').startsWith('near-');
  // Other runners (pytest fixtures reading target/idl) still need the workspace target link.
  if(builds||(entry.artifacts||[]).length){
   const manifests=[],skip=new Set(['.git','node_modules','target','dist','.cargo']);
@@ -193,11 +210,25 @@ ${isNearCargo.toString()}
   // A read-only source mount keeps the default layout; tests then fail with the missing-artifact detail.
   if(!present&&fs.realpathSync(workspace)===workspace)try{fs.symlinkSync('/work/target',link)}catch{}
  }
+ // A NEAR build passes only with a fresh WASM module under target/near; its digest is the build evidence.
+ const nearArtifact=since=>{
+  const dir=path.join(process.env.CARGO_TARGET_DIR||path.join(cwd,'target'),'near'),found=[];
+  (function walk(d,depth){if(depth>3)return;let ents=[];try{ents=fs.readdirSync(d,{withFileTypes:true})}catch{return}
+   for(const e of ents){if(e.isSymbolicLink())continue;const p=path.join(d,e.name);if(e.isDirectory())walk(p,depth+1);else if(e.isFile()&&e.name.endsWith('.wasm')&&fs.statSync(p).mtimeMs>=since)found.push(p)}})(dir,0);
+  if(!found.length){console.error('near-build: no WASM artifact was written under '+dir);return 1}
+  for(const p of found){
+   const bytes=fs.readFileSync(p);
+   if(bytes.subarray(0,4).toString('hex')!=='0061736d'){console.error('near-build: '+path.basename(p)+' is not a WASM module');return 1}
+   console.log('near-build artifact: '+path.basename(p)+' sha256 '+crypto.createHash('sha256').update(bytes).digest('hex')+' bytes '+bytes.length);
+  }
+  return 0;
+ };
+ const startedAt=Date.now()-1000;
  const child=spawn(entry.command,entry.args,{cwd,env:{...process.env,CI:'1',CARGO_NET_OFFLINE:'true',GOPROXY:'off',GOSUMDB:'off',npm_config_offline:'true',npm_config_ignore_scripts:'true',...(python?{PYTHONDONTWRITEBYTECODE:'1',PIP_NO_INDEX:'1',VIRTUAL_ENV:'/work/venv',PATH:'/work/venv/bin:'+(process.env.PATH||'')}:{})},detached:true,stdio:['ignore','pipe','pipe']});
  const kill=()=>{try{process.kill(-child.pid,'SIGKILL')}catch{}};
  const timer=setTimeout(()=>{process.exitCode=124;kill()},timeoutMs);
  child.stdout.pipe(process.stdout);child.stderr.pipe(process.stderr);
  child.on('error',err=>{clearTimeout(timer);console.error(err.message);process.exitCode=127});
- child.on('close',code=>{clearTimeout(timer);kill();if(process.exitCode!==124)process.exitCode=code??1});
+ child.on('close',code=>{clearTimeout(timer);kill();if(process.exitCode===124)return;process.exitCode=code??1;if(code===0&&entry.kind==='near-build')process.exitCode=nearArtifact(startedAt)});
 })().catch(err=>{console.error(err.message);process.exitCode=2});
 `;
