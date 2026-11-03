@@ -37,6 +37,8 @@
     "check:w10": "cargo test --manifest-path contracts/review-registry/Cargo.toml && cargo clippy --manifest-path contracts/review-registry/Cargo.toml --all-targets -- -D warnings && bash contracts/review-registry/scripts/deploy-testnet.sh --dry-run",
     "check:w11": "npm test --workspace apps/web && npm run test:e2e -- landing && npm run guard --workspace apps/web",
     "check:w12": "npm run check:infra",
+    "stack:local": "bash infra/compose/local.sh up",
+    "stack:local:down": "bash infra/compose/local.sh down",
     "check:w13": "npm test --workspace packages/guard && node packages/guard/demo/attack/run.mjs && node packages/guard/demo/attack/run.mjs --no-guard",
     "check:w14": "bash tools/screener-check.sh && npm run check:all"
   },
