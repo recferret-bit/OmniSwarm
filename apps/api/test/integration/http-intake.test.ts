@@ -4,6 +4,7 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, test } from 'node:test';
 import { payRequestReview } from '../../src/chain/mock/mock-ledger.ts';
+import { transition } from '../../src/db/repositories/requests.ts';
 import { call, challenge, conforms, createRequest, pay, sessionCookie, sign, wallet } from '../helpers/flow.ts';
 import { NEEDS_DB } from '../helpers/db.ts';
 import { CONTRACT, PRICE, SHA, TestClock, migratedDb, startApi, type ApiStack, type TestDb } from '../helpers/stack.ts';
@@ -177,6 +178,12 @@ describe('intake HTTP API', NEEDS_DB, () => {
     assert.deepEqual(again.body, { status: 'queued', position: 1 }, 'confirming the same tx again is idempotent');
     const jobs = await api.deps.pool.query(`SELECT count(*)::int AS n FROM pgboss.job WHERE name = 'review' AND singleton_key = $1`, [created.requestHash]);
     assert.equal(jobs.rows[0].n, 1);
+    // A replay after the worker took the job reports where the request is, never `queued` at position 0.
+    await transition(api.deps.pool, created.requestId, { to: 'running', actor: 'test', event: 'review_started', now: new Date() });
+    const started = await call(api.base, `/api/requests/${created.requestId}/payment`, { method: 'POST', body: { txHash }, cookie: created.cookie });
+    assert.equal(started.status, 200);
+    conforms('payment-response', started.body);
+    assert.deepEqual(started.body, { status: 'running', position: null });
 
     const second = await createRequest(api.base, api.deps.pool, await wallet(api.deps.pool, 'hank.mock'));
     const reused = await call(api.base, `/api/requests/${second.requestId}/payment`, { method: 'POST', body: { txHash }, cookie: second.cookie });

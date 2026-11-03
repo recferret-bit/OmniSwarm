@@ -29,7 +29,7 @@ export const createRequestResponse = z.strictObject({ requestId: uuid, requestHa
 
 export const requestParams = z.strictObject({ id: uuid });
 export const paymentRequest = z.strictObject({ txHash });
-export const paymentResponse = z.strictObject({ status: z.literal('queued'), position: z.int().min(0) });
+export const paymentResponse = z.strictObject({ status, position: z.int().min(1).nullable() });
 
 export const progress = z.strictObject({
   phase: z.string().min(1), reviewer: z.string().optional(), pass: z.int().min(1).optional(), percent: z.number().min(0).max(100).optional(),

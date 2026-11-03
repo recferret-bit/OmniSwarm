@@ -138,9 +138,12 @@ export interface CreateRequestResponse {
 export interface PaymentRequest {
   txHash: string;
 }
+/**
+ * The request after its payment was confirmed. A replay of the same tx is idempotent and answers with the current status; position is the 1-based queue rank while queued, else null.
+ */
 export interface PaymentResponse {
-  status: 'queued';
-  position: number;
+  status: Status;
+  position: number | null;
 }
 export interface Progress {
   phase: string;

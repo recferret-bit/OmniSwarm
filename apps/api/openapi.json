@@ -1280,12 +1280,20 @@
                     "status": {
                       "type": "string",
                       "enum": [
-                        "queued"
+                        "awaiting_payment",
+                        "queued",
+                        "running",
+                        "publishing",
+                        "done",
+                        "failed",
+                        "refunded",
+                        "expired"
                       ]
                     },
                     "position": {
+                      "nullable": true,
                       "type": "integer",
-                      "minimum": 0,
+                      "minimum": 1,
                       "maximum": 9007199254740991
                     }
                   },

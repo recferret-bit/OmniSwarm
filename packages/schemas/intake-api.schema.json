@@ -96,10 +96,11 @@
       "properties": {"txHash": {"type": "string", "pattern": "^[1-9A-HJ-NP-Za-km-z]{43,44}$"}}
     },
     "payment-response": {
+      "description": "The request after its payment was confirmed. A replay of the same tx is idempotent and answers with the current status; position is the 1-based queue rank while queued, else null.",
       "type": "object",
       "required": ["status", "position"],
       "additionalProperties": false,
-      "properties": {"status": {"const": "queued"}, "position": {"type": "integer", "minimum": 0}}
+      "properties": {"status": {"$ref": "#/$defs/status"}, "position": {"type": ["integer", "null"], "minimum": 1}}
     },
     "progress": {
       "type": "object",
