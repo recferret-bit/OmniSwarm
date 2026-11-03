@@ -9,7 +9,8 @@ export type Yocto = string;
 export type Nonce = string;
 export type Uuid = string;
 export type Timestamp = string;
-export type Status = 'awaiting_payment' | 'queued' | 'running' | 'publishing' | 'done' | 'failed' | 'refunded';
+export type Status =
+  'awaiting_payment' | 'queued' | 'running' | 'publishing' | 'done' | 'failed' | 'refunded' | 'expired';
 export type Severity = 'critical' | 'high' | 'medium' | 'low' | 'info' | 'none';
 export type ErrorCode =
   | 'VALIDATION_ERROR'
@@ -37,7 +38,16 @@ export type ErrorCode =
   | 'NOT_FOUND'
   | 'CHAIN_UNAVAILABLE'
   | 'GITHUB_UNAVAILABLE'
-  | 'INTERNAL';
+  | 'INTERNAL'
+  | 'REF_NOT_FOUND'
+  | 'REF_CHANGED'
+  | 'NETWORK_DISABLED'
+  | 'PRESET_NOT_ALLOWED'
+  | 'PAYLOAD_TOO_LARGE'
+  | 'PAYMENT_SIGNER_MISMATCH'
+  | 'INVALID_TRANSITION'
+  | 'REFUND_NOT_ALLOWED'
+  | 'REQUEST_NOT_FOUND';
 
 export interface IntakeApi {
   'account-id'?: AccountId;
@@ -72,6 +82,7 @@ export interface IntakeApi {
   'ledger-response'?: LedgerResponse;
   'health-response'?: HealthResponse;
   'admin-refund-response'?: AdminRefundResponse;
+  'ready-response'?: ReadyResponse;
   attestation?: Attestation;
 }
 export interface ErrorResponse {
@@ -129,10 +140,25 @@ export interface Progress {
 export interface RequestStatusResponse {
   status: Status;
   progress?: Progress;
+  /**
+   * Rank among queued requests; only while queued
+   */
+  position?: number;
   reportUrl?: string;
   reportSha256?: Sha256Hex;
+  /**
+   * The report was published with report-health state incomplete
+   */
+  incomplete?: boolean;
   attestTx?: string;
   refundTx?: string;
+  /**
+   * @maxItems 50
+   */
+  timeline?: {
+    event: string;
+    at: Timestamp;
+  }[];
   createdAt: Timestamp;
 }
 export interface ProgressEvent {
@@ -195,6 +221,9 @@ export interface LedgerResponse {
     refundTx?: string;
   }[];
 }
+/**
+ * GET /api/health: liveness plus status. chain.rpc/contract come from ChainPort.health (cached 30 s); workers counts live pg-boss worker instances.
+ */
 export interface HealthResponse {
   ok: boolean;
   network: Network;
@@ -206,5 +235,14 @@ export interface HealthResponse {
   };
 }
 export interface AdminRefundResponse {
-  refundTx: string;
+  /**
+   * null when the contract had already refunded (a retry after the tx was sent)
+   */
+  refundTx: string | null;
+}
+export interface ReadyResponse {
+  ok: boolean;
+  db: boolean;
+  queue: boolean;
+  migrations: boolean;
 }
