@@ -25,6 +25,7 @@ export const FAILURE_MESSAGES = {
   model_changed: 'Agent selected a different model; no automatic model substitution is permitted.',
   model_mismatch: 'Provider served a different model than requested; the review is incomplete.',
   turn_incomplete: 'Agent ended its turn without a successful completion status.',
+  live_required: 'An API reviewer had no recorded replay for this request and live provider calls are off (set OMNI_LIVE=1 only for a paid live run).',
   provider_error: 'Agent/provider rejected the turn; inspect its private session record.',
   native_turn_failed: 'Native CLI did not produce a successful structured turn result.',
   sandbox_unavailable: 'Docker sandbox was lost before review completion; inspect harness/host/lifecycle.json and resume into a fresh sandbox.',

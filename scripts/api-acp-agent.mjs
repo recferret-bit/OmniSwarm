@@ -12,6 +12,9 @@ import { runToolLoop } from './provider-openai-compat.mjs';
 import { toOpenAiTools, toolResultText } from './api-tool-schema.mjs';
 import { passFromBrief, runStrategy } from './scripted-strategies.mjs';
 
+// Loop failures that keep their own name in the session record instead of a generic provider_error.
+const LOOP_FAILURES = { auth: 'auth_required', live_required: 'live_required' };
+
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const send = (message) => process.stdout.write(`${JSON.stringify({ jsonrpc: '2.0', ...message })}\n`);
 
@@ -31,33 +34,56 @@ export function apiAcpInvocation(workDir, config, env) {
   };
 }
 
-class McpClient {
+const MAX_LINE = 4 * 1024 * 1024;
+const SUBMIT_TOOLS = new Set(['submit_audit_report', 'submit_crosscheck_report']);
+
+// MCP client for the bridge child. Lines are capped like agent-rpc.mjs, and every pending call is
+// rejected when the bridge exits, so a dead bridge ends the turn instead of hanging it.
+export class McpClient {
   constructor(command, args, env) {
     this.pending = new Map();
     this.buffer = '';
     this.seq = 0;
+    this.exited = false;
     this.child = spawn(command, args, { env, stdio: ['pipe', 'pipe', 'pipe'] });
     this.child.stdin.on('error', () => {});
     this.child.stderr.on('data', (chunk) => process.stderr.write(chunk));
-    this.child.stdout.on('data', (chunk) => {
-      this.buffer += chunk.toString('utf8');
-      let at;
-      while ((at = this.buffer.indexOf('\n')) >= 0) {
-        const line = this.buffer.slice(0, at);
-        this.buffer = this.buffer.slice(at + 1);
-        if (!line.trim()) continue;
-        let msg;
-        try { msg = JSON.parse(line); } catch { continue; }
-        const pending = this.pending.get(msg.id);
-        if (!pending) continue;
-        this.pending.delete(msg.id);
-        if (msg.error) pending.reject(new Error(msg.error.message || 'mcp error'));
-        else pending.resolve(msg.result);
-      }
-    });
-    this.closed = new Promise((resolve) => this.child.once('close', resolve));
+    this.child.stdout.on('data', (chunk) => this.receive(chunk));
+    this.child.once('error', () => this.end(new SessionError('mcp_unavailable')));
+    this.closed = new Promise((resolve) => this.child.once('close', () => { this.end(new SessionError('mcp_unavailable')); resolve(); }));
+  }
+  receive(chunk) {
+    this.buffer += chunk.toString('utf8');
+    for (let at; (at = this.buffer.indexOf('\n')) >= 0;) {
+      const line = this.buffer.slice(0, at);
+      this.buffer = this.buffer.slice(at + 1);
+      if (line.length > MAX_LINE) return this.fail();
+      this.settle(line);
+    }
+    if (this.buffer.length > MAX_LINE) this.fail();
+  }
+  settle(line) {
+    if (!line.trim()) return;
+    let msg;
+    try { msg = JSON.parse(line); } catch { return; }
+    const pending = this.pending.get(msg?.id);
+    if (!pending) return;
+    this.pending.delete(msg.id);
+    if (msg.error) pending.reject(new Error(msg.error.message || 'mcp error'));
+    else pending.resolve(msg.result);
+  }
+  fail() {
+    this.buffer = '';
+    this.end(new SessionError('protocol_error'));
+    try { this.child.kill('SIGTERM'); } catch { /* already exited */ }
+  }
+  end(error) {
+    this.exited = true;
+    for (const { reject } of this.pending.values()) reject(error);
+    this.pending.clear();
   }
   request(method, params = {}) {
+    if (this.exited) return Promise.reject(new SessionError('mcp_unavailable'));
     const id = ++this.seq;
     return new Promise((resolve, reject) => {
       this.pending.set(id, { resolve, reject });
@@ -119,6 +145,7 @@ export class ApiAcpAgent {
     this.update({ sessionUpdate: 'tool_call', toolCallId: id, title: name, status: 'in_progress' });
     const result = await this.mcp.request('tools/call', { name, arguments: args });
     const text = toolResultText(result);
+    if (SUBMIT_TOOLS.has(name)) this.submitAccepted = this.submitAccepted || !result?.isError;
     this.update({ sessionUpdate: 'tool_call_update', toolCallId: id, title: name, status: result?.isError ? 'failed' : 'completed' });
     return text;
   }
@@ -126,6 +153,7 @@ export class ApiAcpAgent {
     if (!this.state || params.sessionId !== this.state.sessionId || !Array.isArray(params.prompt)) throw new SessionError('protocol_error');
     const brief = params.prompt.map((part) => part.text || '').join('\n');
     const tools = await this.openBridge();
+    this.submitAccepted = false;
     try {
       if (this.config.mode === 'scripted') {
         await runStrategy(this.config.strategy, {
@@ -135,7 +163,9 @@ export class ApiAcpAgent {
           pass: passFromBrief(brief),
         });
         this.state.turns += 1;
-        this.state.stop = 'submitted';
+        // A submit the bridge rejected (or none at all) is not a submitted pass.
+        this.state.stop = this.submitAccepted ? 'submitted' : 'error';
+        this.state.failure = this.submitAccepted ? null : 'submit_rejected';
         this.save();
         return { stopReason: 'end_turn' };
       }
@@ -162,7 +192,7 @@ export class ApiAcpAgent {
       this.state.failure = loop.failure || null;
       this.save();
       if (loop.failure === 'model_mismatch') throw new SessionError('model_mismatch');
-      if (loop.stop === 'error') throw new SessionError(loop.failure === 'auth' ? 'auth_required' : 'provider_error');
+      if (loop.stop === 'error') throw new SessionError(LOOP_FAILURES[loop.failure] || 'provider_error');
       return { stopReason: 'end_turn' };
     } finally {
       await this.mcp?.stop();
