@@ -866,7 +866,7 @@ async function scan(target, outDir, noDeps) {
     `node: ${stackProfile.ecosystems.node.detected ? 'yes' : 'no'} (${node.leads} leads, ${node.files} production files; frameworks: ${stackProfile.ecosystems.node.frameworks.join(', ') || 'none'})`,
     `web: ${web.files} source files, ${web.leads} leads`,
     `config: ${config.files} files, ${config.leads} leads`,
-    `attack plans: review-plans.md (http, grpc, websockets, databases, crypto, scopes_roles, bots_economy, api_dto_abuse)`,
+    `attack plans: review-plans.md (${stackProfile.domains.map((d) => d.id).join(', ')})`,
     `deps: ${noDeps ? 'skipped' : 'deps.md'}`,
     `scanners: ${noDeps ? 'skipped' : 'tools.md'}`,
     '',
@@ -913,7 +913,7 @@ function selfTest() {
     if (!until.includes('bad.rs') && !until.includes('bad.js') && !until.includes('bad.py') && !until.includes('bad.yml')) bad.push(`${id}: no bad-file hit`);
     if (until.includes('good.rs') || until.includes('good.js') || until.includes('good.py') || until.includes('good.yml')) bad.push(`${id}: good file matched`);
   }
-  if (!plansMd.includes('[SCOPES_ROLES]') || !plansMd.includes('[BOTS_ECONOMY]') || !plansMd.includes('[API_DTO_ABUSE]')) {
+  if (!plansMd.includes('[SCOPES_ROLES]') || !plansMd.includes('[ABUSE_ECONOMY]') || !plansMd.includes('[API_DTO_ABUSE]')) {
     bad.push('review-plans.md: missing cross-cutting plans');
   }
   if (solana.body.includes('find_program_address') && /create-program-address[\s\S]*good\.rs/.test(solana.body)) bad.push('canonical bump matched');
