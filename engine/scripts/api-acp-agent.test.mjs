@@ -8,6 +8,7 @@ import { runReviewSession } from './agent-session.mjs';
 import { buildApiLaunch } from './provider-api-launch.mjs';
 import { ApiAcpAgent, McpClient } from './api-acp-agent.mjs';
 import { presetFor } from './provider-openai-compat.mjs';
+import { costLedger, spentUsd } from './bridge-budget.mjs';
 
 const FIXTURE = path.join(path.dirname(fileURLToPath(import.meta.url)), 'provider-fixtures', 'w03');
 const STUB = `
@@ -100,6 +101,28 @@ test('a request with no recorded replay fails as live_required, not provider_err
   }, { launch: h.launch, heartbeatMs: 60_000 });
   assert.equal(result.code, 1);
   assert.equal(result.failureReason, 'live_required');
+});
+
+test('an API pass books its spend on the run ledger and stops on the reviewer total, not its own', async () => {
+  const h = harness({ OMNI_HTTP_REPLAY: path.join(path.dirname(FIXTURE), 'w04') });
+  const report = path.join(h.root, 'report');
+  // Another surface of the same reviewer already spent 0.01 of the 0.015 ceiling; this pass's first turn costs 0.01.
+  await costLedger(report, 'key-zai-glm-5-3').add(0.01);
+  const launch = (opts) => buildApiLaunch(
+    { provider: 'zai', model: opts.model },
+    { workDir: opts.workDir, env: opts.env, role: 'auditor', maxCostUsd: 0.015, bridgeArgs: [h.envFile, '--report-dir', report, '--agent', 'key-zai-glm-5-3'], mcpCommand: process.execPath, mcpLeadingArgs: [path.join(h.root, 'stub.mjs')] },
+    presetFor('zai'),
+  );
+  const result = await runReviewSession({
+    directory: h.directory,
+    identity: { agent: 'key-zai-glm-5-3', family: 'key', provider: 'zai', model: 'glm-5.3', role: 'auditor', sourceDigest: '1'.repeat(64), assignmentDigest: '2'.repeat(64) },
+    bridgeArgs: [h.envFile], prompt: 'Review.', env: h.env, logFile: path.join(h.root, 'ledger.log'),
+  }, { launch, heartbeatMs: 60_000 });
+  assert.equal(result.code, 0, result.failureReason);
+  const session = JSON.parse(fs.readFileSync(path.join(h.directory, 'workspace', 'api-session.json'), 'utf8'));
+  assert.equal(session.stop, 'cost', 'alone the pass (0.01) is under the ceiling');
+  assert.equal(session.turns, 1);
+  assert.ok(Math.abs(spentUsd(report, 'key-zai-glm-5-3') - 0.02) < 1e-9);
 });
 
 // A bridge stub: `body` runs once per request frame `m` (an object with an id).

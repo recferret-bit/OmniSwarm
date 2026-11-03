@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { modelMatches, presetFor, runToolLoop } from './provider-openai-compat.mjs';
 import { buildApiLaunch } from './provider-api-launch.mjs';
+import { costLedger, spentUsd } from './bridge-budget.mjs';
 
 function scriptedFetch(steps) {
   const calls = [];
@@ -165,4 +166,51 @@ test('a tool call with malformed arguments is answered with an error, not sent t
   assert.deepEqual(seen, ['submit_audit_report']);
   const reply = calls[1].body.messages.find((row) => row.role === 'tool' && row.tool_call_id === 'c1');
   assert.match(reply.content, /Tool error: invalid tool arguments/);
+});
+
+// Cost ceiling (ORCHESTRATION section 3): one reviewer's spend over the whole run, on the budget-file ledger.
+const priced = (calls, cost) => ({ ...message('glm-5.3', calls), usage: { prompt_tokens: 3, completion_tokens: 2, cost } });
+const read = (id) => toolCall(id, 'read_file', { path: 'src/lib.rs' });
+const submit = (id) => toolCall(id, 'submit_audit_report', { findings: [], verified_safe: [] });
+const pricedLoop = (fetch, ledger) => runToolLoop({
+  baseUrl: 'https://example.invalid/v1', apiKey: 'k', model: 'glm-5.3', tools: [], callTool: async (name) => `ok ${name}`,
+  brief: 'review', fetchImpl: fetch, sleep: async () => {}, maxCostUsd: 1, ledger,
+});
+
+test('the cost ceiling is the reviewer total: a later pass on the run ledger stops once the total reaches it', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'loop-ceiling-'));
+  const ledger = () => costLedger(root, 'key-zai-glm-5-3');
+  const first = scriptedFetch([{ body: priced([read('a1')], 0.3) }, { body: priced([submit('a2')], 0.3) }]);
+  assert.equal((await pricedLoop(first.fetch, ledger())).stop, 'submitted');
+  const second = scriptedFetch([{ body: priced([read('b1')], 0.3) }, { body: priced([read('b2')], 0.3) }, { body: priced([submit('b3')], 0.3) }]);
+  const stopped = await pricedLoop(second.fetch, ledger());
+  assert.equal(stopped.stop, 'cost', 'its own 0.6 is under the ceiling; the reviewer total 1.2 is not');
+  assert.equal(second.calls.length, 2);
+  assert.ok(Math.abs(spentUsd(root, 'key-zai-glm-5-3') - 1.2) < 1e-9);
+  const third = scriptedFetch([]);
+  assert.equal((await pricedLoop(third.fetch, ledger())).stop, 'cost');
+  assert.equal(third.calls.length, 0, 'a loop that starts over the ceiling sends no request');
+});
+
+test('parallel surfaces of one reviewer share one ceiling', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'loop-ceiling-par-'));
+  const script = (id) => scriptedFetch([{ body: priced([read(`${id}1`)], 0.4) }, { body: priced([read(`${id}2`)], 0.4) }, { body: priced([submit(`${id}3`)], 0.4) }]);
+  const [s1, s2] = [script('s1-'), script('s2-')];
+  const results = await Promise.all([s1, s2].map((surface) => pricedLoop(surface.fetch, costLedger(root, 'key-zai-glm-5-3'))));
+  assert.deepEqual(results.map((result) => result.stop), ['cost', 'cost'], 'each surface alone (1.2) would have submitted');
+  assert.ok(s1.calls.length + s2.calls.length < 6);
+});
+
+test('an auditor launch books its spend on the run budget file; debate and judge sessions do not', () => {
+  const work = fs.mkdtempSync(path.join(os.tmpdir(), 'api-ledger-'));
+  const env = { PATH: '/bin', HOME: '/tmp', ZAI_API_KEY: 'zk-test' };
+  const bridgeArgs = ['--report-dir', '/reports/run', '--role', 'auditor', '--agent', 'key-zai-glm-5-3', '--surface', 'S1'];
+  const ledgerOf = (role, args = bridgeArgs) => {
+    buildApiLaunch({ provider: 'zai', model: 'glm-5.3' }, { workDir: work, env, role, bridgeArgs: args, maxCostUsd: 25 }, presetFor('zai'));
+    return JSON.parse(fs.readFileSync(path.join(work, 'api-launch.json'), 'utf8')).spendLedger;
+  };
+  assert.deepEqual(ledgerOf('auditor'), { reportDir: '/reports/run', reviewerId: 'key-zai-glm-5-3' });
+  assert.deepEqual(ledgerOf('crosscheck'), { reportDir: '/reports/run', reviewerId: 'key-zai-glm-5-3' });
+  for (const role of ['debater', 'orchestrator']) assert.equal(ledgerOf(role), null, role);
+  assert.equal(ledgerOf('auditor', []), null, 'no report dir: the loop counts its own spend');
 });

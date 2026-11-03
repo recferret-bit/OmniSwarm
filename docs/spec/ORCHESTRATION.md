@@ -82,7 +82,7 @@ Two fixed numbers, the same for every family:
 | Debate turn budget | `--debate-tool-budget` | 12 | Tool calls per debate turn (for citation lookups) |
 | Debate rounds | `--debate-rounds R` | **2**, max 3 | Round 1 challenge (+ devil's advocate), round 2 defend; round 3 rebut only if any verdict changed in round 2 |
 | Judge calls | — | 1 per disputed cluster + 1 general review | No retries except one on transport failure |
-| Cost ceiling | `--max-cost-usd` | unset | Sum of reported `usage.cost` (OpenRouter) or estimated cost; crossing it ends the current pass with `stop: cost` |
+| Cost ceiling | `--max-cost-usd` | unset (hosted preset: 25) | Per reviewer, for the whole run: the sum of reported `usage.cost` (OpenRouter) or estimated cost over every API turn of all its passes and surfaces (including its cross-check), kept as `spentUsd` in `harness/budget-<reviewer>.json` under the bridge budget lock. Reaching it ends the current pass with `stop: cost`; the reviewer's remaining passes and surfaces are skipped (`skipped: cost_ceiling` usage rows) and `harness/budget-health.json` records the stop. Debate and judge sessions are not counted against a reviewer |
 
 **Where the cap is enforced** (one gate per family, all three tested):
 1. **Bridge counter** (plugged into W02's `beforeCall(ctx, name)` hook in the `docker-mcp-bridge.mjs` dispatcher, per identity + pass, stored in `harness/budget-<reviewer>.json`, not in the 200-entry log). This is the only gate every family passes through.

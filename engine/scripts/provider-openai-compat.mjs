@@ -119,10 +119,18 @@ async function runCalls(calls, callTool, messages) {
   return submitted;
 }
 
+// The spend a loop checks against maxCostUsd. Without a run ledger (bridge-budget.mjs costLedger) the loop
+// counts only its own turns.
+function loopLedger() {
+  let total = 0;
+  return { async add(cost) { total += Number(cost) || 0; return total; } };
+}
+
 export async function runToolLoop({
   baseUrl, apiKey, model, headers = {}, extraBody = {}, tools = [], callTool, brief, maxTurns = 40, submitTool = 'submit_audit_report',
   provider = 'zai', env = process.env, fetchImpl, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
   random = Math.random, transcriptPath, timeoutMs = Number(env.OMNI_API_TIMEOUT_MS) || 300_000, maxCostUsd = null, prices = null,
+  ledger = loopLedger(),
 } = {}) {
   if (!baseUrl || !model || typeof callTool !== 'function') throw new Error('runToolLoop needs baseUrl, model and callTool');
   if (!SUBMIT_TOOLS.has(submitTool)) throw new Error(`runToolLoop: unknown submit tool ${submitTool}`);
@@ -135,6 +143,10 @@ export async function runToolLoop({
   let servedModel = null;
   let turns = 0;
   const end = (stop, extra = {}) => ({ stop, turns, usage, servedModel, transcriptPath: transcriptPath || null, ...extra });
+  const overCeiling = (spent) => maxCostUsd != null && spent >= maxCostUsd;
+  // Another pass or surface of this reviewer may already have spent the ceiling: send nothing.
+  const before = await ledger.add(0);
+  if (overCeiling(before)) return end('cost', { runCostUsd: before });
   for (let turn = 1; turn <= maxTurns; turn++) {
     const body = { model, messages, tools, stream: false, ...extraBody, ...(turn === maxTurns ? { tool_choice: { type: 'function', function: { name: submitTool } } } : {}) };
     const posted = await postTurn({ fetchFn, url, body, apiKey, headers, timeoutMs, sleep, random, transcript, turn });
@@ -142,11 +154,12 @@ export async function runToolLoop({
     const payload = typeof posted.response.json === 'function' ? await posted.response.json() : posted.response.body;
     turns += 1;
     servedModel = typeof payload?.model === 'string' ? payload.model : servedModel;
-    if (payload?.usage && typeof payload.usage === 'object') usage.push(applyPrice({ ...payload.usage, model: payload.model }, { prices, provider, model }));
+    const priced = payload?.usage && typeof payload.usage === 'object' ? applyPrice({ ...payload.usage, model: payload.model }, { prices, provider, model }) : null;
+    if (priced) usage.push(priced);
     transcript.turn({ turn, status: posted.response.status, model: servedModel }, body);
+    const spent = await ledger.add(priced?.cost);
     if (!modelMatches(model, servedModel)) return end('error', { failure: 'model_mismatch' });
-    const spent = usage.reduce((total, row) => total + (Number(row.cost) || 0), 0);
-    if (maxCostUsd != null && spent >= maxCostUsd) return end('cost', { cost: spent });
+    if (overCeiling(spent)) return end('cost', { runCostUsd: spent });
     const message = payload?.choices?.[0]?.message || {};
     const calls = Array.isArray(message.tool_calls) ? message.tool_calls.map(parseToolCall) : [];
     messages.push({ role: 'assistant', content: message.content ?? null, ...(calls.length ? { tool_calls: message.tool_calls } : {}) });

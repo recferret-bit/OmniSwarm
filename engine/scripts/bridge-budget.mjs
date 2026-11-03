@@ -2,6 +2,8 @@
 // Inspection stops at N; the next 3 calls are finalize-only; the one after that is an error and the pass
 // record says `exhausted`. One reviewer can run several surfaces at once, so every bridge serializes its
 // read-modify-write of harness/budget-<reviewer>.json with a cross-process lock.
+// The same file and lock hold the reviewer's run-wide spend (`spentUsd`): the cost ceiling counts every
+// API turn of every pass and surface of one reviewer in the run, not one tool loop.
 import fs from 'node:fs';
 import path from 'node:path';
 import { withFileLock } from './fs-lock.mjs';
@@ -10,6 +12,13 @@ import { readReportJson, writeReportFile } from './report-files.mjs';
 export const GRACE = 3;
 const SUBMIT = new Set(['submit_audit_report', 'submit_crosscheck_report']);
 const READS = new Set(['read_file', 'search_code']);
+// Debater and orchestrator sessions are bounded per session by debate-bridge.mjs, not by a review pass, and
+// their spend is not a reviewer's.
+const UNBUDGETED_ROLES = new Set(['verification', 'debater', 'orchestrator']);
+
+export function budgetedRole(role) {
+  return !UNBUDGETED_ROLES.has(role);
+}
 
 export function passKey(surface, pass) {
   return `${String(surface || 's1').toLowerCase()}:${pass}`;
@@ -20,7 +29,7 @@ export function budgetFile(reviewerId) {
 }
 
 export function emptyBudget(reviewerId) {
-  return { version: 1, reviewer: reviewerId, passes: {} };
+  return { version: 1, reviewer: reviewerId, passes: {}, spentUsd: 0 };
 }
 
 export function loadBudget(reportDir, reviewerId) {
@@ -71,9 +80,29 @@ export function createBeforeCall({ reportDir, reviewerId, surface, pass, toolBud
   };
 }
 
+export function spentUsd(reportDir, reviewerId) {
+  return Number(loadBudget(reportDir, reviewerId).spentUsd) || 0;
+}
+
+// The run-wide spend ledger of one reviewer: add(cost) records one turn's cost and returns the reviewer's
+// total so far, across every pass, surface and process; add(0) only reads it.
+export function costLedger(reportDir, reviewerId) {
+  return {
+    async add(cost) {
+      const amount = Number(cost) || 0;
+      fs.mkdirSync(path.join(reportDir, 'harness'), { recursive: true });
+      return withFileLock(budgetLockFile(reportDir, reviewerId), () => {
+        const budget = loadBudget(reportDir, reviewerId);
+        const total = (Number(budget.spentUsd) || 0) + amount;
+        if (amount) saveBudget(reportDir, { ...budget, spentUsd: total });
+        return total;
+      });
+    },
+  };
+}
+
 export function attachBudget(ctx) {
-  // Debater and orchestrator sessions are bounded per session by debate-bridge.mjs, not by a review pass.
-  if (!ctx?.reportDir || !ctx.agent || ['verification', 'debater', 'orchestrator'].includes(ctx.role)) return ctx;
+  if (!ctx?.reportDir || !ctx.agent || !budgetedRole(ctx.role)) return ctx;
   let toolBudget = Number(ctx.toolBudget) || 0;
   if (!toolBudget) {
     try { toolBudget = Number(readReportJson(ctx.reportDir, 'harness/reviewers.json').budgets?.toolBudget) || 40; }

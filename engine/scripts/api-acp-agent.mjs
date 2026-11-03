@@ -7,6 +7,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { readReportJson, writeReportFile } from './report-files.mjs';
+import { costLedger } from './bridge-budget.mjs';
 import { loadAgentConfig, sendAcp, serveAcpStdio } from './agent-acp-stdio.mjs';
 import { SessionError } from './agent-rpc.mjs';
 import { runToolLoop } from './provider-openai-compat.mjs';
@@ -181,6 +182,7 @@ export class ApiAcpAgent {
         maxTurns: this.config.maxTurns || 40,
         submitTool: this.config.submitTool || 'submit_audit_report',
         maxCostUsd: this.config.maxCostUsd ?? null,
+        ...(this.config.spendLedger ? { ledger: costLedger(this.config.spendLedger.reportDir, this.config.spendLedger.reviewerId) } : {}),
         prices: this.config.prices || null,
         provider: this.config.provider,
         transcriptPath: path.join(this.config.cwd, 'loop-transcript.jsonl'),
