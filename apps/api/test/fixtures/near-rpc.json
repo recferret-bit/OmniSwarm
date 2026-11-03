@@ -1013,5 +1013,71 @@
         }
       }
     ]
+  },
+  "is_reported_true": {
+    "result": [
+      116,
+      114,
+      117,
+      101
+    ],
+    "logs": [],
+    "block_hash": "GN9wJnmmCtqbJbe1p5nT4HDRJGc2dMJ9fuuXiHkdYwxM",
+    "block_height": 220000000
+  },
+  "is_reported_false": {
+    "result": [
+      102,
+      97,
+      108,
+      115,
+      101
+    ],
+    "logs": [],
+    "block_hash": "GN9wJnmmCtqbJbe1p5nT4HDRJGc2dMJ9fuuXiHkdYwxM",
+    "block_height": 220000000
+  },
+  "report_address_ok": {
+    "final_execution_status": "FINAL",
+    "status": {
+      "SuccessValue": ""
+    },
+    "transaction": {
+      "hash": "9wUAL2SkdLdkcb8bPFA5Zci1jLCPLyXsdJE7VcSu7Lxv",
+      "signer_id": "operator.testnet",
+      "receiver_id": "registry.testnet",
+      "public_key": "ed25519:6E8sCci9badyRkXb3JoRpBj5p8C6Tw41ELDZoiihKEtp",
+      "nonce": 7,
+      "actions": [
+        {
+          "FunctionCall": {
+            "method_name": "report_address",
+            "args": "eyJhY2NvdW50X2lkIjoiZHJhaW5lci50ZXN0bmV0IiwiZXZpZGVuY2VfdXJpIjoiaHR0cHM6Ly9ldmlkZW5jZS50ZXN0L2RyYWluZXIiLCJyZWFzb24iOiJwaGlzaGluZyBkcmFpbmVyIn0=",
+            "gas": 30000000000000,
+            "deposit": "0"
+          }
+        }
+      ]
+    },
+    "transaction_outcome": {
+      "id": "7AfonAhbK4ZbdBU9VPcQdrTZVZBXE25HmZAMEABs9To1",
+      "outcome": {
+        "status": {
+          "SuccessReceiptId": "9"
+        },
+        "logs": []
+      }
+    },
+    "receipts_outcome": [
+      {
+        "id": "9",
+        "outcome": {
+          "status": {
+            "SuccessValue": ""
+          },
+          "logs": []
+        }
+      }
+    ]
   }
 }

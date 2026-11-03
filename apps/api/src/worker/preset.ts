@@ -4,9 +4,12 @@
 import fs from 'node:fs';
 import { AppError } from '../shared/errors.ts';
 
-/** Provider variables per reviewer family (scripts/provider-openai-compat.mjs envAllowlist). */
+/**
+ * Provider variables per reviewer family (scripts/provider-openai-compat.mjs envAllowlist). `scripted`
+ * is not here: scripted reviewers and the scripted judge run only on OmniSwarm's own fixtures
+ * (engine debate-plan.mjs `scripted_judge_demo_only`), never on a requester's repository.
+ */
 const FAMILY_ENV: Record<string, string[]> = {
-  scripted: [],
   'key:zai': ['ZAI_API_KEY', 'ZAI_BASE_URL'],
   openrouter: ['OPENROUTER_API_KEY'],
 };

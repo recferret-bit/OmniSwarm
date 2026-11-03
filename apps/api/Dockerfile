@@ -18,7 +18,11 @@ RUN npm ci --omit=dev --ignore-scripts --no-audit --no-fund --workspace @omniswa
  && npm cache clean --force
 
 FROM node:24.22.2-trixie-slim@sha256:54f84b4cf8432b21aaffd5d3ce8d41e12cea0d10d33c09d2f3c9879d49d6b446 AS runtime
-ENV NODE_ENV=production \
+# production (default) refuses every test adapter. The local stack builds with
+# --build-arg NODE_ENV=development and names CHAIN_ADAPTER=mock and GITHUB_ADAPTER=live
+# explicitly, so API, migrate and the host worker all use the same adapters.
+ARG NODE_ENV=production
+ENV NODE_ENV=${NODE_ENV} \
     HOST=0.0.0.0 \
     PORT=8787 \
     npm_config_update_notifier=false

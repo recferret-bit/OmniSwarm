@@ -1,4 +1,4 @@
-// W09 wave check (@hack): demo steps 1, 2, 3, 5, 6, 7, 9 with real API and worker processes, the mock
+// W09 wave check (@hack): demo steps 1, 2, 3, 5, 6 (SIGKILL and SIGTERM), 7, 8, 9 with real API and worker processes, the mock
 // engine and the mock chain. Every terminal path ends with at most one attestation or refund, and a
 // provider key planted in the worker env appears nowhere in Postgres, logs or the published report.
 import assert from 'node:assert/strict';
@@ -149,6 +149,35 @@ describe('W09 queue and worker @hack', NEEDS_DB, () => {
     assert.equal(await attests(running.requestHash), 0, 'a refunded request is never attested');
     assert.equal(await refunds(running.requestHash), 1);
     await serial.stop();
+  });
+
+  test('6b: SIGTERM mid-run hands the job back with its retry; another worker finishes it', async () => {
+    step('6b', 'SIGTERM the worker mid-run');
+    const request = await queuedRequest(base, pool);
+    const draining = worker({ MOCK_ENGINE_STEP_MS: '20000' });
+    await waitFor(async () => (await status(request.requestId))?.status === 'running');
+    assert.equal(await draining.stop('SIGTERM'), 0);
+    const jobs = await pool.query(`SELECT state, retry_count, retry_limit FROM pgboss.job WHERE name = 'review' AND singleton_key = $1 ORDER BY created_on`,
+      [request.requestHash]);
+    assert.deepEqual(jobs.rows.map((r) => [r.state, r.retry_count, r.retry_limit]), [['completed', 0, 1], ['created', 0, 1]], 'released, retry kept');
+    const next = worker();
+    const row = await until(request.requestId, ['done']);
+    assert.equal(row.attempts, 2);
+    assert.equal(await attests(request.requestHash), 1);
+    await next.stop();
+  });
+
+  test('8: GET /api/ledger lists the paid requests with deposits, costs and refunds, no accounts', async () => {
+    step(8, 'GET /api/ledger');
+    const ledger = await call(base, '/api/ledger');
+    assert.equal(ledger.status, 200);
+    conforms('ledger-response', ledger.body);
+    const paid = await pool.query(`SELECT r.id, r.status FROM request r JOIN payment p ON p.request_id = r.id`);
+    assert.equal(ledger.body.totals.requests, paid.rows.length);
+    assert.deepEqual(ledger.body.entries.map((e: { requestId: string }) => e.requestId).sort(), paid.rows.map((r) => r.id).sort());
+    const refunded = paid.rows.filter((r) => r.status === 'refunded').length;
+    assert.equal(BigInt(ledger.body.totals.refundedYocto), BigInt(refunded) * BigInt(ledger.body.entries[0].paidYocto));
+    assert.doesNotMatch(JSON.stringify(ledger.body), /\.mock"/, 'no account id');
   });
 
   test('DoD: the provider key reaches no table, log or published file', async () => {

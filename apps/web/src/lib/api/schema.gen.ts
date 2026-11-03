@@ -48,6 +48,11 @@ export type ErrorCode =
   | 'INVALID_TRANSITION'
   | 'REFUND_NOT_ALLOWED'
   | 'REQUEST_NOT_FOUND';
+export type GuardReportStatus = 'pending' | 'approved' | 'reported' | 'rejected';
+/**
+ * Deposits of paid requests that were not refunded
+ */
+export type Yocto1 = string;
 /**
  * 202 refund_queued: the API recorded the refund and a worker (the only operator-key holder) sends it. 200 refunded: already refunded; refundTx is null when the tx hash was not recorded.
  */
@@ -90,6 +95,9 @@ export interface IntakeApi {
   'guard-verdict-response'?: GuardVerdictResponse;
   'guard-report-request'?: GuardReportRequest;
   'guard-report-response'?: GuardReportResponse;
+  'guard-report-status'?: GuardReportStatus;
+  'admin-guard-report-list-response'?: AdminGuardReportListResponse;
+  'admin-guard-decision-response'?: AdminGuardDecisionResponse;
   'ledger-response'?: LedgerResponse;
   'health-response'?: HealthResponse;
   'admin-refund-response'?: AdminRefundResponse;
@@ -138,9 +146,12 @@ export interface CreateRequestResponse {
 export interface PaymentRequest {
   txHash: string;
 }
+/**
+ * The request after its payment was confirmed. A replay of the same tx is idempotent and answers with the current status; position is the 1-based queue rank while queued, else null.
+ */
 export interface PaymentResponse {
-  status: 'queued';
-  position: number;
+  status: Status;
+  position: number | null;
 }
 export interface Progress {
   phase: string;
@@ -217,20 +228,70 @@ export interface GuardVerdictResponse {
 }
 export interface GuardReportRequest {
   account: AccountId;
+  /**
+   * Visible ASCII only, so 2000 characters are the registry's 2000-byte evidence_uri limit
+   */
   evidenceUrl: string;
+  /**
+   * The registry's report_address reason: 1-280 characters, not only whitespace, no control characters
+   */
   reason: string;
 }
+/**
+ * 202: the report waits for the owner's review (admin listener); an approved report is sent on chain as report_address by a worker. A resubmission of an open report returns the same reportId.
+ */
 export interface GuardReportResponse {
   queued: true;
+  reportId?: Uuid;
 }
+/**
+ * GET /api/admin/guard/reports[?status=] on the loopback admin listener.
+ */
+export interface AdminGuardReportListResponse {
+  reports: {
+    reportId: Uuid;
+    account: AccountId;
+    reporter: AccountId;
+    evidenceUrl: string;
+    reason: string;
+    status: GuardReportStatus;
+    reportTx: string | null;
+    createdAt: Timestamp;
+  }[];
+}
+/**
+ * POST /api/admin/guard/reports/:id/approve (202 approved: a worker sends report_address) or /reject (200). Repeating a decision answers with the current state; reportTx is set once the worker sent it, null when the chain already listed the account.
+ */
+export interface AdminGuardDecisionResponse {
+  status: GuardReportStatus;
+  reportTx: string | null;
+}
+/**
+ * GET /api/ledger (public, W09-18): paid requests, newest first (at most 500), with the deposit paid, the model cost summed from every attempt's reviewers/* /usage.json (recorded when the request is published or refunded) and the refund. Totals cover every paid request. No account ids.
+ */
 export interface LedgerResponse {
+  /**
+   * @maxItems 500
+   */
   entries: {
     requestId: Uuid;
+    repo: Repo;
     status: Status;
     priceYocto: Yocto;
+    paidYocto: Yocto;
     modelCostUsd: number;
+    /**
+     * Reviewers that reported usage; 0 until the cost is recorded
+     */
+    reviewers: number;
     refundTx?: string;
   }[];
+  totals: {
+    requests: number;
+    salesYocto: Yocto1;
+    refundedYocto: Yocto;
+    modelCostUsd: number;
+  };
 }
 /**
  * GET /api/health: liveness plus status. chain.rpc/contract come from ChainPort.health (cached 30 s); workers counts live pg-boss worker instances.

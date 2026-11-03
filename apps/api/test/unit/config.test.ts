@@ -12,7 +12,7 @@ const BASE = {
 };
 const PROD = {
   ...BASE, NODE_ENV: 'production', ADMIN_TOKEN: 't'.repeat(40), RPC_URLS: 'https://rpc.testnet.fastnear.com',
-  REPORTS_BASE_URL: 'https://reports.example', OPERATOR_KEY_FILE: '/run/credentials/omniswarm-worker@1/operator-key',
+  REPORTS_BASE_URL: 'https://reports.example', OPERATOR_KEY_FILE: '/run/credentials/omniswarm-worker@1/operator-key', HOSTED_PRESET: 'hosted',
 };
 
 function issue(role: Parameters<typeof loadConfig>[0], env: Record<string, string | undefined>): string {
@@ -54,6 +54,8 @@ test('production refuses test adapters, a missing admin token and insecure cooki
   assert.match(issue('worker', { ...PROD, REPORTS_BASE_URL: undefined }), /REPORTS_BASE_URL/);
   assert.match(issue('api', { ...PROD, COOKIE_SECURE: '0' }), /COOKIE_SECURE/);
   assert.equal(loadConfig('api', PROD).http.cookieSecure, true);
+  for (const role of ['api', 'worker'] as const) assert.match(issue(role, { ...PROD, HOSTED_PRESET: undefined }), /HOSTED_PRESET must be set in production/);
+  assert.equal(loadConfig('api', BASE).intake.hostedPreset, 'hosted', 'outside production the default is the hosted preset');
 });
 
 test('the factories refuse test adapters in production even if config were bypassed', async () => {
@@ -74,4 +76,16 @@ test('admin binds loopback only; presets must be allow-listed; trustProxy parses
   assert.equal(loadConfig('api', BASE).http.trustProxy, false);
   assert.equal(loadConfig('api', { ...BASE, NETWORK: 'mainnet' }).intake.priceYocto, null, 'mainnet is off until priced');
   assert.equal(issue('migrate', { DATABASE_URL: BASE.DATABASE_URL }), '', 'migrate needs only the database');
+});
+
+test('the guard account-age signal is off unless GUARD_ACCOUNT_AGE=nearblocks; hygiene has defaults', async () => {
+  const { accountAgeFromConfig } = await import('@omniswarm/guard/account-age');
+  const off = loadConfig('api', BASE).guard;
+  assert.deepEqual(off, { accountAge: 'off', nearblocksApiKey: null });
+  assert.equal(accountAgeFromConfig({ provider: off.accountAge, network: 'testnet' }), undefined);
+  const on = loadConfig('api', { ...BASE, GUARD_ACCOUNT_AGE: 'nearblocks', NEARBLOCKS_API_KEY: 'k' }).guard;
+  assert.ok(accountAgeFromConfig({ provider: on.accountAge, network: 'testnet', apiKey: on.nearblocksApiKey ?? 'k' }), 'a source is built; nothing is fetched');
+  assert.match(issue('api', { ...BASE, GUARD_ACCOUNT_AGE: 'indexer' }), /GUARD_ACCOUNT_AGE/);
+  const { storage } = loadConfig('worker', { ...BASE });
+  assert.deepEqual([storage.keepRuns, storage.orphanReportRetentionH], [20, 168]);
 });

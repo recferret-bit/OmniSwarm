@@ -1,13 +1,14 @@
-// MockChainAdapter: the registry contract simulated on Postgres tables (migration 002). Test and
-// local-demo only; container.ts refuses it when NODE_ENV=production. It mirrors the contract's status
-// rules (lib.rs) so the worker's idempotency is exercised against the same panics.
+// MockChainAdapter: the registry contract simulated on Postgres tables (src/chain/mock/migrations,
+// applied only for CHAIN_ADAPTER=mock). Test and local-demo only; container.ts refuses it when
+// NODE_ENV=production. It mirrors the contract's status rules (lib.rs) so the worker's idempotency is
+// exercised against the same panics.
 import crypto from 'node:crypto';
 import { b58encode } from '@omniswarm/schemas/nep413';
 import type { Db, Pool } from '../../db/pool.ts';
 import { AppError } from '../../shared/errors.ts';
 import { ChainRejectedError, chainUnavailable } from '../errors.ts';
-import type { AttestArgs, ChainAttestation, ChainPort, ChainRequest, KeyPermission, PaymentTx } from '../port.ts';
-import { fromContractAttestation, type ContractAttestation } from '../near/attestation.ts';
+import type { AttestArgs, ChainAttestation, ChainPort, ChainRequest, KeyPermission, PaymentTx, ReportAddressArgs } from '../port.ts';
+import { fromContractAttestation, toContractAttestation, type ContractAttestation } from '../near/attestation.ts';
 
 export interface MockChainOptions {
   contractId: string;
@@ -135,6 +136,48 @@ export class MockChainAdapter implements ChainPort {
       await client.query(`INSERT INTO mock_chain_event (event, request_hash, data) VALUES ('review_refunded', $1, '{}')`, [requestHash]);
     });
     await this.#hang('refund');
+    return txHash;
+  }
+
+  async isReported(accountId: string): Promise<boolean> {
+    await this.#guard();
+    return (await this.#report(accountId)) !== null;
+  }
+
+  /** The registry views the guard reads (INTERFACE.md v0.3.0), answered from the mock tables. */
+  async viewRegistry(method: string, args: Record<string, unknown>): Promise<unknown> {
+    const accountId = String(args.account_id ?? args.account ?? '');
+    if (method === 'is_reported') return this.isReported(accountId);
+    if (method === 'get_report') return this.#guard().then(() => this.#report(accountId));
+    if (method === 'get_attestation_for_account') {
+      const attestation = await this.getAttestationForAccount(accountId);
+      return attestation ? toContractAttestation(attestation) : null;
+    }
+    throw chainUnavailable(new Error(`the mock registry has no view ${method}`));
+  }
+
+  async #report(accountId: string) {
+    const result = await this.#db.query(
+      `SELECT account AS account_id, evidence_uri, reason, 'operator.mock' AS reporter, (extract(epoch FROM reported_at) * 1000)::bigint::float8 AS reported_at_ms
+       FROM mock_chain_report WHERE account = $1`, [accountId]);
+    return result.rows[0] ?? null;
+  }
+
+  /** As in the contract: one report per account, a second one is ERR_ALREADY_REPORTED. */
+  async reportAddress(args: ReportAddressArgs): Promise<string> {
+    await this.#guard();
+    const txHash = mockTxHash(`report_address:${args.accountId}`);
+    const inserted = await this.#db.query(
+      `WITH reported AS (
+         INSERT INTO mock_chain_report (account, evidence_uri, reason, tx_hash) VALUES ($1, $2, $3, $4)
+         ON CONFLICT (account) DO NOTHING RETURNING account)
+       INSERT INTO mock_chain_tx (tx_hash, signer, receiver, method, args, success)
+       SELECT $4, 'operator.mock', $5, 'report_address', $6, true FROM reported`,
+      [args.accountId, args.evidenceUri, args.reason, txHash, this.contractId,
+        JSON.stringify({ account_id: args.accountId, evidence_uri: args.evidenceUri, reason: args.reason })]).catch((error: unknown) => {
+      throw chainUnavailable(error);
+    });
+    if (inserted.rowCount !== 1) throw new ChainRejectedError('ERR_ALREADY_REPORTED');
     return txHash;
   }
 

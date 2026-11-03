@@ -49,6 +49,45 @@ describe('database', NEEDS_DB, () => {
     assert.equal(tables.rows[0].n, 6);
   });
 
+  test('mock chain tables: only for CHAIN_ADAPTER=mock outside production, dropped from production when empty', async () => {
+    const mockTables = async (url: string) => {
+      const probe = createPool(url, 1);
+      try {
+        const rows = await probe.query(`SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name LIKE 'mock\\_chain\\_%' ORDER BY 1`);
+        return rows.rows.map((row) => row.table_name as string);
+      } finally {
+        await probe.end();
+      }
+    };
+    assert.ok((await mockTables(db.url)).includes('mock_chain_request'), 'the test database (CHAIN_ADAPTER=mock) has them');
+
+    const near = await freshDatabase('near');
+    try {
+      await migrateAll(loadConfig('migrate', { ...testEnv(near.url), CHAIN_ADAPTER: 'near' }));
+      assert.deepEqual(await mockTables(near.url), [], 'a near-adapter database never gets them');
+    } finally {
+      await near.drop();
+    }
+
+    // A production database migrated before the split holds them (empty): the deploy step drops them.
+    const legacy = await freshDatabase('legacy');
+    const production = { NODE_ENV: 'production', DATABASE_URL: legacy.url, LOG_LEVEL: 'silent' };
+    try {
+      await migrateAll(loadConfig('migrate', testEnv(legacy.url)));
+      const legacyPool = createPool(legacy.url, 1);
+      await legacyPool.query(`INSERT INTO mock_chain_account (account, code_hash) VALUES ('x.mock', '1')`);
+      await assert.rejects(migrateAll(loadConfig('migrate', production)), /refusing to drop mock chain tables that hold rows in production: mock_chain_account/);
+      assert.ok((await mockTables(legacy.url)).includes('mock_chain_account'), 'nothing dropped when one holds a row');
+      await legacyPool.query('DELETE FROM mock_chain_account');
+      await legacyPool.end();
+      await migrateAll(loadConfig('migrate', production));
+      assert.deepEqual(await mockTables(legacy.url), []);
+      assert.deepEqual(await migrateAll(loadConfig('migrate', production)), [], 'a rerun is a no-op');
+    } finally {
+      await legacy.drop();
+    }
+  });
+
   test('a nonce is consumed exactly once under concurrency', async () => {
     const nonce = crypto.randomBytes(32).toString('base64');
     const now = new Date();

@@ -5,7 +5,7 @@
 import type { ChainPort, ChainRequest, PaymentTx } from '../../chain/port.ts';
 import { isUniqueViolation, withTransaction, type Pool } from '../../db/pool.ts';
 import { findPayment, insertPayment } from '../../db/repositories/payments.ts';
-import { findRequest, queuePosition, transition, type RequestRow } from '../../db/repositories/requests.ts';
+import { findRequest, statusAndPosition, transition, type RequestRow } from '../../db/repositories/requests.ts';
 import { enqueueReview, type ReviewJob } from '../../queue/review-queue.ts';
 import type { PgBoss } from '../../queue/boss.ts';
 import type { Clock } from '../../shared/clock.ts';
@@ -66,5 +66,8 @@ export async function confirmPayment(deps: PaymentDeps, input: { requestId: stri
       if (!(error instanceof AppError && error.code === 'TX_ALREADY_USED' && (await findPayment(deps.pool, input.txHash))?.request_id === row.id)) throw error;
     }
   }
-  return { status: 'queued' as const, position: (await queuePosition(deps.pool, row.id)) ?? 0 };
+  // Where the paid request is now: a replay after the worker started answers with that status, not `queued`.
+  const current = await statusAndPosition(deps.pool, row.id);
+  if (!current) fail('REQUEST_NOT_FOUND', 'Request not found');
+  return current;
 }

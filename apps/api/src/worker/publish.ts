@@ -36,20 +36,25 @@ function setModes(dir: string, includeRoot: boolean): void {
   if (includeRoot) fs.chmodSync(dir, 0o555);
 }
 
+/** Remove a published (0555/0444) tree: every directory is made writable before anything below it goes. */
 export function removeTree(dir: string): void {
   if (!fs.existsSync(dir)) return;
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    if (entry.isDirectory()) { fs.chmodSync(path.join(dir, entry.name), 0o755); removeTree(path.join(dir, entry.name)); }
-  }
-  fs.chmodSync(dir, 0o755);
+  const unlock = (current: string) => {
+    fs.chmodSync(current, 0o755);
+    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+      if (entry.isDirectory()) unlock(path.join(current, entry.name));
+    }
+  };
+  unlock(dir);
   fs.rmSync(dir, { recursive: true, force: true });
 }
 
-export function readPublished(reportsRoot: string, requestId: string): Published | null {
+export function readPublished(reportsRoot: string, requestId: string): (Published & { files: string[] }) | null {
   const dir = path.join(reportsRoot, requestId);
   try {
-    const manifest = JSON.parse(fs.readFileSync(path.join(dir, 'published.json'), 'utf8')) as { reportSha256?: string };
-    return manifest.reportSha256 ? { dir, reportSha256: manifest.reportSha256, created: false } : null;
+    const manifest = JSON.parse(fs.readFileSync(path.join(dir, 'published.json'), 'utf8')) as { reportSha256?: string; files?: unknown };
+    const files = Array.isArray(manifest.files) ? manifest.files.filter((file): file is string => typeof file === 'string') : [];
+    return manifest.reportSha256 ? { dir, reportSha256: manifest.reportSha256, created: false, files } : null;
   } catch {
     return null;
   }

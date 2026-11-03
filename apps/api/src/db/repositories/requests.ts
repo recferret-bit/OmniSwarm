@@ -97,10 +97,16 @@ export async function listByAccount(db: Db, account: string): Promise<RequestRow
 
 /** 1-based rank among queued requests by the time payment was confirmed; null when not queued. */
 export async function queuePosition(db: Db, id: string): Promise<number | null> {
-  const result = await db.query<{ position: number }>(
-    `SELECT 1 + (SELECT count(*)::int FROM request q WHERE q.status = 'queued' AND (q.queued_at, q.id) < (r.queued_at, r.id)) AS position
-     FROM request r WHERE r.id = $1 AND r.status = 'queued'`, [id]);
-  return result.rows[0]?.position ?? null;
+  return (await statusAndPosition(db, id))?.position ?? null;
+}
+
+/** The status and, while queued, the queue rank, read in one statement so the two agree. */
+export async function statusAndPosition(db: Db, id: string): Promise<{ status: Status; position: number | null } | null> {
+  const result = await db.query<{ status: Status; position: number | null }>(
+    `SELECT r.status, CASE WHEN r.status = 'queued' THEN 1 + (SELECT count(*)::int FROM request q
+       WHERE q.status = 'queued' AND (q.queued_at, q.id) < (r.queued_at, r.id)) END AS position
+     FROM request r WHERE r.id = $1`, [id]);
+  return result.rows[0] ?? null;
 }
 
 /** Requests that hold a queue slot: paid and not yet finished. */

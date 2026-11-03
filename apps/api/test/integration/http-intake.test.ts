@@ -3,7 +3,8 @@
 // packages/schemas/intake-api.schema.json.
 import assert from 'node:assert/strict';
 import { after, before, describe, test } from 'node:test';
-import { payRequestReview } from '../../src/chain/mock/mock-ledger.ts';
+import { payRequestReview, seedAttestation, setCodeHash } from '../../src/chain/mock/mock-ledger.ts';
+import { transition } from '../../src/db/repositories/requests.ts';
 import { call, challenge, conforms, createRequest, pay, sessionCookie, sign, wallet } from '../helpers/flow.ts';
 import { NEEDS_DB } from '../helpers/db.ts';
 import { CONTRACT, PRICE, SHA, TestClock, migratedDb, startApi, type ApiStack, type TestDb } from '../helpers/stack.ts';
@@ -177,6 +178,12 @@ describe('intake HTTP API', NEEDS_DB, () => {
     assert.deepEqual(again.body, { status: 'queued', position: 1 }, 'confirming the same tx again is idempotent');
     const jobs = await api.deps.pool.query(`SELECT count(*)::int AS n FROM pgboss.job WHERE name = 'review' AND singleton_key = $1`, [created.requestHash]);
     assert.equal(jobs.rows[0].n, 1);
+    // A replay after the worker took the job reports where the request is, never `queued` at position 0.
+    await transition(api.deps.pool, created.requestId, { to: 'running', actor: 'test', event: 'review_started', now: new Date() });
+    const started = await call(api.base, `/api/requests/${created.requestId}/payment`, { method: 'POST', body: { txHash }, cookie: created.cookie });
+    assert.equal(started.status, 200);
+    conforms('payment-response', started.body);
+    assert.deepEqual(started.body, { status: 'running', position: null });
 
     const second = await createRequest(api.base, api.deps.pool, await wallet(api.deps.pool, 'hank.mock'));
     const reused = await call(api.base, `/api/requests/${second.requestId}/payment`, { method: 'POST', body: { txHash }, cookie: second.cookie });
@@ -228,11 +235,21 @@ describe('intake HTTP API', NEEDS_DB, () => {
     assert.ok(created.cookie && sessionCookie);
   });
 
-  test('guard verdicts come from the chain reader through the guard package', async () => {
+  test('guard verdicts come from the registry (mock chain) through the guard package', async () => {
+    const codeHash = '8iTgRHpmMG2DzuPFDyBXTSkdxJMKmdNfmYo1sJUFKVNS';
+    await setCodeHash(api.deps.pool, 'critical.testnet', codeHash);
+    await seedAttestation(api.deps.pool, {
+      requestHash: '5'.repeat(64), repo: 'omniswarm/bad-dex', commit: SHA, reportSha256: '6'.repeat(64), reportUri: 'https://reports.test/bad/report.html',
+      deployed: 'critical.testnet', codeHash, maxSeverity: 'critical', bindingConfirmed: true,
+    });
     const critical = await call(api.base, '/api/guard/verdict?account=critical.testnet');
     assert.equal(critical.status, 200, JSON.stringify(critical.body));
     conforms('guard-verdict-response', critical.body);
     assert.equal(critical.body.verdict, 'block');
+    assert.ok(critical.body.reasons.includes('ATTESTED_CRITICAL_STILL_DEPLOYED'), JSON.stringify(critical.body));
+    await setCodeHash(api.deps.pool, 'critical.testnet', 'GKot5hBsd81kMupNCXHaqbhv3huEbxAFMLnpcX2hniwn');
+    const changed = await call(api.base, '/api/guard/verdict?account=critical.testnet');
+    assert.ok(changed.body.reasons.includes('CODE_CHANGED_SINCE_REVIEW'), 'the live code hash is read from the chain');
     const invalid = await call(api.base, '/api/guard/verdict?account=NOT%20AN%20ACCOUNT');
     assert.equal(invalid.body.error.code, 'VALIDATION_ERROR');
   });

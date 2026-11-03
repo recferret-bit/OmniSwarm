@@ -41,6 +41,19 @@ export async function payRequestReview(db: Db, input: {
   return txHash;
 }
 
+/** An attestation as the contract would hold it after an earlier review (guard tests, local demo). */
+export async function seedAttestation(db: Db, a: {
+  requestHash: string; repo: string; commit: string; reportSha256: string; reportUri: string; deployed: string; codeHash: string;
+  maxSeverity: string; bindingConfirmed: boolean;
+}): Promise<void> {
+  await db.query(
+    `INSERT INTO mock_chain_attestation (request_hash, repo, commit_sha, report_sha256, report_uri, deployed, code_hash, max_severity,
+       block_height, block_timestamp_ms, binding_confirmed, tx_hash)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 1, $9, $10, $11)`,
+    [a.requestHash, a.repo, a.commit, a.reportSha256, a.reportUri, a.deployed, a.codeHash, a.maxSeverity, Date.now(), a.bindingConfirmed,
+      mockTxHash(`attest:${a.requestHash}`)]);
+}
+
 export async function chainEvents(db: Db, requestHash: string): Promise<string[]> {
   const result = await db.query<{ event: string }>('SELECT event FROM mock_chain_event WHERE request_hash = $1 ORDER BY id', [requestHash]);
   return result.rows.map((row) => row.event);
