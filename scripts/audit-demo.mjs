@@ -10,6 +10,8 @@ import { fileURLToPath } from 'node:url';
 import { resolveDockerBin } from './docker-mcp-bridge.mjs';
 import { parseReviewerList } from './reviewer-registry.mjs';
 import { runHostReview } from './review-host.mjs';
+import { runOfflineDebate } from './debate-run.mjs';
+import { selectSurfaces } from './reviewer-plan.mjs';
 import { DEMO_FIXTURE } from './scripted-strategies.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -46,6 +48,9 @@ function runDockerDemo({ out, surface, env }) {
 async function runHostDemo({ out, surface, env }) {
   process.stdout.write(`${DEMO_STAMP}\nHost snapshot of ${DEMO_FIXTURE}\n`);
   await runHostReview({ target: DEMO_FIXTURE, out, surface, reviewers: parseReviewerList([...DEMO_REVIEWERS]), assign: 'matrix', budgets: { ...DEMO_BUDGETS }, preset: 'demo' }, env);
+  // The same debate, scripted judge and general review the Docker demo runs, over the committed submissions.
+  const debate = await runOfflineDebate(out, DEMO_FIXTURE, { scope: selectSurfaces(surface).map((s) => s.code) });
+  if (debate.missing.length) throw new Error(`demo debate left ${debate.missing.length} turn(s) without an answer`);
   const html = spawnSync(process.execPath, [path.join(HERE, 'generate-html-report.mjs'), out], { encoding: 'utf8' });
   const report = path.join(out, 'report.html');
   // Exit 2 is the renderer's "rendered, but INCOMPLETE" (a host demo has no cross-check or test catalog).
