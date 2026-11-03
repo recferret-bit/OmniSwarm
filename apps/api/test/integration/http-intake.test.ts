@@ -3,7 +3,7 @@
 // packages/schemas/intake-api.schema.json.
 import assert from 'node:assert/strict';
 import { after, before, describe, test } from 'node:test';
-import { payRequestReview } from '../../src/chain/mock/mock-ledger.ts';
+import { payRequestReview, seedAttestation, setCodeHash } from '../../src/chain/mock/mock-ledger.ts';
 import { transition } from '../../src/db/repositories/requests.ts';
 import { call, challenge, conforms, createRequest, pay, sessionCookie, sign, wallet } from '../helpers/flow.ts';
 import { NEEDS_DB } from '../helpers/db.ts';
@@ -235,11 +235,21 @@ describe('intake HTTP API', NEEDS_DB, () => {
     assert.ok(created.cookie && sessionCookie);
   });
 
-  test('guard verdicts come from the chain reader through the guard package', async () => {
+  test('guard verdicts come from the registry (mock chain) through the guard package', async () => {
+    const codeHash = '8iTgRHpmMG2DzuPFDyBXTSkdxJMKmdNfmYo1sJUFKVNS';
+    await setCodeHash(api.deps.pool, 'critical.testnet', codeHash);
+    await seedAttestation(api.deps.pool, {
+      requestHash: '5'.repeat(64), repo: 'omniswarm/bad-dex', commit: SHA, reportSha256: '6'.repeat(64), reportUri: 'https://reports.test/bad/report.html',
+      deployed: 'critical.testnet', codeHash, maxSeverity: 'critical', bindingConfirmed: true,
+    });
     const critical = await call(api.base, '/api/guard/verdict?account=critical.testnet');
     assert.equal(critical.status, 200, JSON.stringify(critical.body));
     conforms('guard-verdict-response', critical.body);
     assert.equal(critical.body.verdict, 'block');
+    assert.ok(critical.body.reasons.includes('ATTESTED_CRITICAL_STILL_DEPLOYED'), JSON.stringify(critical.body));
+    await setCodeHash(api.deps.pool, 'critical.testnet', 'GKot5hBsd81kMupNCXHaqbhv3huEbxAFMLnpcX2hniwn');
+    const changed = await call(api.base, '/api/guard/verdict?account=critical.testnet');
+    assert.ok(changed.body.reasons.includes('CODE_CHANGED_SINCE_REVIEW'), 'the live code hash is read from the chain');
     const invalid = await call(api.base, '/api/guard/verdict?account=NOT%20AN%20ACCOUNT');
     assert.equal(invalid.body.error.code, 'VALIDATION_ERROR');
   });

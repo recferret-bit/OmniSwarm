@@ -1,7 +1,6 @@
 // The API's only touch point with @omniswarm/guard (track S). The guard evaluates chain evidence through
-// a ChainReader: in production the registry views over the API's NEAR ChainPort, in mock-chain mode a
-// recorded snapshot plus the mock registry's blocklist (container.ts). Swapping either is a change to
-// this file and container.ts only.
+// a ChainReader over the API's ChainPort: the NEAR registry in production, the mock registry tables in
+// mock-chain mode (container.ts). Swapping either is a change to this file and container.ts only.
 import { createGuard, registryReader, type AccountAgeSource, type ChainReader, type Verdict } from '@omniswarm/guard';
 import type { ChainPort } from '../../chain/port.ts';
 
@@ -20,11 +19,6 @@ export function chainReader(chain: ChainPort): ChainReader {
     getAccount: (accountId) => chain.viewAccount(accountId),
     getBlockTimestampMs: (height) => chain.blockTimestampMs(height),
   };
-}
-
-/** Mock-chain mode: the recorded snapshot, with the mock registry's blocklist added to its `reported`. */
-export function withChainBlocklist(reader: ChainReader, chain: ChainPort): ChainReader {
-  return { ...reader, isReported: async (accountId) => (await reader.isReported(accountId)) || chain.isReported(accountId) };
 }
 
 /** `accountAge` is the optional indexer (GUARD_ACCOUNT_AGE); without it the age signal is unavailable. */

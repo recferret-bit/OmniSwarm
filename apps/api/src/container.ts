@@ -1,11 +1,9 @@
 // Composition root: the only module that picks concrete adapters. Test adapters (mock chain, recorded
 // GitHub, mock engine) are imported lazily and refused in production, so a production process never
 // even loads them.
-import fs from 'node:fs';
 import path from 'node:path';
-import type { RecordedChain } from '@omniswarm/guard';
 import type { ChainPort } from './chain/port.ts';
-import { chainReader, guardPort, withChainBlocklist, type GuardPort } from './modules/guard/guard.port.ts';
+import { chainReader, guardPort, type GuardPort } from './modules/guard/guard.port.ts';
 import type { Config } from './config/load.ts';
 import { createPool, type Pool } from './db/pool.ts';
 import type { EngineRunner } from './engine/port.ts';
@@ -62,13 +60,10 @@ export async function createEngine(config: Config, env: NodeJS.ProcessEnv = proc
   });
 }
 
+/** The guard reads the registry through the chain adapter: the mock registry in mock-chain mode. */
 export async function createGuardPort(config: Config, chain: ChainPort): Promise<GuardPort> {
-  if (chain.kind === 'mock') {
-    refuseInProduction(config, 'the recorded guard reader');
-    const { createRecordedReader } = await import('@omniswarm/guard/recorded-reader');
-    const records = JSON.parse(fs.readFileSync(path.join(APP_ROOT, 'test/fixtures/guard/records.json'), 'utf8')) as RecordedChain;
-    return guardPort(withChainBlocklist(createRecordedReader(records), chain));
-  }
+  // The account-age indexer is a real network call: never with the mock chain (tests, local stack).
+  if (chain.kind === 'mock') return guardPort(chainReader(chain));
   const { accountAgeFromConfig } = await import('@omniswarm/guard/account-age');
   const accountAge = accountAgeFromConfig({
     provider: config.guard.accountAge, network: config.intake.network, ...(config.guard.nearblocksApiKey ? { apiKey: config.guard.nearblocksApiKey } : {}),
