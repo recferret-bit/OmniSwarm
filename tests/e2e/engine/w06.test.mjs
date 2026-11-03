@@ -5,9 +5,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { runGolden } from '../../scripts/debate-run.mjs';
+import { runGolden } from '../../../scripts/debate-run.mjs';
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 
 test('the plan prints the orchestrator, debate rounds and the cluster cap', () => {
   const result = spawnSync(path.join(ROOT, 'bin', 'audit'), ['run', '--repo', 'eval/golden/near-escrow', '--reviewers', 'scripted:baseline,scripted:paranoid,scripted:wrong,scripted:lazy', '--orchestrator', 'recommended', '--surface', 's1', '--plan'], {

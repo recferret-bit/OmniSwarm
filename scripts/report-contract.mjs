@@ -8,7 +8,7 @@ import { verificationHealth } from './verification-health.mjs';
 import { REVIEW_WORKFLOW } from './review-workflow.mjs';
 import { readCanonicalSubmission } from './audit-submission.mjs';
 import { CLI_DEFAULT_MODELS, REVIEWER_ID_PATTERN, isReviewerId, reviewersOfMeta, vendorOfJob } from './reviewer-registry.mjs';
-import { validate } from '../shared/schemas/index.mjs';
+import { validate } from '../packages/schemas/index.mjs';
 import { hostLogRel } from './sandbox-host-paths.mjs';
 
 const LEVELS = new Set(['critical', 'high', 'medium', 'low', 'info']);

@@ -4,12 +4,12 @@ import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
-import { b58decode, decodeKey, verifyNep413 } from '../../backend/intake/src/lib.ts';
-import { reportSha256 } from '../../backend/intake/src/worker.ts';
+import { b58decode, decodeKey, verifyNep413 } from '../../../apps/api/src/lib.ts';
+import { reportSha256 } from '../../../apps/api/src/worker.ts';
 import { requestHash } from '@omniswarm/schemas/canonical-message';
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const LANDING = path.join(ROOT, 'frontend/landing');
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
+const LANDING = path.join(ROOT, 'apps/web');
 const PORT = 4187;
 const HERO = 'A swarm of AI reviewers that argue over your code, then sign the verdict on NEAR';
 

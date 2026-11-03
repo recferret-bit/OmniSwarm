@@ -10,7 +10,7 @@ services:
   api:
     image: node:24-alpine
     working_dir: /srv/omniswarm/current
-    command: ["node", "backend/intake/src/server.ts"]
+    command: ["node", "apps/api/src/server.ts"]
     environment:
       DATABASE_URL: postgres://omniswarm:${POSTGRES_PASSWORD:-omniswarm}@postgres:5432/omniswarm
       SESSION_SECRET: ${SESSION_SECRET:-dev-session-secret}

@@ -1,5 +1,5 @@
 {
-  "name": "@omniswarm/intake",
+  "name": "@omniswarm/api",
   "version": "0.0.0",
   "private": true,
   "type": "module",

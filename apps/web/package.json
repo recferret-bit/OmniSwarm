@@ -1,5 +1,5 @@
 {
-  "name": "@omniswarm/landing",
+  "name": "@omniswarm/web",
   "version": "0.0.0",
   "private": true,
   "type": "module",

@@ -61,7 +61,7 @@ jobs:
       - name: Detect package
         id: has
         run: |
-          if [ -f backend/intake/package.json ]; then echo "present=true" >> "$GITHUB_OUTPUT"; else echo "present=false" >> "$GITHUB_OUTPUT"; echo "::notice::intake: skipped (no backend/intake/package.json yet)"; fi
+          if [ -f apps/api/package.json ]; then echo "present=true" >> "$GITHUB_OUTPUT"; else echo "present=false" >> "$GITHUB_OUTPUT"; echo "::notice::intake: skipped (no apps/api/package.json yet)"; fi
       - if: steps.has.outputs.present == 'true'
         uses: actions/setup-node@v4
         with:
@@ -78,7 +78,7 @@ jobs:
       - name: Detect package
         id: has
         run: |
-          if [ -f frontend/landing/package.json ]; then echo "present=true" >> "$GITHUB_OUTPUT"; else echo "present=false" >> "$GITHUB_OUTPUT"; echo "::notice::landing: skipped (no frontend/landing/package.json yet)"; fi
+          if [ -f apps/web/package.json ]; then echo "present=true" >> "$GITHUB_OUTPUT"; else echo "present=false" >> "$GITHUB_OUTPUT"; echo "::notice::landing: skipped (no apps/web/package.json yet)"; fi
       - if: steps.has.outputs.present == 'true'
         uses: actions/setup-node@v4
         with:

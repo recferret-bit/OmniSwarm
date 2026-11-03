@@ -6,11 +6,11 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { createApp } from '../../backend/intake/src/app.ts';
-import { attestationCount, createPool, getRequest, insertRequest, migrate, queuePosition, refundOnce, reset, setStatus } from '../../backend/intake/src/store.ts';
-import { auditArgv, drainOne } from '../../backend/intake/src/worker.ts';
+import { createApp } from '../../../apps/api/src/app.ts';
+import { attestationCount, createPool, getRequest, insertRequest, migrate, queuePosition, refundOnce, reset, setStatus } from '../../../apps/api/src/store.ts';
+import { auditArgv, drainOne } from '../../../apps/api/src/worker.ts';
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 // These specs reset (TRUNCATE) the database they are given. There is no default URL, so
 // they never touch a developer's own Postgres: set DATABASE_URL to a throwaway database.
 const DATABASE_URL = process.env.DATABASE_URL || '';
@@ -92,7 +92,7 @@ test('mock worker spawns ./bin/audit, attests once, refunds infra once, and resu
   assert.equal(recorded.includes('--rpc'), false);
   assert.notEqual(Number(fs.readFileSync(path.join(engine, 'child-pid.txt'), 'utf8')), process.pid);
   assert.match(done.hash, /^[0-9a-f]{64}$/);
-  const hashed = spawnSync(process.execPath, [path.join(ROOT, 'backend/intake/scripts/report-hash.ts'), path.join(reports, done.id)], { encoding: 'utf8' });
+  const hashed = spawnSync(process.execPath, [path.join(ROOT, 'apps/api/scripts/report-hash.ts'), path.join(reports, done.id)], { encoding: 'utf8' });
   assert.equal(hashed.status, 0, hashed.stderr);
   assert.equal(hashed.stdout.trim(), done.hash);
   assert.equal(await attestationCount(pool, (await getRequest(pool, done.id)).request_hash), 1);
@@ -123,7 +123,7 @@ test('mock worker spawns ./bin/audit, attests once, refunds infra once, and resu
   assert.equal(early?.status, 'running');
   assert.equal(await attestationCount(pool, (await getRequest(pool, earlyId)).request_hash), 0);
   const beforeRestart = spawns(engine);
-  const restarted = spawnSync(process.execPath, [path.join(ROOT, 'backend/intake/scripts/worker.ts')], {
+  const restarted = spawnSync(process.execPath, [path.join(ROOT, 'apps/api/scripts/worker.ts')], {
     env: { ...process.env, DATABASE_URL, REPORTS_ROOT: reports, ENGINE_ROOT: engine },
     encoding: 'utf8',
   });

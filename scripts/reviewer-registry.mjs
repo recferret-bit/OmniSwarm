@@ -3,7 +3,7 @@
 // a vendor (who trained the model; used for peer and judge conflict rules) and a model.
 // Adapter names appear in this file only as the vendor table and the default models.
 import crypto from 'node:crypto';
-import { validate } from '../shared/schemas/index.mjs';
+import { validate } from '../packages/schemas/index.mjs';
 
 export class ReviewerError extends Error {
   constructor(code, message) { super(message || code); this.name = 'ReviewerError'; this.code = code; }

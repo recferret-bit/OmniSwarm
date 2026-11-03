@@ -7,7 +7,7 @@ import { checkCitations } from './debate-citations.mjs';
 import { anonymize, stripIdentity } from './debate-anonymize.mjs';
 import { classifyArgument, judgeVisible } from './debate-rules.mjs';
 import { scriptedArgument, scriptedFindings, lineOf } from './debate-scripted.mjs';
-import { validate } from '../shared/schemas/index.mjs';
+import { validate } from '../packages/schemas/index.mjs';
 
 const DISCLAIMER = 'Model agreement and passing checks do not certify security.';
 

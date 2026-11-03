@@ -6,7 +6,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { validate } from '../shared/schemas/index.mjs';
+import { validate } from '../packages/schemas/index.mjs';
 import { CLI_DEFAULT_MODELS, ReviewerError, cliSpecsFromAgents, formatReviewerSpec, parseReviewerList, parseReviewerSpec } from './reviewer-registry.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));

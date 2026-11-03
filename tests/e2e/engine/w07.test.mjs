@@ -5,10 +5,10 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { PAGES, findBrowser, printableHtml } from '../../scripts/report-pdf.mjs';
-import { runGolden } from '../../scripts/debate-run.mjs';
+import { PAGES, findBrowser, printableHtml } from '../../../scripts/report-pdf.mjs';
+import { runGolden } from '../../../scripts/debate-run.mjs';
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const scripts = path.join(ROOT, 'scripts');
 const SENTENCE = 'Model agreement and passing checks do not certify security.';
 

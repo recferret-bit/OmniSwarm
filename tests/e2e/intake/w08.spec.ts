@@ -3,11 +3,11 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createApp } from '../../backend/intake/src/app.ts';
-import { createPool, reset } from '../../backend/intake/src/store.ts';
+import { createApp } from '../../../apps/api/src/app.ts';
+import { createPool, reset } from '../../../apps/api/src/store.ts';
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const INTAKE = path.join(ROOT, 'backend/intake');
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
+const INTAKE = path.join(ROOT, 'apps/api');
 // These specs reset (TRUNCATE) the database they are given. There is no default URL, so
 // they never touch a developer's own Postgres: set DATABASE_URL to a throwaway database.
 const DATABASE_URL = process.env.DATABASE_URL || '';

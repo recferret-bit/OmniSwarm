@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { validate } from '../shared/schemas/index.mjs';
+import { validate } from '../packages/schemas/index.mjs';
 
 test('a reviewer report validates and an unknown family is rejected', () => {
   const sample = {

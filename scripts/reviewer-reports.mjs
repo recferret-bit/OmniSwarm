@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readReportJson, writeReportFile } from './report-contract.mjs';
-import { validate } from '../shared/schemas/index.mjs';
+import { validate } from '../packages/schemas/index.mjs';
 import { esc, toneOf } from './report-cards.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));

@@ -7,7 +7,7 @@ Requires=docker.service
 Type=simple
 User=omniswarm
 WorkingDirectory=/srv/omniswarm/current
-ExecStart=/usr/bin/node backend/intake/src/server.ts
+ExecStart=/usr/bin/node apps/api/src/server.ts
 Restart=on-failure
 NoNewPrivileges=true
 

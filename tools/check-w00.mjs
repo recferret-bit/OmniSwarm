@@ -12,15 +12,15 @@ const fail = (m) => { failures.push(m); process.stdout.write(`FAIL ${m}\n`); };
 const read = (p) => fs.readFileSync(rel(p), 'utf8');
 
 function layout() {
-  for (const d of ['backend', 'frontend', 'contracts', 'infra', 'packages', 'eval', 'e2e']) {
+  for (const d of ['apps', 'contracts', 'infra', 'packages', 'eval', 'tests/e2e']) {
     const f = `${d}/README.md`;
     if (!fs.existsSync(rel(f))) { fail(`${f} missing`); continue; }
     const t = read(f);
     for (const need of ['Owning waves', 'Gate command', 'Boundary']) if (!t.includes(need)) fail(`${f} lacks "${need}"`);
   }
   const schemas = ['reviewer-spec', 'run-config', 'reviewer-report', 'usage', 'debate-round', 'adjudication', 'general-review', 'job', 'attestation', 'intake-api'];
-  for (const s of schemas) if (!fs.existsSync(rel(`shared/schemas/${s}.schema.json`))) fail(`shared/schemas/${s}.schema.json missing`);
-  for (const f of ['shared/schemas/canonical-message.mjs', 'tools/worktree-env.mjs', 'RULES.md', '.github/workflows/ci.yml']) if (!fs.existsSync(rel(f))) fail(`${f} missing`);
+  for (const s of schemas) if (!fs.existsSync(rel(`packages/schemas/${s}.schema.json`))) fail(`packages/schemas/${s}.schema.json missing`);
+  for (const f of ['packages/schemas/canonical-message.mjs', 'tools/worktree-env.mjs', 'docs/RULES.md', '.github/workflows/ci.yml']) if (!fs.existsSync(rel(f))) fail(`${f} missing`);
   const agents = fs.existsSync(rel('AGENTS.md')) ? read('AGENTS.md') : '';
   for (const need of ['Tracks and boundaries', 'keyFingerprint', 'allow-listed']) if (!agents.includes(need)) fail(`AGENTS.md lacks "${need}"`);
   const claude = fs.existsSync(rel('CLAUDE.md')) ? read('CLAUDE.md') : '';

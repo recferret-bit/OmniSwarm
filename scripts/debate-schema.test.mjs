@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { validate } from '../shared/schemas/index.mjs';
+import { validate } from '../packages/schemas/index.mjs';
 
 test('debate fixtures pass and the named bad cases fail', () => {
   const turn = { round: 1, clusterId: 'CLUSTER-1', role: 'challenge', anonId: 'Reviewer A', verdict: 'upheld', citations: [{ file: 'src/lib.rs', startLine: 1, endLine: 1, quote: 'x' }], argument: 'cited' };
