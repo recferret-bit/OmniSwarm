@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { digest } from './agent-session-store.mjs';
+import { sha256Json as digest } from './hash-util.mjs';
 import { bridgeRole } from './bridge-tools-registry.mjs';
 import { callBridgeTool } from './docker-mcp-bridge.mjs';
 import { acceptGeneralReview } from './bridge-tools-orchestrator.mjs';

@@ -1,6 +1,6 @@
 # Golden eval
 
-Command: `npm run eval:golden` · date 2026-11-03 · commit 5525b6e
+Command: `npm run eval:golden` · date 2026-11-03 · commit 772aafe
 
 Reviewers: scripted:baseline, scripted:paranoid, scripted:wrong, scripted:lazy; judge scripted:judge. Cost: none (no model was called).
 

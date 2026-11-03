@@ -3,7 +3,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { digest } from './agent-session-store.mjs';
+import { sha256Json as digest } from './hash-util.mjs';
 import { parseReviewerSpec } from './reviewer-registry.mjs';
 import { bridgeRole } from './bridge-tools-registry.mjs';
 import { writeJson, writeText } from './report-util-files.mjs';

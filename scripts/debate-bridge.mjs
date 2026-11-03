@@ -1,7 +1,7 @@
 // Shared pieces of the debater and orchestrator bridge roles: the read tools (the auditor's own handlers and
 // input schemas, behind a per-session call budget), the session's assignment, and report_json unwrapping.
 import { commonHandlers, commonToolDefinitions } from './bridge-tools-common.mjs';
-import { digest } from './agent-session-store.mjs';
+import { sha256Json as digest } from './hash-util.mjs';
 import { readReportJson } from './report-contract.mjs';
 import { readJsonOr, writeJson } from './report-util-files.mjs';
 

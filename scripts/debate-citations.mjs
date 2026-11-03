@@ -2,7 +2,7 @@
 // source-manifest.json is given, a file whose bytes no longer match it is refused. Whitespace is collapsed
 // and the quote must sit inside the cited line range. A debate argument's citation also has to land near
 // one of the cluster's own anchors, so a valid quote about some other function does not decide a cluster.
-import crypto from 'node:crypto';
+import { sha256Hex } from './hash-util.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { LINE_TOLERANCE } from './cluster-findings.mjs';
@@ -25,7 +25,7 @@ export function sourceReader(root, manifest = null) {
     try { stat = fs.lstatSync(full); } catch { return { error: 'file_not_in_snapshot' }; }
     if (!stat.isFile()) return { error: 'file_not_in_snapshot' };
     const bytes = fs.readFileSync(full);
-    if (hashes && hashes.get(rel) !== crypto.createHash('sha256').update(bytes).digest('hex')) return { error: 'source_changed' };
+    if (hashes && hashes.get(rel) !== sha256Hex(bytes)) return { error: 'source_changed' };
     return { lines: bytes.toString('utf8').split(/\r?\n/) };
   };
   return {

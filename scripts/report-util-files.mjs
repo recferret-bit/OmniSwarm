@@ -1,8 +1,8 @@
-// Report-directory file helpers for the debate and report modules. Writes go through report-contract's
+// Report-directory file helpers for the debate and report modules. Writes go through report-files.mjs'
 // atomic writeReportFile; reads are size-capped because report dirs hold target-influenced data.
 import fs from 'node:fs';
 import path from 'node:path';
-import { readReportJson, writeReportFile } from './report-contract.mjs';
+import { readReportJson, writeReportFile } from './report-files.mjs';
 
 export function writeText(root, rel, text) {
   fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true });
