@@ -2,6 +2,7 @@
 // packages/schemas/intake-api.schema.json; test/unit/dto.test.ts runs that schema's examples through
 // them, and the integration tests validate live responses against the JSON Schema itself.
 import { z } from 'zod';
+import { GUARD_REPORT_STATUSES } from '../db/repositories/guard-reports.ts';
 import { STATUSES } from '../modules/requests/state.ts';
 import { ERROR_CODES } from '../shared/errors.ts';
 import { accountId, commitSha, network, nonce, preset, publicKey, repo, sha256Hex, txHash, uuid, yocto } from '../shared/patterns.ts';
@@ -56,6 +57,19 @@ export const guardVerdictResponse = z.strictObject({
     maxSeverity: z.enum(['critical', 'high', 'medium', 'low', 'info', 'none']),
   }).optional(),
 });
+
+export const guardReportRequest = z.strictObject({ account: accountId, evidenceUrl: https.max(2000), reason: z.string().min(1).max(2000) });
+export const guardReportResponse = z.strictObject({ queued: z.literal(true), reportId: uuid.optional() });
+
+const guardReportStatus = z.enum(GUARD_REPORT_STATUSES);
+export const adminGuardReportQuery = z.strictObject({ status: guardReportStatus.optional() });
+export const adminGuardReportListResponse = z.strictObject({
+  reports: z.array(z.strictObject({
+    reportId: uuid, account: accountId, reporter: accountId, evidenceUrl: https, reason: z.string().min(1),
+    status: guardReportStatus, reportTx: z.string().min(1).nullable(), createdAt: timestamp,
+  })),
+});
+export const adminGuardDecisionResponse = z.strictObject({ status: guardReportStatus, reportTx: z.string().min(1).nullable() });
 
 export const healthResponse = z.strictObject({
   ok: z.boolean(), network, queueDepth: z.int().min(0), workers: z.int().min(0),

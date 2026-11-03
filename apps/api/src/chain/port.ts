@@ -56,6 +56,13 @@ export interface AttestArgs {
 /** `view_account.code_hash` of an account without a contract. */
 export const EMPTY_CODE_HASH = '11111111111111111111111111111111';
 
+/** `report_address(account_id, evidence_uri, reason)`: a guard blocklist entry (operator only). */
+export interface ReportAddressArgs {
+  accountId: string;
+  evidenceUri: string;
+  reason: string;
+}
+
 export interface ChainHealth { rpc: boolean; contract: boolean }
 
 export interface ChainPort {
@@ -75,9 +82,12 @@ export interface ChainPort {
   getAttestationForAccount(accountId: string): Promise<ChainAttestation | null>;
   /** Timestamp of a block by height, in milliseconds. */
   blockTimestampMs(height: number): Promise<number>;
+  /** `is_reported(account_id)`: the account is on the registry's guard blocklist. */
+  isReported(accountId: string): Promise<boolean>;
   /** Operator calls. Each returns the FINAL tx hash. `refund` throws when the transfer bounced. */
   markRunning(requestHash: string): Promise<string>;
   attest(args: AttestArgs): Promise<string>;
   refund(requestHash: string): Promise<string>;
+  reportAddress(args: ReportAddressArgs): Promise<string>;
   close(): Promise<void>;
 }

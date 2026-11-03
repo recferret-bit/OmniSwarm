@@ -7,7 +7,7 @@ import { b58encode } from '@omniswarm/schemas/nep413';
 import type { Db, Pool } from '../../db/pool.ts';
 import { AppError } from '../../shared/errors.ts';
 import { ChainRejectedError, chainUnavailable } from '../errors.ts';
-import type { AttestArgs, ChainAttestation, ChainPort, ChainRequest, KeyPermission, PaymentTx } from '../port.ts';
+import type { AttestArgs, ChainAttestation, ChainPort, ChainRequest, KeyPermission, PaymentTx, ReportAddressArgs } from '../port.ts';
 import { fromContractAttestation, type ContractAttestation } from '../near/attestation.ts';
 
 export interface MockChainOptions {
@@ -136,6 +136,30 @@ export class MockChainAdapter implements ChainPort {
       await client.query(`INSERT INTO mock_chain_event (event, request_hash, data) VALUES ('review_refunded', $1, '{}')`, [requestHash]);
     });
     await this.#hang('refund');
+    return txHash;
+  }
+
+  async isReported(accountId: string): Promise<boolean> {
+    await this.#guard();
+    return ((await this.#db.query('SELECT 1 FROM mock_chain_report WHERE account = $1', [accountId])).rowCount ?? 0) > 0;
+  }
+
+  /** As in the contract, reporting an account twice keeps the first entry. */
+  async reportAddress(args: ReportAddressArgs): Promise<string> {
+    await this.#guard();
+    const txHash = mockTxHash(`report_address:${args.accountId}`);
+    try {
+      await this.#db.query(
+        `WITH reported AS (
+           INSERT INTO mock_chain_report (account, evidence_uri, reason, tx_hash) VALUES ($1, $2, $3, $4)
+           ON CONFLICT (account) DO NOTHING RETURNING account)
+         INSERT INTO mock_chain_tx (tx_hash, signer, receiver, method, args, success)
+         SELECT $4, 'operator.mock', $5, 'report_address', $6, true FROM reported`,
+        [args.accountId, args.evidenceUri, args.reason, txHash, this.contractId,
+          JSON.stringify({ account_id: args.accountId, evidence_uri: args.evidenceUri, reason: args.reason })]);
+    } catch (error) {
+      throw chainUnavailable(error);
+    }
     return txHash;
   }
 

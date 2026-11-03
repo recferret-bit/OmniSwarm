@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { RecordedChain } from '@omniswarm/guard';
 import type { ChainPort } from './chain/port.ts';
-import { chainReader, guardPort, type GuardPort } from './modules/guard/guard.port.ts';
+import { chainReader, guardPort, withChainBlocklist, type GuardPort } from './modules/guard/guard.port.ts';
 import type { Config } from './config/load.ts';
 import { createPool, type Pool } from './db/pool.ts';
 import type { EngineRunner } from './engine/port.ts';
@@ -67,7 +67,7 @@ export async function createGuardPort(config: Config, chain: ChainPort): Promise
     refuseInProduction(config, 'the recorded guard reader');
     const { createRecordedReader } = await import('@omniswarm/guard/recorded-reader');
     const records = JSON.parse(fs.readFileSync(path.join(APP_ROOT, 'test/fixtures/guard/records.json'), 'utf8')) as RecordedChain;
-    return guardPort(createRecordedReader(records));
+    return guardPort(withChainBlocklist(createRecordedReader(records), chain));
   }
   return guardPort(chainReader(chain));
 }

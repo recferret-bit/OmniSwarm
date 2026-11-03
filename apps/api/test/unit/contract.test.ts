@@ -19,6 +19,8 @@ const BY_DEF: Record<string, ZodType> = {
   'payment-request': dto.paymentRequest, 'payment-response': dto.paymentResponse, 'request-status-response': dto.requestStatusResponse,
   'progress-event': dto.progressEvent, 'request-list-response': dto.requestListResponse, 'guard-verdict-response': dto.guardVerdictResponse,
   'health-response': dto.healthResponse, 'ready-response': dto.readyResponse, 'admin-refund-response': dto.adminRefundResponse,
+  'guard-report-request': dto.guardReportRequest, 'guard-report-response': dto.guardReportResponse,
+  'admin-guard-report-list-response': dto.adminGuardReportListResponse, 'admin-guard-decision-response': dto.adminGuardDecisionResponse,
 };
 
 test('error codes and statuses are the schema enums', () => {

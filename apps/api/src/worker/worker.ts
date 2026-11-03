@@ -6,8 +6,10 @@ import type { JobWithMetadata } from 'pg-boss';
 import { withTransaction } from '../db/pool.ts';
 import type { PgBoss } from '../queue/boss.ts';
 import {
-  assertRefundJob, assertReviewJob, MAINTENANCE_QUEUE, REFUND_QUEUE, releaseReview, REVIEW_DEAD_QUEUE, REVIEW_QUEUE, type ReviewJob,
+  assertGuardReportJob, assertRefundJob, assertReviewJob, GUARD_REPORT_QUEUE, MAINTENANCE_QUEUE, REFUND_QUEUE, releaseReview,
+  REVIEW_DEAD_QUEUE, REVIEW_QUEUE, type ReviewJob,
 } from '../queue/review-queue.ts';
+import { sendGuardReport } from '../modules/guard/guard-report.service.ts';
 import type { PaymentDeps } from '../modules/payments/payment.service.ts';
 import { refundRequest } from '../modules/payments/settlement.service.ts';
 import { isAppError } from '../shared/errors.ts';
@@ -70,6 +72,10 @@ export async function startWorker(boss: PgBoss, deps: WorkerDeps, shutdown: Abor
       }
       throw error;
     }
+  });
+  await boss.work(GUARD_REPORT_QUEUE, { batchSize: 1, pollingIntervalSeconds: 1 }, async ([job]) => {
+    if (!job) return null;
+    return sendGuardReport(deps, assertGuardReportJob(job.data).reportId);
   });
   await boss.work(MAINTENANCE_QUEUE, { batchSize: 1, pollingIntervalSeconds: 5 }, async () => runMaintenance(deps));
   await boss.schedule(MAINTENANCE_QUEUE, '* * * * *', {}, { singletonKey: 'maintenance' });

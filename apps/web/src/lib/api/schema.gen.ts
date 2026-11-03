@@ -48,6 +48,7 @@ export type ErrorCode =
   | 'INVALID_TRANSITION'
   | 'REFUND_NOT_ALLOWED'
   | 'REQUEST_NOT_FOUND';
+export type GuardReportStatus = 'pending' | 'approved' | 'reported' | 'rejected';
 /**
  * 202 refund_queued: the API recorded the refund and a worker (the only operator-key holder) sends it. 200 refunded: already refunded; refundTx is null when the tx hash was not recorded.
  */
@@ -90,6 +91,9 @@ export interface IntakeApi {
   'guard-verdict-response'?: GuardVerdictResponse;
   'guard-report-request'?: GuardReportRequest;
   'guard-report-response'?: GuardReportResponse;
+  'guard-report-status'?: GuardReportStatus;
+  'admin-guard-report-list-response'?: AdminGuardReportListResponse;
+  'admin-guard-decision-response'?: AdminGuardDecisionResponse;
   'ledger-response'?: LedgerResponse;
   'health-response'?: HealthResponse;
   'admin-refund-response'?: AdminRefundResponse;
@@ -223,8 +227,34 @@ export interface GuardReportRequest {
   evidenceUrl: string;
   reason: string;
 }
+/**
+ * 202: the report waits for the owner's review (admin listener); an approved report is sent on chain as report_address by a worker. A resubmission of an open report returns the same reportId.
+ */
 export interface GuardReportResponse {
   queued: true;
+  reportId?: Uuid;
+}
+/**
+ * GET /api/admin/guard/reports[?status=] on the loopback admin listener.
+ */
+export interface AdminGuardReportListResponse {
+  reports: {
+    reportId: Uuid;
+    account: AccountId;
+    reporter: AccountId;
+    evidenceUrl: string;
+    reason: string;
+    status: GuardReportStatus;
+    reportTx: string | null;
+    createdAt: Timestamp;
+  }[];
+}
+/**
+ * POST /api/admin/guard/reports/:id/approve (202 approved: a worker sends report_address) or /reject (200). Repeating a decision answers with the current state; reportTx is set once the worker sent it, null when the chain already listed the account.
+ */
+export interface AdminGuardDecisionResponse {
+  status: GuardReportStatus;
+  reportTx: string | null;
 }
 export interface LedgerResponse {
   entries: {

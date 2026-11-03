@@ -59,6 +59,7 @@ export async function installQueues(boss: PgBoss, config: Config): Promise<void>
   await ensure(REVIEW_DEAD_QUEUE, { policy: 'standard', retryLimit: 3, retryDelay: 30 });
   await ensure(REVIEW_QUEUE, reviewQueueOptions(config));
   await ensure(REFUND_QUEUE, { policy: 'exclusive', retryLimit: 5, retryDelay: 30, retryBackoff: true, expireInSeconds: 600 });
+  await ensure(GUARD_REPORT_QUEUE, { policy: 'exclusive', retryLimit: 5, retryDelay: 30, retryBackoff: true, expireInSeconds: 600 });
   await ensure(MAINTENANCE_QUEUE, { policy: 'exclusive', retryLimit: 0, expireInSeconds: 300 });
 }
 
@@ -105,4 +106,21 @@ export function assertRefundJob(data: unknown): RefundJob {
 export async function enqueueRefund(boss: PgBoss, tx: Db, job: RefundJob): Promise<string | null> {
   const db = { executeSql: (text: string, values?: unknown[]) => tx.query(text, values as unknown[]) };
   return boss.send(REFUND_QUEUE, assertRefundJob(job), { singletonKey: job.requestHash, db });
+}
+
+/** Approved guard reports: `report_address` signed by a worker. */
+export const GUARD_REPORT_QUEUE = 'guard-report';
+
+export interface GuardReportJob { reportId: string }
+
+export function assertGuardReportJob(data: unknown): GuardReportJob {
+  const job = data as Partial<GuardReportJob> | null;
+  if (!job || !/^[0-9a-f-]{36}$/.test(String(job.reportId))) throw new JobContractError('guard report job payload rejected');
+  return { reportId: String(job.reportId) };
+}
+
+/** One pending job per approved report, sent inside the caller's transaction. */
+export async function enqueueGuardReport(boss: PgBoss, tx: Db, job: GuardReportJob): Promise<string | null> {
+  const db = { executeSql: (text: string, values?: unknown[]) => tx.query(text, values as unknown[]) };
+  return boss.send(GUARD_REPORT_QUEUE, assertGuardReportJob(job), { singletonKey: job.reportId, db });
 }

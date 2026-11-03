@@ -1872,6 +1872,221 @@
         }
       }
     },
+    "/api/guard/reports": {
+      "post": {
+        "summary": "Report a NEAR account for the guard blocklist (owner review, then report_address on chain)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "account": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9._-]{2,64}$"
+                  },
+                  "evidenceUrl": {
+                    "type": "string",
+                    "maxLength": 2000,
+                    "pattern": "^https:\\/\\/[^\\s]+$"
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  }
+                },
+                "required": [
+                  "account",
+                  "evidenceUrl",
+                  "reason"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "queued": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "reportId": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+                    }
+                  },
+                  "required": [
+                    "queued"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "VALIDATION_ERROR",
+                            "MESSAGE_INVALID",
+                            "REPO_INVALID",
+                            "REPO_PRIVATE",
+                            "REPO_ARCHIVED",
+                            "REPO_TOO_LARGE",
+                            "REPO_DENIED",
+                            "REPO_NOT_FOUND",
+                            "REF_NOT_FOUND",
+                            "REF_CHANGED",
+                            "NETWORK_DISABLED",
+                            "PRESET_NOT_ALLOWED",
+                            "PAYLOAD_TOO_LARGE",
+                            "QUEUE_FULL",
+                            "NONCE_EXPIRED",
+                            "NONCE_USED",
+                            "NONCE_UNKNOWN",
+                            "SIG_INVALID",
+                            "KEY_NOT_FULL_ACCESS",
+                            "ACCOUNT_MISMATCH",
+                            "UNAUTHORIZED",
+                            "FORBIDDEN",
+                            "PAYMENT_NOT_FOUND",
+                            "PAYMENT_MISMATCH",
+                            "PAYMENT_SIGNER_MISMATCH",
+                            "TX_ALREADY_USED",
+                            "ACTIVE_REQUEST_EXISTS",
+                            "INVALID_TRANSITION",
+                            "REFUND_NOT_ALLOWED",
+                            "RATE_LIMITED",
+                            "NOT_FOUND",
+                            "REQUEST_NOT_FOUND",
+                            "CHAIN_UNAVAILABLE",
+                            "GITHUB_UNAVAILABLE",
+                            "INTERNAL"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 2000
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "retryable"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "VALIDATION_ERROR",
+                            "MESSAGE_INVALID",
+                            "REPO_INVALID",
+                            "REPO_PRIVATE",
+                            "REPO_ARCHIVED",
+                            "REPO_TOO_LARGE",
+                            "REPO_DENIED",
+                            "REPO_NOT_FOUND",
+                            "REF_NOT_FOUND",
+                            "REF_CHANGED",
+                            "NETWORK_DISABLED",
+                            "PRESET_NOT_ALLOWED",
+                            "PAYLOAD_TOO_LARGE",
+                            "QUEUE_FULL",
+                            "NONCE_EXPIRED",
+                            "NONCE_USED",
+                            "NONCE_UNKNOWN",
+                            "SIG_INVALID",
+                            "KEY_NOT_FULL_ACCESS",
+                            "ACCOUNT_MISMATCH",
+                            "UNAUTHORIZED",
+                            "FORBIDDEN",
+                            "PAYMENT_NOT_FOUND",
+                            "PAYMENT_MISMATCH",
+                            "PAYMENT_SIGNER_MISMATCH",
+                            "TX_ALREADY_USED",
+                            "ACTIVE_REQUEST_EXISTS",
+                            "INVALID_TRANSITION",
+                            "REFUND_NOT_ALLOWED",
+                            "RATE_LIMITED",
+                            "NOT_FOUND",
+                            "REQUEST_NOT_FOUND",
+                            "CHAIN_UNAVAILABLE",
+                            "GITHUB_UNAVAILABLE",
+                            "INTERNAL"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 2000
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "retryable"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/requests/{id}/events": {
       "get": {
         "summary": "Server-Sent Events: progress and status of one request",

@@ -200,7 +200,47 @@
         "reason": {"type": "string", "minLength": 1, "maxLength": 2000}
       }
     },
-    "guard-report-response": {"type": "object", "required": ["queued"], "additionalProperties": false, "properties": {"queued": {"const": true}}},
+    "guard-report-response": {
+      "description": "202: the report waits for the owner's review (admin listener); an approved report is sent on chain as report_address by a worker. A resubmission of an open report returns the same reportId.",
+      "type": "object",
+      "required": ["queued"],
+      "additionalProperties": false,
+      "properties": {"queued": {"const": true}, "reportId": {"$ref": "#/$defs/uuid"}}
+    },
+    "guard-report-status": {"enum": ["pending", "approved", "reported", "rejected"]},
+    "admin-guard-report-list-response": {
+      "description": "GET /api/admin/guard/reports[?status=] on the loopback admin listener.",
+      "type": "object",
+      "required": ["reports"],
+      "additionalProperties": false,
+      "properties": {
+        "reports": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["reportId", "account", "reporter", "evidenceUrl", "reason", "status", "reportTx", "createdAt"],
+            "additionalProperties": false,
+            "properties": {
+              "reportId": {"$ref": "#/$defs/uuid"},
+              "account": {"$ref": "#/$defs/account-id"},
+              "reporter": {"$ref": "#/$defs/account-id"},
+              "evidenceUrl": {"type": "string", "pattern": "^https://[^\\s]+$"},
+              "reason": {"type": "string", "minLength": 1},
+              "status": {"$ref": "#/$defs/guard-report-status"},
+              "reportTx": {"type": ["string", "null"], "minLength": 1},
+              "createdAt": {"$ref": "#/$defs/timestamp"}
+            }
+          }
+        }
+      }
+    },
+    "admin-guard-decision-response": {
+      "description": "POST /api/admin/guard/reports/:id/approve (202 approved: a worker sends report_address) or /reject (200). Repeating a decision answers with the current state; reportTx is set once the worker sent it, null when the chain already listed the account.",
+      "type": "object",
+      "required": ["status", "reportTx"],
+      "additionalProperties": false,
+      "properties": {"status": {"$ref": "#/$defs/guard-report-status"}, "reportTx": {"type": ["string", "null"], "minLength": 1}}
+    },
     "ledger-response": {
       "type": "object",
       "required": ["entries"],

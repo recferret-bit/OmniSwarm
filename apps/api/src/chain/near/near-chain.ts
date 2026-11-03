@@ -4,7 +4,7 @@
 import { Account, FailoverRpcError, FailoverRpcProvider, JsonRpcProvider, actions, type Provider } from 'near-api-js';
 import { AccessKeyDoesNotExistError, AccountDoesNotExistError, UnknownTransactionError } from 'near-api-js/rpc-errors';
 import { ChainRejectedError, chainUnavailable } from '../errors.ts';
-import type { AttestArgs, ChainAttestation, ChainPort, ChainRequest, KeyPermission, PaymentTx } from '../port.ts';
+import type { AttestArgs, ChainAttestation, ChainPort, ChainRequest, KeyPermission, PaymentTx, ReportAddressArgs } from '../port.ts';
 import { fromContractAttestation, type ContractAttestation } from './attestation.ts';
 import type { OperatorKey } from './operator-key.ts';
 import { panicReason, parsePaymentTx, returnValue } from './payment-tx.ts';
@@ -109,6 +109,10 @@ export class NearChainAdapter implements ChainPort {
     return view ? { codeHash: view.code_hash } : null;
   }
 
+  async isReported(accountId: string): Promise<boolean> {
+    return (await this.#view<boolean>('is_reported', { account_id: accountId })) === true;
+  }
+
   markRunning(requestHash: string): Promise<string> {
     return this.#call('mark_running', { request_hash: requestHash });
   }
@@ -123,6 +127,10 @@ export class NearChainAdapter implements ChainPort {
   // v0.2: refund resolves to false when the transfer bounced; the contract then restored the request.
   refund(requestHash: string): Promise<string> {
     return this.#call('refund', { request_hash: requestHash }, true);
+  }
+
+  reportAddress(args: ReportAddressArgs): Promise<string> {
+    return this.#call('report_address', { account_id: args.accountId, evidence_uri: args.evidenceUri, reason: args.reason });
   }
 
   async close(): Promise<void> {}

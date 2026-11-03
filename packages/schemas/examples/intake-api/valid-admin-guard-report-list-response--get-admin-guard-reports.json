@@ -1,0 +1,14 @@
+{
+  "reports": [
+    {
+      "reportId": "3f2b8c1e-5d4a-4b7e-9c1a-2e6f0a8b4d10",
+      "account": "bad.testnet",
+      "reporter": "alice.testnet",
+      "evidenceUrl": "https://example.org/evidence/1",
+      "reason": "Drains approvals",
+      "status": "pending",
+      "reportTx": null,
+      "createdAt": "2026-11-03T12:00:00.000Z"
+    }
+  ]
+}

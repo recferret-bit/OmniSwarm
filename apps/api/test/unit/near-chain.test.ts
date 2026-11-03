@@ -46,6 +46,10 @@ function registry(call: Call): Answer {
   if (call.method === 'tx') return p.tx_hash === 'unknown' ? { error: REC.unknown_tx } : { result: REC.tx_paid };
   if (call.method === 'block') return { result: REC.block };
   if (call.method === 'query' && p.request_type === 'call_function') {
+    if (p.method_name === 'is_reported') {
+      const args = JSON.parse(Buffer.from(p.args_base64, 'base64').toString('utf8'));
+      return { result: args.account_id === 'drainer.testnet' ? REC.is_reported_true : REC.is_reported_false };
+    }
     const name = { get_request: 'get_request', get_attestation: 'get_attestation', get_attestation_for_account: 'get_attestation', get_price: 'get_price' }[p.method_name as string];
     return { result: REC[name ?? 'null_view'] };
   }
@@ -115,4 +119,26 @@ test('operator writes sign with the key file, wait for FINAL and read the refund
   assert.ok(!JSON.stringify(server.calls).includes(fs.readFileSync(keyFile, 'utf8').slice(30, 60)), 'the secret never goes over the wire');
   fs.chmodSync(keyFile, 0o644);
   assert.throws(() => loadOperatorKey(keyFile), /must not be readable/);
+});
+
+test('guard blocklist: is_reported is a final view; report_address is an operator call with {account_id, evidence_uri, reason}', async () => {
+  const keyFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'key-')), 'operator.key');
+  fs.writeFileSync(keyFile, JSON.stringify({ account_id: 'operator.testnet', private_key: KeyPair.fromRandom('ed25519').toString() }), { mode: 0o600 });
+  const server = await rpc((call) => (call.method === 'send_tx' ? { result: REC.report_address_ok } : registry(call)));
+  const reader = adapter([server.url]);
+  assert.equal(await reader.isReported('drainer.testnet'), true);
+  assert.equal(await reader.isReported('clean.testnet'), false);
+  const view = server.calls.find((c) => c.params?.method_name === 'is_reported');
+  assert.equal(view?.params.finality, 'final');
+  assert.deepEqual(JSON.parse(Buffer.from(view?.params.args_base64, 'base64').toString('utf8')), { account_id: 'drainer.testnet' });
+  const report = { accountId: 'drainer.testnet', evidenceUri: 'https://evidence.test/drainer', reason: 'phishing drainer' };
+  await assert.rejects(reader.reportAddress(report), /holds no operator key/, 'the API process cannot report');
+  assert.equal(await adapter([server.url], () => loadOperatorKey(keyFile)).reportAddress(report), REC.report_address_ok.transaction.hash);
+  assert.equal(server.calls.find((c) => c.method === 'send_tx')?.params.wait_until, 'FINAL');
+
+  const old = await rpc((call) => (call.params?.method_name === 'is_reported'
+    ? { result: { error: 'wasm execution failed with error: MethodResolveError(MethodNotFound)', logs: [], block_height: 220000000, block_hash: REC.null_view.block_hash } }
+    : registry(call)));
+  await assert.rejects(adapter([old.url]).isReported('drainer.testnet'), (error: unknown) => error instanceof AppError && error.code === 'CHAIN_UNAVAILABLE',
+    'a registry without is_reported is an unavailable signal, not "not reported"');
 });

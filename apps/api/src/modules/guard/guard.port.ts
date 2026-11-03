@@ -10,9 +10,10 @@ export interface GuardPort {
 }
 
 /**
- * ChainReader over the registry and RPC. There is no shared blocklist yet (the registry has no
- * `is_reported` and the API stores no approved reports), so nothing is reported; and no indexer is
- * wired for account age, so that signal is unavailable and the guard never answers `allow` from it.
+ * ChainReader over the registry and RPC. The blocklist is the registry's `is_reported` (approved guard
+ * reports are written there by `report_address`); a registry without that view makes the signal
+ * unavailable rather than "not reported". No indexer is wired for account age, so that signal is
+ * unavailable and the guard never answers `allow` from it.
  */
 export function chainReader(chain: ChainPort): ChainReader {
   return {
@@ -21,10 +22,15 @@ export function chainReader(chain: ChainPort): ChainReader {
       const attestation = await chain.getAttestationForAccount(accountId);
       return attestation ? toContractAttestation(attestation) : null;
     },
-    isReported: async () => false,
+    isReported: (accountId) => chain.isReported(accountId),
     getAccountAgeDays: async () => { throw new Error('account age needs an indexer, which is not configured'); },
     getBlockTimestampMs: (height) => chain.blockTimestampMs(height),
   };
+}
+
+/** Mock-chain mode: the recorded snapshot, with the mock registry's blocklist added to its `reported`. */
+export function withChainBlocklist(reader: ChainReader, chain: ChainPort): ChainReader {
+  return { ...reader, isReported: async (accountId) => (await reader.isReported(accountId)) || chain.isReported(accountId) };
 }
 
 export function guardPort(reader: ChainReader): GuardPort {
