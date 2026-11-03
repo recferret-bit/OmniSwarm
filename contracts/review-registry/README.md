@@ -1,29 +1,44 @@
 # review-registry
 
-NEAR contract for a paid, single-use review request. Host tests use `cargo test` on this crate. The review sandbox does not build it and does not install `cargo-near` or `wasm32-unknown-unknown`.
+NEAR contract for a paid, single-use review request, its attestation, and the deployed-account binding the agent guard reads. `near-sdk` 5.30.0.
 
-## Methods
+The full method, argument, event and error list is in [INTERFACE.md](INTERFACE.md).
 
-| Method | Who | Effect |
-|---|---|---|
-| `new(owner, operator, treasury, price_yocto)` | deploy | init once |
-| `request_review(request_hash)` | anyone, payable | `Pending` when the deposit is at least the price and the hash is unused |
-| `mark_running(request_hash)` | operator | `Pending` → `Running` |
-| `attest(...)` | operator | `Pending` or `Running` → `Done`; records the report hash |
-| `refund(request_hash)` | operator or owner | `Pending` or `Running` → `Refunded`, then transfers the deposit back |
-| `withdraw(amount)` | owner | sends earned `Done` deposits to the treasury |
-| `get_request`, `get_attestation`, `get_attestation_for_account`, `get_attestations_for_repo`, `get_price` | anyone | views |
+## Tests
 
-`Done` cannot be refunded. A non-operator cannot attest. A non-owner cannot withdraw. Deposits still `Pending` are not earned.
+```sh
+CARGO_TARGET_DIR=<scratch>/cargo-near cargo test --manifest-path contracts/review-registry/Cargo.toml
+cargo clippy --manifest-path contracts/review-registry/Cargo.toml --all-targets -- -D warnings
+```
 
-## Events
+The unit tests run on near-sdk's mock VM (`unit-testing` is a dev-dependency only). They cover every access rule, state transition, validation code, the storage and reserve rules, the refund and withdraw transfers (receiver and exact yocto amount from the created receipts), both failure callbacks, the binding rules, pagination, parsed NEP-297 events, and the deploy script's dry run.
 
-Logs are `EVENT_JSON:{"standard":"omniswarm","version":"1.0.0","event":"...","data":[...]}`. Events: `review_requested`, `review_attested`, `review_refunded`.
+Two rules live in generated wasm glue, so the mock VM cannot exercise them: `#[init]` rejecting a second `new`, and `#[private]` rejecting outside callers of the callbacks. A near-workspaces sandbox suite would cover them. It is not here because it needs the `wasm32-unknown-unknown` target, `cargo-near`, and a downloaded `near-sandbox` binary, none of which this host has offline. The review sandbox never installs them either (AGENTS.md).
+
+## Money
+
+`locked` holds `Pending` and `Running` deposits; `earned` holds `Done` deposits. The contract keeps `balance ≥ storage stake + locked`, and `withdraw` cannot go below that (`get_withdrawable`). Refund and withdraw transfers have callbacks that restore state when the transfer fails.
+
+## Binding
+
+`get_attestation_for_account` (the guard's view) returns an attestation only when the `deployed` account paid the request itself or later called `confirm_binding`. This stops third parties from binding a report to an account they do not control. It does not prove that the deployed code was built from the reviewed commit. See INTERFACE.md, "Deployed-account binding".
 
 ## Key limits
 
-The operator key is a function-call key for `mark_running`, `attest`, `refund`, `report_address`, and `reviewer_attest` on this contract only. It cannot transfer NEAR, add keys, or call `withdraw`. If its gas allowance runs out, the owner adds allowance with a full-access key. `withdraw` stays on the owner's key.
+- The **operator** account (`operator.<owner>`) holds a function-call key for `review-registry.<owner>` limited to `mark_running`, `attest` and `refund`, with a 1 NEAR gas allowance. That key cannot transfer NEAR, add or delete keys, deploy code, or call `withdraw`, the admin methods, or any other contract. When the allowance runs out, the owner adds a new key. The API signs only with this key. The operator account's own full-access key stays in the owner's keychain.
+- The **owner** account signs `withdraw`, `set_*` and `propose_owner`. Rotation is two-step: `propose_owner(new)` and then `accept_owner()` from the new account.
+- The **contract** account keeps the full-access key that `create-account` generated. Whoever holds it can redeploy arbitrary code, which would also change the registry the guard trusts. It is the only upgrade path, so the owner keeps it offline. Deleting it (`near account delete-keys`) makes the contract immutable.
+- The treasury only receives transfers. It defaults to the owner account.
 
 ## Deploy
 
-`bash contracts/review-registry/scripts/deploy-testnet.sh --dry-run` prints the `near` commands and does not deploy. The owner runs those commands. Testnet funding and the live adapter stay with the owner.
+```sh
+bash contracts/review-registry/scripts/deploy-testnet.sh --dry-run   # prints the six commands, touches nothing
+bash contracts/review-registry/scripts/deploy-testnet.sh --execute   # the owner runs them (near-cli-rs + cargo-near)
+```
+
+The commands build the wasm, create `review-registry.<owner>` and `operator.<owner>` funded by the owner, deploy with `new(owner, operator.<owner>, treasury, 1 NEAR)`, add the operator function-call key, and read `get_price`. New keys go to the near-cli keychain. The operator key goes to the legacy keychain (`~/.near-credentials/testnet/`) so the owner can move it into the host env file. No command prints a secret key. `OWNER`, `CONTRACT`, `OPERATOR`, `TREASURY`, `PRICE_YOCTO` and `OPERATOR_ALLOWANCE` override the defaults. A unit test checks that the key lands on the operator named in `new`, and that the key's method list equals `OPERATOR_METHODS`.
+
+The near-cli-rs flag spelling (`--contract-account-id`, `--function-names`) has not been checked against an installed `near --help` on this host.
+
+Explorer: `https://testnet.nearblocks.io/address/review-registry.<owner>.testnet` once deployed.
