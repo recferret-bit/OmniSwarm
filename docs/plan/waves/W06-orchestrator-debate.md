@@ -60,24 +60,24 @@ The **golden eval** decides whether debate earns its cost: it must beat union an
 - [x] Seeded anonymization; `anonymization.json` hidden from judges — W06-04
 - [x] Snapshot-tested brief templates (objective · output · tools · boundaries) — W06-05
 - [x] Bridge role `debater` with `submit_debate_turn` — W06-06
-- [x] Bridge role `orchestrator` with merge / adjudication / general-review submits, no `run_existing_tests` — W06-07
-- [x] Round 1 challenge extends crosscheck with batching (R-10) — W06-08
+- [ ] Bridge role `orchestrator` with merge / adjudication / general-review submits, no `run_existing_tests` — W06-07
+- [ ] Round 1 challenge extends crosscheck with batching (R-10) — W06-08
 - [x] Devil's advocate per cluster — W06-09
 - [x] Rounds 2/3 defend/rebut with early stop — W06-10
 - [x] Discard uncited arguments; `conformity_suspect` — W06-11
-- [x] Orchestrator merge suggestions (H+) — W06-12
+- [ ] Orchestrator merge suggestions (H+) — W06-12
 - [x] `--orchestrator <spec>|recommended` resolution in `--plan` — W06-13
 - [x] Adjudicate phase with cross-family judge and alternate judge — W06-14
 - [x] New final statuses mapped onto legacy ones; no silent drops; severity re-calibration — W06-15
 - [x] General review phase + schema validation — W06-16
 - [x] Stage failures → INCOMPLETE, per-model findings intact — W06-17
-- [x] Full tracing (`debate/trace.jsonl`) — W06-18
+- [ ] Full tracing (`debate/trace.jsonl`) — W06-18
 - [x] Scripted debate strategies + `scripted:judge` so the phase runs offline — W06-19
 - [x] Engine e2e — W06-20
-- [x] Golden repos (6 in `H`, 4 more `H+`) — W06-21, W06-22
+- [ ] Golden repos (6 in `H`, 4 more `H+`) — W06-21, W06-22
 - [x] Eval runner with union and majority-vote baselines — W06-23
-- [x] Rubric judge on general reviews (H+) — W06-24
-- [x] Live eval + `eval/RESULTS.md` — W06-25
+- [ ] Rubric judge on general reviews (H+) — W06-24
+- [ ] Live eval + `eval/RESULTS.md` — W06-25
 - [x] OD-14 default decision — W06-26
 - [x] Wave check guide + tag — W06-27
 

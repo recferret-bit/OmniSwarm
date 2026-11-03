@@ -1,12 +1,19 @@
 # packages/
 
-**Track:** Security (S)
-**Owning waves:** W13 (agent guard).
-**Owned subpaths:** `packages/guard/` (`@omniswarm/guard`: allow, warn, block wrapper around an agent's signer), with its prompt-injection demo in `packages/guard/demo/attack/`. It joins the root npm workspaces automatically (`packages/*`).
-**Not owned here:** `packages/schemas/` (`@omniswarm/schemas`) is the lead's cross-track contract (AGENTS.md, "Tracks and boundaries").
-**Gate command:** `npm run check:w13` (unit, `tests/e2e/intake/w13.spec.ts`, `packages/guard/demo/attack/run.mjs` with and without `--no-guard`). The workspace's own tests run with `npm test -w @omniswarm/guard`.
-**Contract:** guard DTOs in `packages/schemas/intake-api.schema.json` (change request CR-13a to the lead).
+Shared libraries. Each one is a root npm workspace (`packages/*`).
 
-**Boundary:** NEAR RPC, wallets, payments, the GitHub API and the queue live only in `apps/`, `contracts/` and `infra/`. `engine/scripts/`, `engine/docker/`, `engine/native/` and `engine/skills/` stay the offline review engine and never gain a network path to them (AGENTS.md, "Tracks and boundaries"). The guard calls the intake API's `/api/guard/verdict`; it does not talk to the review engine.
+**Boundary:** NEAR RPC, wallets, payments, the GitHub API and the queue live only in `apps/`, `contracts/` and `infra/`. `engine/scripts/`, `engine/docker/`, `engine/native/` and `engine/skills/` stay the offline review engine and never gain a network path to them (AGENTS.md, "Tracks and boundaries").
 
-Nothing is built here yet (W00 lands the folder only).
+## packages/guard (`@omniswarm/guard`)
+
+**Track:** Security (S) · **Owning wave:** W13 (agent guard).
+**Gate command:** `npm run check:w13`: the workspace tests (`npm test -w @omniswarm/guard`), then `node packages/guard/demo/attack/run.mjs` with and without `--no-guard`.
+
+An allow / warn / block wrapper around an agent's signer. The guard reads chain evidence through an injected `ChainReader` (registry attestations, the live code hash, the blocklist, account and attestation age); it does not need the API. `httpSource` is an optional verdict source for agents that would rather ask the API's `GET /api/guard/verdict`. See [`guard/README.md`](guard/README.md) and the prompt-injection demo in [`guard/demo/attack/`](guard/demo/attack/README.md).
+
+## packages/schemas (`@omniswarm/schemas`)
+
+**Owner:** the lead. It is the cross-track contract (AGENTS.md, "Tracks and boundaries"); a needed change is a change request to the lead.
+**Gate command:** `npm run test:schemas`.
+
+JSON Schemas for the engine, the intake API, jobs and attestations, plus the shared helpers both apps import by package name: `canonical-message` (request message and hash), `canonical-json` (report hash input) and `nep413` (NEP-413 payload and base58).
