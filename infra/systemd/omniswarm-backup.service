@@ -1,0 +1,21 @@
+[Unit]
+Description=OmniSwarm nightly backup (pg_dump + reports tarball)
+Documentation=file:/srv/omniswarm/current/infra/README.md
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+# Root: reads /etc/omniswarm/stack.env (0600) for `docker compose`.
+ExecStart=/srv/omniswarm/current/infra/deploy/backup.sh
+Environment=DOCKER_CONFIG=/run/omniswarm-backup/docker
+RuntimeDirectory=omniswarm-backup
+RuntimeDirectoryMode=0700
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/srv/omniswarm/backup
+ReadWritePaths=-/run/docker.sock
+ProtectHome=yes
+PrivateTmp=yes
+Nice=10
+IOSchedulingClass=idle

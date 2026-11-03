@@ -1,0 +1,2 @@
+# infra/compose/local.sh state: generated secrets, self-signed certs, sample reports.
+/compose/.local/

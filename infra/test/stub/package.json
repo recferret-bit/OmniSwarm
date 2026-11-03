@@ -1,0 +1,9 @@
+{
+  "name": "omniswarm-infra-stub",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "api": "node api.mjs",
+    "web": "node web.mjs"
+  }
+}
