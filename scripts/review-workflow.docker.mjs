@@ -10,6 +10,7 @@ import { REVIEW_IMAGE, createSnapshot, disposeSnapshot } from './worker-isolatio
 import { buildExistingTestCatalog } from './review-workflow.mjs';
 import { callBridgeTool, resolveDockerBin } from './docker-mcp-bridge.mjs';
 import { holdSandbox, probeSandbox } from './sandbox-lifecycle.mjs';
+import { importClosure } from './worker-isolation-bundle.mjs';
 const scripts = path.dirname(fileURLToPath(import.meta.url));
 const dockerBin = resolveDockerBin();
 const docker = args => {
@@ -43,7 +44,8 @@ test('real Docker enforces offline existing tests, manifest binding and unlimite
   const start = network => {
     const container = `source-review-${crypto.randomUUID()}`;
     const args = ['run', '--detach', '--pull=never', '--name', container, '--label', `omniswarm.review.fixture=${label}`, '--network', network, '--user', '10001:10001', '--read-only', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges', '--pids-limit', '128', '--memory', '256m', '--tmpfs', '/tmp:mode=1777', '--tmpfs', '/work:mode=1777', '--tmpfs', '/out:mode=1777', '--mount', `type=bind,src=${source},dst=/src,readonly`, '--env', 'SANDBOX_REVIEW_ONLY=1', '--env', 'SANDBOX_BUDGET_MS=1000', '--env', 'SANDBOX_HOLD=1'];
-    for (const file of ['sandbox-inside.mjs', 'sandbox-lib.mjs']) args.push('--mount', `type=bind,src=${path.join(scripts, file)},dst=/opt/audit/${file},readonly`);
+    // Every module sandbox-inside.mjs loads, flat under /opt/audit as sandbox.sh mounts them.
+    for (const file of importClosure(path.join(scripts, 'sandbox-inside.mjs')).map(f => path.basename(f))) args.push('--mount', `type=bind,src=${path.join(scripts, file)},dst=/opt/audit/${file},readonly`);
     docker([...args, REVIEW_IMAGE, 'node', '/opt/audit/sandbox-inside.mjs']);
     containers.push(container);
     return container;

@@ -74,11 +74,15 @@ test('offline Cargo tests automatically compile Solana SBF cdylib artifacts into
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'audit-sbf-toolchain-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   fs.chmodSync(root, 0o755);
-  for (const directory of [path.join(root, 'src'), path.join(root, 'tests')]) fs.mkdirSync(directory, { recursive: true, mode: 0o755 });
-  const manifest = '[package]\nname="inert-sbf-program"\nversion="0.1.0"\nedition="2021"\n[lib]\ncrate-type=["cdylib","lib"]\n';
+  for (const directory of [path.join(root, 'src'), path.join(root, 'tests'), path.join(root, 'solana-program/src')]) fs.mkdirSync(directory, { recursive: true, mode: 0o755 });
+  // Only a cdylib that depends on a Solana crate goes through the SBF compile (a plain or near-sdk cdylib does not).
+  // Offline, that dependency is an inert local path crate with the Solana package name.
+  const manifest = '[package]\nname="inert-sbf-program"\nversion="0.1.0"\nedition="2021"\n[lib]\ncrate-type=["cdylib","lib"]\n[dependencies]\nsolana-program={path="solana-program"}\n';
   fs.writeFileSync(path.join(root, 'Anchor.toml'), '[programs.localnet]\ninert_sbf_program = "11111111111111111111111111111111"\n');
   fs.writeFileSync(path.join(root, 'Cargo.toml'), manifest);
-  fs.writeFileSync(path.join(root, 'Cargo.lock'), 'version = 3\n[[package]]\nname="inert-sbf-program"\nversion="0.1.0"\n');
+  fs.writeFileSync(path.join(root, 'solana-program/Cargo.toml'), '[package]\nname="solana-program"\nversion="0.1.0"\nedition="2021"\n');
+  fs.writeFileSync(path.join(root, 'solana-program/src/lib.rs'), '// Inert stand-in for the Solana crate.\n');
+  fs.writeFileSync(path.join(root, 'Cargo.lock'), 'version = 3\n[[package]]\nname="inert-sbf-program"\nversion="0.1.0"\ndependencies = [\n "solana-program",\n]\n\n[[package]]\nname="solana-program"\nversion="0.1.0"\n');
   fs.writeFileSync(path.join(root, 'src/lib.rs'), '#[no_mangle]\npub extern "C" fn entrypoint(_input: *mut u8) -> u64 { 0 }\n');
   fs.writeFileSync(path.join(root, 'tests/sbf.rs'), '#[test]\nfn existing_sbf_artifact_test(){let bytes=include_bytes!(concat!(env!("CARGO_TARGET_TMPDIR"),"/../deploy/inert_sbf_program.so"));assert_eq!(&bytes[..4],b"\\x7fELF");}\n');
   const entry = { cwd: '.', command: 'cargo', args: ['test', '--locked', '--offline'], timeoutMs: 900000, files: [{ path: 'Cargo.toml', sha256: crypto.createHash('sha256').update(manifest).digest('hex') }] };

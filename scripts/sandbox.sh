@@ -118,6 +118,9 @@ export_files() {
       -v "$VOL":/work:ro \
       -v "$OUT/files":/export \
       -v "$LIB:/opt/audit/sandbox-lib.mjs:ro" \
+      -v "$SCRIPT_DIR/sandbox-net.mjs:/opt/audit/sandbox-net.mjs:ro" \
+      -v "$SCRIPT_DIR/sandbox-tree.mjs:/opt/audit/sandbox-tree.mjs:ro" \
+      -v "$SCRIPT_DIR/sandbox-artifacts.mjs:/opt/audit/sandbox-artifacts.mjs:ro" \
       audit-sandbox:local \
       /opt/audit/sandbox-lib.mjs export /work /export build \
       >"$RUN/export.log" 2>&1 || true
@@ -259,6 +262,9 @@ docker run -d --name "$PROXY" \
   -e PORT=3128 \
   -v "$SCRIPT_DIR/sandbox-proxy.mjs:/opt/audit/sandbox-proxy.mjs:ro" \
   -v "$SCRIPT_DIR/sandbox-lib.mjs:/opt/audit/sandbox-lib.mjs:ro" \
+  -v "$SCRIPT_DIR/sandbox-net.mjs:/opt/audit/sandbox-net.mjs:ro" \
+  -v "$SCRIPT_DIR/sandbox-tree.mjs:/opt/audit/sandbox-tree.mjs:ro" \
+  -v "$SCRIPT_DIR/sandbox-artifacts.mjs:/opt/audit/sandbox-artifacts.mjs:ro" \
   -w /opt/audit \
   node:24-bookworm-slim \
   node /opt/audit/sandbox-proxy.mjs >/dev/null
@@ -339,7 +345,15 @@ if ! docker run -d --name "$SBX" \
   -v "$RUN":/out \
   -v "$SCRIPT_DIR/sandbox-inside.mjs:/opt/audit/sandbox-inside.mjs:ro" \
   -v "$SCRIPT_DIR/sandbox-lib.mjs:/opt/audit/sandbox-lib.mjs:ro" \
+  -v "$SCRIPT_DIR/sandbox-net.mjs:/opt/audit/sandbox-net.mjs:ro" \
+  -v "$SCRIPT_DIR/sandbox-tree.mjs:/opt/audit/sandbox-tree.mjs:ro" \
+  -v "$SCRIPT_DIR/sandbox-artifacts.mjs:/opt/audit/sandbox-artifacts.mjs:ro" \
   -v "$SCRIPT_DIR/harness.mjs:/opt/audit/harness.mjs:ro" \
+  -v "$SCRIPT_DIR/harness-leads.mjs:/opt/audit/harness-leads.mjs:ro" \
+  -v "$SCRIPT_DIR/harness-patterns-app.mjs:/opt/audit/harness-patterns-app.mjs:ro" \
+  -v "$SCRIPT_DIR/harness-patterns-chain.mjs:/opt/audit/harness-patterns-chain.mjs:ro" \
+  -v "$SCRIPT_DIR/harness-scanners.mjs:/opt/audit/harness-scanners.mjs:ro" \
+  -v "$SCRIPT_DIR/harness-walk.mjs:/opt/audit/harness-walk.mjs:ro" \
   -v "$SCRIPT_DIR/audit-plans.mjs:/opt/audit/audit-plans.mjs:ro" \
   -v "$SCRIPT_DIR/scanner-evidence.mjs:/opt/audit/scanner-evidence.mjs:ro" \
   -v "$SCRIPT_DIR/stack-detect.mjs:/opt/audit/stack-detect.mjs:ro" \
@@ -503,8 +517,7 @@ if [ -n "$HOLD_FILE" ] && running; then
     echo "sandbox: cannot verify network disconnection; refusing reviewer handoff" >&2
     exit 1
   fi
-  # R-01: target suites run as uid 10001 after this point. Make /work and /work/bin root-owned so a suite cannot
-  # replace or rename /work/bin. Subdirectories (src, cargo, target, runs, venv) stay 10001-owned; preparation is finished.
+  # R-01 and R-02 handoff seal: root-owned /work and /work/bin, and the root-owned /work/deps copy of node_modules.
   if ! docker run --rm --name "$SEAL" \
     --entrypoint bash \
     --user 0:0 \
@@ -516,10 +529,11 @@ if [ -n "$HOLD_FILE" ] && running; then
     --network none \
     --read-only \
     -v "$VOL":/work \
+    -v "$SCRIPT_DIR/sandbox-seal.sh:/opt/audit/sandbox-seal.sh:ro" \
     audit-sandbox:local \
-    -c 'mkdir -p /work/runs /work/bin && chown 10001:10001 /work/runs && chown -R root:root /work/bin && chown root:root /work && chmod 755 /work /work/bin && chmod -R go-w /work/bin' \
+    /opt/audit/sandbox-seal.sh /work \
     >"$RUN/seal.log" 2>&1; then
-    echo "sandbox: cannot make /work root-owned; refusing reviewer handoff" >&2
+    echo "sandbox: cannot make /work root-owned or seal /work/deps; refusing reviewer handoff" >&2
     exit 1
   fi
   if [ -n "$READY_FILE" ]; then
