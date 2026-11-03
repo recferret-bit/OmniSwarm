@@ -126,7 +126,7 @@ Source: `docs/spec/ORCHESTRATION.md` section 1.1.
 | `packages/schemas/` | Cross-track contract (`@omniswarm/schemas`): JSON Schemas, validator, examples, canonical request message, canonical JSON report hash, NEP-413 payload and base58. Lead only |
 | `apps/api/` | Intake service (`@omniswarm/api`: Fastify, pg-boss, Postgres). Track B |
 | `contracts/review-registry/` | NEAR registry contract (Rust). Track C |
-| `apps/web/` | Landing and review app (`@omniswarm/web`: Vite, React). Track F |
+| `apps/web/` | Landing and review app (`@omniswarm/web`: Next.js 16, Zustand). Track F |
 | `infra/` | Compose, nginx, systemd, deploy scripts. Track I |
 | `packages/guard/` | `@omniswarm/guard`, attack demo in `demo/attack/`. Track S |
 | `eval/` | Golden fixture repos and the eval runner. Track E |

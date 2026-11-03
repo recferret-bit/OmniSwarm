@@ -26,3 +26,6 @@ omniswarm.config.json
 
 # Cargo build output
 target/
+
+# Agent worktrees
+.claude/worktrees/

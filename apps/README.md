@@ -20,7 +20,7 @@ The intake worker runs `./bin/audit run` as a black box with an argv array, neve
 **Track:** Front (F)
 **Package:** `@omniswarm/web`
 **Owning waves:** W11 (landing and review app).
-**Owned subpaths:** `apps/web/` (Vite + React + TypeScript, `@hot-labs/near-connect`).
+**Owned subpaths:** `apps/web/` (Next.js 16 App Router + Zustand + TypeScript, `@hot-labs/near-connect`).
 **Gate command:** `npm run test:landing && npm run test:e2e -- landing` (Vitest, then Playwright in `tests/e2e/landing/`). Prints "skipped (no package yet)" until `apps/web/package.json` exists.
 **Contract:** talks to the intake API as typed by `packages/schemas/intake-api.schema.json`; runs on mocks of it until W08 and W09 land.
 

@@ -17,5 +17,9 @@
   "scripts": {
     "test": "node --test test/*.test.mjs",
     "typecheck": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@omniswarm/schemas": "*",
+    "typescript": "^5.9.3"
   }
 }
