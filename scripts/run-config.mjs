@@ -86,6 +86,7 @@ export function resolveRunConfig({ flags = {}, root = ROOT, explicitConfig = fla
     reviewers = parseReviewerList(reviewers.map((r) => formatReviewerSpec(r.family === 'cli' && models[r.provider] ? { ...r, model: models[r.provider] } : r)));
   }
 
+  const dollars = (name, value) => { const n = typeof value === 'string' && value.trim() === '' ? NaN : Number(value); if (!Number.isFinite(n) || n < 0) throw new ConfigError(`${name} must be a number of US dollars, 0 or more (got ${String(value).slice(0, 40)})`); return n; };
   const number = (name, value) => { if (value === undefined || value === '') return undefined; const n = Number(value); if (!Number.isInteger(n)) throw new ConfigError(`${name} must be an integer`); return n; };
   const merged = {
     reviewers: reviewers.map(formatReviewerSpec),
@@ -96,7 +97,7 @@ export function resolveRunConfig({ flags = {}, root = ROOT, explicitConfig = fla
     toolBudget: number('--tool-budget', flags.toolBudget) ?? pick('toolBudget') ?? DEFAULTS.toolBudget,
     grace: 3,
     ...(pick('debate') ? { debate: pick('debate') } : {}),
-    ...(flags.maxCostUsd !== undefined ? { maxCostUsd: Number(flags.maxCostUsd) } : pick('maxCostUsd') !== undefined ? { maxCostUsd: Number(pick('maxCostUsd')) } : {}),
+    ...(flags.maxCostUsd !== undefined ? { maxCostUsd: dollars('--max-cost-usd', flags.maxCostUsd) } : pick('maxCostUsd') !== undefined ? { maxCostUsd: dollars('maxCostUsd', pick('maxCostUsd')) } : {}),
     ...(pick('prices') ? { prices: pick('prices') } : {}),
   };
   if (!Number.isInteger(merged.passes) || merged.passes < 1 || merged.passes > 5) throw new ConfigError('passes must be 1–5');
@@ -135,8 +136,9 @@ export function parseFlags(argv) {
     const arg = argv[i];
     const key = { '--config': 'config', '--preset': 'preset', '--reviewers': 'reviewers', '--agents': 'agents', '--model': 'model', '--models': 'models', '--assign': 'assign', '--orchestrator': 'orchestrator', '--alternate-judge': 'alternateJudge', '--passes': 'passes', '--tool-budget': 'toolBudget', '--max-cost-usd': 'maxCostUsd' }[arg];
     if (key) { flags[key] = take(i); continue; }
-    const legacy = /^--model-([a-z]+)$/.exec(arg);
-    if (legacy && Object.hasOwn(CLI_DEFAULT_MODELS, legacy[1])) { flags.modelByAgent[legacy[1]] = take(i); continue; }
+    // --claude-model <slug> (the planned spelling) and --model-claude <slug> (alias) set one vendor's model.
+    const perAgent = /^--([a-z]+)-model$/.exec(arg)?.[1] || /^--model-([a-z]+)$/.exec(arg)?.[1];
+    if (perAgent && Object.hasOwn(CLI_DEFAULT_MODELS, perAgent)) { flags.modelByAgent[perAgent] = take(i); continue; }
     throw new ConfigError(`unknown option ${arg}`);
   }
   return flags;

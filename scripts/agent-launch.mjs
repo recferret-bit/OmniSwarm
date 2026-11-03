@@ -29,49 +29,39 @@ export function stageAuditSkill(workDir) {
   }
 }
 
+const shellQuote = value => `'${String(value).replaceAll("'", "'\\''")}'`;
+
+// R-08: AGY runs with --dangerously-skip-permissions, so its plugin's PreToolUse hook is the only refusal of a
+// host tool. Stage the plugin (bridge config + hook) and prove the hook denies a host command and allows the
+// bridge. check-agents runs this same staging in a throwaway workspace.
+export function stageAgyPlugin({ workDir, bridgeArgs, nodeBin = process.execPath }) {
+  stageAuditSkill(workDir);
+  const pluginDir = path.join(workDir, '.agents', 'plugins', 'audit-docker');
+  fs.mkdirSync(pluginDir, { recursive: true, mode: 0o700 });
+  fs.writeFileSync(path.join(pluginDir, 'plugin.json'), JSON.stringify({ name: 'audit-docker', description: 'One-shot Docker container MCP bridge for security auditing' }, null, 2));
+  fs.writeFileSync(path.join(pluginDir, 'mcp_config.json'), JSON.stringify({ mcpServers: { audit_docker: { command: nodeBin, args: [BRIDGE_SCRIPT, ...bridgeArgs] } } }, null, 2));
+  const skillFiles = ['.agents', '.claude'].flatMap(dir => {
+    const file = path.join(workDir, dir, 'skills', 'security-audit', 'SKILL.md');
+    return fs.existsSync(file) ? [file, fs.realpathSync(file)] : [];
+  });
+  const denyCmd = [nodeBin, path.join(HERE, 'audit-tool-policy.mjs'), ...new Set(skillFiles)].map(shellQuote).join(' ');
+  const hooksFile = path.join(pluginDir, 'hooks.json');
+  fs.writeFileSync(hooksFile, JSON.stringify({ 'audit-docker': { PreToolUse: [{ matcher: '.*', hooks: [{ type: 'command', command: denyCmd }] }] } }, null, 2));
+  return agyHookPreflight({ hooksFile });
+}
+
 export function buildCliInvocation({ agent, model, prompt, workDir, bridgeArgs, conversationId, nodeBin = process.execPath, env = process.env }) {
   if (conversationId && (agent !== 'agy' || !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(conversationId))) throw new Error('Invalid AGY conversation identity');
   const exe = resolveExecutable(agent, env);
   if (!exe) throw new Error(`CLI executable not found on PATH: ${agent}`);
-  const fullBridgeArgs = [BRIDGE_SCRIPT, ...bridgeArgs];
-  stageAuditSkill(workDir);
-
-  if (agent === 'agy') {
-    spawnSync('git', ['init', '-q'], { cwd: workDir, stdio: 'ignore' });
-    const pluginDir = path.join(workDir, '.agents', 'plugins', 'audit-docker');
-    fs.mkdirSync(pluginDir, { recursive: true, mode: 0o700 });
-    fs.writeFileSync(path.join(pluginDir, 'plugin.json'), JSON.stringify({
-      name: 'audit-docker',
-      description: 'One-shot Docker container MCP bridge for security auditing',
-    }, null, 2));
-    fs.writeFileSync(path.join(pluginDir, 'mcp_config.json'), JSON.stringify({
-      mcpServers: { audit_docker: { command: nodeBin, args: fullBridgeArgs } },
-    }, null, 2));
-    const shellQuote = value => `'${String(value).replaceAll("'", "'\\''")}'`;
-    const skillFiles = ['.agents', '.claude'].flatMap(dir => {
-      const file = path.join(workDir, dir, 'skills', 'security-audit', 'SKILL.md');
-      return [file, fs.realpathSync(file)];
-    });
-    const denyCmd = [nodeBin, path.join(HERE, 'audit-tool-policy.mjs'), ...new Set(skillFiles)].map(shellQuote).join(' ');
-    fs.writeFileSync(path.join(pluginDir, 'hooks.json'), JSON.stringify({
-      'audit-docker': {
-        PreToolUse: [{
-          matcher: '.*',
-          hooks: [{ type: 'command', command: denyCmd }],
-        }],
-      },
-    }, null, 2));
-    // R-08: refuse to launch AGY whose permission hook is absent or not refusing host tools.
-    const hook = agyHookPreflight({ hooksFile: path.join(pluginDir, 'hooks.json') });
-    if (hook.state !== 'ready') throw new Error(`AGY unavailable: ${hook.reason} (${hook.detail})`);
-    return {
-      executable: exe,
-      args: ['--output-format', 'stream-json', '--dangerously-skip-permissions', '--disable-slash-commands', '--model', model, ...(conversationId ? ['--conversation', conversationId] : []), `--print=${prompt}`],
-      stdin: '',
-      cwd: workDir,
-    };
-  }
-
-  throw new Error(`Unsupported agent: ${agent}`);
+  if (agent !== 'agy') throw new Error(`Unsupported agent: ${agent}`);
+  spawnSync('git', ['init', '-q'], { cwd: workDir, stdio: 'ignore' });
+  const hook = stageAgyPlugin({ workDir, bridgeArgs, nodeBin });
+  if (hook.state !== 'ready') throw new Error(`AGY unavailable: ${hook.reason} (${hook.detail})`);
+  return {
+    executable: exe,
+    args: ['--output-format', 'stream-json', '--dangerously-skip-permissions', '--disable-slash-commands', '--model', model, ...(conversationId ? ['--conversation', conversationId] : []), `--print=${prompt}`],
+    stdin: '',
+    cwd: workDir,
+  };
 }
-

@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { writeReportFile } from './report-contract.mjs';
 
 // An unavailable Docker daemon is not evidence that its container stopped.
 export function probeSandbox(dockerBin, container) {
@@ -47,10 +48,7 @@ export async function holdSandbox({ probe, held, record, wait = () => new Promis
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const [container, holdFile, recordFile] = process.argv.slice(2);
   if (!container || !holdFile || !recordFile) throw new Error('Expected container, hold file and lifecycle record');
-  const record = status => {
-    const temporary = `${recordFile}.tmp`;
-    fs.writeFileSync(temporary, JSON.stringify({ ...status, at: new Date().toISOString() }) + '\n', { mode: 0o600 });
-    fs.renameSync(temporary, recordFile);
-  };
+  // Atomic, link-refusing write of the host-only lifecycle record (R-04, R-13).
+  const record = status => writeReportFile(path.dirname(recordFile), path.basename(recordFile), JSON.stringify({ ...status, at: new Date().toISOString() }) + '\n');
   await holdSandbox({ probe: () => probeSandbox('docker', container), held: () => fs.existsSync(holdFile), record });
 }

@@ -41,9 +41,11 @@ export async function qualifyAgentSessions({ out, agents = Object.keys(MODELS), 
       const name = `${agent}-s1-auth`;
       const identity = { name, agent, role: 'auditor', workflow: REVIEW_WORKFLOW, model: models[agent], sourceDigest: digest(marker + '\n'), assignmentDigest: digest('inert-transport-qualification'), surface: 'S1' };
       writeReportFile(reportDir, 'identity.json', JSON.stringify(identity));
+      // The bridge checks the identity against this run's reviewer list and refuses to start without one.
+      writeReportFile(reportDir, 'harness/reviewers.json', JSON.stringify({ version: 1, reviewers: [{ id: agent, family: 'cli', provider: agent, model: models[agent] }] }));
       const options = {
         directory: path.join(reportDir, 'session'), identity, signal,
-        bridgeArgs: ['--container', container, '--report-dir', reportDir, '--role', 'auditor', '--auditor', name, '--agent', agent, '--surface', 'S1', '--identity-file', path.join(reportDir, 'identity.json')],
+        bridgeArgs: ['--container', container, '--report-dir', reportDir, '--role', 'auditor', '--auditor', name, '--agent', agent, '--surface', 'S1', '--identity-file', path.join(reportDir, 'identity.json'), '--reviewers-file', path.join(reportDir, 'harness', 'reviewers.json')],
         logFile: path.join(reportDir, 'first-turn.log'),
         onProgress: event => console.log(`[${agent}] ${event.phase}: ${Math.floor(event.elapsedMs / 1000)}s; agent activity ${event.agentIdleMs == null ? 'none yet' : Math.floor(event.agentIdleMs / 1000) + 's ago'}`),
       };

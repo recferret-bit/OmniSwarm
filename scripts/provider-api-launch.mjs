@@ -20,6 +20,8 @@ export function buildApiLaunch(reviewer, ctx, preset) {
     headers: preset.headers(env),
     extraBody: preset.extraBody,
     maxTurns: ctx.maxTurns || (ctx.toolBudget ? ctx.toolBudget + 3 : 40),
+    // The last turn forces this role's submit tool (W04-09).
+    submitTool: ctx.role === 'crosscheck' ? 'submit_crosscheck_report' : 'submit_audit_report',
     maxCostUsd: ctx.maxCostUsd ?? null,
     prices: ctx.prices || null,
     cwd: ctx.workDir,

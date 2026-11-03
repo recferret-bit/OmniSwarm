@@ -24,6 +24,7 @@ import { buildSessionLaunch } from './agent-session-launch.mjs';
 import { buildCliInvocation } from './agent-launch.mjs';
 import { readReportJson, validateAuditor, validCrosscheckRow, writeReportFile } from './report-contract.mjs';
 import { REVIEW_WORKFLOW } from './review-workflow.mjs';
+import { attachBudget } from './bridge-budget.mjs';
 
 const ID_DIGESTS = { sourceDigest: 'a'.repeat(64), assignmentDigest: 'b'.repeat(64), model: 'fixture-model' };
 const auditorIdentity = (name, agent, surface) => ({ name, agent, role: 'auditor', surface, ...ID_DIGESTS });
@@ -105,7 +106,7 @@ test('malformed audit output cannot be converted into an empty successful review
   assert.throws(() => normalizeFindingsPayload({ findings: [], verified_safe: [{ control: 'test', how_attacked: 'read', holds: 'yes' }] }, 'claude-s1-auth', 'S1'));
 });
 
-test('reviews have no deadline and only explicit finalization restricts inspection', async (t) => {
+test('reviews have no deadline and only the bridge budget restricts inspection', async (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'audit-session-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const prompt = buildAuditorPrompt({ targetName: 'inert', auditorName: 'grok-s6-client', surface: { code: 'S6' }, reportDir: root });
@@ -120,9 +121,15 @@ test('reviews have no deadline and only explicit finalization restricts inspecti
   assert.equal(result.result.isError, false, 'legacy deadline metadata cannot close inspection');
   const ping = await handleRpcMessage(ctx, { id: 2, method: 'ping' });
   assert.deepEqual(ping.result, {});
+  // The legacy --finalize-only flag and ctx.finalizeOnly are gone: nothing but the budget closes inspection.
+  assert.equal(Object.hasOwn(parseBridgeArgs(['--finalize-only']), 'finalizeOnly'), false);
   ctx.finalizeOnly = true;
-  const closed = await handleRpcMessage(ctx, { id: 4, method: 'tools/call', params: { name: 'get_audit_context' } });
-  assert.equal(closed.result.isError, true, 'an explicit submission-only recovery retains its scope');
+  const still = await handleRpcMessage(ctx, { id: 4, method: 'tools/call', params: { name: 'get_audit_context' } });
+  assert.equal(still.result.isError, false, 'a stray finalizeOnly field does not restrict inspection');
+  attachBudget(Object.assign(ctx, { toolBudget: 1, pass: 1 }));
+  await handleRpcMessage(ctx, { id: 5, method: 'tools/call', params: { name: 'get_audit_context' } });
+  const closed = await handleRpcMessage(ctx, { id: 6, method: 'tools/call', params: { name: 'get_audit_context' } });
+  assert.match(closed.result.content[0].text, /budget exhausted: call submit_audit_report now/);
   const submitted = await handleRpcMessage(ctx, { id: 3, method: 'tools/call', params: { name: 'submit_audit_report', arguments: { findings: [], verified_safe: [], markdown_summary: '# Finalization fixture\nNo security review performed.' } } });
   assert.equal(submitted.result.isError, false);
 });

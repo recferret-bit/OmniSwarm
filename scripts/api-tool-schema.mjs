@@ -27,11 +27,16 @@ export function toolResultText(result) {
   return text;
 }
 
-export function mapToolCall(call) {
+// One chat-completions tool call -> {id, name, args}. Arguments that are not a JSON object come back
+// with `error`; the loop answers that call with the error text instead of calling the bridge.
+export function parseToolCall(call) {
+  const name = String(call?.function?.name || call?.name || '');
+  const id = String(call?.id || name || 'call');
   let args = call?.function?.arguments ?? call?.arguments ?? {};
   if (typeof args === 'string') {
     try { args = args ? JSON.parse(args) : {}; }
-    catch { return { name: call?.function?.name || call?.name, args: {}, error: `invalid tool arguments: ${args.slice(0, 200)}` }; }
+    catch { return { id, name, args: {}, error: `invalid tool arguments: ${args.slice(0, 200)}` }; }
   }
-  return { name: call?.function?.name || call?.name, args: args && typeof args === 'object' ? args : {} };
+  if (!args || typeof args !== 'object' || Array.isArray(args)) return { id, name, args: {}, error: 'tool arguments must be a JSON object' };
+  return { id, name, args };
 }

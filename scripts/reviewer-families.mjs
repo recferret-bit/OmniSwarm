@@ -53,6 +53,9 @@ export const families = {
   },
   // Environment variable names this reviewer's process may receive beyond the base set.
   envAllowlist: (reviewer) => families.get(reviewer.family).envAllowlist(reviewer),
+  // Operator variable that holds this reviewer's key (null for keyless reviewers). Key presence checks and
+  // the recorded keyFingerprint both read this one name.
+  fingerprintEnv: (reviewer) => families.get(reviewer.family).fingerprintEnv?.(reviewer) ?? null,
   // True when the session must keep the model it was launched with (a changed model aborts the turn).
   modelPinned: (reviewer) => Boolean(loaded.get(reviewer.family)?.providers?.[reviewer.provider]?.pinsModel),
 };
