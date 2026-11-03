@@ -3,7 +3,8 @@
 // invariants in scripts/harness-fixtures/hostile/expected.json must hold afterwards. Reviewer calls are scripted
 // callBridgeTool calls; no model is involved.
 // Needs Docker and the local images audit-sandbox:local and node:24-bookworm-slim; it never pulls or builds one.
-// Run: npm run test:docker -- --test-name-pattern hardening
+// Run: node --test --test-name-pattern hardening scripts/sandbox-hardening.docker.mjs (npm run test:docker -- --test-name-pattern
+// puts the flag after the file globs, so node does not filter).
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -73,6 +74,9 @@ test('hardening: the hostile fixture cannot influence what reviewers see (six in
   assert.equal(firstRun.dependencies, 'sealed', 'the per-run copy took node_modules from the root-owned /work/deps seal');
   assert.equal(await sh('stat -c "%U:%G %a" /work/deps'), 'root:root 755');
   assert.equal(await sh('touch /work/deps/planted 2>/dev/null && echo wrote || echo refused'), 'refused', 'uid 10001 cannot write the dependency seal');
+  // The in-container harness (/opt/audit/harness.mjs and the modules sandbox.sh mounts beside it) loaded and wrote its leads.
+  const leads = path.join(report, 'harness/sandbox-run/harness-leads');
+  for (const file of ['summary.md', 'review-plans.md', 'stack-profile.json', 'scanner-results.json']) assert.ok(fs.existsSync(path.join(leads, file)), `in-container harness wrote ${file}`);
 
   await t.test(`${invariant('R-01-bridge-node').id}: the bridge still runs the real node`, async () => {
     assert.equal(await exec("process.stdout.write(require('node:fs').readlinkSync('/proc/self/exe'))"), '/usr/local/bin/node');
