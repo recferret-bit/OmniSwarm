@@ -13,7 +13,7 @@ import { authRoutes } from '../modules/auth/auth.routes.ts';
 import { guardRoutes } from '../modules/guard/guard.routes.ts';
 import { healthRoutes } from '../modules/health/health.routes.ts';
 import { ledgerRoutes } from '../modules/ledger/ledger.routes.ts';
-import { reportRoutes } from '../modules/reports/reports.routes.ts';
+import { reportRoutes } from '../modules/report-index/reports.routes.ts';
 import { paymentRoutes } from '../modules/payments/payment.routes.ts';
 import { eventRoutes } from '../modules/progress/events.routes.ts';
 import { quoteRoutes } from '../modules/quote/quote.routes.ts';
