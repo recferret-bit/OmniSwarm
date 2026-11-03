@@ -4,13 +4,12 @@ import path from 'node:path';
 import os from 'node:os';
 import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { pathToFileURL } from 'node:url';
 import { REVIEW_IMAGE, LIMITS, hash, backendStatus, createSnapshot, disposeSnapshot, requireOwnedSnapshot, createJob, validateOutput, expectedFiles } from './worker-isolation.mjs';
 import { writeReportFile } from './report-contract.mjs';
 import { validateReviewRequest, validateResult, encodeFrame, readJsonLine } from './terminal-review-contract.mjs';
+import { REPO_ROOT, runtimeBundle, bundleDigest, liveBundleDigest, bundleMountArgs } from './worker-isolation-bundle.mjs';
 
-const HERE = path.dirname(fileURLToPath(import.meta.url));
-const RUNTIME_FILES = ['worker-runtime.mjs', 'worker-isolation.mjs', 'report-contract.mjs', 'verification-health.mjs', 'scanner-evidence.mjs', 'audit-process.mjs', 'audit-submission.mjs', 'review-workflow.mjs', 'terminal-review-contract.mjs'];
 const IMAGE = /^(?:[a-z0-9][a-z0-9./:_-]*@)?sha256:[a-f0-9]{64}$/;
 const OWNED_RECORDS = new Map();
 export function createRecordDirectory() {
@@ -36,7 +35,7 @@ export function transition(job, state, detail = {}) {
   Object.assign(job, detail, { state });
 }
 export function runtimeDigest() {
-  return hash(JSON.stringify(RUNTIME_FILES.map((name) => [name, hash(fs.readFileSync(path.join(HERE, name)))])));
+  return liveBundleDigest();
 }
 
 // Only trusted fixed Docker invocations use this helper; no target command API.
@@ -72,8 +71,7 @@ async function requireDocker(args, options) {
 function security(image, name, label, runtime) {
   if (!IMAGE.test(image)) throw new Error('review runtime requires an immutable image identity');
   const args = ['--pull=never', '--name', name, '--label', `omniswarm.review.job=${label}`, '--network', 'none', '--ipc', 'private', '--user', '10001:10001', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges', '--read-only', '--pids-limit', '64', '--memory', '128m', '--cpus', '1', '--log-driver', 'json-file', '--log-opt', 'max-size=1m', '--log-opt', 'max-file=1', '--tmpfs', '/tmp:rw,noexec,nosuid,nodev,size=16m,mode=1777', '--env', 'HOME=/home/reviewer', '--entrypoint', '/usr/local/bin/node', '--tmpfs', '/home/reviewer:rw,noexec,nosuid,nodev,size=8m,uid=10001,gid=10001,mode=700'];
-  for (const file of RUNTIME_FILES) args.push('--mount', `type=bind,src=${path.join(runtime.snapshot, file)},dst=/trusted/${file},readonly`);
-  return args;
+  return [...args, ...bundleMountArgs(runtime.snapshot)];
 }
 
 async function removeOwned(type, name, label) {
@@ -169,9 +167,10 @@ async function runIsolated(snapshot, job, { fixture = 'probe', image = REVIEW_IM
   try {
     save();
     if (cancelled.aborted) { transition(job, 'cancelled'); return outcome; }
-    runtime = createSnapshot(HERE, { only: RUNTIME_FILES });
+    const bundle = runtimeBundle();
+    runtime = createSnapshot(REPO_ROOT, { only: bundle });
     requireOwnedSnapshot(runtime);
-    const capturedDigest = hash(JSON.stringify(RUNTIME_FILES.map((name) => [name, runtime.manifest.files.find((f) => f.path === name)?.sha256])));
+    const capturedDigest = bundleDigest(bundle, (rel) => runtime.manifest.files.find((f) => f.path === rel)?.sha256);
     if (capturedDigest !== job.runtimeDigest) throw new Error('trusted runtime changed before sealed capture');
     await requireDocker(['image', 'inspect', image, '--format', '{{.Id}}']);
     if (cancelled.aborted) { transition(job, 'cancelled'); return outcome; }
