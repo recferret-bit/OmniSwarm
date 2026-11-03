@@ -35,9 +35,10 @@ async function submitDebateTurn(ctx, raw) {
     round: task.round, clusterId: task.clusterId, role: task.role, anonId: task.anonId,
     verdict: args.verdict, citations: args.citations, argument: args.argument, devilAdvocate: task.role === 'devil',
   };
+  // The schema refuses this too (citations minItems 1 unless insufficient_evidence); the named code tells the model why.
+  if (body.verdict !== 'insufficient_evidence' && Array.isArray(body.citations) && !body.citations.length) throw new Error('citation_required: cite file, lines and a quote, or answer insufficient_evidence');
   const check = validate('debate-round', body);
   if (!check.ok) throw new Error(`Invalid debate turn: ${check.errors[0]}`);
-  if (body.verdict !== 'insufficient_evidence' && !body.citations.length) throw new Error('citation_required: cite file, lines and a quote, or answer insufficient_evidence');
   const hash = commitInbox(ctx.reportDir, identity.name, 'debate-turn', body);
   return `Debate turn committed for ${task.anonId} on ${task.clusterId} round ${task.round}. Hash: ${hash}. Finish with a short acknowledgement.`;
 }

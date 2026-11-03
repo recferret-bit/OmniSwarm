@@ -39,6 +39,18 @@ export function planProblems(reviewers) {
   return reviewers.flatMap((r) => { const v = families.check(r); return v.ok ? [] : [`${r.id}: ${v.reason}`]; });
 }
 
+// The judge for a cluster whose authors share the orchestrator's vendor, as pickJudge (debate-judge.mjs) picks it:
+// the explicit alternate, else the first non-scripted run reviewer of another vendor (per cluster it also skips
+// any vendor that wrote the finding). The scripted judge is the citation rules and never hands a cluster over.
+export function alternateJudgeLine({ orchestrator, alternateJudge, reviewers }) {
+  if (alternateJudge) return `Alternate judge: ${formatReviewerSpec(alternateJudge)}`;
+  if (orchestrator.family === 'scripted') return 'Alternate judge: not used (the scripted judge applies the citation rules, not a vendor model)';
+  const other = reviewers.find((r) => r.family !== 'scripted' && r.vendor !== orchestrator.vendor);
+  return other
+    ? `Alternate judge: ${formatReviewerSpec(other)} (default: first run reviewer of another vendor than ${orchestrator.vendor})`
+    : `Alternate judge: none (no run reviewer of another vendor than ${orchestrator.vendor}; its clusters stay DISPUTED, no_independent_judge)`;
+}
+
 export function renderPlan({ reviewers, assign, budgets, orchestrator, alternateJudge, warnings = [], surfaceArg = 'all', env = process.env }) {
   const jobs = assignJobs({ reviewers, surfaceArg, assign });
   const surfaces = selectSurfaces(surfaceArg);
@@ -59,7 +71,7 @@ export function renderPlan({ reviewers, assign, budgets, orchestrator, alternate
   lines.push('', `Assignment: ${assign} (${jobs.length} job${jobs.length === 1 ? '' : 's'})`, `  ${pad('reviewer', w)}${surfaces.map((s) => pad(s.code, 4)).join('')}`);
   for (const r of reviewers) lines.push(`  ${pad(r.id, w)}${surfaces.map((s) => pad(jobs.some((j) => j.reviewer.id === r.id && j.surface.id === s.id) ? 'x' : '.', 4)).join('')}`);
   const worst = budgets.passes * (budgets.toolBudget + GRACE);
-  lines.push('', `Budgets: passes ${budgets.passes}; tool budget ${budgets.toolBudget} per pass; debate rounds ${budgets.debate.rounds} (max 3); debate cluster cap ${budgets.debate.maxClusters}; max cost ${budgets.maxCostUsd == null ? 'unset' : `$${budgets.maxCostUsd}`}`);
+  lines.push('', `Budgets: passes ${budgets.passes}; tool budget ${budgets.toolBudget} per pass; debate rounds ${budgets.debate.rounds} (max 3); debate cluster cap ${budgets.debate.maxClusters}; debate tool budget ${budgets.debate.toolBudget} per turn; max cost ${budgets.maxCostUsd == null ? 'unset' : `$${budgets.maxCostUsd}`}`);
   lines.push(`Pass roles: ${passRoles(budgets.passes).join(', ')}. Worst case ${worst} calls.`);
   for (const r of reviewers) {
     const roles = passRoles(Math.min(budgets.passes, 2)).join(', ');
@@ -68,12 +80,14 @@ export function renderPlan({ reviewers, assign, budgets, orchestrator, alternate
     lines.push(`${r.id}  ${budgets.passes} × ${budgets.toolBudget} (+${GRACE})  ${roles}  max ${worst} calls  gate: ${gate}`);
     if (maxTurnsFlag) lines.push(`--max-turns ${budgets.toolBudget + GRACE}`);
   }
+  let judge = orchestrator;
   if (orchestrator === 'recommended') {
     const rec = recommendedOrchestrator({ env });
+    judge = rec.reviewer;
     lines.push(`Orchestrator: recommended -> ${rec.spec || 'none'}; ${rec.reason}. It runs the debate and general-review phases.`);
   } else if (orchestrator) lines.push(`Orchestrator: ${formatReviewerSpec(orchestrator)} (runs the debate and general-review phases)`);
-  else lines.push('Orchestrator: none');
-  if (alternateJudge) lines.push(`Alternate judge: ${formatReviewerSpec(alternateJudge)}`);
+  else lines.push('Orchestrator: none (no debate or general review)');
+  if (judge) lines.push(alternateJudgeLine({ orchestrator: judge, alternateJudge, reviewers }));
   for (const warning of warnings) lines.push(`Warning: ${warning}`);
   const problems = planProblems(reviewers);
   if (orchestrator && orchestrator !== 'recommended') { const v = families.check(orchestrator); if (!v.ok) problems.push(`orchestrator ${orchestrator.id}: ${v.reason}`); }

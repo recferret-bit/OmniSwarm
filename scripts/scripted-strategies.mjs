@@ -10,11 +10,6 @@ function readJson(file) {
   return JSON.parse(fs.readFileSync(file, 'utf8'));
 }
 
-export function judgeAnswer(title, fixtureRoot = DEMO_FIXTURE) {
-  const table = readJson(path.join(fixtureRoot, 'answers', 'adjudication.json'));
-  return table[title] || { status: 'INSUFFICIENT_EVIDENCE', title };
-}
-
 async function readCitations(callTool, findings) {
   const seen = new Set();
   for (const finding of findings) {
@@ -41,7 +36,8 @@ export function passFromBrief(brief) {
 }
 
 export async function runStrategy(name, { callTool, fixtureRoot = DEMO_FIXTURE, surface = 'S1', pass = 1 } = {}) {
-  if (name === 'judge') return judgeAnswer(surface, fixtureRoot);
+  // scripted:judge is the debate's citation rules (debate-judge.mjs), never a reviewer session.
+  if (name === 'judge') throw new Error('scripted:judge judges the debate; it does not review a surface');
   const answers = readJson(path.join(fixtureRoot, 'answers', `${name}.json`));
   if (name === 'lazy') {
     const file = answers.read || 'src/lib.rs';

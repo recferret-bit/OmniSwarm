@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { validate } from '../../../packages/schemas/index.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const run = (args, env = {}) => spawnSync(path.join(ROOT, 'bin', 'audit'), args, { cwd: ROOT, encoding: 'utf8', env: { ...process.env, ...env }, timeout: 180_000 });
@@ -37,6 +38,16 @@ test('demo refuses a foreign repo and the host snapshot stamps the banner', () =
   const bridgeLog = fs.readdirSync(path.join(out, 'harness')).find((name) => name.startsWith('bridge-scripted-'));
   assert.ok(bridgeLog);
   assert.match(fs.readFileSync(path.join(out, 'harness', bridgeLog), 'utf8'), /read_file/);
+  // The host demo debates the committed submissions like the Docker demo: scripted judge, then the general review.
+  const json = (rel) => JSON.parse(fs.readFileSync(path.join(out, rel), 'utf8'));
+  const adjudication = json('debate/adjudication.json');
+  assert.ok(adjudication.length > 0 && json('debate/clusters.json').clusters.length >= adjudication.length);
+  assert.ok(adjudication.every((row) => row.judge.reviewerId === 'scripted-judge' || row.judge.reviewerId === 'triage'));
+  assert.ok(fs.readdirSync(path.join(out, 'debate', 'round-1')).length > 0);
+  assert.equal(validate('general-review', json('general-review.json')).ok, true);
+  assert.equal(json('reviewers/index.json').groups.flatMap((g) => g.vendors.flatMap((v) => v.reviewers)).length, 4);
+  const scored = json('findings-and-scores.json');
+  assert.ok(scored.length > 0 && scored.every((row) => typeof row.finalStatus === 'string'), 'finalStatus reaches findings-and-scores.json');
 });
 
 // Demo step 2: the documented replay command, with the documented RELATIVE OMNI_HTTP_REPLAY.

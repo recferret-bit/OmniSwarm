@@ -41,10 +41,10 @@ export function bridgeJudge(ctx, reviewer, budget = DEBATE_TOOL_BUDGET) {
   };
 }
 
-export function bridgeSummary(ctx, reviewer) {
+export function bridgeSummary(ctx, reviewer, budget = DEBATE_TOOL_BUDGET) {
   return async ({ clusters }) => {
     const name = `${reviewer.id}-general-review`;
-    const assignment = { kind: 'general-review', clusterIds: clusters.map((row) => row.clusterId), budget: DEBATE_TOOL_BUDGET };
+    const assignment = { kind: 'general-review', clusterIds: clusters.map((row) => row.clusterId), budget };
     const prompt = renderDebateBrief('general-review', { clusters });
     const { body, reason } = await session(ctx, { name, agent: reviewer.id, role: 'orchestrator', prompt, assignment, kind: 'general-review' });
     return body || { unavailable: reason };

@@ -1,5 +1,5 @@
 // Dependency-free validator for the draft 2020-12 subset the OmniSwarm schemas use:
-// type, required, properties, enum, const, pattern, items, oneOf, anyOf,
+// type, required, properties, enum, const, pattern, items, oneOf, anyOf, if/then,
 // additionalProperties (boolean or schema), minimum/maximum, minLength/maxLength,
 // minItems/maxItems, and $ref ("#/$defs/<name>", "<schema>.schema.json", "<schema>.schema.json#/$defs/<name>"). Anything else in a schema
 // is annotation (title, description, $schema, $id, examples) and is ignored.
@@ -75,6 +75,12 @@ function check(schema, value, at, root, errors) {
     if (matches !== 1) errors.push(`${at}: must match exactly one of oneOf (matched ${matches})`);
   }
   if (schema.anyOf && !schema.anyOf.some((sub) => { const e = []; check(sub, value, at, root, e); return !e.length; })) errors.push(`${at}: must match at least one of anyOf`);
+  // if/then: `if` never reports; when it matches, `then` reports its own errors.
+  if (schema.if !== undefined && schema.then !== undefined) {
+    const probe = [];
+    check(schema.if, value, at, root, probe);
+    if (!probe.length) check(schema.then, value, at, root, errors);
+  }
 }
 
 // validate('run-config', value) or validate('intake-api#quote-request', value)

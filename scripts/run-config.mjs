@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { validate } from '../packages/schemas/index.mjs';
+import { isFixtureTarget, SCRIPTED_JUDGE_REFUSAL } from './debate-fixtures.mjs';
 import { CLI_DEFAULT_MODELS, ReviewerError, cliSpecsFromAgents, formatReviewerSpec, parseReviewerList, parseReviewerSpec } from './reviewer-registry.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -54,8 +55,37 @@ function legacyModels(flags) {
 
 const hasLegacyModelFlags = (flags) => Boolean(flags.model || flags.models || Object.values(flags.modelByAgent || {}).some(Boolean));
 
+const integerFlag = (name, value) => { if (value === undefined || value === '') return undefined; const n = Number(value); if (!Number.isInteger(n)) throw new ConfigError(`${name} must be an integer`); return n; };
+const DEBATE_LIMITS = { rounds: ['--debate-rounds', 1, 3], maxClusters: ['--debate-max-clusters', 1, 500], toolBudget: ['--debate-tool-budget', 1, 100] };
+
+// Debate settings: --debate-* flags over the preset or file `debate` object. Unset keys keep DEFAULTS.debate.
+function debateSettings(flags, fromConfig = {}) {
+  const debate = { ...fromConfig };
+  for (const [key, flag] of Object.entries({ rounds: 'debateRounds', maxClusters: 'debateMaxClusters', toolBudget: 'debateToolBudget' })) {
+    const value = integerFlag(DEBATE_LIMITS[key][0], flags[flag]);
+    if (value !== undefined) debate[key] = value;
+  }
+  if (debate.rounds > 3) throw new ConfigError('debate_rounds_max_3: debate rounds are at most 3');
+  for (const [key, [name, min, max]] of Object.entries(DEBATE_LIMITS)) {
+    if (debate[key] !== undefined && !(Number.isInteger(debate[key]) && debate[key] >= min && debate[key] <= max)) throw new ConfigError(`${name} must be ${min}–${max}`);
+  }
+  return Object.keys(debate).length ? debate : null;
+}
+
+// The scripted judge stands in for a model only on OmniSwarm's fixtures (OD-05); `target` is the review
+// target when the caller knows it (orchestrate.sh passes --target at plan time).
+function refuseScriptedJudge(target, specs) {
+  if (target === undefined || isFixtureTarget(target)) return;
+  for (const [flag, spec] of specs) {
+    if (spec && spec !== 'recommended' && parseReviewerSpec(spec).family === 'scripted') {
+      throw new ConfigError(`${SCRIPTED_JUDGE_REFUSAL}: ${flag} ${spec} runs only on OmniSwarm's fixtures (scripts/demo-fixture, eval/golden); choose a model orchestrator for a real target`);
+    }
+  }
+}
+
 // Resolve flags + config into the effective run configuration.
-// flags: {config, preset, reviewers, agents, model, models, modelByAgent, assign, orchestrator, alternateJudge, passes, toolBudget}
+// flags: {config, preset, reviewers, agents, model, models, modelByAgent, assign, orchestrator, alternateJudge, passes, toolBudget,
+//         debateRounds, debateMaxClusters, debateToolBudget, target}
 export function resolveRunConfig({ flags = {}, root = ROOT, explicitConfig = flags.config } = {}) {
   const file = explicitConfig ? path.resolve(explicitConfig) : path.join(root, CONFIG_NAME);
   let config = null;
@@ -87,22 +117,22 @@ export function resolveRunConfig({ flags = {}, root = ROOT, explicitConfig = fla
   }
 
   const dollars = (name, value) => { const n = typeof value === 'string' && value.trim() === '' ? NaN : Number(value); if (!Number.isFinite(n) || n < 0) throw new ConfigError(`${name} must be a number of US dollars, 0 or more (got ${String(value).slice(0, 40)})`); return n; };
-  const number = (name, value) => { if (value === undefined || value === '') return undefined; const n = Number(value); if (!Number.isInteger(n)) throw new ConfigError(`${name} must be an integer`); return n; };
+  const debate = debateSettings(flags, pick('debate'));
   const merged = {
     reviewers: reviewers.map(formatReviewerSpec),
     ...(flags.orchestrator || pick('orchestrator') ? { orchestrator: flags.orchestrator || pick('orchestrator') } : {}),
     ...(flags.alternateJudge || pick('alternateJudge') ? { alternateJudge: flags.alternateJudge || pick('alternateJudge') } : {}),
     ...((flags.assign || pick('assign')) ? { assign: flags.assign || pick('assign') } : {}),
-    passes: number('--passes', flags.passes) ?? pick('passes') ?? DEFAULTS.passes,
-    toolBudget: number('--tool-budget', flags.toolBudget) ?? pick('toolBudget') ?? DEFAULTS.toolBudget,
+    passes: integerFlag('--passes', flags.passes) ?? pick('passes') ?? DEFAULTS.passes,
+    toolBudget: integerFlag('--tool-budget', flags.toolBudget) ?? pick('toolBudget') ?? DEFAULTS.toolBudget,
     grace: 3,
-    ...(pick('debate') ? { debate: pick('debate') } : {}),
+    ...(debate ? { debate } : {}),
     ...(flags.maxCostUsd !== undefined ? { maxCostUsd: dollars('--max-cost-usd', flags.maxCostUsd) } : pick('maxCostUsd') !== undefined ? { maxCostUsd: dollars('maxCostUsd', pick('maxCostUsd')) } : {}),
     ...(pick('prices') ? { prices: pick('prices') } : {}),
   };
   if (!Number.isInteger(merged.passes) || merged.passes < 1 || merged.passes > 5) throw new ConfigError('passes must be 1–5');
   if (!Number.isInteger(merged.toolBudget) || merged.toolBudget < 5 || merged.toolBudget > 200) throw new ConfigError('tool budget must be 5–200');
-  if (merged.debate?.rounds > 3) throw new ConfigError('debate_rounds_max_3');
+  refuseScriptedJudge(flags.target, [['--orchestrator', merged.orchestrator], ['--alternate-judge', merged.alternateJudge]]);
   const check = validate('run-config', merged);
   if (!check.ok) throw new ConfigError(`invalid run configuration: ${check.errors[0]}`);
 
@@ -134,7 +164,7 @@ export function parseFlags(argv) {
   const take = (i) => { if (i + 1 >= argv.length) throw new ConfigError(`${argv[i]} needs a value`); return argv[i + 1]; };
   for (let i = 0; i < argv.length; i += 2) {
     const arg = argv[i];
-    const key = { '--config': 'config', '--preset': 'preset', '--reviewers': 'reviewers', '--agents': 'agents', '--model': 'model', '--models': 'models', '--assign': 'assign', '--orchestrator': 'orchestrator', '--alternate-judge': 'alternateJudge', '--passes': 'passes', '--tool-budget': 'toolBudget', '--max-cost-usd': 'maxCostUsd' }[arg];
+    const key = { '--config': 'config', '--preset': 'preset', '--reviewers': 'reviewers', '--agents': 'agents', '--model': 'model', '--models': 'models', '--assign': 'assign', '--orchestrator': 'orchestrator', '--alternate-judge': 'alternateJudge', '--passes': 'passes', '--tool-budget': 'toolBudget', '--max-cost-usd': 'maxCostUsd', '--debate-rounds': 'debateRounds', '--debate-max-clusters': 'debateMaxClusters', '--debate-tool-budget': 'debateToolBudget', '--target': 'target' }[arg];
     if (key) { flags[key] = take(i); continue; }
     // --claude-model <slug> (the planned spelling) and --model-claude <slug> (alias) set one vendor's model.
     const perAgent = /^--([a-z]+)-model$/.exec(arg)?.[1] || /^--model-([a-z]+)$/.exec(arg)?.[1];
@@ -146,7 +176,7 @@ export function parseFlags(argv) {
 
 function main() {
   const [command, ...rest] = process.argv.slice(2);
-  if (command !== 'resolve') { process.stderr.write('usage: run-config.mjs resolve [--config f] [--preset p] [--reviewers a,b | --agents a,b] [--model* ...] [--assign m] [--orchestrator o] [--alternate-judge j] [--passes n] [--tool-budget n]\n'); process.exit(2); }
+  if (command !== 'resolve') { process.stderr.write('usage: run-config.mjs resolve [--config f] [--preset p] [--reviewers a,b | --agents a,b] [--model* ...] [--assign m] [--orchestrator o] [--alternate-judge j] [--passes n] [--tool-budget n] [--debate-rounds n] [--debate-max-clusters n] [--debate-tool-budget n] [--target dir]\n'); process.exit(2); }
   try {
     const result = resolveRunConfig({ flags: parseFlags(rest) });
     process.stdout.write(`${JSON.stringify(result)}\n`);

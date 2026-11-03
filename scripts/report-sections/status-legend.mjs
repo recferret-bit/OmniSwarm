@@ -29,10 +29,9 @@ export function statusPill(status) {
   return `<span class="pill${tone ? ` ${tone}` : ''}" data-status="${esc(status)}">${esc(status)}</span>`;
 }
 
-// report-style.css draws orange pills (medium severity) at 3.3:1 on their tint; v2 pages darken the text.
-export const ORANGE_PILL_TEXT = FG.orange;
+// Orange pills take --orange-ink from report-style.css on every page; status pills set their own colours here.
 export function statusCss() {
-  return `.pill.orange{color:${ORANGE_PILL_TEXT}}${Object.entries(STATUS_COLORS).map(([status, color]) => `.pill[data-status="${status}"]{color:${color.fg};background:${color.bg}}`).join('')}`;
+  return Object.entries(STATUS_COLORS).map(([status, color]) => `.pill[data-status="${status}"]{color:${color.fg};background:${color.bg}}`).join('');
 }
 
 export const section = {

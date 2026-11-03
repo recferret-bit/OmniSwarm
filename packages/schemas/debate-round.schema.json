@@ -17,6 +17,8 @@
     "conformitySuspect": { "type": "boolean" },
     "devilAdvocate": { "type": "boolean" }
   },
+  "if": { "required": ["verdict"], "properties": { "verdict": { "enum": ["upheld", "partial", "refuted"] } } },
+  "then": { "properties": { "citations": { "minItems": 1 } } },
   "$defs": {
     "citation": {
       "type": "object",

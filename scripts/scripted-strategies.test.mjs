@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { judgeAnswer, runStrategy } from './scripted-strategies.mjs';
+import { runStrategy } from './scripted-strategies.mjs';
 
-test('scripted strategies read cited files and submit; judge answers come from the fixture', async () => {
+test('scripted strategies read cited files and submit; scripted:judge does not review', async () => {
   const calls = [];
   const callTool = async (name, args) => { calls.push({ name, args }); return 'ok'; };
   await runStrategy('baseline', { callTool, surface: 'S1' });
@@ -17,6 +17,5 @@ test('scripted strategies read cited files and submit; judge answers come from t
   calls.length = 0;
   await runStrategy('wrong', { callTool, surface: 'S1' });
   assert.deepEqual(calls.at(-1).args.findings[0].location, ['src/lib.rs:25']);
-  assert.deepEqual(judgeAnswer('Missing owner check in withdraw'), { status: 'CONFIRMED', title: 'Missing owner check in withdraw' });
-  assert.equal(judgeAnswer('no such cluster').status, 'INSUFFICIENT_EVIDENCE');
+  await assert.rejects(runStrategy('judge', { callTool, surface: 'S1' }), /judges the debate/);
 });

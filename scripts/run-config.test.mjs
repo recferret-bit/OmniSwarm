@@ -84,3 +84,39 @@ test('more than eight reviewers fall back to round-robin with a warning', (t) =>
   assert.equal(r.warnings.length, 1);
   assert.equal(resolveRunConfig({ flags: { reviewers: specs, assign: 'matrix' }, root: tmp(t) }).assign, 'matrix');
 });
+
+test('--debate-rounds, --debate-max-clusters and --debate-tool-budget are validated and override the file', (t) => {
+  const d = tmp(t);
+  const file = write(d, 'c.json', { reviewers: ['cli:claude:opus'], debate: { rounds: 1, maxClusters: 10 } });
+  const r = resolveRunConfig({ flags: parseFlags(['--config', file, '--debate-rounds', '3', '--debate-tool-budget', '6']) });
+  assert.deepEqual(r.budgets.debate, { rounds: 3, toolBudget: 6, maxClusters: 10 });
+  assert.deepEqual(resolveRunConfig({ flags: { config: file } }).budgets.debate, { rounds: 1, toolBudget: 12, maxClusters: 10 });
+  const bad = [[['--debate-rounds', '4'], /debate_rounds_max_3/], [['--debate-rounds', '0'], /--debate-rounds must be 1–3/], [['--debate-rounds', 'two'], /--debate-rounds must be an integer/],
+    [['--debate-max-clusters', '501'], /--debate-max-clusters must be 1–500/], [['--debate-tool-budget', '0'], /--debate-tool-budget must be 1–100/]];
+  for (const [argv, message] of bad) assert.throws(() => resolveRunConfig({ flags: parseFlags(argv), root: tmp(t) }), message, argv.join(' '));
+  assert.throws(() => resolveRunConfig({ flags: { config: write(d, 'r4.json', { reviewers: ['cli:claude:opus'], debate: { rounds: 4 } }) } }), /\$\.debate\.rounds: above maximum 3/);
+  const viaCli = spawnSync(path.join(here, '..', 'bin', 'audit'), ['run', '--repo', path.join(here, 'demo-fixture'), '--reviewers', 'scripted:baseline', '--debate-rounds', '4', '--plan'], { encoding: 'utf8' });
+  assert.equal(viaCli.status, 2);
+  assert.match(viaCli.stderr, /debate_rounds_max_3/);
+});
+
+test('the default debate rounds are the golden-eval OD-14 decision recorded in eval/RESULTS.md', (t) => {
+  const results = fs.readFileSync(path.join(here, '..', 'eval', 'RESULTS.md'), 'utf8');
+  const recorded = Number(/^Default debate rounds: (\d)\./m.exec(results)?.[1]);
+  assert.deepEqual(resolveRunConfig({ flags: {}, root: tmp(t) }).budgets.debate, { rounds: recorded, toolBudget: 12, maxClusters: 25 });
+});
+
+test('scripted_judge_demo_only: the scripted judge is refused at plan time on anything but a bundled fixture', (t) => {
+  const real = path.join(here, '..', 'contracts', 'review-registry');
+  for (const flags of [{ orchestrator: 'scripted:judge' }, { orchestrator: 'cli:claude:opus', alternateJudge: 'scripted:judge' }]) {
+    assert.throws(() => resolveRunConfig({ flags: { ...flags, target: real }, root: tmp(t) }), /^ConfigError: scripted_judge_demo_only: --(orchestrator|alternate-judge) scripted:judge/);
+  }
+  for (const fixture of [path.join(here, 'demo-fixture'), path.join(here, '..', 'eval', 'golden', 'near-escrow')]) {
+    assert.equal(resolveRunConfig({ flags: { orchestrator: 'scripted:judge', target: fixture }, root: tmp(t) }).orchestrator.id, 'scripted-judge');
+  }
+  const viaCli = (repo) => spawnSync(path.join(here, '..', 'bin', 'audit'), ['run', '--repo', repo, '--reviewers', 'scripted:baseline', '--orchestrator', 'scripted:judge', '--surface', 's1', '--plan'], { encoding: 'utf8' });
+  const refused = viaCli(real);
+  assert.equal(refused.status, 2);
+  assert.match(refused.stderr, /scripted_judge_demo_only/);
+  assert.equal(viaCli(path.join(here, 'demo-fixture')).status, 0);
+});

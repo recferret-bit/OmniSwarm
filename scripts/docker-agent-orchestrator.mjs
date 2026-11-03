@@ -22,8 +22,9 @@ import { runReviewSession } from './agent-session.mjs';
 import { REVIEW_WORKFLOW, buildExistingTestCatalog } from './review-workflow.mjs';
 import { families } from './reviewer-families.mjs';
 import { publishReviewers } from './reviewer-publish.mjs';
-import { reviewersOfMeta } from './reviewer-registry.mjs';
+import { formatReviewerSpec, reviewersOfMeta } from './reviewer-registry.mjs';
 import { assignJobs, defaultAssign } from './reviewer-plan-assign.mjs';
+import { recommendedOrchestrator } from './reviewer-plan.mjs';
 import { loadPhases, runPhases } from './orchestrator-phases.mjs';
 import { DEMO_FIXTURE } from './scripted-strategies.mjs';
 import { startOneShotDocker } from './orchestrator-sandbox.mjs';
@@ -75,7 +76,27 @@ function planJobs(request) {
   }));
   request.models = Object.fromEntries(reviewers.map((r) => [r.id, r.model]));
   request.agents = reviewers.map((r) => r.id);
-  return { surfaceArg, reviewers, assign, jobs };
+  return { surfaceArg, reviewers, assign, jobs, ...planJudges(request) };
+}
+
+// The judges: the orchestrator (`recommended` is resolved once, here, so the bridge and the debate agree on it)
+// and the alternate judge. A scripted judge applies the citation rules in-process; any other judge runs bridge
+// sessions, so it is checked like a reviewer and listed in harness/reviewers.json even if it reviews no surface.
+// orchestratorRecord is what reviewers.json and meta.json say was asked for.
+function planJudges(request, env = process.env) {
+  let orchestratorRecord = request.orchestrator || null;
+  if (request.orchestrator === 'recommended') {
+    const { reviewer } = recommendedOrchestrator({ env });
+    orchestratorRecord = { requested: 'recommended', resolved: reviewer ? formatReviewerSpec(reviewer) : null };
+    // With none available the debate phase records no_orchestrator_available.
+    if (reviewer) request.orchestrator = reviewer;
+  }
+  const judges = [request.orchestrator, request.alternateJudge].filter((judge) => judge && typeof judge === 'object' && judge.family !== 'scripted');
+  for (const judge of judges) {
+    const verdict = families.check(judge);
+    if (!verdict.ok) throw new Error(`Judge ${judge.id}: ${verdict.reason}`);
+  }
+  return { judges, orchestratorRecord };
 }
 
 // Any review of the bundled fixture is the demo, however it was started (`audit demo` on Docker included).
@@ -85,17 +106,16 @@ function isDemo(request) {
 }
 
 function writeInitialRecords(run) {
-  const { request, output, published, assign, budgets, jobs, surfaceArg } = run;
-  // Reviewers, orchestrator choice and budgets are recorded at plan time (harness/reviewers.json) and in meta.json.
-  // `models` stays populated for every reviewer so reports and tools that read the old map keep working.
-  const orchestrator = request.orchestrator === 'recommended' ? { requested: 'recommended' } : request.orchestrator || null;
+  const { request, output, published, assign, budgets, jobs, surfaceArg, orchestratorRecord: orchestrator } = run;
+  // Reviewers, judges, orchestrator choice and budgets are recorded at plan time (harness/reviewers.json) and in
+  // meta.json. `models` stays populated for every reviewer so reports and tools that read the old map keep working.
   run.initialMeta = {
     name: request.name || path.basename(request.target), mode: request.mode || 'local', source: request.source || request.target, surface: surfaceArg,
     agents: request.agents, models: request.models, reviewers: published, orchestrator, assign, budgets, auditors: jobs.map((job) => job.name),
     workerExits: run.workerExits, crosscheckExits: run.crosscheckExits, stageFailures: run.stageFailures, finalized: false, sandboxHardening: 1,
     workflow: REVIEW_WORKFLOW, agentTransport: 'acp_v1', submissionAuthority: 'mcp_commit', ...(isDemo(request) ? { demo: true } : {}),
   };
-  writeReportFile(output, 'harness/reviewers.json', `${JSON.stringify({ version: 1, reviewers: published, orchestrator, alternateJudge: request.alternateJudge || null, assign, budgets, preset: request.preset || null }, null, 2)}\n`);
+  writeReportFile(output, 'harness/reviewers.json', `${JSON.stringify({ version: 1, reviewers: published, judges: run.publishedJudges, orchestrator, alternateJudge: request.alternateJudge || null, assign, budgets, preset: request.preset || null }, null, 2)}\n`);
   writeReportFile(output, 'meta.json', JSON.stringify(run.initialMeta, null, 2));
   run.saveWorkers();
 }
@@ -105,8 +125,9 @@ function createRun(request, output, sealed, planned, options) {
   const cancellation = new AbortController();
   const run = {
     request, output, ...sealed, ...planned, review, startSandbox, cancellation, signal: cancellation.signal,
-    reviewerById: new Map(planned.reviewers.map((r) => [r.id, r])),
+    reviewerById: new Map([...planned.judges, ...planned.reviewers].map((r) => [r.id, r])),
     published: publishReviewers(planned.reviewers, process.env),
+    publishedJudges: publishReviewers(planned.judges, process.env),
     budgets: request.budgets || null, prices: request.prices || null, dockerBin: resolveDockerBin(),
     stageFailures: [], providerFailures: {}, crosscheckExits: {}, budgetRows: [], costCeilings: new Set(),
     workerExits: Object.fromEntries(planned.jobs.map((j) => [j.name, null])),

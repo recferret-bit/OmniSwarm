@@ -83,6 +83,7 @@ export function parseBridgeArgs(argv) {
   if (opts.identityFile) {
     const rel = path.relative(opts.reportDir, opts.identityFile);
     opts.submissionIdentity = readReportJson(opts.reportDir, rel);
+    // A cross-check is named by its reviewer; auditor, debater and orchestrator sessions by --auditor.
     const name = opts.role === 'crosscheck' ? `crosscheck-${opts.agent}` : opts.auditor;
     validateSubmissionIdentity(opts.submissionIdentity, name);
     if (opts.submissionIdentity.agent !== opts.agent || opts.submissionIdentity.role !== opts.role) throw new Error('Bridge submission identity mismatch');
@@ -91,12 +92,15 @@ export function parseBridgeArgs(argv) {
   return opts;
 }
 
-function loadReviewerIds({ reportDir, reviewersFile }) {
+// The orchestrator role may also be one of the run's judges (the orchestrator or the alternate judge), which
+// need not review a surface. Every other role must be a listed reviewer.
+function loadReviewerIds({ reportDir, reviewersFile, role }) {
   let listed;
   try { listed = readReportJson(reportDir, path.relative(reportDir, reviewersFile)); }
   catch { throw new BridgeError('IDENTITY_UNKNOWN', 'This run has no readable reviewers file inside the report directory, so reviewer identity cannot be checked'); }
   if (!Array.isArray(listed?.reviewers)) throw new BridgeError('IDENTITY_UNKNOWN', 'Reviewers file has no reviewers list');
-  return new Set(listed.reviewers.map(reviewer => reviewer?.id).filter(id => typeof id === 'string'));
+  const judges = role === 'orchestrator' && Array.isArray(listed.judges) ? listed.judges : [];
+  return new Set([...listed.reviewers, ...judges].map(reviewer => reviewer?.id).filter(id => typeof id === 'string'));
 }
 
 // The tool list for a role comes from bridge-tools-<role>.mjs.

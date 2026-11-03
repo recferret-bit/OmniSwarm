@@ -12,5 +12,16 @@ test('debate fixtures pass and the named bad cases fail with a named error', () 
   assert.equal(validate('general-review', general).ok, true);
   assert.match(validate('general-review', { ...general, riskPosture: 'secure' }).errors[0], /^\$\.riskPosture: must be one of/);
 });
-// debate-round has no minItems on citations (lead change request), so an upheld turn with no citation is refused
-// by submit_debate_turn instead: see bridge-tools-debate-roles.test.mjs.
+
+test('a turn needs a citation unless it answers insufficient_evidence', () => {
+  for (const verdict of ['upheld', 'partial', 'refuted']) {
+    assert.deepEqual(validate('debate-round', { ...turn, verdict, citations: [] }).errors, ['$.citations: fewer than 1 items'], verdict);
+  }
+  assert.equal(validate('debate-round', { ...turn, verdict: 'insufficient_evidence', citations: [] }).ok, true);
+});
+
+test('a contribution with no priced pass has costUsd null; a negative cost is refused', () => {
+  const row = { reviewerId: 'cli-claude-opus', uniqueConfirmed: 0, refuted: 0, toolCalls: 3, costUsd: null };
+  assert.equal(validate('general-review', { ...general, contributions: [row] }).ok, true);
+  assert.deepEqual(validate('general-review', { ...general, contributions: [{ ...row, costUsd: -0.5 }] }).errors, ['$.contributions[0].costUsd: below minimum 0']);
+});
