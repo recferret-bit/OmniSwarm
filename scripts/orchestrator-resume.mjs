@@ -108,7 +108,8 @@ function restartContext(state, { name, role, agent, identity, prompt, priorDirec
 
 // Decide how one execute() call continues a previous run. Returns the session directory, whether the saved
 // conversation is loaded, the (possibly extended) prompt, and `reused` when a committed report is reused as is.
-// `passResume`: the job restarts at a later pass, so the old report stays archived instead of being recommitted.
+// `passResume`: this turn continues a job's pass loop (a later pass, or a job resumed at a later pass), so the
+// old report stays archived instead of being recommitted over the slot the agent must submit into.
 export function resumeSession(state, { name, agent, role, identity, prompt, passResume = false }) {
   const { resumeRoot, request, output, neverStarted } = state;
   const plan = { directory: path.join(output, 'sessions', name), resuming: false, restartedFrom: undefined, prompt };

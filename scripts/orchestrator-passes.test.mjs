@@ -79,7 +79,8 @@ test('the Docker path hands every session its budgets and prices and runs exactl
 
 test('a failed later pass keeps the earlier pass, counts only completed passes and resumes at the failed pass', async (t) => {
   const f = setup(t, { failPass: 2 });
-  const first = f.request();
+  const budgets = { ...BUDGETS, passes: 3 };
+  const first = f.request({ budgets });
   const result = await runOrchestratedAudit(first, { review: f.review, startSandbox: f.startSandbox });
   assert.ok(result.stageFailures.includes('auditor_error:scripted-baseline-s1-auth'));
   const job = readReportJson(first.out, 'workers.json').jobs[0];
@@ -93,14 +94,16 @@ test('a failed later pass keeps the earlier pass, counts only completed passes a
   assert.ok(!errors.some((e) => /missing or invalid outputs/.test(e)), 'the kept pass-1 report still validates');
 
   f.calls.length = 0;
-  const resumed = f.request({ dir: 'resumed', resumeFrom: first.out });
+  const resumed = f.request({ dir: 'resumed', resumeFrom: first.out, budgets });
   const second = setup(t);
-  await runOrchestratedAudit(resumed, { review: second.review, startSandbox: f.startSandbox });
-  assert.deepEqual(second.calls.filter((c) => c.role === 'auditor').map((c) => c.pass), [2], 'resume starts at the first unfinished pass');
+  const again = await runOrchestratedAudit(resumed, { review: second.review, startSandbox: f.startSandbox });
+  assert.deepEqual(second.calls.filter((c) => c.role === 'auditor').map((c) => c.pass), [2, 3], 'resume starts at the first unfinished pass and runs the rest');
+  assert.deepEqual(again.stageFailures, [], 'no later pass collides with a recommitted old report');
   const after = readReportJson(resumed.out, 'workers.json').jobs[0];
-  assert.equal(after.passesCompleted, 2);
+  assert.equal(after.passesCompleted, 3);
   assert.equal(after.state, 'collected');
-  assert.ok(fs.existsSync(path.join(resumed.out, 'submissions', 'scripted-baseline-s1-auth-pass-1.json')));
+  assert.match(readReportJson(resumed.out, 'auditors/scripted-baseline-s1-auth.json')[0].title, /^Pass 3 finding/);
+  for (const k of [1, 2]) assert.ok(fs.existsSync(path.join(resumed.out, 'submissions', `scripted-baseline-s1-auth-pass-${k}.json`)));
 });
 
 test('a review of the bundled fixture on the Docker path is stamped as the demo', async (t) => {

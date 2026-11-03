@@ -71,7 +71,7 @@ async function reviewJob(run, job) {
   const loop = await runReviewerPasses({
     out: run.output, name: job.name, reviewerId: job.adapter, surface: job.surface.code, budgets: run.budgets, files: run.sourceFiles,
     startPass, ceilings: run.costCeilings,
-    runPass: ({ pass, brief }) => run.execute({ name: job.name, agent: job.adapter, role: 'auditor', surface: job.surface.code, prompt: brief ? `${prompt}\n${brief}` : prompt, assignment: job.surface, logFile, pass, passResume: pass === startPass && startPass > 1 }),
+    runPass: ({ pass, brief }) => run.execute({ name: job.name, agent: job.adapter, role: 'auditor', surface: job.surface.code, prompt: brief ? `${prompt}\n${brief}` : prompt, assignment: job.surface, logFile, pass, passResume: pass > 1 || startPass > 1 }),
   });
   run.budgetRows.push(...loop.health);
   const res = loop.result;

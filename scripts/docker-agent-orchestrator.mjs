@@ -80,7 +80,7 @@ function planJobs(request) {
 
 // Any review of the bundled fixture is the demo, however it was started (`audit demo` on Docker included).
 function isDemo(request) {
-  if (request.preset === 'demo' || request.demo === true || process.env.OMNI_DEMO === '1') return true;
+  if (request.preset === 'demo' || request.demo === true) return true;
   try { return fs.realpathSync(request.target) === fs.realpathSync(DEMO_FIXTURE); } catch { return false; }
 }
 
