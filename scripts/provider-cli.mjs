@@ -1,6 +1,8 @@
 // The `cli` family: local vendor subscriptions driven through ACP or native sessions
 // (ORCHESTRATION section 1). The per-adapter launch branches that used to sit in
-// buildSessionLaunch live here, keyed by provider. No key or endpoint enters these processes.
+// buildSessionLaunch live here, keyed by provider. Subscription CLIs get no key or endpoint;
+// the one exception is claude-zai, which maps the operator's ZAI_API_KEY to ANTHROPIC_AUTH_TOKEN
+// with the Z.ai Anthropic endpoint (AGENTS.md "Key policy").
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -27,8 +29,9 @@ export const ADAPTER_PINS = { codex: '2.2.2', claude: '0.92.0' };
 
 export function sessionEnvironment(source = process.env) {
   const env = {};
-  // Native subscription stores stay where the official CLI expects them. No key,
-  // endpoint, proxy, NODE_OPTIONS or shell-hook override enters this runtime.
+  // Native subscription stores stay where the official CLI expects them. No key, endpoint,
+  // proxy, NODE_OPTIONS or shell-hook override passes through here; claude-zai adds its two
+  // mapped variables in launch() below.
   for (const key of ['HOME', 'USER', 'PATH', 'LANG', 'LC_ALL', 'TMPDIR', 'CODEX_HOME', 'CLAUDE_CONFIG_DIR', 'GROK_HOME', 'XDG_CONFIG_HOME']) {
     if (typeof source[key] === 'string') env[key] = source[key];
   }
@@ -48,7 +51,18 @@ export function runtimeAdapter(agent) {
 }
 
 const BRIDGE = path.join(HERE, 'docker-mcp-bridge.mjs');
-const MAINTAINED = { codex: true, claude: true };
+
+// Per-provider facts other modules read instead of naming adapters themselves.
+// presence: listed by plain `check-agents` (claude-zai only when --reviewers names it);
+// transport: how the session reaches the CLI; maxTurnsFlag: the CLI takes --max-turns N+3 itself;
+// pinsModel: a model change reported by the agent mid-session aborts the turn.
+export const CLI_PROVIDERS = Object.freeze({
+  claude: Object.freeze({ installed: () => true, pinsModel: false, presence: true, transport: 'maintained_acp', maxTurnsFlag: false }),
+  codex: Object.freeze({ installed: () => true, pinsModel: true, presence: true, transport: 'maintained_acp', maxTurnsFlag: false }),
+  grok: Object.freeze({ installed: () => true, pinsModel: true, presence: true, transport: 'native_acp', maxTurnsFlag: true }),
+  agy: Object.freeze({ installed: () => true, pinsModel: false, presence: true, transport: 'native_cli_acp_adapter', maxTurnsFlag: false }),
+  'claude-zai': Object.freeze({ installed: () => true, pinsModel: false, presence: false, transport: 'maintained_acp', maxTurnsFlag: false }),
+});
 
 const launchers = {
   codex({ model, cli, environment, invocation, mcpServers, adapterFor }) {
@@ -120,19 +134,12 @@ function launch(reviewer, { workDir, bridgeArgs, legacyConversationId, env = pro
   if ((requested === 'claude' || requested === 'claude-zai') && toolBudget && sessionMeta.claudeCode && claudeMaxTurnsSupport(env)) {
     sessionMeta.claudeCode.options.extraArgs['max-turns'] = String(toolBudget + 3);
   }
-  return { invocation, mcpServers, sessionMeta, transport: MAINTAINED[provider] ? 'maintained_acp' : provider === 'grok' ? 'native_acp' : 'native_cli_acp_adapter' };
+  return { invocation, mcpServers, sessionMeta, transport: CLI_PROVIDERS[provider].transport };
 }
 
 export const family = {
   name: 'cli',
-  // pinsModel: a model change reported by the agent mid-session aborts the turn.
-  providers: {
-    claude: { installed: () => true, pinsModel: false },
-    codex: { installed: () => true, pinsModel: true },
-    grok: { installed: () => true, pinsModel: true },
-    agy: { installed: () => true, pinsModel: false },
-    'claude-zai': { installed: () => true, pinsModel: false },
-  },
+  providers: CLI_PROVIDERS,
   installed: () => true,
   // Is this reviewer usable on this machine right now (CLI on PATH)? Used to pick a recommended orchestrator.
   available: (reviewer, env = process.env) => {
