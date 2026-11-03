@@ -9,8 +9,9 @@
 #         api/web restart, nginx reload, workers restarted one at a time).
 # rollback: `release.sh rollback` on the host.
 # --dry-run prints every local and remote command and contacts nothing.
-# The ssh user needs passwordless sudo for release.sh only. Run
-# infra/deploy/smoke.sh <domain> afterwards.
+# The ssh user (provision.sh --deploy-user, default `deploy`) needs passwordless
+# sudo: it unpacks the release and runs its release.sh as root, so it is
+# root-equivalent. Run infra/deploy/smoke.sh <domain> afterwards.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
