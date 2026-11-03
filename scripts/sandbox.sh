@@ -118,6 +118,9 @@ export_files() {
       -v "$VOL":/work:ro \
       -v "$OUT/files":/export \
       -v "$LIB:/opt/audit/sandbox-lib.mjs:ro" \
+      -v "$SCRIPT_DIR/sandbox-net.mjs:/opt/audit/sandbox-net.mjs:ro" \
+      -v "$SCRIPT_DIR/sandbox-tree.mjs:/opt/audit/sandbox-tree.mjs:ro" \
+      -v "$SCRIPT_DIR/sandbox-artifacts.mjs:/opt/audit/sandbox-artifacts.mjs:ro" \
       audit-sandbox:local \
       /opt/audit/sandbox-lib.mjs export /work /export build \
       >"$RUN/export.log" 2>&1 || true
@@ -259,6 +262,9 @@ docker run -d --name "$PROXY" \
   -e PORT=3128 \
   -v "$SCRIPT_DIR/sandbox-proxy.mjs:/opt/audit/sandbox-proxy.mjs:ro" \
   -v "$SCRIPT_DIR/sandbox-lib.mjs:/opt/audit/sandbox-lib.mjs:ro" \
+  -v "$SCRIPT_DIR/sandbox-net.mjs:/opt/audit/sandbox-net.mjs:ro" \
+  -v "$SCRIPT_DIR/sandbox-tree.mjs:/opt/audit/sandbox-tree.mjs:ro" \
+  -v "$SCRIPT_DIR/sandbox-artifacts.mjs:/opt/audit/sandbox-artifacts.mjs:ro" \
   -w /opt/audit \
   node:24-bookworm-slim \
   node /opt/audit/sandbox-proxy.mjs >/dev/null
@@ -339,7 +345,15 @@ if ! docker run -d --name "$SBX" \
   -v "$RUN":/out \
   -v "$SCRIPT_DIR/sandbox-inside.mjs:/opt/audit/sandbox-inside.mjs:ro" \
   -v "$SCRIPT_DIR/sandbox-lib.mjs:/opt/audit/sandbox-lib.mjs:ro" \
+  -v "$SCRIPT_DIR/sandbox-net.mjs:/opt/audit/sandbox-net.mjs:ro" \
+  -v "$SCRIPT_DIR/sandbox-tree.mjs:/opt/audit/sandbox-tree.mjs:ro" \
+  -v "$SCRIPT_DIR/sandbox-artifacts.mjs:/opt/audit/sandbox-artifacts.mjs:ro" \
   -v "$SCRIPT_DIR/harness.mjs:/opt/audit/harness.mjs:ro" \
+  -v "$SCRIPT_DIR/harness-leads.mjs:/opt/audit/harness-leads.mjs:ro" \
+  -v "$SCRIPT_DIR/harness-patterns-app.mjs:/opt/audit/harness-patterns-app.mjs:ro" \
+  -v "$SCRIPT_DIR/harness-patterns-chain.mjs:/opt/audit/harness-patterns-chain.mjs:ro" \
+  -v "$SCRIPT_DIR/harness-scanners.mjs:/opt/audit/harness-scanners.mjs:ro" \
+  -v "$SCRIPT_DIR/harness-walk.mjs:/opt/audit/harness-walk.mjs:ro" \
   -v "$SCRIPT_DIR/audit-plans.mjs:/opt/audit/audit-plans.mjs:ro" \
   -v "$SCRIPT_DIR/scanner-evidence.mjs:/opt/audit/scanner-evidence.mjs:ro" \
   -v "$SCRIPT_DIR/stack-detect.mjs:/opt/audit/stack-detect.mjs:ro" \
