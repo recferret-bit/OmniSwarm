@@ -2,6 +2,9 @@
   "name": "demo-vault-client",
   "private": true,
   "type": "module",
+  "scripts": {
+    "test": "node --test"
+  },
   "dependencies": {
     "near-api-js": "5.1.1"
   }
