@@ -12,6 +12,7 @@ import { KeyPair } from 'near-api-js';
 import { ChainRejectedError } from '../../src/chain/errors.ts';
 import { NearChainAdapter } from '../../src/chain/near/near-chain.ts';
 import { loadOperatorKey } from '../../src/chain/near/operator-key.ts';
+import { chainReader, guardPort } from '../../src/modules/guard/guard.port.ts';
 import { AppError } from '../../src/shared/errors.ts';
 import { APP_ROOT } from '../../src/shared/paths.ts';
 
@@ -131,6 +132,9 @@ test('guard blocklist: is_reported is a final view; report_address is an operato
   const view = server.calls.find((c) => c.params?.method_name === 'is_reported');
   assert.equal(view?.params.finality, 'final');
   assert.deepEqual(JSON.parse(Buffer.from(view?.params.args_base64, 'base64').toString('utf8')), { account_id: 'drainer.testnet' });
+  const verdict = await guardPort(chainReader(reader)).verdict('drainer.testnet');
+  assert.equal(verdict.verdict, 'block', 'the guard reads is_reported through registryReader over this adapter');
+  assert.ok(verdict.reasons.includes('REPORTED'));
   const report = { accountId: 'drainer.testnet', evidenceUri: 'https://evidence.test/drainer', reason: 'phishing drainer' };
   await assert.rejects(reader.reportAddress(report), /holds no operator key/, 'the API process cannot report');
   assert.equal(await adapter([server.url], () => loadOperatorKey(keyFile)).reportAddress(report), REC.report_address_ok.transaction.hash);

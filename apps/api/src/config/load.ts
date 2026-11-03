@@ -25,6 +25,7 @@ export interface Config {
     mock: { failRate: number; hangAfter: 'attest' | 'refund' | null };
   };
   github: { adapter: 'live' | 'recorded'; apiUrl: string; token: string | null; timeoutMs: number; fixturesDir: string };
+  guard: { accountAge: 'off' | 'nearblocks'; nearblocksApiKey: string | null };
   engine: {
     runner: 'cli' | 'mock'; root: string; configPath: string; timeoutS: number; killGraceS: number;
     logMaxBytes: number; envPassthrough: string[];
@@ -122,6 +123,7 @@ function build(raw: RawEnv): Config {
       adapter: adapters(raw).github, apiUrl: raw.GITHUB_API_URL, token: raw.GITHUB_TOKEN ?? null,
       timeoutMs: raw.GITHUB_TIMEOUT_MS, fixturesDir: raw.GITHUB_FIXTURES_DIR ?? path.join(APP_ROOT, 'test/fixtures/github'),
     },
+    guard: { accountAge: raw.GUARD_ACCOUNT_AGE, nearblocksApiKey: raw.NEARBLOCKS_API_KEY ?? null },
     engine: {
       runner: adapters(raw).engine, root: raw.ENGINE_ROOT,
       configPath: raw.ENGINE_CONFIG ?? path.join(raw.ENGINE_ROOT, 'omniswarm.config.json'),

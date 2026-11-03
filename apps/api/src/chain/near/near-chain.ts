@@ -110,7 +110,13 @@ export class NearChainAdapter implements ChainPort {
   }
 
   async isReported(accountId: string): Promise<boolean> {
-    return (await this.#view<boolean>('is_reported', { account_id: accountId })) === true;
+    const reported = await this.#view<unknown>('is_reported', { account_id: accountId });
+    if (typeof reported !== 'boolean') throw chainUnavailable(new Error('is_reported did not return a boolean'));
+    return reported;
+  }
+
+  viewRegistry(method: string, args: Record<string, unknown>): Promise<unknown> {
+    return this.#view<unknown>(method, args);
   }
 
   markRunning(requestHash: string): Promise<string> {

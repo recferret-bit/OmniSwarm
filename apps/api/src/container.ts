@@ -69,7 +69,11 @@ export async function createGuardPort(config: Config, chain: ChainPort): Promise
     const records = JSON.parse(fs.readFileSync(path.join(APP_ROOT, 'test/fixtures/guard/records.json'), 'utf8')) as RecordedChain;
     return guardPort(withChainBlocklist(createRecordedReader(records), chain));
   }
-  return guardPort(chainReader(chain));
+  const { accountAgeFromConfig } = await import('@omniswarm/guard/account-age');
+  const accountAge = accountAgeFromConfig({
+    provider: config.guard.accountAge, network: config.intake.network, ...(config.guard.nearblocksApiKey ? { apiKey: config.guard.nearblocksApiKey } : {}),
+  });
+  return guardPort(chainReader(chain), accountAge);
 }
 
 export interface CoreDeps { config: Config; pool: Pool; clock: Clock; chain: ChainPort }

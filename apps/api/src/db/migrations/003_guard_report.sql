@@ -7,8 +7,9 @@ CREATE TABLE guard_report (
   id uuid PRIMARY KEY,
   account text NOT NULL CHECK (account ~ '^[a-z0-9._-]{2,64}$'),
   reporter text NOT NULL,
-  evidence_url text NOT NULL CHECK (evidence_url ~ '^https://[^\s]+$' AND length(evidence_url) <= 2000),
-  reason text NOT NULL CHECK (length(reason) BETWEEN 1 AND 2000),
+  -- The registry's report_address limits (contracts/review-registry/INTERFACE.md v0.3.0).
+  evidence_url text NOT NULL CHECK (evidence_url ~ '^https://[!-~]+$' AND octet_length(evidence_url) <= 2000),
+  reason text NOT NULL CHECK (char_length(reason) BETWEEN 1 AND 280),
   status text NOT NULL CHECK (status IN ('pending', 'approved', 'reported', 'rejected')),
   report_tx text,
   created_at timestamptz NOT NULL,

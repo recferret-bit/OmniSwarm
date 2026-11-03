@@ -63,6 +63,10 @@ export const envSchema = z.object({
   MOCK_CHAIN_FAIL_RATE: z.coerce.number().min(0).max(1).default(0),
   MOCK_CHAIN_HANG_AFTER: z.enum(['attest', 'refund']).optional(),
 
+  // Guard account-age signal (W13): off by default; `nearblocks` asks the NearBlocks API (API only).
+  GUARD_ACCOUNT_AGE: z.enum(['off', 'nearblocks']).default('off'),
+  NEARBLOCKS_API_KEY: z.string().min(1).optional(),
+
   GITHUB_ADAPTER: z.enum(['live', 'recorded']).optional(),
   GITHUB_API_URL: z.url().default('https://api.github.com'),
   GITHUB_TOKEN: z.string().min(1).optional(),

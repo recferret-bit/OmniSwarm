@@ -228,7 +228,13 @@ export interface GuardVerdictResponse {
 }
 export interface GuardReportRequest {
   account: AccountId;
+  /**
+   * Visible ASCII only, so 2000 characters are the registry's 2000-byte evidence_uri limit
+   */
   evidenceUrl: string;
+  /**
+   * The registry's report_address reason: 1-280 characters, not only whitespace, no control characters
+   */
   reason: string;
 }
 /**

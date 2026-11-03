@@ -8,7 +8,7 @@ import type { Db, Pool } from '../../db/pool.ts';
 import { AppError } from '../../shared/errors.ts';
 import { ChainRejectedError, chainUnavailable } from '../errors.ts';
 import type { AttestArgs, ChainAttestation, ChainPort, ChainRequest, KeyPermission, PaymentTx, ReportAddressArgs } from '../port.ts';
-import { fromContractAttestation, type ContractAttestation } from '../near/attestation.ts';
+import { fromContractAttestation, toContractAttestation, type ContractAttestation } from '../near/attestation.ts';
 
 export interface MockChainOptions {
   contractId: string;
@@ -141,25 +141,43 @@ export class MockChainAdapter implements ChainPort {
 
   async isReported(accountId: string): Promise<boolean> {
     await this.#guard();
-    return ((await this.#db.query('SELECT 1 FROM mock_chain_report WHERE account = $1', [accountId])).rowCount ?? 0) > 0;
+    return (await this.#report(accountId)) !== null;
   }
 
-  /** As in the contract, reporting an account twice keeps the first entry. */
+  /** The registry views the guard reads (INTERFACE.md v0.3.0), answered from the mock tables. */
+  async viewRegistry(method: string, args: Record<string, unknown>): Promise<unknown> {
+    const accountId = String(args.account_id ?? args.account ?? '');
+    if (method === 'is_reported') return this.isReported(accountId);
+    if (method === 'get_report') return this.#guard().then(() => this.#report(accountId));
+    if (method === 'get_attestation_for_account') {
+      const attestation = await this.getAttestationForAccount(accountId);
+      return attestation ? toContractAttestation(attestation) : null;
+    }
+    throw chainUnavailable(new Error(`the mock registry has no view ${method}`));
+  }
+
+  async #report(accountId: string) {
+    const result = await this.#db.query(
+      `SELECT account AS account_id, evidence_uri, reason, 'operator.mock' AS reporter, (extract(epoch FROM reported_at) * 1000)::bigint::float8 AS reported_at_ms
+       FROM mock_chain_report WHERE account = $1`, [accountId]);
+    return result.rows[0] ?? null;
+  }
+
+  /** As in the contract: one report per account, a second one is ERR_ALREADY_REPORTED. */
   async reportAddress(args: ReportAddressArgs): Promise<string> {
     await this.#guard();
     const txHash = mockTxHash(`report_address:${args.accountId}`);
-    try {
-      await this.#db.query(
-        `WITH reported AS (
-           INSERT INTO mock_chain_report (account, evidence_uri, reason, tx_hash) VALUES ($1, $2, $3, $4)
-           ON CONFLICT (account) DO NOTHING RETURNING account)
-         INSERT INTO mock_chain_tx (tx_hash, signer, receiver, method, args, success)
-         SELECT $4, 'operator.mock', $5, 'report_address', $6, true FROM reported`,
-        [args.accountId, args.evidenceUri, args.reason, txHash, this.contractId,
-          JSON.stringify({ account_id: args.accountId, evidence_uri: args.evidenceUri, reason: args.reason })]);
-    } catch (error) {
+    const inserted = await this.#db.query(
+      `WITH reported AS (
+         INSERT INTO mock_chain_report (account, evidence_uri, reason, tx_hash) VALUES ($1, $2, $3, $4)
+         ON CONFLICT (account) DO NOTHING RETURNING account)
+       INSERT INTO mock_chain_tx (tx_hash, signer, receiver, method, args, success)
+       SELECT $4, 'operator.mock', $5, 'report_address', $6, true FROM reported`,
+      [args.accountId, args.evidenceUri, args.reason, txHash, this.contractId,
+        JSON.stringify({ account_id: args.accountId, evidence_uri: args.evidenceUri, reason: args.reason })]).catch((error: unknown) => {
       throw chainUnavailable(error);
-    }
+    });
+    if (inserted.rowCount !== 1) throw new ChainRejectedError('ERR_ALREADY_REPORTED');
     return txHash;
   }
 

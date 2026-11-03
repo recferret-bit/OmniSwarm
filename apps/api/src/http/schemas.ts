@@ -58,7 +58,13 @@ export const guardVerdictResponse = z.strictObject({
   }).optional(),
 });
 
-export const guardReportRequest = z.strictObject({ account: accountId, evidenceUrl: https.max(2000), reason: z.string().min(1).max(2000) });
+// The registry's report_address rules (INTERFACE.md v0.3.0): evidence_uri https + visible ASCII, at most
+// 2000 bytes; reason 1-280 characters, not only whitespace, no control characters.
+export const guardReportRequest = z.strictObject({
+  account: accountId,
+  evidenceUrl: z.string().max(2000).regex(/^https:\/\/[!-~]+$/),
+  reason: z.string().min(1).max(280).regex(/^[^\u0000-\u001f\u007f]*[^\s\u0000-\u001f\u007f][^\u0000-\u001f\u007f]*$/u),
+});
 export const guardReportResponse = z.strictObject({ queued: z.literal(true), reportId: uuid.optional() });
 
 const guardReportStatus = z.enum(GUARD_REPORT_STATUSES);

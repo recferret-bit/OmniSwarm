@@ -3,6 +3,7 @@
 // signs: approval records the decision and enqueues a `guard-report` job in one transaction, and a
 // worker (the only operator-key holder) sends it, asking the contract first so a retry never re-sends.
 import crypto from 'node:crypto';
+import { ChainRejectedError } from '../../chain/errors.ts';
 import type { ChainPort } from '../../chain/port.ts';
 import { withAdvisoryLock, withTransaction, type Pool } from '../../db/pool.ts';
 import { audit } from '../../db/repositories/audit.ts';
@@ -54,6 +55,16 @@ export async function decideReport(deps: GuardReportDeps, reportId: string, deci
   });
 }
 
+/** `report_address`; another report of the same account landing first (ERR_ALREADY_REPORTED) is success, without a tx. */
+async function reportOnce(chain: ChainPort, row: GuardReportRow): Promise<string | null> {
+  try {
+    return await chain.reportAddress({ accountId: row.account, evidenceUri: row.evidence_url, reason: row.reason });
+  } catch (error) {
+    if (error instanceof ChainRejectedError && error.reason === 'ERR_ALREADY_REPORTED') return null;
+    throw error;
+  }
+}
+
 /** Worker: send `report_address` for an approved report unless the contract already lists the account. */
 export async function sendGuardReport(deps: { pool: Pool; clock: Clock; chain: ChainPort }, reportId: string) {
   const row = await findGuardReport(deps.pool, reportId);
@@ -61,9 +72,7 @@ export async function sendGuardReport(deps: { pool: Pool; clock: Clock; chain: C
   return withAdvisoryLock(deps.pool, `guard-report:${row.account}`, async () => {
     const current = await findGuardReport(deps.pool, reportId);
     if (current?.status !== 'approved') return { skipped: current?.status ?? 'missing' };
-    const reportTx = (await deps.chain.isReported(current.account))
-      ? null
-      : await deps.chain.reportAddress({ accountId: current.account, evidenceUri: current.evidence_url, reason: current.reason });
+    const reportTx = (await deps.chain.isReported(current.account)) ? null : await reportOnce(deps.chain, current);
     const now = deps.clock.now();
     await withTransaction(deps.pool, async (client) => {
       await markGuardReported(client, reportId, reportTx, now);

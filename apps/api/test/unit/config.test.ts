@@ -75,3 +75,15 @@ test('admin binds loopback only; presets must be allow-listed; trustProxy parses
   assert.equal(loadConfig('api', { ...BASE, NETWORK: 'mainnet' }).intake.priceYocto, null, 'mainnet is off until priced');
   assert.equal(issue('migrate', { DATABASE_URL: BASE.DATABASE_URL }), '', 'migrate needs only the database');
 });
+
+test('the guard account-age signal is off unless GUARD_ACCOUNT_AGE=nearblocks; hygiene has defaults', async () => {
+  const { accountAgeFromConfig } = await import('@omniswarm/guard/account-age');
+  const off = loadConfig('api', BASE).guard;
+  assert.deepEqual(off, { accountAge: 'off', nearblocksApiKey: null });
+  assert.equal(accountAgeFromConfig({ provider: off.accountAge, network: 'testnet' }), undefined);
+  const on = loadConfig('api', { ...BASE, GUARD_ACCOUNT_AGE: 'nearblocks', NEARBLOCKS_API_KEY: 'k' }).guard;
+  assert.ok(accountAgeFromConfig({ provider: on.accountAge, network: 'testnet', apiKey: on.nearblocksApiKey ?? 'k' }), 'a source is built; nothing is fetched');
+  assert.match(issue('api', { ...BASE, GUARD_ACCOUNT_AGE: 'indexer' }), /GUARD_ACCOUNT_AGE/);
+  const { storage } = loadConfig('worker', { ...BASE });
+  assert.deepEqual([storage.keepRuns, storage.orphanReportRetentionH], [20, 168]);
+});

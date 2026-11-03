@@ -196,8 +196,8 @@
       "additionalProperties": false,
       "properties": {
         "account": {"$ref": "#/$defs/account-id"},
-        "evidenceUrl": {"type": "string", "pattern": "^https://[^\\s]+$", "maxLength": 2000},
-        "reason": {"type": "string", "minLength": 1, "maxLength": 2000}
+        "evidenceUrl": {"type": "string", "pattern": "^https://[!-~]+$", "maxLength": 2000, "description": "Visible ASCII only, so 2000 characters are the registry's 2000-byte evidence_uri limit"},
+        "reason": {"type": "string", "minLength": 1, "maxLength": 280, "pattern": "^[^\\u0000-\\u001f\\u007f]*[^\\s\\u0000-\\u001f\\u007f][^\\u0000-\\u001f\\u007f]*$", "description": "The registry's report_address reason: 1-280 characters, not only whitespace, no control characters"}
       }
     },
     "guard-report-response": {

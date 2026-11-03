@@ -82,8 +82,10 @@ export interface ChainPort {
   getAttestationForAccount(accountId: string): Promise<ChainAttestation | null>;
   /** Timestamp of a block by height, in milliseconds. */
   blockTimestampMs(height: number): Promise<number>;
-  /** `is_reported(account_id)`: the account is on the registry's guard blocklist. */
+  /** `is_reported {account_id}`: the account is on the registry's guard blocklist. Rejects on a non-boolean. */
   isReported(accountId: string): Promise<boolean>;
+  /** A registry view at finality final, parsed JSON (null when absent): what @omniswarm/guard's registryReader calls. */
+  viewRegistry(method: string, args: Record<string, unknown>): Promise<unknown>;
   /** Operator calls. Each returns the FINAL tx hash. `refund` throws when the transfer bounced. */
   markRunning(requestHash: string): Promise<string>;
   attest(args: AttestArgs): Promise<string>;
