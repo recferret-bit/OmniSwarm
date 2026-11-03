@@ -32,6 +32,16 @@ export interface MockTx {
   deposit: string;
 }
 
+// A guard report waiting for the owner's review (the admin listener is loopback-only and not mocked).
+export interface MockGuardReport {
+  id: string;
+  account: string;
+  reporter: string;
+  evidenceUrl: string;
+  reason: string;
+  createdAt: number;
+}
+
 export interface MockControls {
   error: MockError | null;
   walletReject: boolean;
@@ -43,6 +53,7 @@ export interface MockState {
   requests: MockRequest[];
   txs: Record<string, MockTx>;
   attestations: Record<string, OnChainAttestation>;
+  guardReports: MockGuardReport[];
   session: string | null;
   controls: MockControls;
 }
@@ -50,7 +61,7 @@ export interface MockState {
 const KEY = 'omniswarm.mock.db';
 
 export function emptyState(): MockState {
-  return { nonces: {}, requests: [], txs: {}, attestations: {}, session: null, controls: { error: null, walletReject: false, tampered: false } };
+  return { nonces: {}, requests: [], txs: {}, attestations: {}, guardReports: [], session: null, controls: { error: null, walletReject: false, tampered: false } };
 }
 
 let memory: MockState | null = null;

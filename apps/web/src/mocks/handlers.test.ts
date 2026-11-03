@@ -8,7 +8,7 @@ import { getAttestation } from '@/lib/near/rpc';
 import { createRequestFlowStore } from '@/stores/request-flow';
 import { useMockApi } from '@/test/msw';
 import { setMockError } from './controls';
-import { clock, readState } from './db';
+import { clock, readState, updateState } from './db';
 import { progressEvent, statusOf } from './handlers/status';
 import { DONE_AFTER_MS, snapshotAt } from './state-machine';
 import { createMockConnector } from './wallet';
@@ -20,6 +20,21 @@ function expectValid(def: string, value: unknown) {
   expect(result.errors).toEqual([]);
 }
 
+async function post(path: string, body: unknown) {
+  const response = await fetch(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  return { status: response.status, body: (await response.json()) as unknown };
+}
+
+async function withClock<T>(at: number, run: () => Promise<T>): Promise<T> {
+  const real = clock.now;
+  clock.now = () => at;
+  try {
+    return await run();
+  } finally {
+    clock.now = real;
+  }
+}
+
 async function paidRequest() {
   const connector = createMockConnector();
   const store = createRequestFlowStore({ api, connector: async () => connector, sleep: async () => undefined, now: Date.now, storage: () => sessionStorage });
@@ -28,7 +43,7 @@ async function paidRequest() {
   await store.getState().sign('alice.testnet');
   expectValid('create-request-response', store.getState().request);
   await store.getState().pay();
-  return store.getState().request!;
+  return { ...store.getState().request!, txHash: store.getState().txHash! };
 }
 
 describe('mock intake API', () => {
@@ -63,5 +78,61 @@ describe('mock intake API', () => {
     } finally {
       clock.now = real;
     }
+  });
+
+  it('answers a payment replay with the current status and rank, and refuses a tx used elsewhere', async () => {
+    const request = await paidRequest();
+    const paidAt = readState().requests[0]!.paidAt!;
+    const replay = await withClock(paidAt, () => api.confirmPayment(request.requestId, { txHash: request.txHash }));
+    expectValid('payment-response', replay);
+    expect(replay).toEqual({ status: 'queued', position: 1 });
+    const later = await withClock(paidAt + DONE_AFTER_MS, () => api.confirmPayment(request.requestId, { txHash: request.txHash }));
+    expectValid('payment-response', later);
+    expect(later).toEqual({ status: 'done', position: null });
+    const other = { ...readState().requests[0]!, id: '00000000-0000-4000-a000-000000000001', paidAt: null, txHash: null };
+    updateState((state) => { state.requests.unshift(other); });
+    const reused = await post(`/api/requests/${other.id}/payment`, { txHash: request.txHash });
+    expect(reused.status).toBe(409);
+    expectValid('error-response', reused.body);
+    expect(reused.body).toMatchObject({ error: { code: 'TX_ALREADY_USED' } });
+  });
+
+  it('serves the public ledger without account ids', async () => {
+    const request = await paidRequest();
+    const paidAt = readState().requests[0]!.paidAt!;
+    const ledger = await withClock(paidAt + DONE_AFTER_MS, async () => (await fetch('/api/ledger')).json());
+    expectValid('ledger-response', ledger);
+    expect(ledger.entries).toEqual([expect.objectContaining({ requestId: request.requestId, status: 'done', paidYocto: request.priceYocto, reviewers: 3 })]);
+    expect(ledger.totals).toEqual({ requests: 1, salesYocto: request.priceYocto, refundedYocto: '0', modelCostUsd: 0 });
+    expect(JSON.stringify(ledger)).not.toContain('alice.testnet');
+  });
+
+  it('serves 404 for a report that is not published', async () => {
+    const request = await paidRequest();
+    const early = await fetch(`/api/reports/${request.requestId}`);
+    expect(early.status).toBe(404);
+    expectValid('error-response', await early.json());
+    const unknown = await fetch('/api/reports/00000000-0000-4000-a000-000000000000');
+    expect(await unknown.json()).toMatchObject({ error: { code: 'REQUEST_NOT_FOUND' } });
+  });
+
+  it('queues guard reports with the schema rules and keeps one open report per account', async () => {
+    const report = { account: 'phish.testnet', evidenceUrl: 'https://evidence.example/1', reason: 'drains approvals' };
+    const anonymous = await post('/api/guard/reports', report);
+    expect(anonymous.status).toBe(401);
+    expectValid('error-response', anonymous.body);
+    await paidRequest();
+    const cases = [
+      report, { ...report, reason: 'x'.repeat(280) }, { ...report, reason: 'x'.repeat(281) }, { ...report, reason: '   ' },
+      { ...report, reason: 'line\nbreak' }, { ...report, evidenceUrl: 'http://evidence.example' }, { ...report, extra: 1 },
+    ];
+    for (const body of cases) {
+      const response = await post('/api/guard/reports', body);
+      expect(response.status).toBe(validate('intake-api#guard-report-request', body).ok ? 202 : 400);
+      expectValid(response.status === 202 ? 'guard-report-response' : 'error-response', response.body);
+    }
+    const first = (await post('/api/guard/reports', report)).body as { reportId: string };
+    const again = (await post('/api/guard/reports', { ...report, reason: 'resubmitted' })).body as { reportId: string };
+    expect(again.reportId).toBe(first.reportId);
   });
 });

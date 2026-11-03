@@ -34,7 +34,7 @@ export function progressEvent(status: RequestStatusResponse): ProgressEvent {
 
 const one = http.get<{ id: string }>('/api/requests/:id', async ({ params }) => {
   const row = find(params.id);
-  return row ? HttpResponse.json(await statusOf(row)) : apiError('NOT_FOUND', 404, 'Request not found');
+  return row ? HttpResponse.json(await statusOf(row)) : apiError('REQUEST_NOT_FOUND', 404, 'Request not found');
 });
 
 // Emits one event per status/progress change; SSE_DROP errors the stream so the
@@ -75,7 +75,7 @@ const mine = http.get('/api/requests', async ({ request }) => {
 
 const report = http.get<{ id: string }>('/api/reports/:id', async ({ params }) => {
   const row = find(params.id);
-  if (!row) return apiError('NOT_FOUND', 404, 'Request not found');
+  if (!row) return apiError('REQUEST_NOT_FOUND', 404, 'Request not found');
   const status = await statusOf(row);
   const attestation = readState().attestations[row.requestHash];
   if (status.status !== 'done' || !attestation) return apiError('NOT_FOUND', 404, 'Report not published yet');

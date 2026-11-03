@@ -1,7 +1,8 @@
 // POST /api/requests/:id/payment with backoff while the transaction is not yet
 // visible at FINAL (PAYMENT_NOT_FOUND, max 60 s). Re-sending the same txHash
-// after a reload is idempotent: TX_ALREADY_USED means an earlier attempt landed,
-// so the request's own status decides.
+// after a reload is idempotent: the API answers with the current status and the
+// queue rank, null once the review has started. On TX_ALREADY_USED the request's
+// own status decides.
 import type { Api } from '@/lib/api/client';
 import { toAppError } from '@/lib/api/errors';
 
