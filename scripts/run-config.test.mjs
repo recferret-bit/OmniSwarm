@@ -26,6 +26,22 @@ test('--agents and the model flags keep their old precedence and map to cli revi
   assert.throws(() => resolveRunConfig({ flags: { agents: 'claude', reviewers: 'cli:claude:opus' }, root: tmp(t) }), ConfigError);
 });
 
+test('W01-07: --claude-model is the planned spelling and --model-claude stays an alias', (t) => {
+  const planned = resolveRunConfig({ flags: parseFlags(['--agents', 'claude', '--claude-model', 'sonnet']), root: tmp(t) });
+  const alias = resolveRunConfig({ flags: parseFlags(['--agents', 'claude', '--model-claude', 'sonnet']), root: tmp(t) });
+  assert.equal(planned.reviewers[0].id, 'cli-claude-sonnet');
+  assert.deepEqual(planned.reviewers, alias.reviewers);
+  assert.throws(() => parseFlags(['--nobody-model', 'x']), /unknown option/);
+  const viaCli = spawnSync(path.join(here, '..', 'bin', 'audit'), ['run', '--repo', path.join(here, 'demo-fixture'), '--claude-model', 'sonnet', '--surface', 's1', '--plan'], { encoding: 'utf8' });
+  assert.equal(viaCli.status, 0, viaCli.stderr);
+  assert.match(viaCli.stdout, /cli-claude-sonnet/);
+});
+
+test('--max-cost-usd must be a non-negative dollar amount', (t) => {
+  for (const bad of ['abc', '-1', '', 'NaN', 'Infinity']) assert.throws(() => resolveRunConfig({ flags: { maxCostUsd: bad }, root: tmp(t) }), /must be a number of US dollars/);
+  assert.equal(resolveRunConfig({ flags: { maxCostUsd: '0.25' }, root: tmp(t) }).budgets.maxCostUsd, 0.25);
+});
+
 test('flags override a preset, which overrides the file, which overrides defaults', (t) => {
   const d = tmp(t);
   const file = write(d, 'c.json', { reviewers: ['cli:claude:opus'], passes: 2, presets: { p: { reviewers: ['scripted:baseline'], passes: 4 } } });

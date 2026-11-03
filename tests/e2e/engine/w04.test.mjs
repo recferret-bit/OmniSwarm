@@ -98,7 +98,7 @@ test('Docker path: budgets and prices reach every session, each pass is recorded
 });
 
 test('grok plan shows max-turns derived from the budget', () => {
-  const result = run(['run', '--repo', 'scripts/demo-fixture', '--reviewers', 'cli:grok:grok-4.7', '--tool-budget', '10', '--passes', '1', '--plan', '--verbose']);
+  const result = run(['run', '--repo', 'scripts/demo-fixture', '--reviewers', 'cli:grok:grok-4.7', '--tool-budget', '10', '--passes', '1', '--plan']);
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /--max-turns 13/);
 });
