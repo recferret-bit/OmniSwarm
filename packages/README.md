@@ -2,6 +2,8 @@
 
 Shared libraries. Each one is a root npm workspace (`packages/*`).
 
+**Owning waves:** W00 and the lead (`packages/schemas`), W13 (`packages/guard`).
+
 **Boundary:** NEAR RPC, wallets, payments, the GitHub API and the queue live only in `apps/`, `contracts/` and `infra/`. `engine/scripts/`, `engine/docker/`, `engine/native/` and `engine/skills/` stay the offline review engine and never gain a network path to them (AGENTS.md, "Tracks and boundaries").
 
 ## packages/guard (`@omniswarm/guard`)
