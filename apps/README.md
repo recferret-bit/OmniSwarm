@@ -6,26 +6,26 @@ The two service apps. Each one is a root npm workspace (`apps/*`) and belongs to
 
 ## apps/api (was `backend/intake/`)
 
-**Track:** Intake (B)
-**Package:** `@omniswarm/api`
-**Owning waves:** W08 (Intake API), W09 (queue and worker); W10 adds `src/chain/adapters/near/`; W13 adds `src/guard/`.
-**Owned subpaths:** `apps/api/` (Fastify 5 + zod, pg-boss, Postgres 16, TypeScript run by Node 24 type stripping with no build step).
-**Gate command:** `npm run test:intake` (unit plus Postgres integration on a per-worktree database, see `tools/worktree-env.mjs`). Prints "skipped (no package yet)" until `apps/api/package.json` exists. The `tests/e2e/intake/` specs TRUNCATE their database, so they run only when `DATABASE_URL` is set and skip otherwise.
+**Track:** Intake (B) · **Package:** `@omniswarm/api` · **Owning waves:** W08 (intake API), W09 (queue and worker), W10 (NEAR chain adapter), W13 (guard route).
+**Stack:** Fastify 5 + zod, pg-boss on Postgres 16, near-api-js 7.4.0, TypeScript run by Node 24 type stripping with no build step.
+**Gate command:** `npm run test:intake` (`npm test -w apps/api`). The Postgres integration tests skip without `DATABASE_URL`; with it, each test file creates and drops its own database on that server (`test/helpers/db.ts`). `npm run check:w08` and `npm run check:w09` add the `tests/e2e/intake/` specs, which start the real API and worker processes.
 **Contract:** DTOs come from `packages/schemas/intake-api.schema.json` and `job.schema.json`. A needed schema change is a change request to the lead.
 
-The intake worker runs `./bin/audit run` as a black box with an argv array, never passes `--rpc`, and never widens a reviewer's permissions.
+Processes: `npm run start -w apps/api` (public API), `npm run worker -w apps/api` (queue worker), `npm run db:migrate -w apps/api`. Routes are registered in `src/http/app.ts`; `/api/docs` serves the OpenAPI UI, and admin refunds listen on loopback only.
+
+Three adapters pick mock or real (`src/config/load.ts`): `CHAIN_ADAPTER` (`mock` | `near`), `GITHUB_ADAPTER` (`recorded` | `live`) and `ENGINE_RUNNER` (`mock` | `cli`). Each defaults to the real adapter when `NODE_ENV=production` and to the mock otherwise, and a mock is refused in production.
+
+The worker runs `./bin/audit run --github <owner/repo> --ref <sha> --preset <preset> --out <dir>` as a black box with an argv array (`src/engine/cli/argv.ts`); it never passes `--rpc` and refuses `cli:*` reviewers in a hosted preset (`src/worker/preset.ts`).
 
 ## apps/web (was `frontend/landing/`)
 
-**Track:** Front (F)
-**Package:** `@omniswarm/web`
-**Owning waves:** W11 (landing and review app).
-**Owned subpaths:** `apps/web/` (Next.js 16 App Router + Zustand + TypeScript, `@hot-labs/near-connect`).
-**Gate command:** `npm run test:landing && npm run test:e2e -- landing` (Vitest, then Playwright in `tests/e2e/landing/`). Prints "skipped (no package yet)" until `apps/web/package.json` exists.
-**Contract:** talks to the intake API as typed by `packages/schemas/intake-api.schema.json`; runs on mocks of it until W08 and W09 land.
+**Track:** Front (F) · **Package:** `@omniswarm/web` · **Owning wave:** W11 (landing and review app).
+**Stack:** Next.js 16 App Router, React 19, Zustand 5, `@hot-labs/near-connect` 0.12.0.
+**Gate command:** `npm run test:landing && npm run test:e2e -- landing` (typecheck + Vitest, then the Playwright-driven flow in `tests/e2e/landing/`). `npm run guard -w apps/web` checks that a production bundle carries no mock code.
+**Contract:** the API client is generated from `packages/schemas/intake-api.schema.json` (`npm run gen:api -w apps/web`).
 
-Wallet code and the NEAR connector belong here and in no other track.
+`NEXT_PUBLIC_API_MOCK=1` serves the API from MSW handlers and `NEXT_PUBLIC_WALLET=mock` uses a mock wallet; `.env.development` turns both on, so `next dev` runs on mocks. Wallet code and the NEAR connector belong here and in no other track.
 
 ## Shared code
 
-Both apps import the cross-track helpers by package name, never by relative path: `@omniswarm/schemas/canonical-message` (request message and hash), `@omniswarm/schemas/canonical-json` (report hash input) and `@omniswarm/schemas/nep413` (NEP-413 payload and base58). The intake also imports `@omniswarm/guard`.
+Both apps import the cross-track helpers by package name, never by relative path: `@omniswarm/schemas/canonical-message` (request message and hash), `@omniswarm/schemas/canonical-json` (report hash input) and `@omniswarm/schemas/nep413` (NEP-413 payload and base58). The API also imports `@omniswarm/guard`.
