@@ -13,7 +13,7 @@ const git = (cwd, ...args) => spawnSync('git', ['-c', 'user.email=fixture@exampl
 function fixtureRepo(blocks, demoFiles = []) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'screener-repo-'));
   fs.mkdirSync(path.join(dir, 'tools'));
-  fs.copyFileSync(path.join(TOOLS, 'secret-sweep.sh'), path.join(dir, 'tools', 'secret-sweep.sh'));
+  for (const file of ['secret-sweep.sh', 'secret-shapes.txt']) fs.copyFileSync(path.join(TOOLS, file), path.join(dir, 'tools', file));
   fs.writeFileSync(path.join(dir, 'README.md'), blocks.map(([run, see]) => `<!-- screener\nrun: ${run}\nyou should see: ${see}\n-->\n`).join('\n'));
   const writes = demoFiles.map((rel) => `fs.mkdirSync(path.dirname(path.join(out, ${JSON.stringify(rel)})), { recursive: true }); fs.writeFileSync(path.join(out, ${JSON.stringify(rel)}), 'DEMO — not a review');`).join('\n');
   fs.writeFileSync(path.join(dir, 'demo.mjs'), `import fs from 'node:fs'; import path from 'node:path';\nconst out = path.resolve('demo-out'); fs.mkdirSync(out, { recursive: true });\nconsole.log('DEMO — not a review');\n${writes}\nconsole.log('Demo report saved to: ' + out);\n`);

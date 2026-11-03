@@ -50,14 +50,17 @@ if [ "${SECRET_SWEEP_NO_GITLEAKS:-}" != "1" ] && command -v gitleaks >/dev/null 
   echo "gitleaks $version: no leaks"
 fi
 
-# The harness fixture bad.js contains only the PEM header plus "MII", which is a shape, not a key. Every
-# pattern needs the real key's length, so this file, the audit docs that name the prefixes, and short test
-# shapes (sk-proj-AAAA…, 'dummy-not-a-secret') do not match.
-#   OpenRouter sk-or-v1- + 64 hex · xAI xai- + 70+ · Z.ai 32 hex "." 16 · Anthropic/OpenAI sk-ant-/sk-proj- + 40+
-pattern='ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{60,}|-----BEGIN [A-Z ]*PRIVATE KEY-----['"'"'\r\n]+[A-Za-z0-9+/=]{40,}'
-pattern+='|sk-ant-[A-Za-z0-9_-]{40,}|sk-proj-[A-Za-z0-9_-]{40,}|sk-or-v1-[0-9a-f]{64}|xai-[A-Za-z0-9]{70,}'
-pattern+='|[0-9a-f]{32}\.[A-Za-z0-9]{16}'
-pattern+='|(OPENROUTER|ZAI|Z_AI|XAI|ANTHROPIC|OPENAI|GEMINI|NEARAI)_(API_KEY|AUTH_TOKEN)[[:space:]]*[=:][[:space:]]*["'"'"']?[A-Za-z0-9]{32,}'
+# Key shapes come from tools/secret-shapes.txt, which infra/deploy/log-hygiene.sh reads too. The PEM rule
+# stays here: it needs the key body, because the harness fixture bad.js holds only the PEM header plus "MII",
+# which is a shape, not a key.
+SHAPES="$(dirname "$0")/secret-shapes.txt"
+[ -r "$SHAPES" ] || { echo "secret sweep: $SHAPES is missing" >&2; exit 1; }
+pattern=''
+while IFS= read -r rule; do
+  case "$rule" in '' | '#'*) continue ;; esac
+  pattern+="${rule#*|}|"
+done <"$SHAPES"
+pattern+='-----BEGIN [A-Z ]*PRIVATE KEY-----['"'"'\r\n]+[A-Za-z0-9+/=]{40,}'
 tmp="$(mktemp)"
 trap 'rm -f "$tmp" "$tmp.err"' EXIT
 # git grep exits 1 when nothing matches. Any other failure is a real error.
