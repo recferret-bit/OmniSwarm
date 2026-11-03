@@ -1,0 +1,17 @@
+{
+  "executiveSummary": "One medium finding.",
+  "riskPosture": "moderate",
+  "topFindings": [
+    {
+      "clusterId": "c1",
+      "title": "Missing owner check on set_price",
+      "severity": "medium",
+      "finalStatus": "CONFIRMED"
+    }
+  ],
+  "coverage": [],
+  "openDisagreements": [],
+  "contributions": [],
+  "methodology": "fixture",
+  "disclaimer": "fixture"
+}

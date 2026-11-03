@@ -2,40 +2,116 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://omniswarm.dev/schemas/job.schema.json",
   "title": "job",
-  "description": "Intake to engine hand-off. The worker runs ./bin/audit as a black box with an argv array from `input` and reads `output` back from the report directory. INTAKE sections 3 (steps 8-9) and 6.",
+  "description": "Intake to engine hand-off. `input` is the pg-boss `review` job payload, validated on send and on fetch; the worker derives a fresh per-attempt out dir from it and runs ./bin/audit as a black box with an argv array. `output` is what the worker stores on the completed job. INTAKE sections 3 (steps 7-9) and 6.",
   "type": "object",
-  "required": ["input"],
+  "required": [
+    "input"
+  ],
   "additionalProperties": false,
   "properties": {
-    "input": { "$ref": "#/$defs/input" },
-    "output": { "$ref": "#/$defs/output" }
+    "input": {
+      "$ref": "#/$defs/input"
+    },
+    "output": {
+      "$ref": "#/$defs/output"
+    }
   },
   "$defs": {
     "input": {
       "type": "object",
-      "required": ["requestId", "repo", "commitSha", "preset", "network", "outDir"],
+      "required": [
+        "requestId",
+        "requestHash",
+        "repo",
+        "commitSha",
+        "preset",
+        "network"
+      ],
       "additionalProperties": false,
       "properties": {
-        "requestId": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
-        "repo": { "type": "string", "pattern": "^[A-Za-z0-9-]{1,39}/[A-Za-z0-9._-]{1,100}$" },
-        "commitSha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
-        "preset": { "type": "string", "pattern": "^[a-z0-9-]{1,40}$" },
-        "network": { "enum": ["testnet", "mainnet"] },
-        "outDir": { "type": "string", "minLength": 1, "maxLength": 1000 }
+        "requestId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "requestHash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "repo": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9-]{1,39}/[A-Za-z0-9._-]{1,100}$"
+        },
+        "commitSha": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "preset": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,40}$"
+        },
+        "network": {
+          "enum": [
+            "testnet",
+            "mainnet"
+          ]
+        }
       }
     },
     "output": {
       "type": "object",
-      "required": ["status", "reportDir", "healthState", "reportSha256", "maxSeverityConfirmed", "generalReviewPath", "costUsd"],
+      "required": [
+        "status",
+        "reportDir",
+        "healthState",
+        "reportSha256",
+        "maxSeverityConfirmed",
+        "generalReviewPath",
+        "costUsd"
+      ],
       "additionalProperties": false,
       "properties": {
-        "status": { "enum": ["done", "failed", "incomplete"] },
-        "reportDir": { "type": "string", "minLength": 1, "maxLength": 1000 },
-        "healthState": { "enum": ["passed", "incomplete"] },
-        "reportSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
-        "maxSeverityConfirmed": { "enum": ["critical", "high", "medium", "low", "info", "none"] },
-        "generalReviewPath": { "type": ["string", "null"] },
-        "costUsd": { "type": "number", "minimum": 0 }
+        "status": {
+          "enum": [
+            "done",
+            "failed",
+            "incomplete"
+          ]
+        },
+        "reportDir": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "healthState": {
+          "enum": [
+            "passed",
+            "incomplete"
+          ]
+        },
+        "reportSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "maxSeverityConfirmed": {
+          "enum": [
+            "critical",
+            "high",
+            "medium",
+            "low",
+            "info",
+            "none"
+          ]
+        },
+        "generalReviewPath": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "costUsd": {
+          "type": "number",
+          "minimum": 0
+        }
       }
     }
   }

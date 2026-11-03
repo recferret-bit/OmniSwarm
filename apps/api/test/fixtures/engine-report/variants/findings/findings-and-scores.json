@@ -1,0 +1,13 @@
+[
+  {
+    "id": "C-1",
+    "title": "Unchecked transfer still deployed",
+    "severity": "critical",
+    "status": "MODEL_AGREEMENT",
+    "score": 9.5,
+    "locations": [
+      "src/lib.rs:7"
+    ],
+    "remediation": "Check the caller."
+  }
+]

@@ -1,0 +1,6 @@
+{
+  "ok": true,
+  "db": true,
+  "queue": true,
+  "migrations": true
+}

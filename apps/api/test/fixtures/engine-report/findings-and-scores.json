@@ -1,0 +1,13 @@
+[
+  {
+    "id": "F-1",
+    "title": "Missing owner check on set_price",
+    "severity": "medium",
+    "status": "UPHELD_REVIEW",
+    "score": 5.5,
+    "locations": [
+      "src/lib.rs:42"
+    ],
+    "remediation": "Assert predecessor == owner."
+  }
+]

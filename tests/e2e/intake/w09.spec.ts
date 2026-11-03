@@ -1,148 +1,163 @@
-import test from 'node:test';
+// W09 wave check (@hack): demo steps 1, 2, 3, 5, 6, 7, 9 with real API and worker processes, the mock
+// engine and the mock chain. Every terminal path ends with at most one attestation or refund, and a
+// provider key planted in the worker env appears nowhere in Postgres, logs or the published report.
 import assert from 'node:assert/strict';
-import crypto from 'node:crypto';
 import fs from 'node:fs';
-import os from 'node:os';
+import http from 'node:http';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
-import { createApp } from '../../../apps/api/src/app.ts';
-import { attestationCount, createPool, getRequest, insertRequest, migrate, queuePosition, refundOnce, reset, setStatus } from '../../../apps/api/src/store.ts';
-import { auditArgv, drainOne } from '../../../apps/api/src/worker.ts';
+import { after, before, describe, test } from 'node:test';
+import pg from 'pg';
+import { chainEvents } from '../../../apps/api/src/chain/mock/mock-ledger.ts';
+import { call, conforms, queuedRequest } from '../../../apps/api/test/helpers/flow.ts';
+import { freshDatabase, NEEDS_DB, type TestDatabase } from '../../../apps/api/test/helpers/db.ts';
+import { ADMIN_TOKEN, testEnv } from '../../../apps/api/test/helpers/stack.ts';
+import { freePort, Proc, script, step, waitFor } from './processes.ts';
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
-// These specs reset (TRUNCATE) the database they are given. There is no default URL, so
-// they never touch a developer's own Postgres: set DATABASE_URL to a throwaway database.
-const DATABASE_URL = process.env.DATABASE_URL || '';
-const NEEDS_DB = DATABASE_URL ? {} : { skip: 'DATABASE_URL is not set; these specs TRUNCATE their database, so point it at a throwaway Postgres to run them' };
-const SHA = 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2';
+const PLANTED_KEY = 'sk-or-planted-0123456789abcdef';
 
-const AUDIT_BIN = `#!/usr/bin/env node
-const fs = require('node:fs');
-const path = require('node:path');
-const argv = process.argv.slice(2);
-fs.writeFileSync(path.join(process.cwd(), 'argv.json'), JSON.stringify(process.argv));
-fs.writeFileSync(path.join(process.cwd(), 'child-pid.txt'), String(process.pid));
-const spawns = path.join(process.cwd(), 'spawns.txt');
-const seen = fs.existsSync(spawns) ? Number(fs.readFileSync(spawns, 'utf8')) : 0;
-fs.writeFileSync(spawns, String(seen + 1));
-if (argv.includes('--rpc')) process.exit(3);
-const out = argv[argv.indexOf('--out') + 1];
-fs.mkdirSync(out, { recursive: true });
-const fail = process.env.MOCK_ENGINE_FAIL || '';
-if (fail === 'infra') {
-  process.stderr.write('infra failure');
-  process.exit(1);
-}
-const findings = fail === 'findings'
-  ? { findings: [{ id: 'C-1', severity: 'critical', title: 'still deployed' }] }
-  : { findings: [] };
-fs.writeFileSync(path.join(out, 'findings-and-scores.json'), JSON.stringify(findings));
-fs.writeFileSync(path.join(out, 'general-review.json'), JSON.stringify({ summary: 'mock' }));
-`;
-
-function plantEngine(dir) {
-  fs.mkdirSync(path.join(dir, 'bin'), { recursive: true });
-  const file = path.join(dir, 'bin', 'audit');
-  fs.writeFileSync(file, AUDIT_BIN);
-  fs.chmodSync(file, 0o755);
-  return dir;
-}
-
-function spawns(dir) {
-  return Number(fs.readFileSync(path.join(dir, 'spawns.txt'), 'utf8'));
-}
-
-test('audit argv is the engine command and never includes --rpc', () => {
-  const argv = auditArgv({ repo: 'near/near-sdk-rs', ref: SHA, preset: 'scripted', out: '/tmp/omniswarm-out' });
-  assert.deepEqual(argv, ['./bin/audit', 'run', '--github', 'near/near-sdk-rs', '--ref', SHA, '--preset', 'scripted', '--out', '/tmp/omniswarm-out']);
-  assert.equal(argv.includes('--rpc'), false);
-  assert.throws(() => auditArgv({ repo: 'near/near-sdk-rs', ref: SHA, preset: 'scripted', out: '/tmp/out --rpc' }), /rejected/);
-});
-
-test('mock worker spawns ./bin/audit, attests once, refunds infra once, and resumes a pre-attest kill', NEEDS_DB, async () => {
-  const pool = createPool(DATABASE_URL);
-  await migrate(pool);
-  await reset(pool);
-  const reports = fs.mkdtempSync(path.join(os.tmpdir(), 'w09-reports-'));
-  const engine = plantEngine(fs.mkdtempSync(path.join(os.tmpdir(), 'w09-engine-')));
-  const opts = { reportsRoot: reports, engineRoot: engine };
-  const now = Date.now();
-  async function seed(n) {
-    const id = crypto.randomUUID();
-    await insertRequest(pool, {
-      id, account: 'alice.mock', repo: 'near/near-sdk-rs', commitSha: SHA, network: 'testnet', preset: 'scripted',
-      requestHash: crypto.randomBytes(32).toString('hex'), priceYocto: '1000000000000000000000000', now: new Date(now + n),
-    });
-    await setStatus(pool, id, 'queued', new Date(now + n));
-    return id;
-  }
-  const ids = [await seed(1), await seed(2), await seed(3)];
-  assert.deepEqual(await Promise.all(ids.map((id) => queuePosition(pool, id))), [1, 2, 3]);
-
-  const done = await drainOne(pool, { ...opts, mode: 'ok' });
-  assert.ok(done);
-  assert.equal(done.status, 'done');
-  assert.equal(done.argv.includes('--rpc'), false);
-  assert.equal(done.argv[0], './bin/audit');
-  assert.equal(done.argv[1], 'run');
-  const recorded = JSON.parse(fs.readFileSync(path.join(engine, 'argv.json'), 'utf8'));
-  assert.equal(recorded[1].endsWith(`${path.sep}bin${path.sep}audit`), true);
-  assert.equal(recorded[2], 'run');
-  assert.equal(recorded.includes('--rpc'), false);
-  assert.notEqual(Number(fs.readFileSync(path.join(engine, 'child-pid.txt'), 'utf8')), process.pid);
-  assert.match(done.hash, /^[0-9a-f]{64}$/);
-  const hashed = spawnSync(process.execPath, [path.join(ROOT, 'apps/api/scripts/report-hash.ts'), path.join(reports, done.id)], { encoding: 'utf8' });
-  assert.equal(hashed.status, 0, hashed.stderr);
-  assert.equal(hashed.stdout.trim(), done.hash);
-  assert.equal(await attestationCount(pool, (await getRequest(pool, done.id)).request_hash), 1);
-  assert.deepEqual(await Promise.all([queuePosition(pool, ids[1]), queuePosition(pool, ids[2])]), [1, 2]);
-
-  const infra = await drainOne(pool, { ...opts, mode: 'infra' });
-  assert.equal(infra?.status, 'refunded');
-  const again = await refundOnce(pool, (await getRequest(pool, infra.id)).request_hash);
-  assert.equal(again.created, false);
-  assert.equal(again.count, 1);
-
-  const critical = await drainOne(pool, { ...opts, mode: 'findings' });
-  assert.equal(critical?.status, 'done');
-  const criticalHash = (await getRequest(pool, critical.id)).request_hash;
-  const refunds = await pool.query('SELECT count(*)::int AS n FROM mock_refund WHERE request_hash = $1', [criticalHash]);
-  assert.equal(refunds.rows[0].n, 0);
-  assert.equal(await attestationCount(pool, criticalHash), 1);
-
-  const attestedId = await seed(4);
-  const attested = await drainOne(pool, { ...opts, crashAfter: 'attested' });
-  assert.equal(attested?.id, attestedId);
-  assert.equal(attested?.status, 'running');
-  assert.equal(await attestationCount(pool, (await getRequest(pool, attestedId)).request_hash), 1);
-
-  const earlyId = await seed(5);
-  const early = await drainOne(pool, { ...opts, crashAfter: 'before-attest' });
-  assert.equal(early?.id, earlyId);
-  assert.equal(early?.status, 'running');
-  assert.equal(await attestationCount(pool, (await getRequest(pool, earlyId)).request_hash), 0);
-  const beforeRestart = spawns(engine);
-  const restarted = spawnSync(process.execPath, [path.join(ROOT, 'apps/api/scripts/worker.ts')], {
-    env: { ...process.env, DATABASE_URL, REPORTS_ROOT: reports, ENGINE_ROOT: engine },
-    encoding: 'utf8',
+function streamEvents(url: string): Promise<any[]> {
+  return new Promise((resolve, reject) => {
+    const events: any[] = [];
+    http.get(url, (res) => {
+      let buffer = '';
+      res.setEncoding('utf8');
+      res.on('data', (chunk: string) => {
+        buffer += chunk;
+        for (let cut = buffer.indexOf('\n\n'); cut >= 0; cut = buffer.indexOf('\n\n')) {
+          const data = buffer.slice(0, cut).split('\n').find((line) => line.startsWith('data: '));
+          buffer = buffer.slice(cut + 2);
+          if (data) events.push(JSON.parse(data.slice(6)));
+        }
+      });
+      res.on('end', () => resolve(events));
+    }).on('error', reject);
   });
-  assert.equal(restarted.status, 0, restarted.stderr);
-  assert.match(restarted.stdout, new RegExp(`${attestedId} done`));
-  assert.match(restarted.stdout, new RegExp(`${earlyId} done`));
-  assert.match(restarted.stdout, /worker finished 2/);
-  assert.equal(spawns(engine), beforeRestart + 1);
-  assert.equal((await getRequest(pool, attestedId)).status, 'done');
-  assert.equal((await getRequest(pool, earlyId)).status, 'done');
-  assert.equal(await attestationCount(pool, (await getRequest(pool, attestedId)).request_hash), 1);
-  assert.equal(await attestationCount(pool, (await getRequest(pool, earlyId)).request_hash), 1);
+}
 
-  const app = await createApp({ databaseUrl: DATABASE_URL, sessionSecret: 'test-session-secret', adminToken: 'admin-test' });
-  const base = await app.listen({ port: 0, host: '127.0.0.1' });
-  const denied = await fetch(`${base}/api/admin/requests/${done.id}/refund`, { method: 'POST', headers: { 'x-admin-token': 'admin-test' } });
-  const body = await denied.json();
-  assert.equal(denied.status, 409);
-  assert.equal(body.error.code, 'REFUND_NOT_ALLOWED');
-  await app.close();
-  await pool.end();
+describe('W09 queue and worker @hack', NEEDS_DB, () => {
+  let db: TestDatabase;
+  let env: Record<string, string>;
+  let api: Proc;
+  let base = '';
+  let adminBase = '';
+  let pool: pg.Pool;
+  const workers: Proc[] = [];
+  const worker = (extra: Record<string, string> = {}) => {
+    const proc = new Proc('src/bin/worker.ts', { ...env, OPENROUTER_API_KEY: PLANTED_KEY, ...extra });
+    workers.push(proc);
+    return proc;
+  };
+  const status = async (id: string) => (await pool.query('SELECT * FROM request WHERE id = $1', [id])).rows[0];
+  const until = (id: string, wanted: string[]) => waitFor(async () => {
+    const row = await status(id);
+    return wanted.includes(row?.status) ? row : null;
+  }, 60_000);
+  const attests = async (hash: string) => (await chainEvents(pool, hash)).filter((e) => e === 'review_attested').length;
+  const refunds = async (hash: string) => (await chainEvents(pool, hash)).filter((e) => e === 'review_refunded').length;
+
+  before(async () => {
+    db = await freshDatabase('w09');
+    const port = await freePort();
+    const adminPort = await freePort();
+    env = testEnv(db.url, { PORT: String(port), ADMIN_PORT: String(adminPort), LOG_LEVEL: 'info' });
+    assert.equal(script('src/bin/migrate.ts', [], env).status, 0);
+    api = new Proc('src/bin/api.ts', env);
+    base = `http://127.0.0.1:${port}`;
+    adminBase = `http://127.0.0.1:${adminPort}`;
+    await waitFor(async () => (await fetch(`${base}/api/ready`)).ok);
+    pool = new pg.Pool({ connectionString: db.url, max: 3 });
+    process.stdout.write(`# W09 API on port ${port}, admin on 127.0.0.1:${adminPort}, workers use the mock engine\n`);
+  });
+  after(async () => {
+    for (const proc of workers) await proc.stop();
+    await pool?.end();
+    await api?.stop();
+    await db?.drop();
+  });
+
+  test('1-3: a queued request streams progress over SSE, is published, attested once, and the hash recomputes', async () => {
+    const request = await queuedRequest(base, pool);
+    step(1, 'worker + GET /api/requests/:id/events');
+    const events = streamEvents(`${base}/api/requests/${request.requestId}/events`);
+    const proc = worker({ MOCK_ENGINE_STEP_MS: '200' });
+    const seen = await events;
+    for (const event of seen) conforms('progress-event', event);
+    const percents = seen.filter((e) => e.progress).map((e) => e.progress.percent);
+    assert.ok(percents.length >= 5, `${percents}`);
+    assert.ok(seen.some((e) => e.progress?.phase === 'review' && e.progress.reviewer === 'scripted-baseline'));
+    assert.equal(seen.at(-1).status, 'done');
+    step(2, 'done: reportUrl, reportSha256, attestTx, review_attested');
+    const view = (await call(base, `/api/requests/${request.requestId}`)).body;
+    assert.equal(view.reportUrl, `https://reports.test/${request.requestId}/report.html`);
+    assert.ok(view.attestTx);
+    assert.equal(await attests(request.requestHash), 1);
+    step(3, 'report-hash.ts recomputes the attested hash');
+    const dir = path.join(env.REPORTS_ROOT ?? '', request.requestId);
+    assert.equal(script('scripts/report-hash.ts', [dir], env).stdout.trim(), view.reportSha256);
+    assert.ok(fs.existsSync(path.join(dir, 'reviewers/index.json')));
+    await proc.stop();
+  });
+
+  test('5: an infra failure is refunded once; critical findings are attested, never refunded', async () => {
+    step(5, 'MOCK_ENGINE_FAIL=infra, then =findings');
+    const infra = worker({ MOCK_ENGINE_FAIL: 'infra' });
+    const failed = await queuedRequest(base, pool);
+    const refunded = await until(failed.requestId, ['refunded']);
+    assert.ok(refunded.refund_tx);
+    assert.equal(await refunds(failed.requestHash), 1);
+    await infra.stop();
+    const findings = worker({ MOCK_ENGINE_FAIL: 'findings' });
+    const critical = await queuedRequest(base, pool);
+    assert.equal((await until(critical.requestId, ['done'])).max_severity, 'critical');
+    assert.equal(await refunds(critical.requestHash), 0);
+    await findings.stop();
+  });
+
+  test('6: kill -9 mid-run, restart: one more attempt, one attestation', async () => {
+    step(6, 'SIGKILL the worker mid-run and restart it');
+    const request = await queuedRequest(base, pool);
+    const doomed = worker({ MOCK_ENGINE_STEP_MS: '2000' });
+    await waitFor(async () => (await status(request.requestId))?.status === 'running');
+    await doomed.stop('SIGKILL');
+    const again = worker();
+    const row = await until(request.requestId, ['done']);
+    assert.equal(row.attempts, 2);
+    assert.equal(await attests(request.requestHash), 1);
+    await again.stop();
+  });
+
+  test('7 and 9: three jobs with concurrency 1 show positions; admin refund rules', async () => {
+    step(7, '3 queued, WORKER_CONCURRENCY=1');
+    const queued = [await queuedRequest(base, pool), await queuedRequest(base, pool), await queuedRequest(base, pool)];
+    assert.deepEqual(queued.map((q) => q.position), [1, 2, 3]);
+    const serial = worker({ WORKER_CONCURRENCY: '1', MOCK_ENGINE_STEP_MS: '300' });
+    await waitFor(async () => (await status(queued[0]!.requestId))?.status === 'running');
+    const positions = await Promise.all(queued.slice(1).map(async (q) => (await call(base, `/api/requests/${q.requestId}`)).body.position));
+    assert.deepEqual(positions, [1, 2]);
+    step(9, 'admin refund: running -> queued for a worker -> refunded, done -> 409, no token -> 401');
+    const running = queued[0]!;
+    const path9 = `/api/admin/requests/${running.requestId}/refund`;
+    assert.equal((await call(adminBase, path9, { method: 'POST' })).status, 401);
+    const refunded = await call(adminBase, path9, { method: 'POST', headers: { 'x-admin-token': ADMIN_TOKEN } });
+    assert.equal(refunded.status, 202, JSON.stringify(refunded.body));
+    assert.equal((await until(running.requestId, ['refunded'])).status, 'refunded', 'a worker sends the queued refund');
+    await until(queued[2]!.requestId, ['done']);
+    const done = await call(adminBase, `/api/admin/requests/${queued[2]!.requestId}/refund`, { method: 'POST', headers: { 'x-admin-token': ADMIN_TOKEN } });
+    assert.equal(done.status, 409);
+    assert.equal(done.body.error.code, 'REFUND_NOT_ALLOWED');
+    assert.equal((await call(base, path9, { method: 'POST', headers: { 'x-admin-token': ADMIN_TOKEN } })).status, 404, 'no admin route on the public port');
+    assert.equal(await attests(running.requestHash), 0, 'a refunded request is never attested');
+    assert.equal(await refunds(running.requestHash), 1);
+    await serial.stop();
+  });
+
+  test('DoD: the provider key reaches no table, log or published file', async () => {
+    const dump = await pool.query(`SELECT string_agg(t::text, '') AS s FROM (
+      SELECT row_to_json(r)::text AS t FROM request r UNION ALL SELECT data::text FROM audit_log UNION ALL SELECT data::text FROM pgboss.job) x`);
+    assert.ok(!String(dump.rows[0].s).includes(PLANTED_KEY));
+    for (const proc of [api, ...workers]) assert.ok(!proc.output.includes(PLANTED_KEY));
+    const files = fs.readdirSync(env.REPORTS_ROOT ?? '', { recursive: true, withFileTypes: true }).filter((entry) => entry.isFile());
+    for (const file of files) assert.ok(!fs.readFileSync(path.join(file.parentPath, file.name), 'utf8').includes(PLANTED_KEY), file.name);
+    assert.ok(files.length > 0);
+  });
 });

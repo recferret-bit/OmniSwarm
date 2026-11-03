@@ -1,13 +1,17 @@
-import { reconcile } from '../src/app.ts';
-import { createPool, migrate } from '../src/store.ts';
+// `npm run reconcile -w @omniswarm/api`: one reconciler pass now (workers also run it every minute).
+import { createCore } from '../src/container.ts';
+import { reconcilePayments } from '../src/modules/payments/reconcile.service.ts';
+import { createBoss } from '../src/queue/boss.ts';
+import { configOrExit } from '../src/shared/lifecycle.ts';
 
-const databaseUrl = process.env.DATABASE_URL;
-if (!databaseUrl) {
-  console.error('Missing DATABASE_URL');
-  process.exit(1);
+const config = configOrExit('script');
+const core = await createCore(config);
+const boss = createBoss(config, 'sender');
+await boss.start();
+try {
+  const result = await reconcilePayments({ ...core, boss });
+  process.stdout.write(`${JSON.stringify(result)}\n`);
+} finally {
+  await boss.stop({ graceful: false, close: true });
+  await core.pool.end();
 }
-const pool = createPool(databaseUrl);
-await migrate(pool);
-const moved = await reconcile(pool);
-await pool.end();
-process.stdout.write(`${JSON.stringify({ queued: moved })}\n`);

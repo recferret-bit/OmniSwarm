@@ -3,19 +3,40 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=24.0.0"
+  },
   "scripts": {
-    "dev": "node src/server.ts",
-    "start": "node src/server.ts",
-    "test": "node --test test/*.test.ts",
+    "start": "node src/bin/api.ts",
+    "dev": "node --env-file-if-exists=.env src/bin/api.ts",
+    "worker": "node src/bin/worker.ts",
+    "db:migrate": "node src/bin/migrate.ts",
+    "db:reset": "node scripts/db-reset.ts",
     "reconcile": "node scripts/reconcile.ts",
-    "db:migrate": "node src/migrate-cli.ts",
-    "worker": "node scripts/worker.ts"
+    "openapi": "node scripts/openapi.ts",
+    "typecheck": "tsc --noEmit -p .",
+    "test": "node --test --test-concurrency=1 \"test/**/*.test.ts\""
   },
   "dependencies": {
+    "@fastify/cookie": "11.1.5",
+    "@fastify/cors": "11.4.0",
+    "@fastify/helmet": "13.2.0",
+    "@fastify/rate-limit": "11.2.2",
+    "@fastify/swagger": "9.9.3",
+    "@fastify/swagger-ui": "6.1.2",
     "@omniswarm/guard": "*",
     "@omniswarm/schemas": "*",
-    "fastify": "^5.3.3",
-    "pg": "^8.16.3",
-    "zod": "^3.25.76"
+    "fastify": "5.12.8",
+    "fastify-type-provider-zod": "7.0.0",
+    "near-api-js": "7.4.0",
+    "pg": "8.23.1",
+    "pg-boss": "12.38.0",
+    "pino": "10.4.0",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.2",
+    "@types/pg": "8.23.1",
+    "typescript": "7.0.2"
   }
 }

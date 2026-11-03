@@ -1,0 +1,24 @@
+{
+  "name": "near-sdk-rs",
+  "mode": "github",
+  "source": "near/near-sdk-rs",
+  "agents": [
+    "scripted-baseline"
+  ],
+  "reviewers": [
+    {
+      "id": "scripted-baseline",
+      "family": "scripted"
+    }
+  ],
+  "auditors": [
+    "scripted-baseline"
+  ],
+  "workerExits": {
+    "scripted-baseline": 0
+  },
+  "crosscheckExits": {},
+  "stageFailures": [],
+  "finalized": true,
+  "workflow": "source_security_review_v1"
+}
