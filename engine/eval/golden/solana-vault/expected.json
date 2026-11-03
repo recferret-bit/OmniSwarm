@@ -1,0 +1,41 @@
+{
+  "stack": "solana",
+  "bugs": [
+    {
+      "file": "programs/vault/src/lib.rs",
+      "startLine": 42,
+      "endLine": 42,
+      "class": "missing-signer-check",
+      "title": "withdraw authority is not a signer",
+      "severity": "high"
+    },
+    {
+      "file": "programs/vault/src/lib.rs",
+      "startLine": 47,
+      "endLine": 47,
+      "class": "unconstrained-close-receiver",
+      "title": "close sends the rent to any receiver",
+      "severity": "high",
+      "missedBy": [
+        "baseline"
+      ],
+      "misjudgedBy": "baseline"
+    }
+  ],
+  "decoys": [
+    {
+      "file": "programs/vault/src/lib.rs",
+      "startLine": 31,
+      "endLine": 31,
+      "reason": "has_one = owner ties the vault to the signer",
+      "claim": "deposit does not check the vault owner"
+    },
+    {
+      "file": "programs/vault/src/lib.rs",
+      "startLine": 12,
+      "endLine": 12,
+      "reason": "checked_add returns an error on overflow",
+      "claim": "deposit can overflow the vault amount"
+    }
+  ]
+}

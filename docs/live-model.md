@@ -15,7 +15,7 @@ The selected-file review scope is static correctness, maintainability and defens
 ## Prerequisites
 
 - Run commands from this repository root with Node available.
-- Docker must be running with the immutable Node image referenced by `scripts/worker-isolation.mjs` already provisioned. The supervisor does not pull or install it automatically.
+- Docker must be running with the immutable Node image referenced by `engine/scripts/worker-isolation.mjs` already provisioned. The supervisor does not pull or install it automatically.
 - Prepare a local source directory you are authorized to disclose. Select one to three relative UTF-8 files, at most 64 KiB combined. Named credentials, `.env*`, symlinks and other excluded entries cannot be selected. Filename exclusions do not detect every secret embedded in ordinary source: inspect the selected material before sending it to a provider.
 - Open your authenticated model session before starting the job. Use a text-only conversation or an independently verified tools-disabled interface. Do not feed untrusted source into an unrestricted credential-bearing coding agent.
 - Selected-file handoffs and inference have no default reasoning deadline. Explicit caller-supplied test deadlines remain supported; cancellation still invalidates a handoff. Selected-file relay claim bindings cannot be replayed as an ACP session resume.
@@ -33,17 +33,17 @@ Use `grok-docker` when the AI client itself must be contained. The older `grok-n
   --provider grok-docker --model grok-4.7 --out /tmp/grok-review
 ```
 
-`setup` verifies the prepared public source, builds/tests the Linux native broker and installs the pinned official Grok CLI inside the image for login only. The broker links native auth, sampling, HTTP and foundation crates without the full agent shell/tool/UI crate. Its routing module mechanically projects the pinned native header function, changing only module references; preparation compares the complete projection against upstream before compilation. The Docker build uses one compilation job, disabled debug symbols and reusable source/dependency/target caches. It records an immutable local image ID and current package/recipe identities under private ignored `native/.cache/grok-docker/`. It uses the existing pinned source/private-protoc preparation prerequisites; it does not install global host tools. Changed source, shared scripts or Docker recipe invalidate the receipt and require setup again.
+`setup` verifies the prepared public source, builds/tests the Linux native broker and installs the pinned official Grok CLI inside the image for login only. The broker links native auth, sampling, HTTP and foundation crates without the full agent shell/tool/UI crate. Its routing module mechanically projects the pinned native header function, changing only module references; preparation compares the complete projection against upstream before compilation. The Docker build uses one compilation job, disabled debug symbols and reusable source/dependency/target caches. It records an immutable local image ID and current package/recipe identities under private ignored `engine/native/.cache/grok-docker/`. It uses the existing pinned source/private-protoc preparation prerequisites; it does not install global host tools. Changed source, shared scripts or Docker recipe invalidate the receipt and require setup again.
 
 `login` starts the official CLI's device authorization inside a separate container. The owner approves the displayed URL/code in their browser. Only the dedicated Docker volume `omniswarm-grok-isolated-auth-v1` receives the resulting credentials. The host's `.grok`, home, session stores and environment credentials are never imported. This follows the [official device-code flow for containers](https://docs.x.ai/build/enterprise#device-code). Login cannot be inferred from a ready host session.
 
 During review, the client is uid 10001, drops all capabilities, has a read-only root and auth volume, bounded tmpfs/memory/CPU/PIDs, and no host-source or socket mounts. It accepts only the existing strict instruction/files JSONL frame, constructs no tools and permits one inference. Its internal network connects only to an isolated HTTPS CONNECT proxy; that proxy permits the two official core domains `cli-chat-proxy.grok.com` and `auth.x.ai`, port 443, resolving public IPv4 itself. No alternate model, provider, billing route or unrestricted host client is used after failure. The network-disabled source worker, validated reports, unverified model/tool provenance and three-file/64 KiB limit are preserved.
 
-Owned client/proxy containers and per-session internal/external networks are removed after success, refusal or cancellation. Parent-owned private records under `native/.cache/grok-docker/sessions/` retain their exact identities and cleanup status without source, prompts or credentials; journal failure cannot prevent teardown attempts. The login volume persists for subsequent checks; the inference path cannot refresh or mutate it. Near-expiry credentials require a separate official Docker login. A recipe-valid image plus a passing dummy Docker test is preparation evidence; actual inference still requires the Docker login and a real review.
+Owned client/proxy containers and per-session internal/external networks are removed after success, refusal or cancellation. Parent-owned private records under `engine/native/.cache/grok-docker/sessions/` retain their exact identities and cleanup status without source, prompts or credentials; journal failure cannot prevent teardown attempts. The login volume persists for subsequent checks; the inference path cannot refresh or mutate it. Near-expiry credentials require a separate official Docker login. A recipe-valid image plus a passing dummy Docker test is preparation evidence; actual inference still requires the Docker login and a real review.
 
 **Verified on 2026-10-16:** the Linux image passed 26 native tests, the bridge passed 143 Node tests and 21 Docker tests, and an actual Docker auth preflight correctly refused the empty login volume. A separate official device login was attempted but expired without issuing credentials. Authenticated Docker inference therefore remains pending owner login; no host credential or API-billing fallback was used. Login timeout/cancellation now remains incomplete even if the Docker attachment exits zero.
 
-`node --test scripts/grok-docker.docker.mjs` uses a dummy Linux broker and a disposable dummy auth volume. It verifies client mounts, private networking, runtime identity, read-only credentials and cleanup, with no account/provider requests. `model-cli-grok-docker.test.mjs` checks receipt invalidation, strict destinations and metadata, provisioning/refusal, and use of the existing strict native protocol.
+`node --test engine/scripts/grok-docker.docker.mjs` uses a dummy Linux broker and a disposable dummy auth volume. It verifies client mounts, private networking, runtime identity, read-only credentials and cleanup, with no account/provider requests. `model-cli-grok-docker.test.mjs` checks receipt invalidation, strict destinations and metadata, provisioning/refusal, and use of the existing strict native protocol.
 
 ## 1. Start the isolated source job
 
@@ -131,7 +131,7 @@ In terminal B, replace the path below with the printed `socketPath`:
 
 ```sh
 umask 077
-node scripts/terminal-review-client.mjs claim \
+node engine/scripts/terminal-review-client.mjs claim \
   --socket /tmp/fc-tr-XXXXXX/s > /tmp/live-review-claim.json
 ```
 
@@ -144,7 +144,7 @@ The JSON contains:
 Only one claim is accepted per job. Retain the original claim locally; do not claim again to recover it. Check state without claiming:
 
 ```sh
-node scripts/terminal-review-client.mjs status \
+node engine/scripts/terminal-review-client.mjs status \
   --socket /tmp/fc-tr-XXXXXX/s
 ```
 
@@ -182,7 +182,7 @@ Copy `submissionTemplate` from the saved claim into a private local `response.js
 Do not submit the whole claim, raw prose, Markdown fences, credentials, commands, URLs to fetch, or a previous job's result.
 
 ```sh
-node scripts/terminal-review-client.mjs submit \
+node engine/scripts/terminal-review-client.mjs submit \
   --socket /tmp/fc-tr-XXXXXX/s < response.json
 ```
 
@@ -230,7 +230,7 @@ Keep source-bearing claim/result/journal files private and follow your provider'
 
 ### Grok native broker (experimental)
 
-`native/grok-review/` pins public Grok commit `2bdd1d6a6369de0e8c68132ea4539e9abd9e14a8`, with SOURCE_REV `559751fdcec02d413e4c57c8832ab275e4f44980`. It cannot be mapped to installed `1.0.52 (0920c8169e27)` and must not impersonate that build. The CLI selector is explicitly `grok-native`; its compiled native client version/routing remain those of the public source, with a separate broker identity.
+`engine/native/grok-review/` pins public Grok commit `2bdd1d6a6369de0e8c68132ea4539e9abd9e14a8`, with SOURCE_REV `559751fdcec02d413e4c57c8832ab275e4f44980`. It cannot be mapped to installed `1.0.52 (0920c8169e27)` and must not impersonate that build. The CLI selector is explicitly `grok-native`; its compiled native client version/routing remain those of the public source, with a separate broker identity.
 
 It constructs only the native low-level sampler, never an agent/session, workspace, ToolSet, hooks, plugins or MCP runtime. Internal local/hosted inventories are empty and internal tool choice is none. The pinned native conversion omits `tools`/`tool_choice` on the wire for that empty set; guards require their absence and no search parameters before sending. This is compatible zero-tool serialization, not a tool grant. One inference is permitted, without automatic retries or side-model calls. Raw SSE/output/deadlines are bounded; nonempty tool calls, invalid citations and truncated/non-text results are refused. Empty tool-call metadata arrays do not count as execution requests. Node shares lifecycle code only, never another provider's model/login.
 
@@ -238,11 +238,11 @@ The normal native auth startup/refresh path can repair/prune credential files, l
 
 Native auth policy is applied from bounded read-only file snapshots with no create-on-resolve, environment expansion or second policy read. Requirements take precedence over environment/user team pins. Unsupported raw mandatory/campaign/version/auth policies and ambiguous aliases block instead of being silently dropped. Forced MDM is detected before decoding and is unsupported/fail-closed, even if malformed. The initial profile does not support enterprise/custom endpoints. Fixed routing headers are obtained through a narrow official native facade, not hand-built subscription headers.
 
-Private derived source/Cargo/HOME/target/logs live under ignored `native/.cache/`. `grok-review/build.mjs --prepare` requires the pinned source checkout already provisioned and refuses unexpected tracked/untracked/ignored inputs or unrecognized cached overlays. Registry/Git dependency versions/checksums stay locked; only the broker package entry is added. Existing Rust 1.99.0 compiled the source's 1.94.0 snapshot. The user approved the upstream-pinned protoc 29.3 macOS ARM archive, verified as SHA-256 `2b8a3403cd097f95f3ba656e14b76c732b6b26d7f183330b11e36ef2bc028765`, installed only in the private build cache. No DotSlash/global toolchain/package installation was performed.
+Private derived source/Cargo/HOME/target/logs live under ignored `engine/native/.cache/`. `grok-review/build.mjs --prepare` requires the pinned source checkout already provisioned and refuses unexpected tracked/untracked/ignored inputs or unrecognized cached overlays. Registry/Git dependency versions/checksums stay locked; only the broker package entry is added. Existing Rust 1.99.0 compiled the source's 1.94.0 snapshot. The user approved the upstream-pinned protoc 29.3 macOS ARM archive, verified as SHA-256 `2b8a3403cd097f95f3ba656e14b76c732b6b26d7f183330b11e36ef2bc028765`, installed only in the private build cache. No DotSlash/global toolchain/package installation was performed.
 
 ```sh
-node native/grok-review/build.mjs --test
-node native/grok-review/admit.mjs --admit
+node engine/native/grok-review/build.mjs --test
+node engine/native/grok-review/admit.mjs --admit
 ./bin/audit check-model-cli --provider grok-native
 ```
 
@@ -276,7 +276,7 @@ The diagnostic run's `connector-state.json` records requested model `grok-4.7` a
 
 ### Native Codex broker
 
-`native/codex-review/` is a separately compiled review-only embedding of Codex source commit `092d3acd6bec3e3a14bdc7e7a2810ab628ab759d`. It now has a bounded runtime/auth executable and a Node adapter selected explicitly with `--provider codex-native`. It is not the unmodified installed `codex` executable and never substitutes Claude. Native `AuthManager` loads the normal credential store with ChatGPT-only authentication and preserved managed login/workspace restrictions; no token extraction, credential copying, synthetic headers, custom endpoints or API-billing fallback is implemented.
+`engine/native/codex-review/` is a separately compiled review-only embedding of Codex source commit `092d3acd6bec3e3a14bdc7e7a2810ab628ab759d`. It now has a bounded runtime/auth executable and a Node adapter selected explicitly with `--provider codex-native`. It is not the unmodified installed `codex` executable and never substitutes Claude. Native `AuthManager` loads the normal credential store with ChatGPT-only authentication and preserved managed login/workspace restrictions; no token extraction, credential copying, synthetic headers, custom endpoints or API-billing fallback is implemented.
 
 Its strict request/result types reject arbitrary commands, URLs, model/provider/config/resume overrides and extra fields. The fixed source instruction matches the existing relay; source hashes, relative paths, line counts, three-file/64 KiB bounds and result citations are validated. The startup constructor applies an empty native tool ceiling and isolated session, omits environments/dynamic tools, disables source-facing startup features through constrained setters and rejects configured MCP/notification actions rather than silently discarding them.
 
@@ -287,12 +287,12 @@ The adapter starts in a private neutral directory with filtered environment and 
 Admission is deliberately separate from preliminary policy tests:
 
 ```sh
-node native/codex-review/build.mjs --test
-node native/codex-review/admit.mjs --admit
+node engine/native/codex-review/build.mjs --test
+node engine/native/codex-review/admit.mjs --admit
 ./bin/audit check-model-cli --provider codex-native
 ```
 
-`--admit` first revokes an older receipt, then requires native tests, the exact pinned router test, a broker build, all Node tests and all five real-Docker fixture suites. Zero-test selectors/skipped suites do not count as passes. Only success writes private `native/.cache/runtime-admission.json` with admission true, gate evidence and source/package/recipe/binary identities. The adapter rechecks current identities and hashes the binary before starting it; changed inputs require a fresh admission run. This is a local reproducibility gate under the trusted owner's control, not a signed attestation against a malicious host owner.
+`--admit` first revokes an older receipt, then requires native tests, the exact pinned router test, a broker build, all Node tests and all five real-Docker fixture suites. Zero-test selectors/skipped suites do not count as passes. Only success writes private `engine/native/.cache/runtime-admission.json` with admission true, gate evidence and source/package/recipe/binary identities. The adapter rechecks current identities and hashes the binary before starting it; changed inputs require a fresh admission run. This is a local reproducibility gate under the trusted owner's control, not a signed attestation against a malicious host owner.
 
 **Current status (2026-10-15):** all five admission gates passed: 14 native tests, the exact pinned router test, broker build, 118 Node tests and 17 Docker tests, with no skips or failures. A current local runtime admission receipt was issued. The public `review-with-cli --provider codex-native --model gpt-6.1-sol` then reviewed a generated three-line inert sample through the full Docker/adapter/native-subscription path and exited 0. Requested and client-reported model were both `gpt-6.1-sol`. The report validated with zero notes; the parent recorded collection and cleanup, report hashes matched, and independent inspection confirmed the exact owned containers/volume were absent. Socket and staged source were removed. Private evidence is retained in the `fc-codex-live-ux38ixu6/review` temporary directory.
 
@@ -314,11 +314,11 @@ Until those conditions are implemented and reviewed for each additional provider
 ## Reproduce the automated checks
 
 ```sh
-node --test scripts/*.test.mjs
-node --test scripts/worker-isolation.docker.mjs
-node --test scripts/terminal-relay.docker.mjs
-node --test scripts/terminal-model-connector.docker.mjs
-node --test scripts/static-cli-review.docker.mjs
+node --test engine/scripts/*.test.mjs
+node --test engine/scripts/worker-isolation.docker.mjs
+node --test engine/scripts/terminal-relay.docker.mjs
+node --test engine/scripts/terminal-model-connector.docker.mjs
+node --test engine/scripts/static-cli-review.docker.mjs
 ```
 
 The terminal-relay Docker test uses a simulated terminal responder; the automatic connector Docker test uses a **fake local CLI** with inert source. They validate transport, flag/environment controls and refusal/cleanup, not live inference or an actual subscription account.

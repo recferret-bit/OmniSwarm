@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://omniswarm.dev/schemas/attestation.schema.json",
+  "title": "attestation",
+  "description": "What the backend attests on chain after a review (registry attest call). INTAKE sections 3 (step 9) and 6. Chain-side fields (bindingConfirmed, blockHeight, blockTimestampMs) appear when the attestation is read back from the contract.",
+  "type": "object",
+  "required": [
+    "requestHash",
+    "reportSha256",
+    "reportUri",
+    "maxSeverity"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "requestHash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "reportSha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "reportUri": {
+      "type": "string",
+      "pattern": "^https://[^\\s]+$",
+      "maxLength": 2000
+    },
+    "deployed": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^[a-z0-9._-]{2,64}$"
+    },
+    "codeHash": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "maxSeverity": {
+      "enum": [
+        "critical",
+        "high",
+        "medium",
+        "low",
+        "info",
+        "none"
+      ]
+    },
+    "repo": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9-]{1,39}/[A-Za-z0-9._-]{1,100}$"
+    },
+    "commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "bindingConfirmed": {
+      "type": "boolean"
+    },
+    "blockHeight": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "blockTimestampMs": {
+      "type": "integer",
+      "minimum": 0
+    }
+  }
+}

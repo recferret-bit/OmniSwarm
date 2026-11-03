@@ -1,0 +1,34 @@
+[
+  {
+    "id": "cli-claude-opus-s1-auth#0",
+    "verdict": "upheld",
+    "reason": "Read the cited line.",
+    "evidence": [
+      "src/lib.rs:16"
+    ]
+  },
+  {
+    "id": "cli-claude-opus-s1-auth#1",
+    "verdict": "refuted",
+    "reason": "Read the cited line.",
+    "evidence": [
+      "src/lib.rs:40"
+    ]
+  },
+  {
+    "id": "openrouter-qwen-qwen3-8-max-0902-s1-auth#0",
+    "verdict": "upheld",
+    "reason": "Read the cited line.",
+    "evidence": [
+      "src/lib.rs:30"
+    ]
+  },
+  {
+    "id": "openrouter-anthropic-claude-opus-5-5-s1-auth#0",
+    "verdict": "upheld",
+    "reason": "Read the cited line.",
+    "evidence": [
+      "src/log.ts:3"
+    ]
+  }
+]

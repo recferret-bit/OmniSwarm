@@ -40,7 +40,7 @@ A **reviewer** is one model in one family. Its spec string:
 - **Combining approaches:** any mix in one run, e.g. the owner's default local preset:
   `--reviewers cli:claude:opus,cli:codex:gpt-6.1-sol,cli:grok:grok-4.7,cli:agy:gemini-4-argon-high,openrouter:qwen/qwen3.8-max-0902,key:zai:glm-5.3`
 - **Hosted preset (OD-04, owner-confirmed):** `key:zai:glm-5.3`, `openrouter:qwen/qwen3.8-max-0902`, `openrouter:anthropic/claude-opus-5.5`, `openrouter:openai/gpt-6.1-sol`, `openrouter:x-ai/grok-4.7`, `openrouter:google/gemini-4-argon`; orchestrator `openrouter:anthropic/claude-opus-5.5`, alternate judge `openrouter:openai/gpt-6.1-sol`; `--assign round-robin --passes 2 --tool-budget 30 --max-cost-usd 25`.
-- **Config file:** `omniswarm.config.json` (or `--config path`) holds `reviewers`, `orchestrator`, `passes`, `toolBudget`, `debate`, `presets`; flags override it. Schema: `shared/schemas/run-config.schema.json`. Presets: `local-subscriptions`, `api-only`, `mixed`, `hosted` (OD-04), `demo` (all `scripted`).
+- **Config file:** `omniswarm.config.json` (or `--config path`) holds `reviewers`, `orchestrator`, `passes`, `toolBudget`, `debate`, `presets`; flags override it. Schema: `packages/schemas/run-config.schema.json`. Presets: `local-subscriptions`, `api-only`, `mixed`, `hosted` (OD-04), `demo` (all `scripted`).
 - **Defaults** (verified 2026-11-02, keep in config, not code): Claude `opus`, Codex `gpt-6.1-sol`, Grok `grok-4.7`, AGY `gemini-4-argon-high`, Z.ai `glm-5.3` (thinking always on; `reasoning_effort: high`), OpenRouter Qwen `qwen/qwen3.8-max-0902` (alt `qwen/qwen3-coder-next`).
 - **Assignment:** `--assign matrix` (default when reviewers ≤ 8): every reviewer reviews every selected surface, so each per-model report covers the whole repo. `--assign round-robin` keeps today's behaviour for cost control (fixes R-17d).
 
@@ -82,7 +82,7 @@ Two fixed numbers, the same for every family:
 | Debate turn budget | `--debate-tool-budget` | 12 | Tool calls per debate turn (for citation lookups) |
 | Debate rounds | `--debate-rounds R` | **2**, max 3 | Round 1 challenge (+ devil's advocate), round 2 defend; round 3 rebut only if any verdict changed in round 2 |
 | Judge calls | — | 1 per disputed cluster + 1 general review | No retries except one on transport failure |
-| Cost ceiling | `--max-cost-usd` | unset | Sum of reported `usage.cost` (OpenRouter) or estimated cost; crossing it ends the current pass with `stop: cost` |
+| Cost ceiling | `--max-cost-usd` | unset (hosted preset: 25) | Per reviewer, for the whole run: the sum of reported `usage.cost` (OpenRouter) or estimated cost over every API turn of all its passes and surfaces (including its cross-check), kept as `spentUsd` in `harness/budget-<reviewer>.json` under the bridge budget lock. Reaching it ends the current pass with `stop: cost`; the reviewer's remaining passes and surfaces are skipped (`skipped: cost_ceiling` usage rows) and `harness/budget-health.json` records the stop. Debate and judge sessions are not counted against a reviewer |
 
 **Where the cap is enforced** (one gate per family, all three tested):
 1. **Bridge counter** (plugged into W02's `beforeCall(ctx, name)` hook in the `docker-mcp-bridge.mjs` dispatcher, per identity + pass, stored in `harness/budget-<reviewer>.json`, not in the 200-entry log). This is the only gate every family passes through.
@@ -125,7 +125,7 @@ Every pass writes raw usage to `harness/usage/<reviewer>/<surface>-pass-<k>.json
 
 ## 5. Brief templates (P3)
 
-Every brief = **Objective · Output schema · Tools and sources · Boundaries**. Review-pass templates live in `scripts/review-briefs.mjs` (W04); challenge/defend/rebut, judge and general-review templates live in `scripts/orchestrator-briefs.mjs` (W06). Both are snapshot-tested.
+Every brief = **Objective · Output schema · Tools and sources · Boundaries**. Review-pass templates live in `engine/scripts/review-briefs.mjs` (W04); challenge/defend/rebut, judge and general-review templates live in `engine/scripts/orchestrator-briefs.mjs` (W06). Both are snapshot-tested.
 - **Review pass k:** objective (surface, pass role), schema `reviewer-report`, tools (bridge read tools, fixed tests), boundaries (no exploits, budget N, "submit no finding if none").
 - **Challenge / defend / rebut:** one cluster only, its quoted evidence, schema `debate-round`, budget 12 calls, "cite file:line + quote or your argument is discarded", devil's-advocate variant.
 - **Judge:** one cluster, evidence + valid arguments only, schema `adjudication`, "insufficient_evidence is allowed".
@@ -160,7 +160,7 @@ reports/<run>/
 
 ## 7. Evaluation (W06)
 
-- `eval/golden/` — 6–10 small repos (Rust/NEAR, Solana, TS, Python), each with seeded bugs (`expected.json`: file, line range, class) and **decoys** (code that looks vulnerable and is safe).
+- `engine/eval/golden/` — 6–10 small repos (Rust/NEAR, Solana, TS, Python), each with seeded bugs (`expected.json`: file, line range, class) and **decoys** (code that looks vulnerable and is safe).
 - `npm run eval:golden -- --reviewers scripted:*` runs offline in CI; with `OMNI_LIVE=1` it runs real models.
 - Metrics: recall, precision, decoy false-positive rate, dedup correctness, **true findings lost in debate** (conformity rate), cost per confirmed finding.
 - Baselines: union of all findings; majority vote without debate. Debate ships as default only if it beats both on precision without losing recall by more than one seeded bug; otherwise default `--debate-rounds 1` (challenge only) and the README says why (P9).

@@ -1,0 +1,21 @@
+[
+  {
+    "title": "Agreed check",
+    "surface": "S1",
+    "severity": "low",
+    "confidence": "probable",
+    "location": [
+      "src/lib.rs:30"
+    ],
+    "impact": "Agreed check.",
+    "preconditions": "A balance exists.",
+    "analysis": "Source inspection of the cited line.",
+    "validation": "Source inspection.",
+    "attack": [],
+    "poc": "",
+    "fix": "Add the missing control."
+  },
+  {
+    "verified_safe": []
+  }
+]

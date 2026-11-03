@@ -1,0 +1,33 @@
+[
+  {
+    "file": "src/lib.rs",
+    "startLine": 16,
+    "endLine": 16,
+    "quote": "saturating_sub",
+    "valid": true,
+    "clusterId": "CLUSTER-1",
+    "anonId": "Reviewer A",
+    "round": 1
+  },
+  {
+    "file": "src/lib.rs",
+    "startLine": 16,
+    "endLine": 16,
+    "quote": "nope",
+    "valid": false,
+    "reason": "quote_not_found",
+    "clusterId": "CLUSTER-1",
+    "anonId": "Reviewer B",
+    "round": 1
+  },
+  {
+    "file": "src/lib.rs",
+    "startLine": 16,
+    "endLine": 16,
+    "quote": "saturating_sub",
+    "valid": true,
+    "clusterId": "CLUSTER-1",
+    "anonId": "Reviewer D",
+    "round": 2
+  }
+]

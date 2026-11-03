@@ -1,0 +1,21 @@
+[
+  {
+    "title": "Logged secret",
+    "surface": "S1",
+    "severity": "medium",
+    "confidence": "probable",
+    "location": [
+      "src/log.ts:3"
+    ],
+    "impact": "Logged secret.",
+    "preconditions": "A balance exists.",
+    "analysis": "Source inspection of the cited line.",
+    "validation": "Source inspection.",
+    "attack": [],
+    "poc": "",
+    "fix": "Add the missing control."
+  },
+  {
+    "verified_safe": []
+  }
+]

@@ -1,4 +1,4 @@
-/* Shared report tokens, navigation and panels come from ../scripts/report-style.css. */
+/* Shared report tokens, navigation and panels come from ../engine/scripts/report-style.css. */
 .docs-intro { font-size: 19px; font-weight: 700; line-height: 1.4; margin: 0 0 10px; letter-spacing: -.025em; }
 .docs-lead { color: var(--muted); font-size: 14px; max-width: 55ch; margin: 0; }
 .docs-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 20px; margin-top: 23px; font-size: 12px; font-weight: 700; }

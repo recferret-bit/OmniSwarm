@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://omniswarm.dev/schemas/debate-round.schema.json",
+  "title": "debate-round",
+  "description": "debate/round-<n>/<anon-id>.json: one anonymized turn on one cluster. Arguments without a valid citation are discarded by the citation checker. ORCHESTRATION section 4.2.",
+  "type": "object",
+  "required": ["round", "clusterId", "role", "anonId", "verdict", "citations", "argument"],
+  "additionalProperties": false,
+  "properties": {
+    "round": { "type": "integer", "minimum": 1, "maximum": 3 },
+    "clusterId": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "role": { "enum": ["challenge", "devil", "defend", "rebut"] },
+    "anonId": { "type": "string", "pattern": "^Reviewer [A-Z]$" },
+    "verdict": { "enum": ["upheld", "partial", "refuted", "insufficient_evidence"] },
+    "citations": { "type": "array", "maxItems": 100, "items": { "$ref": "#/$defs/citation" } },
+    "argument": { "type": "string", "minLength": 1, "maxLength": 20000 },
+    "conformitySuspect": { "type": "boolean" },
+    "devilAdvocate": { "type": "boolean" }
+  },
+  "if": { "required": ["verdict"], "properties": { "verdict": { "enum": ["upheld", "partial", "refuted"] } } },
+  "then": { "properties": { "citations": { "minItems": 1 } } },
+  "$defs": {
+    "citation": {
+      "type": "object",
+      "required": ["file", "startLine", "endLine", "quote"],
+      "additionalProperties": false,
+      "properties": {
+        "file": { "type": "string", "minLength": 1, "maxLength": 1000 },
+        "startLine": { "type": "integer", "minimum": 1 },
+        "endLine": { "type": "integer", "minimum": 1 },
+        "quote": { "type": "string", "minLength": 1, "maxLength": 4000 }
+      }
+    }
+  }
+}

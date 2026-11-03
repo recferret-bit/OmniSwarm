@@ -1,0 +1,40 @@
+{
+  "stack": "python",
+  "bugs": [
+    {
+      "file": "app/main.py",
+      "startLine": 19,
+      "endLine": 19,
+      "class": "path-traversal",
+      "title": "download joins the path parameter into the upload path",
+      "severity": "high"
+    },
+    {
+      "file": "app/main.py",
+      "startLine": 24,
+      "endLine": 24,
+      "class": "idor",
+      "title": "get_invoice returns invoices of other users",
+      "severity": "high",
+      "missedBy": [
+        "baseline"
+      ]
+    }
+  ],
+  "decoys": [
+    {
+      "file": "app/main.py",
+      "startLine": 33,
+      "endLine": 33,
+      "reason": "yaml.safe_load builds plain data only",
+      "claim": "config upload deserializes YAML unsafely"
+    },
+    {
+      "file": "app/main.py",
+      "startLine": 40,
+      "endLine": 40,
+      "reason": "argv list, no shell, ref matched by a hex regex",
+      "claim": "commit lookup passes user input to a shell"
+    }
+  ]
+}

@@ -31,7 +31,7 @@ See: the four `cli` reviewers, `matrix (24 jobs)`. Add `--passes 3`: `Budgets: p
 
 **5. Recommended orchestrator.**
 `./bin/audit run --repo <F> --agents claude --orchestrator recommended --plan`
-See: `Orchestrator: recommended -> cli:claude:opus; first choice of the OD-05 order is available. No phase uses it yet.` (On a machine without the `claude` CLI on PATH it says `none available (...)`.)
+See: `Orchestrator: recommended -> cli:claude:opus; first choice of the OD-05 order is available. It runs the debate and general-review phases.` and the `Alternate judge:` line. (On a machine without the `claude` CLI on PATH it says `none available (...)`.)
 
 **6. Crash during cross-check (R-03).**
 `node --test --test-name-pattern="crash during cross-check" scripts/docker-agent-orchestrator.test.mjs`
@@ -43,7 +43,11 @@ See: pass. `report.html` of the fixture shows the control's real evidence text w
 
 **8. No adapter literals outside the cli provider table.**
 `grep -rn "'claude', 'codex', 'grok', 'agy'\|claude|codex|grok|agy" scripts/*.mjs scripts/*.sh bin/audit | grep -v "\.test\.mjs"`
-See: only `scripts/model-cli-status.mjs` and two `*.docker.mjs` tests (terminal model connectors, outside W01) and no match in the files W01 owns.
+See: only `scripts/model-cli-status.mjs` and two `*.docker.mjs` tests (terminal model connectors, outside W01). The check-agents presence list (`scripts/agent-presence.mjs`) and the `--max-turns` plan gate read `presence`, `transport` and `maxTurnsFlag` from the cli provider table in `scripts/provider-cli.mjs` (fixed after the 2026-11-03 review, which found a literal list at `docker-agent-orchestrator.mjs:60`).
+
+**9. Matrix over every surface validates (2026-11-03 review, W01-09).**
+`node --test --test-name-pattern "W01-09" scripts/report-contract.test.mjs`
+See: pass. Two reviewers x all six surfaces, `assign: matrix`, gives 12 expected jobs; the contract derives them with the launcher's own `assignJobs` (`scripts/reviewer-plan-assign.mjs`).
 
 Other refusals, unchanged: `./bin/audit run --repo <F> --rpc https://x --plan` prints "source security review does not contact deployed RPCs", exit 1. `--reviewers 'cli:claude:op;rm'` is rejected (exit 2).
 
@@ -66,4 +70,6 @@ All good: from the main checkout `git merge --no-ff wave/w01-reviewer-registry -
 
 - Job names now carry the reviewer id (`cli-claude-opus-s1-auth`, not `claude-s1-auth`), so a run made before W01 cannot be resumed with `--resume-from`; reading and validating an old report works (legacy ids are the adapter names).
 - `--passes`, `--tool-budget`, `--orchestrator`, `--alternate-judge`, `maxCostUsd` are recorded and printed, not enforced (W04, W06).
-- Not done: W01-20 (app-specific plan guidance, H+) and the `runAgentProcess` half of W01-21 (`audit-process.mjs` belongs to W02).
+- W01-21 is complete since the 2026-11-03 fixes: `runAgentProcess` and its tests are deleted.
+- W01-20 is partial: the reviewer prompts and the `get_review_plan` description no longer name app-specific domains; the plan text itself (`audit-plans.mjs`, `orchestrator-surfaces.mjs` S3/S6 names) still does.
+- The planned flag `--claude-model <slug>` (and `--grok-model`, `--agy-model`, `--codex-model`) works; `--model-<vendor>` stays an alias.

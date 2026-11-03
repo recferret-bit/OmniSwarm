@@ -1,0 +1,196 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
+import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { brokerEnvironment, ConnectorError } from './model-cli-claude.mjs';
+import { exactKeys, validateReviewRequest, validateResult } from './terminal-review-contract.mjs';
+import { nativeIdentity } from '../native/codex-review/build.mjs';
+import { matchesAdmission } from '../native/codex-review/admit.mjs';
+import { verifyAdmittedBinary } from '../native/admission-common.mjs';
+import { providerDiagnostic } from './provider-error-diagnostic.mjs';
+
+export const CODEX_SOURCE = '092d3acd6bec3e3a14bdc7e7a2810ab628ab759d';
+export const DEFAULT_CODEX_MODEL = 'gpt-6.1-sol';
+const CACHE = fileURLToPath(new URL('../native/.cache/', import.meta.url));
+const BINARY = path.join(CACHE, 'target/debug/omniswarm-codex-review');
+const REASONS = new Set(['native_input_contract_rejected', 'native_output_contract_rejected', 'native_startup_policy_incompatible', 'native_configuration_rejected', 'native_subscription_auth_required', 'native_runtime_failed', 'native_execution_event_rejected', 'native_deadline_exceeded']);
+const modelName = (value) => typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value);
+const CODEX_PROFILE = Object.freeze({
+  provider: 'codex', sourceCommit: CODEX_SOURCE, authMethod: 'chatgpt', version: '0.162.1-native',
+  tempPrefix: 'omni-codex-session-', environmentKeys: ['CODEX_HOME'], inventories: ['tools','mcpServers'],
+  admissionError: 'native_broker_not_admitted', resolveBinary: admittedBinary, reasons: REASONS,
+});
+
+// Any refusal here surfaces as the profile's admissionError (native_broker_not_admitted).
+async function admittedBinary() {
+  const receipt = await verifyAdmittedBinary({ cache: CACHE, binary: BINARY, matches: (value) => matchesAdmission(value, nativeIdentity()) });
+  return { executable: BINARY, identity: { sourceCommit: CODEX_SOURCE, packageDigest: receipt.packageDigest, recipeDigest: receipt.recipeDigest, binarySha256: receipt.binarySha256 } };
+}
+
+// Executable injection is test-only; no CLI/RPC option chooses an executable.
+export function createCodexNativeAdapter(options = {}) {
+  return createNativeReviewAdapter({ ...options, model: options.model === undefined ? DEFAULT_CODEX_MODEL : options.model }, CODEX_PROFILE);
+}
+
+// A private (0700) per-session working directory; removal re-checks it is the same directory.
+function openSessionDirectory(prefix) {
+  const cwd = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), prefix)));
+  fs.chmodSync(cwd, 0o700);
+  return { cwd, identity: fs.lstatSync(cwd) };
+}
+
+function removeSessionDirectory({ cwd, identity }) {
+  const stat = fs.lstatSync(cwd);
+  if (stat.isSymbolicLink() || stat.ino !== identity.ino || stat.dev !== identity.dev) throw new ConnectorError('native_session_cleanup_unverified');
+  fs.rmSync(cwd, { recursive: true, force: true });
+}
+
+// The broker environment plus only the profile's own keys; TMPDIR is the private session directory.
+function sessionEnvironment(environment, profile, cwd) {
+  const env = brokerEnvironment(environment);
+  delete env.CLAUDE_CONFIG_DIR;
+  for (const key of profile.environmentKeys) if (typeof environment[key] === 'string') env[key] = environment[key];
+  env.TMPDIR = cwd;
+  return env;
+}
+
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
+  promise.catch(() => {});
+  return { promise, resolve, reject };
+}
+
+// One native protocol frame against the session so far: {blocked: {reason, diagnostic}}, {header} or {answer}.
+// Anything off-contract throws, and the caller stops the session as native_protocol_rejected.
+function classifyFrame(event, { header, request, answer }, profile, checkOnly) {
+  if (event.state === 'blocked_or_incomplete') {
+    const hasDiagnostic = profile.diagnostics && Object.hasOwn(event, 'diagnostic');
+    exactKeys(event, ['version', 'state', 'reason', ...(hasDiagnostic ? ['diagnostic'] : [])]);
+    if (event.version !== 1) throw new Error('native protocol version rejected');
+    const diagnostic = hasDiagnostic ? providerDiagnostic(event.diagnostic) : undefined;
+    if (hasDiagnostic && !diagnostic) throw new Error('native diagnostic rejected');
+    return { blocked: { reason: profile.reasons.has(event.reason) ? event.reason : 'native_runtime_failed', diagnostic } };
+  }
+  if (!header) {
+    exactKeys(event, ['version', 'state', 'provider', 'authMethod', 'sourceCommit', ...profile.inventories, ...(profile.sourceRevision ? ['sourceRevision'] : []), 'clientReportedModel']);
+    if (event.version !== 1 || event.state !== 'preflight_ready' || event.provider !== profile.provider || event.authMethod !== profile.authMethod || event.sourceCommit !== profile.sourceCommit
+      || (profile.sourceRevision && event.sourceRevision !== profile.sourceRevision)
+      || profile.inventories.some((key) => !Array.isArray(event[key]) || event[key].length)
+      || !modelName(event.clientReportedModel)) throw new Error('preflight rejected');
+    return { header: event };
+  }
+  exactKeys(event, ['version', 'state', 'provider', 'clientReportedModel', 'result']);
+  if (checkOnly || !request || answer || event.version !== 1 || event.state !== 'result' || event.provider !== profile.provider
+    || !(profile.allowUnknownModel && event.clientReportedModel === null) && !modelName(event.clientReportedModel)) throw new Error('result rejected');
+  validateResult(event.result, request);
+  return { answer: { review: event.result, cliReportedModel: event.clientReportedModel } };
+}
+
+// Shared internal transport only. Public CLI profile selection supplies fixed descriptors.
+export function createNativeReviewAdapter({ model, environment = process.env, executable, checkOnly = false } = {}, profile) {
+  if (!modelName(model)) throw new ConnectorError('requested_model_rejected');
+  return {
+    async withSession(callback, { signal } = {}) {
+      if (signal?.aborted) throw new ConnectorError('connector_cancelled');
+      let admitted;
+      try { admitted = executable ? { executable } : await profile.resolveBinary(); } catch { throw new ConnectorError(profile.admissionError); }
+      const directory = openSessionDirectory(profile.tempPrefix);
+      const { cwd } = directory;
+      const env = sessionEnvironment(environment, profile, cwd);
+      const child = spawn(admitted.executable, admitted.args || [checkOnly ? '--check' : '--review', '--model', model], { cwd, env, detached: true, stdio: ['pipe', 'pipe', 'pipe'] });
+      const { promise: ready, resolve: readyResolve, reject: readyReject } = deferred();
+      const { promise: completed, resolve: completedResolve, reject: completedReject } = deferred();
+      let header;
+      let answer;
+      let request;
+      let used = false;
+      let failure;
+      let bytes = 0;
+      let pending = '';
+      let escalation;
+      let timer;
+      const kill = (sig) => {
+        if (child.pid) { try { process.kill(-child.pid, sig); } catch { child.kill(sig); } }
+      };
+      const stop = (reason, diagnostic) => {
+        if (failure) return;
+        failure = new ConnectorError(reason);
+        if (diagnostic) failure.diagnostic = diagnostic;
+        readyReject(failure);
+        kill('SIGTERM');
+        escalation = setTimeout(() => kill('SIGKILL'), 300);
+      };
+      const deadline = (ms) => { clearTimeout(timer); timer = setTimeout(() => stop('connector_deadline'), ms); };
+      const abort = () => stop('connector_cancelled');
+      const decoder = new TextDecoder('utf-8', { fatal: true });
+      const frame = (line) => {
+        const next = classifyFrame(JSON.parse(line), { header, request, answer }, profile, checkOnly);
+        if (next.blocked) stop(next.blocked.reason, next.blocked.diagnostic);
+        else if (next.header) {
+          header = next.header;
+          clearTimeout(timer);
+          readyResolve(header);
+        } else answer = next.answer;
+      };
+      deadline(55_000);
+      child.stdin.on('error', () => {});
+      child.stdout.on('data', (chunk) => {
+        bytes += chunk.length;
+        if (bytes > 2 * 1024 * 1024) { stop('cli_output_limit'); return; }
+        try {
+          pending += decoder.decode(chunk, { stream: true });
+          for (let at; (at = pending.indexOf('\n')) >= 0;) {
+            const line = pending.slice(0, at);
+            pending = pending.slice(at + 1);
+            if (failure) break;
+            if (!line.trim()) throw new Error('empty native frame');
+            frame(line);
+          }
+        } catch { stop('native_protocol_rejected'); }
+      });
+      child.stderr.on('data', (chunk) => { bytes += chunk.length; if (bytes > 2 * 1024 * 1024) stop('cli_output_limit'); });
+      child.on('error', () => stop('cli_unavailable'));
+      child.on('close', (code) => {
+        clearTimeout(timer);
+        clearTimeout(escalation);
+        kill('SIGKILL');
+        signal?.removeEventListener('abort', abort);
+        try { pending += decoder.decode(); } catch { failure ||= new ConnectorError('native_protocol_rejected'); }
+        if (pending.length) failure ||= new ConnectorError('native_protocol_rejected');
+        if (!failure && (code !== 0 || !header || (!checkOnly && (!used || !answer)))) failure = new ConnectorError('native_result_missing');
+        if (failure) { readyReject(failure); completedReject(failure); } else completedResolve(answer);
+      });
+      signal?.addEventListener('abort', abort, { once: true });
+      if (signal?.aborted) abort();
+      try {
+        const status = await ready;
+        if (checkOnly) await completed;
+        const result = await callback({
+          provider: profile.provider, version: profile.version, authMethod: profile.authMethod, sourceCommit: profile.sourceCommit,
+          ...(profile.sourceRevision ? { sourceRevision: profile.sourceRevision } : {}),
+          brokerIdentity: admitted.identity,
+          review: async (approved, requested) => {
+            if (checkOnly || used || requested !== model || failure || signal?.aborted) throw new ConnectorError('native_request_rejected');
+            validateReviewRequest(approved);
+            used = true;
+            request = approved;
+            clearTimeout(timer);
+            child.stdin.write(JSON.stringify({ version: 1, instruction: approved.instruction, files: approved.files }) + '\n');
+            return await completed;
+          },
+          cliReportedModel: status.clientReportedModel,
+        });
+        if (failure) throw failure;
+        if (!checkOnly && !used) throw new ConnectorError('native_request_rejected');
+        return result;
+      } finally {
+        if (child.exitCode === null && child.signalCode === null) stop('connector_cancelled');
+        await completed.catch(() => {});
+        removeSessionDirectory(directory);
+      }
+    },
+  };
+}

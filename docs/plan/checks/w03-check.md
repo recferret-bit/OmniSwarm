@@ -19,7 +19,14 @@ Wave file: [`../waves/W03-api-reviewers.md`](../waves/W03-api-reviewers.md). Abo
 
 See three rows, no key value: `key-zai-glm-5-3` family `key` vendor `zai` model `glm-5.3` env `ZAI_API_KEY,ZAI_BASE_URL` transport `api-acp`; `openrouter-qwen-qwen3-8-max-0902` vendor `alibaba` env `OPENROUTER_API_KEY`; `scripted-baseline` vendor `scripted`. Exit 0. Ran on this branch; the id keeps the `-0902` suffix.
 
-**2. Replay (automated only).** `node --test scripts/provider-openai-compat.test.mjs scripts/http-replay.test.mjs` passes with no network. The recorded bodies are under `scripts/provider-fixtures/w03/`.
+**2. Replay.** With dummy keys and the relative replay path the docs give:
+
+```sh
+OMNI_DEMO_HOST=1 OMNI_HTTP_REPLAY=scripts/provider-fixtures/w03 ZAI_API_KEY=zk-test OPENROUTER_API_KEY=or-test \
+  ./bin/audit run --repo scripts/demo-fixture --reviewers key:zai:glm-5.3,openrouter:qwen/qwen3.8-max-0902 --surface s1 --passes 1 --out <out>
+```
+
+See exit 0 and two submissions; the OpenRouter replay reads a file, searches, then submits. `npm run check:w03` runs exactly this. Until the lead lands the `audit-submission.mjs` model-id change (OpenRouter ids contain `/`), that test is marked `todo` and the OpenRouter submit is refused by the bridge.
 
 **3. Scripted reviewers.** Where:
 
@@ -28,6 +35,8 @@ See three rows, no key value: `key-zai-glm-5-3` family `key` vendor `zai` model 
 ```
 
 See `DEMO — not a review`, then `Demo report saved to: <out>`. `<out>/submissions/` has four files. `<out>/harness/bridge-scripted-*.json` contains `read_file`. `<out>/meta.json` has `"demo": true`. `<out>/report.html` contains `DEMO — not a review`. About 2 seconds.
+
+With Docker running, the same command without `--no-docker` reviews the fixture in the sandbox (about 4 minutes; the first run also builds the image, which compiles `cargo-near`). The coordinator runs three catalogued checks offline: `npm existing tests in client`, the NEAR WASM build (`cargo near build non-reproducible-wasm`) and NEAR clippy. All three pass, and `cargo-audit`, `npm-audit` and `node-deps` run against the committed lockfiles. `<out>/report-health.json` stays `incomplete` with exactly one gap, `NEAR contract tests in . are a local-sandbox coverage gap…`: the fixture is a near-sdk contract and `near-sandbox` cannot run offline. The demo prints `DEMO — verification limited by design`, then `Demo report saved to: <out>`, and exits 0. Any other gap, or a report that is not the bundled fixture's, exits 2. `./bin/audit run --repo <a NEAR repo>` with the same single gap still exits 2 (`audit-demo-verdict.test.mjs`).
 
 **4. check-agents.** Unset `OPENROUTER_API_KEY`, then:
 

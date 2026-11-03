@@ -4,7 +4,7 @@
 
 ## 1. Boundary
 
-The intake service is a **separate layer**. It may call NEAR RPC, GitHub and the registry contract. It starts reviews only by spawning `./bin/audit run --github <owner>/<repo> --ref <sha> --preset <hosted> --out <dir>` with an argv array. It never passes `--rpc` (rejected anyway), never edits `scripts/`, and never mounts keys into the sandbox. The engine never learns that a review was paid.
+The intake service is a **separate layer**. It may call NEAR RPC, GitHub and the registry contract. It starts reviews only by spawning `./bin/audit run --github <owner>/<repo> --ref <sha> --preset <hosted> --out <dir>` with an argv array. It never passes `--rpc` (rejected anyway), never edits `engine/scripts/`, and never mounts keys into the sandbox. The engine never learns that a review was paid.
 
 ## 2. Stack
 
@@ -31,24 +31,29 @@ The intake service is a **separate layer**. It may call NEAR RPC, GitHub and the
 9. **Publish.** Copy the report folder to `REPORTS_ROOT/<requestId>/`, served read-only by nginx from a **separate origin** `reports.<domain>` (reports quote untrusted target text and run their own script; the app embeds them in `<iframe sandbox="allow-scripts">` and reads the index with a CORS GET allowed only from the app origin), compute `reportSha256 = sha256(findings-and-scores.json ‖ general-review.json)` (canonical), read `code_hash` of `deployed` (if any) via `view_account`, call `attest(request_hash, repo, commit, report_sha256, report_uri, deployed, code_hash, max_severity_confirmed)` with the backend's **function-call key** (scoped to `attest`, `refund`, `mark_running`). Status `done`.
 10. **Refund.** Infra failure (sandbox, provider outage, timeout) or rejection after payment → `refund(request_hash)`; status `refunded`. A completed review is never refunded (OD-07).
 
-## 4. API surface (`shared/schemas/intake-api.schema.json`)
+## 4. API surface (`packages/schemas/intake-api.schema.json`)
 
 | Method | Path | Auth | Body → Response |
 |---|---|---|---|
 | POST | `/api/challenge` | none, rate-limited per IP | `{}` → `{nonce, expiresAt}` |
 | POST | `/api/quote` | none, rate-limited per IP | `{repoUrl, network}` → `{normalizedRepo, commitSha, priceYocto, contractId, queueDepth, preset, etaMinutes}` |
 | POST | `/api/requests` | NEP-413 signature | `{accountId, publicKey, signature, message, nonce}` → `{requestId, requestHash, priceYocto, contractId}` + `sid` cookie |
-| POST | `/api/requests/:id/payment` | `sid` | `{txHash}` → `{status: "queued", position}` |
+| POST | `/api/requests/:id/payment` | `sid` | `{txHash}` → `{status, position\|null}`; a replay of the same tx is idempotent and returns the current status and, while queued, the 1-based queue rank (else `null`) |
 | GET | `/api/requests/:id` | public (id is unguessable UUIDv4) | → `{status, progress, reportUrl?, reportSha256?, attestTx?, refundTx?, createdAt}` |
 | GET | `/api/requests/:id/events` | public | SSE stream of progress events |
 | GET | `/api/requests?mine=1` | `sid` | → list of the account's requests |
-| GET | `/api/reports/:id` | public | → report index (links to `report.html`, per-reviewer pages, general review, attestation) |
+| GET | `/api/reports/:id` | public | → `{requestId, reportUrl, reportSha256, reviewers?, generalReviewUrl?, attestation?}`; 404 `NOT_FOUND` until the request is `done` |
 | GET | `/api/guard/verdict?account=&network=` | `x-guard-key` header (higher limit) or rate-limited public; verdicts cached 60 s per account | → `{verdict: allow|warn|block, reasons[], signals{}, attestation?}` (W13) |
-| POST | `/api/guard/reports` | `sid` + NEP-413 | `{account, evidenceUrl, reason}` → queued for owner review, then `report_address` on chain (W13) |
-| GET | `/api/ledger` | public (`H+`, track 04) | → sales, model costs and refunds per request, from `usage.json` and payments |
+| POST | `/api/guard/reports` | `sid` | `{account, evidenceUrl (https, visible ASCII, ≤ 2000), reason (1–280 chars, not blank, no control chars)}` → 202 `{queued: true, reportId}`; waits for owner review, then a worker sends `report_address` (W13). A resubmission of the reporter's pending report on the same account returns the same `reportId` |
+| GET | `/api/ledger` | public (`H+`, track 04) | → `{entries: [{requestId, repo, status, priceYocto, paidYocto, modelCostUsd, reviewers, refundTx?}] (newest first, ≤ 500), totals: {requests, salesYocto, refundedYocto, modelCostUsd}}`; cost from every attempt's `reviewers/*/usage.json`, recorded when the request is published or refunded; totals cover every paid request; no account ids |
 | GET | `/api/health` | none | → `{ok, network, queueDepth, workers, chain: {rpc, contract}}` |
 | GET | `/api/docs` | none | OpenAPI UI |
-| POST | `/api/admin/requests/:id/refund` | admin token from env, localhost-only via nginx | → `{refundTx}` |
+| POST | `/api/admin/requests/:id/refund` | admin | → 202 `{status: "refund_queued"}` (the API records the refund, a worker signs and sends it) or 200 `{status: "refunded", refundTx\|null}` if already refunded |
+| GET | `/api/admin/guard/reports[?status=]` | admin | → `{reports: [{reportId, account, reporter, evidenceUrl, reason, status, reportTx, createdAt}]}`; status `pending\|approved\|reported\|rejected` |
+| POST | `/api/admin/guard/reports/:id/approve` | admin | → 202 `{status: "approved", reportTx: null}`; a worker sends `report_address` (skipped if `is_reported`), then `reported` with `reportTx` (`null` when the chain already listed the account) |
+| POST | `/api/admin/guard/reports/:id/reject` | admin | → 200 `{status: "rejected", reportTx: null}`. Repeating a decision returns the current state; deciding a non-pending report is 409 `INVALID_TRANSITION` |
+
+Admin routes exist only on the separate admin listener (`ADMIN_HOST:ADMIN_PORT`, loopback only, default `127.0.0.1:8788`); the public app has no `/api/admin` route. Auth is the `x-admin-token` header (`ADMIN_TOKEN` from env), compared in constant time. The API never signs: refunds and approved reports are queued for the worker, the only operator-key holder.
 
 Statuses: `awaiting_payment → queued → running → publishing → done | failed → refunded`. Errors use one shape: `{error: {code, message, retryable}}`; codes listed in the schema (`REPO_PRIVATE`, `REPO_TOO_LARGE`, `QUEUE_FULL`, `NONCE_EXPIRED`, `NONCE_USED`, `SIG_INVALID`, `KEY_NOT_FULL_ACCESS`, `PAYMENT_NOT_FOUND`, `PAYMENT_MISMATCH`, `TX_ALREADY_USED`, `RATE_LIMITED`, …).
 
@@ -57,7 +62,7 @@ Statuses: `awaiting_payment → queued → running → publishing → done | fai
 - Rate limits: `/challenge` and `/quote` 30/min/IP; `/requests` 5/day and 1 active per account; global `MAX_QUEUE` (default 10).
 - Repo rules: public only, `size ≤ MAX_REPO_KB` (default 200 MB), optional allow-list mode for the hackathon demo, deny-list.
 - Inputs: repo regex `^[A-Za-z0-9-]{1,39}/[A-Za-z0-9._-]{1,100}$`; commit SHA `^[0-9a-f]{40}$`; everything else zod-validated; body limit 16 KB.
-- Ports: `ChainPort` (`verifyMessage`, `getTx`, `getRequest`, `attest`, `refund`, `viewAccount`, `viewCodeHash`), `GitHubPort`, `ClockPort`. Mocks for each with contract suites that W10 re-runs against testnet.
+- Ports: `ChainPort` (`health`, `keyPermission`, `getPaymentTx`, `getRequest`, `getAttestation`, `getPrice`, `viewAccount`, `getAttestationForAccount`, `blockTimestampMs`, `isReported`, `viewRegistry`; operator writes `markRunning`, `attest`, `refund`, `reportAddress`, signed by the worker only), `GitHubPort`, `ClockPort` (apps/api/src/chain/port.ts). Mocks for each with contract suites that W10 re-runs against testnet.
 - Secrets: provider keys, the backend FC key and the GitHub token live in `/etc/omniswarm/*.env` (root 0600) on the host; never in Postgres, never in the repo, never in the sandbox.
 - Logs: request id, account, repo, status; never message signatures beyond the hash, never keys.
 
@@ -73,8 +78,10 @@ Statuses: `awaiting_payment → queued → running → publishing → done | fai
 | `refund(request_hash)` | call | operator or owner | `Pending|Running → Refunded`; transfers `deposit` back; emits `review_refunded` |
 | `withdraw(amount)` | call | owner | moves earned deposits of `Done` requests to the treasury |
 | `set_price`, `set_operator` | call | owner | admin |
-| `report_address(account, evidence_sha256, evidence_uri)` | call | operator | guard blocklist entry (W13); emits `address_reported` |
-| `get_request`, `get_attestation`, `get_attestations_for_repo`, `get_attestation_for_account`, `is_reported`, `get_price` | view | anyone | reads |
+| `report_address(account_id, evidence_uri, reason)` | call, no deposit | operator only | guard blocklist entry (W13): `evidence_uri` `https://` + visible ASCII ≤ 2000 bytes, `reason` 1–280 chars, not blank, no control chars; one report per account (`ERR_ALREADY_REPORTED`); emits `address_reported` |
+| `retract_report(account_id)` | call | owner | removes the report; emits `report_retracted` |
+| `get_request`, `get_attestation`, `get_attestations_for_repo`, `get_attestation_for_account`, `get_price` | view | anyone | reads |
+| `is_reported(account_id)`, `get_report(account_id)` | view | anyone | `bool`; the stored report (`account_id`, `evidence_uri`, `reason`, `reporter`, `reported_at_ms`) or `null` |
 
 Events: NEP-297 `EVENT_JSON:{"standard":"omniswarm","version":"1.0.0","event":…,"data":[…]}`. The **operator function-call key** is limited to exactly `mark_running`, `attest`, `refund`, `report_address` (and `reviewer_attest` keys live on each reviewer sub-account under OD-02). Storage is paid from the deposit; price ≥ storage cost is asserted. The backend's key is a **function-call key** limited to `review-registry.<owner>.<net>` and the operator methods, with a gas allowance; it cannot transfer NEAR or add keys (README explains the limits, track 06 requirement). OmniSwarm audits this contract with itself in W14 (dogfood run).
 
@@ -85,4 +92,4 @@ Events: NEP-297 `EVENT_JSON:{"standard":"omniswarm","version":"1.0.0","event":�
 - **warn** if the account is a contract with no attestation, its live `code_hash` differs from the attested one (code changed since review), the account is younger than `MIN_AGE_DAYS`, or the attestation is older than `MAX_ATTEST_AGE_DAYS`.
 - **allow** otherwise. Every verdict lists reasons and the signal values (account age from first-seen block via FastNEAR indexer API or RPC, `code_hash` via `view_account`, attestations via `get_attestation_for_account`, populated from the `deployed` field the requester signed).
 
-`@omniswarm/guard` wraps any signer: `guard.wrap(signer, {onWarn: askHuman})` → refuses `block`, calls `onWarn` for `warn`. The demo agent holds only a function-call key, which cannot transfer NEAR, so it pays through a small `demo-payments` contract method `pay_out(receiver, amount)` funded for the demo; a prompt-injected instruction tells it to pay a known-bad address; the guard blocks it and the log is committed under `demos/attack/`.
+`@omniswarm/guard` wraps any signer: `guard.wrap(signer, {onWarn: askHuman})` → refuses `block`, calls `onWarn` for `warn`. The demo agent holds only a function-call key, which cannot transfer NEAR, so it pays through a small `demo-payments` contract method `pay_out(receiver, amount)` funded for the demo; a prompt-injected instruction tells it to pay a known-bad address; the guard blocks it and the log is committed under `packages/guard/demo/attack/`.

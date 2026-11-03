@@ -1,0 +1,29 @@
+{
+  "entries": [
+    {
+      "requestId": "3f2b8c1e-5d4a-4b7e-9c1a-2e6f0a8b4d10",
+      "repo": "near/near-sdk-rs",
+      "status": "done",
+      "priceYocto": "1000000000000000000000000",
+      "paidYocto": "1000000000000000000000000",
+      "modelCostUsd": 7.31,
+      "reviewers": 3
+    },
+    {
+      "requestId": "7a1c2d3e-4f50-4a6b-8c7d-9e0f1a2b3c4d",
+      "repo": "near/near-sdk-rs",
+      "status": "refunded",
+      "priceYocto": "1000000000000000000000000",
+      "paidYocto": "1000000000000000000000000",
+      "modelCostUsd": 0.42,
+      "reviewers": 1,
+      "refundTx": "7AfonAhbK4ZbdBU9VPcQdrTZVZBXE25HmZAMEABs9To1"
+    }
+  ],
+  "totals": {
+    "requests": 2,
+    "salesYocto": "1000000000000000000000000",
+    "refundedYocto": "1000000000000000000000000",
+    "modelCostUsd": 7.73
+  }
+}

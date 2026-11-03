@@ -31,18 +31,18 @@ Answer the track-06 brief literally. An agent about to pay or call a NEAR accoun
 ## Features covered
 
 - [x] Guard DTOs (CR-13a) and route module — W13-01
-- [x] Signal collectors: attestation, live code hash, blocklist, account age, is-contract — W13-02, W13-03, W13-04
+- [ ] Signal collectors: attestation, live code hash, blocklist, account age, is-contract — W13-02, W13-03, W13-04
 - [x] Verdict engine with reason codes and thresholds — W13-05
-- [x] `GET /api/guard/verdict` with caching and rate limits — W13-06
-- [x] Blocklist on chain: `report_address`, `is_reported`, `get_report` — W13-07
-- [x] `POST /api/guard/reports` with evidence, owner approval → chain — W13-08
+- [ ] `GET /api/guard/verdict` with caching and rate limits — W13-06
+- [ ] Blocklist on chain: `report_address`, `is_reported`, `get_report` — W13-07
+- [ ] `POST /api/guard/reports` with evidence, owner approval → chain — W13-08
 - [x] `@omniswarm/guard` wrapper (block refuses, warn asks) — W13-09
-- [x] Demo fixtures: good, drained, phish, fresh accounts on testnet (owner runs) — W13-10
-- [x] Prior-interaction signal (H+) — W13-11
-- [x] FC-key-only demo agent — W13-12
-- [x] Prompt-injection attack demo with committed log — W13-13, W13-14
+- [ ] Demo fixtures: good, drained, phish, fresh accounts on testnet (owner runs) — W13-10
+- [ ] Prior-interaction signal (H+) — W13-11
+- [ ] FC-key-only demo agent — W13-12
+- [ ] Prompt-injection attack demo with committed log — W13-13, W13-14
 - [x] Guard README with key limits — W13-15
-- [x] Wave check, owner guide, tag — W13-16
+- [ ] Wave check, owner guide, tag — W13-16
 
 ## Issues
 

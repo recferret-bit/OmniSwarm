@@ -1,0 +1,18 @@
+{
+  "round": 1,
+  "clusterId": "CLUSTER-1",
+  "role": "devil",
+  "anonId": "Reviewer A",
+  "verdict": "refuted",
+  "citations": [
+    {
+      "file": "src/lib.rs",
+      "startLine": 16,
+      "endLine": 16,
+      "quote": "saturating_sub"
+    }
+  ],
+  "argument": "The guard sits in the caller.",
+  "devilAdvocate": true,
+  "conformitySuspect": false
+}

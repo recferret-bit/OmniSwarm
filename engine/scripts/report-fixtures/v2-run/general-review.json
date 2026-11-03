@@ -1,0 +1,81 @@
+{
+  "executiveSummary": "One disputed finding remains.\nLine two.\nLine three.",
+  "riskPosture": "high-risk",
+  "topFindings": [
+    {
+      "clusterId": "CLUSTER-1",
+      "title": "Missing owner check",
+      "severity": "high",
+      "finalStatus": "DISPUTED"
+    }
+  ],
+  "coverage": [
+    {
+      "surface": "S1",
+      "covered": true,
+      "gaps": [
+        "debate_cap"
+      ]
+    }
+  ],
+  "openDisagreements": [
+    {
+      "clusterId": "CLUSTER-1",
+      "summary": "Quotes disagree."
+    }
+  ],
+  "contributions": [
+    {
+      "reviewerId": "cli-claude-opus",
+      "uniqueConfirmed": 0,
+      "refuted": 0,
+      "toolCalls": 4,
+      "costUsd": 0
+    },
+    {
+      "reviewerId": "key-zai-glm-5-3",
+      "uniqueConfirmed": 0,
+      "refuted": 0,
+      "toolCalls": 4,
+      "costUsd": 0
+    },
+    {
+      "reviewerId": "openrouter-qwen-qwen3-8-max-0902",
+      "uniqueConfirmed": 0,
+      "refuted": 0,
+      "toolCalls": 4,
+      "costUsd": 0
+    },
+    {
+      "reviewerId": "openrouter-anthropic-claude-opus-5-5",
+      "uniqueConfirmed": 1,
+      "refuted": 0,
+      "toolCalls": 4,
+      "costUsd": 0
+    },
+    {
+      "reviewerId": "scripted-baseline",
+      "uniqueConfirmed": 0,
+      "refuted": 0,
+      "toolCalls": 4,
+      "costUsd": 0
+    }
+  ],
+  "methodology": {
+    "reviewers": [
+      "cli-claude-opus",
+      "key-zai-glm-5-3",
+      "openrouter-qwen-qwen3-8-max-0902",
+      "openrouter-anthropic-claude-opus-5-5",
+      "scripted-baseline"
+    ],
+    "orchestrator": "cli:codex:gpt-5.5",
+    "passes": 2,
+    "toolBudget": 40,
+    "debateRounds": 2,
+    "judgeAssignment": [
+      "CLUSTER-1: key-zai-glm-5-3 (alternate)"
+    ]
+  },
+  "disclaimer": "Model agreement and passing checks do not certify security."
+}

@@ -14,6 +14,29 @@ Plan only (2026-11-02, hackathon day D2). Start with [`PRODUCT_WAVES.md`](./PROD
 | [`../spec/DECISIONS.md`](../spec/DECISIONS.md) | Open owner decisions OD-01..OD-16 with recommendations |
 | [`../hackathon/TRACKS.md`](../hackathon/TRACKS.md) | Track rules and fit: 06 security (primary), 07 agents, 13 open |
 
+## Path map (2026-11-03)
+
+Every track moved after most wave files were written: the non-engine tracks first, then the review engine under `engine/`. Wave files under [`waves/`](./waves/) and the owner guides under [`checks/`](./checks/) are closed records and keep the old paths; read them through this table. `bin/` (`./bin/audit`), `reports/` (run output) and the operator's `omniswarm.config.json` stay at the repository root, as do `.claude/skills/security-audit/SKILL.md` and `.grok/`.
+
+| Old path | New path | Notes |
+|---|---|---|
+| `shared/schemas/` | `packages/schemas/` | Still `@omniswarm/schemas`, lead only. Also holds `canonical-json.mjs` and `nep413.mjs`, shared by both apps |
+| `backend/intake/` | `apps/api/` | Package `@omniswarm/intake` is now `@omniswarm/api` (`npm run dev -w apps/api`) |
+| `frontend/landing/` | `apps/web/` | Package `@omniswarm/landing` is now `@omniswarm/web` (`npm run guard -w apps/web`) |
+| `backend/README.md`, `frontend/README.md` | `apps/README.md` | One README for both apps |
+| `e2e/` | `tests/e2e/` | Same package and runner (`npm run test:e2e`). The `intake/` specs need an explicit `DATABASE_URL` and skip without one |
+| `demos/attack/` | `packages/guard/demo/attack/` | `node packages/guard/demo/attack/run.mjs [--no-guard]` |
+| `demos/dogfood/README.md` | `docs/hackathon/dogfood.md` | |
+| `RULES.md` | `docs/RULES.md` | |
+| `scripts/` | `engine/scripts/` | Still flat; `npm test` globs `engine/scripts/*.test.mjs`. Schema imports are `../../packages/schemas/…` |
+| `docker/` | `engine/docker/` | The sandbox build context is `engine/docker` only |
+| `native/` | `engine/native/` | Admission recipes hash `engine/scripts/*.mjs` and the root `bin/audit`; receipts from before the move must be re-admitted |
+| `skills/security-audit/` | `engine/skills/security-audit/` | Canonical copy; `.claude/skills/security-audit/SKILL.md` stays at the root and stays byte-identical |
+| `runtime/` | `engine/runtime/` | `./bin/audit setup-agents` installs into `engine/runtime/node_modules/` |
+| `eval/` | `engine/eval/` | `npm run eval:golden`; golden repos at `engine/eval/golden/` |
+| `omniswarm.config.example.json` | `engine/omniswarm.config.example.json` | Copy it to `omniswarm.config.json` at the repository root (the default lookup) |
+| `/trusted/*.mjs`, `/packages/schemas/` (worker container) | `/trusted/engine/scripts/`, `/trusted/packages/schemas/` | The sealed worker bundle mirrors the repository layout under `/trusted` |
+
 ## How to run it with agents
 
 1. The lead runs W00 alone (one session), lands it after the owner check.

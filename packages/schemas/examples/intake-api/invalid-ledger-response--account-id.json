@@ -1,0 +1,20 @@
+{
+  "entries": [
+    {
+      "requestId": "3f2b8c1e-5d4a-4b7e-9c1a-2e6f0a8b4d10",
+      "repo": "near/near-sdk-rs",
+      "status": "done",
+      "account": "alice.testnet",
+      "priceYocto": "1000000000000000000000000",
+      "paidYocto": "1000000000000000000000000",
+      "modelCostUsd": 7.31,
+      "reviewers": 3
+    }
+  ],
+  "totals": {
+    "requests": 1,
+    "salesYocto": "1000000000000000000000000",
+    "refundedYocto": "0",
+    "modelCostUsd": 7.31
+  }
+}

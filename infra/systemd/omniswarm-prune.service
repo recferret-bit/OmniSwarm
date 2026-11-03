@@ -1,0 +1,21 @@
+[Unit]
+Description=OmniSwarm retention (old private runs, engine staging leftovers, unused images)
+Documentation=file:/srv/omniswarm/current/infra/README.md
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/srv/omniswarm/current/infra/deploy/prune.sh
+EnvironmentFile=-/etc/omniswarm/ops.env
+Environment=DOCKER_CONFIG=/run/omniswarm-prune/docker
+RuntimeDirectory=omniswarm-prune
+RuntimeDirectoryMode=0700
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/srv/omniswarm/work
+ReadWritePaths=-/run/docker.sock
+ProtectHome=yes
+PrivateTmp=yes
+Nice=10
+IOSchedulingClass=idle

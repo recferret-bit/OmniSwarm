@@ -1,0 +1,40 @@
+{
+  "stack": "near",
+  "bugs": [
+    {
+      "file": "src/lib.rs",
+      "startLine": 27,
+      "endLine": 27,
+      "class": "missing-owner-check",
+      "title": "withdraw has no owner check",
+      "severity": "high"
+    },
+    {
+      "file": "src/lib.rs",
+      "startLine": 28,
+      "endLine": 28,
+      "class": "unchecked-transfer-amount",
+      "title": "withdraw transfers more than the recorded balance",
+      "severity": "high",
+      "missedBy": [
+        "paranoid"
+      ]
+    }
+  ],
+  "decoys": [
+    {
+      "file": "src/lib.rs",
+      "startLine": 22,
+      "endLine": 22,
+      "reason": "deposit asserts the predecessor is the owner",
+      "claim": "deposit is callable by anyone"
+    },
+    {
+      "file": "src/lib.rs",
+      "startLine": 32,
+      "endLine": 32,
+      "reason": "release asserts the predecessor is the arbiter",
+      "claim": "release is callable by anyone"
+    }
+  ]
+}

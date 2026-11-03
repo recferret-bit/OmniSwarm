@@ -1,0 +1,99 @@
+{
+  "note": "Recorded from the intake worker (reportSha256) and the review page (digestReport) before they shared this module; both produced these hashes. The first entry is the landing sample whose hash is ATTESTED_SHA256.",
+  "reports": [
+    {
+      "findings": {
+        "findings": [
+          {
+            "id": "F-1",
+            "severity": "low",
+            "title": "Missing owner check"
+          }
+        ]
+      },
+      "canonicalFindings": "{\"findings\":[{\"id\":\"F-1\",\"severity\":\"low\",\"title\":\"Missing owner check\"}]}",
+      "sha256": "f1d565b590ebe3953a45032be451719096222b9ee003ceee21900c1136bc35b1",
+      "general": {
+        "summary": "No critical issue in this sample."
+      },
+      "canonicalGeneral": "{\"summary\":\"No critical issue in this sample.\"}"
+    },
+    {
+      "findings": {
+        "findings": [
+          {
+            "id": "F-1",
+            "severity": "low",
+            "title": "Missing owner check (tampered)"
+          }
+        ]
+      },
+      "canonicalFindings": "{\"findings\":[{\"id\":\"F-1\",\"severity\":\"low\",\"title\":\"Missing owner check (tampered)\"}]}",
+      "sha256": "aad5074f6b7a7fd26cd263f1f307e7fd2c9f786e4c700395e222aee7d0d6df9f",
+      "general": {
+        "summary": "No critical issue in this sample."
+      },
+      "canonicalGeneral": "{\"summary\":\"No critical issue in this sample.\"}"
+    },
+    {
+      "findings": {
+        "findings": []
+      },
+      "canonicalFindings": "{\"findings\":[]}",
+      "sha256": "ae6316b47c1d822f5e19286a409de1d431b9729a6a0e08819dd42ca9e90497c2",
+      "general": {
+        "summary": "mock"
+      },
+      "canonicalGeneral": "{\"summary\":\"mock\"}"
+    },
+    {
+      "findings": {
+        "findings": [
+          {
+            "id": "C-1",
+            "severity": "critical",
+            "title": "still deployed"
+          }
+        ]
+      },
+      "canonicalFindings": "{\"findings\":[{\"id\":\"C-1\",\"severity\":\"critical\",\"title\":\"still deployed\"}]}",
+      "sha256": "3ef00749355b74a6148629e1c65853760f6b872e80c0c60c78236342768c40d2",
+      "general": {
+        "summary": "mock"
+      },
+      "canonicalGeneral": "{\"summary\":\"mock\"}"
+    },
+    {
+      "findings": {
+        "b": [
+          1,
+          2.5,
+          null,
+          true,
+          "x\"y"
+        ],
+        "a": {
+          "z": 1,
+          "y": [
+            {
+              "d": 1,
+              "c": 2
+            }
+          ]
+        }
+      },
+      "canonicalFindings": "{\"a\":{\"y\":[{\"c\":2,\"d\":1}],\"z\":1},\"b\":[1,2.5,null,true,\"x\\\"y\"]}",
+      "sha256": "b913a4be376067bb56e8afbb52feee47a2ca9f2e0f2d11c013df4ace895b5c72",
+      "general": null,
+      "canonicalGeneral": "{}"
+    },
+    {
+      "findings": {
+        "findings": []
+      },
+      "canonicalFindings": "{\"findings\":[]}",
+      "sha256": "a1340d1fb8639e7b968571aa00da4c9f35034a81b19b44dd9bccbed9c2479e38",
+      "canonicalGeneral": "{}"
+    }
+  ]
+}

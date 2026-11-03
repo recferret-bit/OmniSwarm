@@ -1,0 +1,163 @@
+# Rendered by the nginx image entrypoint into /etc/nginx/conf.d/omniswarm.conf.
+# Only ${OMNI_*} names are substituted (NGINX_ENVSUBST_FILTER=^OMNI_):
+#   OMNI_DOMAIN          app hostname            (omniswarm.example)
+#   OMNI_REPORTS_DOMAIN  reports hostname        (reports.omniswarm.example)
+#   OMNI_APP_ORIGIN      https origin of the app (adds :port in the dev profile)
+#   OMNI_REPORTS_ORIGIN  https origin of reports
+# One certificate (cert name = OMNI_DOMAIN) covers both hostnames.
+
+# Upstreams are resolved per request (proxy_pass with a variable) through
+# Docker's DNS (resolver in nginx.conf), so `--scale api=N` and rolling
+# restarts change the replica set without a reload. Each request gets the
+# current address list (rotated, so load spreads) and retries within it
+# (proxy_next_upstream). A shared `upstream { server api resolve; }` group was
+# tried and dropped: when a re-resolve replaced its peers while a request was
+# connecting to a departed replica, nginx answered "no live upstreams" (502)
+# with healthy replicas left (infra/check/bring-up.sh rolling-restart test).
+
+map $host $omni_https_origin {
+  ${OMNI_REPORTS_DOMAIN} ${OMNI_REPORTS_ORIGIN};
+  default                ${OMNI_APP_ORIGIN};
+}
+
+# :80 serves ACME http-01 challenges and redirects everything else to https.
+server {
+  listen 80 default_server;
+  server_name _;
+
+  location ^~ /.well-known/acme-challenge/ {
+    root /var/www/certbot;
+    default_type text/plain;
+  }
+
+  # Container healthcheck (compose). Loopback inside the container only.
+  location = /nginx-health {
+    access_log off;
+    allow 127.0.0.1;
+    deny all;
+    default_type text/plain;
+    return 200 "ok\n";
+  }
+
+  location / {
+    return 301 $omni_https_origin$request_uri;
+  }
+}
+
+# Unknown names on :443 get no certificate and no content.
+server {
+  listen 443 ssl default_server;
+  server_name _;
+  ssl_reject_handshake on;
+}
+
+# App origin: Next.js web app at /, intake API at /api/.
+server {
+  listen 443 ssl;
+  http2 on;
+  server_name ${OMNI_DOMAIN};
+
+  ssl_certificate     /etc/letsencrypt/live/${OMNI_DOMAIN}/fullchain.pem;
+  ssl_certificate_key /etc/letsencrypt/live/${OMNI_DOMAIN}/privkey.pem;
+  include /etc/nginx/snippets/tls.conf;
+
+  include /etc/nginx/snippets/headers-common.conf;
+  # Framing and base-uri only; the web app may send its own script policy,
+  # and the browser enforces both.
+  add_header Content-Security-Policy "frame-ancestors 'none'; base-uri 'self'; object-src 'none'" always;
+  add_header X-Frame-Options "DENY" always;
+
+  set $omni_api api:8787;
+  set $omni_web web:3000;
+
+  client_max_body_size 16k;
+  # Same-host bridge network: a healthy replica accepts in well under 1 s;
+  # a removed one costs at most this before nginx tries the next.
+  proxy_connect_timeout 1s;
+  proxy_send_timeout 60s;
+  proxy_read_timeout 60s;
+
+  # The admin listener is container loopback only (ADMIN_HOST=127.0.0.1) and
+  # is never proxied. This blocks the path on the public API port as well.
+  location ^~ /api/admin {
+    deny all;
+  }
+
+  # Server-sent events: no buffering, no gzip, long read timeout.
+  location ~ ^/api/requests/[^/]+/events$ {
+    limit_conn omni_sse 10;
+    include /etc/nginx/snippets/proxy.conf;
+    proxy_buffering off;
+    proxy_cache off;
+    proxy_read_timeout 1h;
+    proxy_send_timeout 1h;
+    gzip off;
+    proxy_pass http://$omni_api;
+  }
+
+  location = /api/challenge {
+    limit_req zone=omni_challenge burst=10 nodelay;
+    include /etc/nginx/snippets/proxy.conf;
+    proxy_pass http://$omni_api;
+  }
+
+  location = /api/quote {
+    limit_req zone=omni_quote burst=10 nodelay;
+    include /etc/nginx/snippets/proxy.conf;
+    proxy_pass http://$omni_api;
+  }
+
+  location = /api/requests {
+    limit_req zone=omni_requests burst=5 nodelay;
+    include /etc/nginx/snippets/proxy.conf;
+    proxy_pass http://$omni_api;
+  }
+
+  location /api/ {
+    limit_req zone=omni_api burst=40 nodelay;
+    include /etc/nginx/snippets/proxy.conf;
+    proxy_pass http://$omni_api;
+  }
+
+  location / {
+    client_max_body_size 1m;
+    include /etc/nginx/snippets/proxy.conf;
+    proxy_pass http://$omni_web;
+  }
+}
+
+# Reports origin: published report folders, read-only, separate origin.
+server {
+  listen 443 ssl;
+  http2 on;
+  server_name ${OMNI_REPORTS_DOMAIN};
+
+  ssl_certificate     /etc/letsencrypt/live/${OMNI_DOMAIN}/fullchain.pem;
+  ssl_certificate_key /etc/letsencrypt/live/${OMNI_DOMAIN}/privkey.pem;
+  include /etc/nginx/snippets/tls.conf;
+
+  root /srv/reports;
+  autoindex off;
+  client_max_body_size 1k;
+
+  include /etc/nginx/snippets/headers-common.conf;
+  # Reports quote untrusted target text. Each report page also carries its own
+  # <meta> CSP that pins scripts to a per-page nonce
+  # (engine/scripts/generate-html-report.mjs); browsers enforce both policies, so the
+  # inline allowances here only admit what that nonce admits. frame-ancestors
+  # and sandbox work only as a header, which is why they are set here.
+  add_header Content-Security-Policy "default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors ${OMNI_APP_ORIGIN}; sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox" always;
+  add_header Access-Control-Allow-Origin "${OMNI_APP_ORIGIN}" always;
+  add_header Vary "Origin" always;
+
+  location ~ /\. {
+    deny all;
+  }
+
+  location / {
+    limit_except GET {
+      deny all;
+    }
+    try_files $uri =404;
+  }
+}

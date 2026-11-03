@@ -1,0 +1,19 @@
+{
+  "input": {
+    "requestId": "3f2b8c1e-5d4a-4b7e-9c1a-2e6f0a8b4d10",
+    "requestHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "repo": "near/near-sdk-rs",
+    "commitSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "preset": "hosted",
+    "network": "testnet"
+  },
+  "output": {
+    "status": "done",
+    "reportDir": "reports/req-3f2b8c1e/2026-11-05-120000-near-sdk-rs",
+    "healthState": "passed",
+    "reportSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "maxSeverityConfirmed": "high",
+    "generalReviewPath": "general-review.json",
+    "costUsd": 7.31
+  }
+}

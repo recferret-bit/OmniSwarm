@@ -1,0 +1,35 @@
+# Production overlay (one Linux VM, OD-13). Used by infra/deploy/lib.sh:
+#   docker compose --env-file /etc/omniswarm/stack.env \
+#     -f compose.yml -f compose.prod.yml ...
+services:
+  postgres:
+    # Loopback only: the host's systemd workers connect here. Nothing on the
+    # network can reach Postgres.
+    ports:
+      - "127.0.0.1:5432:5432"
+
+  api:
+    environment:
+      # Links in GET /api/reports/:id; the worker attests the same prefix.
+      REPORTS_BASE_URL: https://${OMNI_REPORTS_DOMAIN:?set OMNI_REPORTS_DOMAIN in the stack env file}
+
+  nginx:
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      OMNI_APP_ORIGIN: https://${OMNI_DOMAIN:?set OMNI_DOMAIN in the stack env file}
+      OMNI_REPORTS_ORIGIN: https://${OMNI_REPORTS_DOMAIN:?set OMNI_REPORTS_DOMAIN in the stack env file}
+
+  # Run-only (profile): infra/deploy/certbot.sh issues the first certificate
+  # (standalone, before nginx owns :80) and renews through the webroot.
+  certbot:
+    image: certbot/certbot:v5.9.0@sha256:bc93cb710b413e6b456d622f9b0133b3e109c0a78c2ed9976af43d209b0a1805
+    profiles: [certbot]
+    volumes:
+      - ${OMNI_TLS_DIR:?set OMNI_TLS_DIR in the stack env file}:/etc/letsencrypt
+      - ${OMNI_ACME_DIR:?set OMNI_ACME_DIR in the stack env file}:/var/www/certbot
+    environment:
+      OMNI_ACME_EMAIL: ${OMNI_ACME_EMAIL:?set OMNI_ACME_EMAIL in the stack env file}
+    security_opt: ["no-new-privileges:true"]
+    restart: "no"

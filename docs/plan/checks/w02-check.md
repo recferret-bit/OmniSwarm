@@ -20,7 +20,7 @@ Step numbers match the wave file.
 ```sh
 node scripts/harness.mjs --self-test
 cat scripts/harness-fixtures/hostile/expected.json      # lists 6 invariants
-node --test --test-name-pattern hardening scripts/*.docker.mjs
+node --test --test-name-pattern hardening scripts/sandbox-hardening.docker.mjs
 ```
 
 See `harness self-test ok (104 patterns)`, then (about 25 s):
@@ -33,12 +33,13 @@ See `harness self-test ok (104 patterns)`, then (about 25 s):
   ✔ R-04-host-lifecycle: the host lifecycle is untouched by the forgery
   ✔ R-07-text-not-classified: planted text never becomes a failure label
 ✔ hardening: the hostile fixture cannot influence what reviewers see (six invariants)
+✔ hardening: the handoff seal copies prepared node_modules into a root-owned /work/deps
 ```
 
 Notes:
 
-- The wave file writes this as `npm run test:docker -- --test-name-pattern hardening`. With that spelling npm puts the flag after the file globs and node does not filter, so all Docker files run. 37 of the other Docker tests fail on `main` too (`914d2a5`): the sorted pass/fail list of `node --test scripts/*.docker.mjs` is identical before and after W02, apart from the new hardening test. Use the command above.
-- The test is `scripts/sandbox-hardening.docker.mjs`. It starts the real `sandbox.sh --review-only` on `scripts/harness-fixtures/hostile/`, runs the catalogued `npm test` through the real bridge (`callBridgeTool`, no model), then asserts the invariants. The fixture's suite tries, as uid 10001: writing `/work/bin/node`, renaming `/work/bin`, rewriting `/work/src/src/lib.js` and `/src/src/lib.js`, starting a `setsid` sleeper, writing `/out/lifecycle.json` (`lost`), `/out/agent-*.log` and `/out/sandbox.release`, and printing "usage limit reached".
+- The wave file writes this as `npm run test:docker -- --test-name-pattern hardening`. With that spelling npm puts the flag after the file globs and node does not filter, so all Docker files run. Use the command above. The rest of the Docker suite was red for unrelated reasons until the engine-sandbox fix pass (2026-11-03, branch `worktree-agent-aef5e510068636637`): on `5ad56e0` `npm run test:docker` ran 33 tests, 14 passed and 19 failed, because the worker runtime could not load its imports in its container and the SBF fixture no longer matched the build routing. Both are fixed; see "Automated checks".
+- The test is `scripts/sandbox-hardening.docker.mjs`. It starts the real `sandbox.sh --review-only` on `scripts/harness-fixtures/hostile/`, runs the catalogued `npm test` through the real bridge (`callBridgeTool`, no model), then asserts the invariants. The fixture's suite tries, as uid 10001: writing `/work/bin/node`, renaming `/work/bin`, rewriting `/work/src/src/lib.js` and `/src/src/lib.js`, starting a `setsid` sleeper, writing `/out/lifecycle.json` (`lost`), `/out/agent-*.log` and `/out/sandbox.release`, and printing "usage limit reached". The test also asserts that the suite's run row says `dependencies: sealed`, that `/work/deps` is `root:root 755` and not writable by uid 10001, and that the in-container harness wrote its leads. The second test runs `scripts/sandbox-seal.sh` on a scratch volume: nested `node_modules` trees are copied, those under `.git` and `target` are not, symlinks are kept, and uid 10001 cannot change, add to or move the copy.
 
 ### 2. After the hostile suite, a bridge read returns the original file and the digests match
 
@@ -61,7 +62,7 @@ OMNI_HARDENING_HOLD_SECONDS=75 node --test scripts/sandbox-hardening.docker.mjs 
 ```
 
 ```sh
-docker exec --user 10001:10001 <container> stat -c '%U:%G %a %n' /work /work/bin /work/runs /work/src
+docker exec --user 10001:10001 <container> stat -c '%U:%G %a %n' /work /work/bin /work/runs /work/src /work/deps
 docker exec --user 10001:10001 <container> ls -la /work/bin
 docker exec --user 10001:10001 <container> /usr/local/bin/node -e "console.log(require('fs').readlinkSync('/proc/self/exe'))"
 docker exec --user 10001:10001 <container> sh -c 'test -e /tmp/hostile-node-ran && echo "node marker: PRESENT" || echo "node marker: absent"'
@@ -75,6 +76,7 @@ root:root 755 /work
 root:root 755 /work/bin
 sandbox:sandbox 755 /work/runs
 sandbox:sandbox 755 /work/src
+root:root 755 /work/deps
 total 8                                   (/work/bin is empty: no planted node)
 /usr/local/bin/node
 node marker: absent
@@ -164,7 +166,8 @@ See 21 passing tests, including:
 node scripts/harness.mjs --self-test && npm test        # self-test ok (104 patterns); 330 pass, 0 fail
 npm run test:schemas                                    # 119 pass, 0 fail
 cmp skills/security-audit/SKILL.md .claude/skills/security-audit/SKILL.md && echo identical
-npm run check:w02                                       # exit 0: self-test, npm test (330/330), hardening + review-workflow Docker tests (8/8)
+npm run check:w02                                       # exit 0: self-test, npm test (330/330), hardening + review-workflow Docker tests (9/9 since the seal test)
+npm run test:docker                                     # 2026-11-03: 34 pass, 0 fail (was 14 pass, 19 fail on 5ad56e0)
 ```
 
 `check:w02` is `node scripts/harness.mjs --self-test && npm test && OMNI_REQUIRE_HARDENING=1 node --test scripts/sandbox-hardening.docker.mjs scripts/review-workflow.docker.mjs` (the wave file's `npm run test:docker -- --test-name-pattern hardening` does not filter, see step 1).
@@ -174,9 +177,9 @@ Earlier waves: `npm run check:w01` and `npm run check:w00` are unchanged by this
 ## Known residuals (not fixed in W02)
 
 - `/out` stays writable inside the container, because preparation writes there. The hostile run shows `"write /out/harness/summary.md": "succeeded"`: the harness leads that `read_file` can serve from `/out/harness` and `/out/crosscheck` are container-writable. They are untrusted leads. Only the source tree (R-02) is served from the sealed `/src`. `docker exec` cannot make a mount read-only per call.
-- Each per-run copy pulls `node_modules` from the writable `/work/src`, so one suite can affect a later suite's evidence (not what reviewers read).
+- Fixed after W02: each per-run copy takes `node_modules` from `/work/deps`, which `scripts/sandbox-seal.sh` copies from the prepared `/work/src` at handoff and makes root-owned and not writable by uid 10001. Residual: the copy keeps symlinks (`cp -a`, then `verbatimSymlinks`), so a `node_modules` symlink with an absolute target under `/work/src` still points into the writable tree.
 - A suite can still kill the sandbox's own process; the review then ends INCOMPLETE with `sandbox_unavailable`. A leftover process that cannot be killed is recorded as `survivingProcesses`, not treated as a failure.
-- `/usr/local/cargo/bin` is mode 0777 in the image. The read-only root filesystem prevents writes at run time; the Dockerfile was not changed because no image build was allowed.
+- Fixed after W02: `/usr/local/cargo/bin` was mode 0777 in the rust base image. `engine/docker/sandbox.Dockerfile` now removes group and world write from `/usr/local/cargo` and `/usr/local/rustup` and fails the build if a world-writable file is left; `sandbox-hardening.docker.mjs` checks `root:root 755` in the running sandbox. The read-only root filesystem still blocks writes as a second layer.
 - `native/codex-review` `cargo test` was not run here: its workspace root is not in this worktree.
 
 ## When you're done

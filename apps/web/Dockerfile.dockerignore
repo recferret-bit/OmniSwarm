@@ -1,0 +1,19 @@
+# BuildKit reads <Dockerfile>.dockerignore next to the Dockerfile in place of a
+# root .dockerignore. Allow-list: deny everything, then admit what the build needs.
+*
+!package.json
+!package-lock.json
+!apps/web/
+!apps/api/package.json
+!packages/schemas/
+!packages/guard/package.json
+
+**/node_modules
+**/.env
+**/.env.*
+apps/web/.next
+apps/web/dist
+**/*.test.*
+**/*.spec.*
+**/*.vectors.json
+apps/web/Dockerfile*

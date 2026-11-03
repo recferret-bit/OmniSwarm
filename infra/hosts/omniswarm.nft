@@ -1,0 +1,63 @@
+#!/usr/sbin/nft -f
+# OmniSwarm host firewall, installed by infra/deploy/provision.sh as
+# /etc/nftables.d/omniswarm.nft and loaded by omniswarm-firewall.service.
+#
+# Only this table is replaced on load. Docker's own iptables-nft tables are
+# never flushed, so reloading the firewall does not cut container networking.
+#
+# Open: 22 (new connections rate-limited per source address), 80, 443.
+# Everything else that is addressed to the host is dropped, including ports a
+# container publishes on a public address by mistake (Postgres 5432, the
+# Docker API 2375/2376): the prerouting guard drops them before Docker's DNAT
+# can forward them. Postgres is meant to listen on 127.0.0.1 only
+# (compose.prod.yml), and loopback traffic is never touched.
+
+table inet omniswarm
+delete table inet omniswarm
+
+table inet omniswarm {
+  set ssh_v4 {
+    type ipv4_addr
+    flags dynamic, timeout
+    timeout 2m
+  }
+
+  set ssh_v6 {
+    type ipv6_addr
+    flags dynamic, timeout
+    timeout 2m
+  }
+
+  # After conntrack (-200), before Docker's DNAT (-100), so it sees the port a
+  # client asked for, not the container port Docker rewrites it to. Replies to
+  # the host's own outbound connections are not `new` and pass.
+  chain guard {
+    type filter hook prerouting priority -150; policy accept;
+    iifname "lo" accept
+    # Containers talking to each other or to the host gateway.
+    iifname "docker0" accept
+    iifname "br-*" accept
+    ct state new tcp dport != { 22, 80, 443 } drop
+  }
+
+  chain input {
+    type filter hook input priority filter; policy drop;
+    ct state established,related accept
+    ct state invalid drop
+    iifname "lo" accept
+    iifname "docker0" accept
+    iifname "br-*" accept
+
+    # DHCP and DHCPv6 replies (cloud VMs renew their lease).
+    udp sport 67 udp dport 68 accept
+    udp sport 547 udp dport 546 accept
+    icmp type { echo-request, destination-unreachable, time-exceeded, parameter-problem } limit rate 20/second accept
+    icmpv6 type { echo-request, destination-unreachable, packet-too-big, time-exceeded, parameter-problem, nd-router-solicit, nd-router-advert, nd-neighbor-solicit, nd-neighbor-advert } accept
+
+    # SSH: at most 6 new connections per minute per address (burst 4), then
+    # drop; fail2ban bans repeat offenders on top of this.
+    tcp dport 22 ct state new add @ssh_v4 { ip saddr limit rate over 6/minute burst 4 packets } drop
+    tcp dport 22 ct state new add @ssh_v6 { ip6 saddr limit rate over 6/minute burst 4 packets } drop
+    tcp dport { 22, 80, 443 } accept
+  }
+}

@@ -1,0 +1,4 @@
+# Output of `run.mjs --out .`; the committed logs are in examples/.
+/attack-log.md
+/attack-log.json
+/attack.log

@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": "INVALID_TRANSITION",
+    "message": "Request is done; it cannot become refunded",
+    "retryable": false
+  }
+}

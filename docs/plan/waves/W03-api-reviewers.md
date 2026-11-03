@@ -40,7 +40,7 @@ Approaches 2 (direct API keys) and 3 (OpenRouter) become reviewers that do exact
 - [x] `scripted` family + strategies — W03-13
 - [x] `scripted:judge` answers for the orchestrator role — W03-14
 - [x] Recorded HTTP fixtures and replay — W03-15
-- [x] `check-agents` for new families — W03-16
+- [ ] `check-agents` for new families — W03-16
 - [x] Bundled demo fixture with scripted answers — W03-17
 - [x] `./bin/audit demo` (OD-10) — W03-18
 - [ ] Live smoke with the owner's keys — W03-19 (owner, `OMNI_LIVE=1`)

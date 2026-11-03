@@ -1,0 +1,15 @@
+{
+  "status": "queued",
+  "position": 2,
+  "timeline": [
+    {
+      "event": "request_created",
+      "at": "2026-11-03T10:00:00Z"
+    },
+    {
+      "event": "payment_verified",
+      "at": "2026-11-03T10:01:00Z"
+    }
+  ],
+  "createdAt": "2026-11-03T10:00:00Z"
+}

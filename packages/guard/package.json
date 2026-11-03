@@ -3,8 +3,27 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "exports": "./index.mjs",
+  "types": "./index.d.mts",
+  "exports": {
+    ".": {
+      "types": "./index.d.mts",
+      "default": "./index.mjs"
+    },
+    "./recorded-reader": {
+      "types": "./recorded-reader.d.mts",
+      "default": "./src/recorded-reader.mjs"
+    },
+    "./account-age": {
+      "types": "./account-age.d.mts",
+      "default": "./src/account-age.mjs"
+    }
+  },
   "scripts": {
-    "test": "node --test guard.test.mjs"
+    "test": "node --test test/*.test.mjs",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@omniswarm/schemas": "*",
+    "typescript": "^5.9.3"
   }
 }

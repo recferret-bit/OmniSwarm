@@ -1,0 +1,37 @@
+{
+  "stack": "near-client",
+  "bugs": [
+    {
+      "file": "src/wallet.ts",
+      "startLine": 7,
+      "endLine": 7,
+      "class": "secret-in-local-storage",
+      "title": "login stores the account secret in localStorage",
+      "severity": "high"
+    },
+    {
+      "file": "src/wallet.ts",
+      "startLine": 20,
+      "endLine": 20,
+      "class": "fixed-signature-nonce",
+      "title": "signLogin signs with an all-zero nonce, so a signature can be replayed",
+      "severity": "high"
+    }
+  ],
+  "decoys": [
+    {
+      "file": "src/wallet.ts",
+      "startLine": 14,
+      "endLine": 14,
+      "reason": "the contract id is checked against an allow-list",
+      "claim": "callContract calls any contract"
+    },
+    {
+      "file": "src/wallet.ts",
+      "startLine": 28,
+      "endLine": 28,
+      "reason": "the signature is verified against the public key",
+      "claim": "verifyLogin trusts the caller"
+    }
+  ]
+}

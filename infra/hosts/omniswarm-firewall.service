@@ -1,0 +1,22 @@
+# Loads infra/hosts/omniswarm.nft (installed as /etc/nftables.d/omniswarm.nft)
+# before the network and Docker come up. It replaces only its own table, so
+# `systemctl reload omniswarm-firewall` never touches Docker's rules. It runs
+# after nftables.service, because that stock unit may `flush ruleset`.
+[Unit]
+Description=OmniSwarm host firewall (nftables table inet omniswarm)
+Documentation=file:/srv/omniswarm/current/infra/README.md
+DefaultDependencies=no
+Wants=network-pre.target
+Before=network-pre.target docker.service shutdown.target
+After=nftables.service local-fs.target
+Conflicts=shutdown.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/nft -f /etc/nftables.d/omniswarm.nft
+ExecReload=/usr/sbin/nft -f /etc/nftables.d/omniswarm.nft
+ExecStop=/usr/sbin/nft delete table inet omniswarm
+
+[Install]
+WantedBy=sysinit.target

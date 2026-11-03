@@ -1,9 +1,9 @@
 # Dependencies
-runtime/node_modules/
+engine/runtime/node_modules/
 node_modules/
 
 # Local build and review caches
-native/.cache/
+engine/native/.cache/
 .cache/
 
 # OS files
@@ -13,13 +13,20 @@ Thumbs.db
 # Local drops. Not part of the suite.
 
 # One directory per `audit run`: auditors, harness, and Docker build products.
+# Run output stays at the repository root (bin/audit, engine/scripts/report-util-files.mjs REPORTS_ROOT).
 reports/
 
 # Per-worktree isolation (tools/worktree-env.mjs)
 .env.worktree
 
 # Golden eval run output (W06)
-eval/runs/
+engine/eval/runs/
 
-# operator run config (copy of omniswarm.config.example.json)
+# operator run config at the repository root (copy of engine/omniswarm.config.example.json)
 omniswarm.config.json
+
+# Cargo build output
+target/
+
+# Agent worktrees
+.claude/worktrees/

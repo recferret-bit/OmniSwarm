@@ -1,0 +1,37 @@
+{
+  "stack": "node",
+  "bugs": [
+    {
+      "file": "src/server.ts",
+      "startLine": 23,
+      "endLine": 23,
+      "class": "sql-injection",
+      "title": "user search interpolates the query string into SQL",
+      "severity": "high"
+    },
+    {
+      "file": "src/server.ts",
+      "startLine": 32,
+      "endLine": 32,
+      "class": "missing-authorization",
+      "title": "DELETE /users/:id has no admin check",
+      "severity": "high"
+    }
+  ],
+  "decoys": [
+    {
+      "file": "src/server.ts",
+      "startLine": 18,
+      "endLine": 18,
+      "reason": "the order id is a bound parameter",
+      "claim": "order lookup builds SQL from the path"
+    },
+    {
+      "file": "src/server.ts",
+      "startLine": 38,
+      "endLine": 38,
+      "reason": "safeRedirect allow-lists the target",
+      "claim": "login redirect is an open redirect"
+    }
+  ]
+}
