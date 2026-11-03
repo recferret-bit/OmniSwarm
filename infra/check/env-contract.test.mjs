@@ -61,6 +61,18 @@ test('a non-provider name in providers.env.example is an error', () => {
   assert.ok(errors.includes('DATABASE_URL (providers.env.example) is not a provider variable (<PROVIDER>_API_KEY or _BASE_URL)'));
 });
 
+test('ops.env.example: host-timer settings are OMNI_*, read by a deploy script, and URLs stay empty', () => {
+  const hostScripts = 'omni_fetch OMNI_HEARTBEAT_URL\nAFTER="${OMNI_HEALTH_RESTART_AFTER:-2}"\n';
+  assert.deepEqual(checkContract(input({ ops: parseEnv('OMNI_HEARTBEAT_URL=\nOMNI_HEALTH_RESTART_AFTER=2\n'), hostScripts })).errors, []);
+  const { errors } = checkContract(input({
+    ops: parseEnv('OMNI_HEARTBEAT_URL=https://hc-ping.com/real-uuid\nOMNI_UNUSED=1\nALERT_TO=x\nOMNI_DOMAIN=\n'), hostScripts,
+  }));
+  assert.ok(errors.includes('OMNI_HEARTBEAT_URL (ops.env.example) has a value; URLs in examples must be empty'), errors.join('\n'));
+  assert.ok(errors.includes('OMNI_UNUSED (ops.env.example) is declared but no infra/deploy script reads it'), errors.join('\n'));
+  assert.ok(errors.includes('ALERT_TO (ops.env.example) is not an OMNI_* host setting'), errors.join('\n'));
+  assert.ok(errors.includes('OMNI_DOMAIN (ops.env.example) is also declared in stack.env.example'), errors.join('\n'));
+});
+
 test('requiredUnset lists the :? variables the owner must fill', () => {
   const i = input();
   assert.deepEqual(requiredUnset(i.stack, i.baseRefs), ['OMNI_DOMAIN', 'POSTGRES_PASSWORD', 'SESSION_SECRET']);

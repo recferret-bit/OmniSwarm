@@ -53,6 +53,25 @@ assert_rendered() {
     || check_fail "proxy.conf must overwrite X-Forwarded-For with \$remote_addr (TRUST_PROXY=true in the api)"
 }
 
+# Log hygiene (W12-13): the access log carries no query string, body, header,
+# cookie or full client address.
+# shellcheck disable=SC2016 # the patterns are literal nginx $variables
+assert_log_format() {
+  local logfmt bad
+  logfmt="$(awk '/log_format omniswarm/ { f = 1 } f { print } f && /;[[:space:]]*$/ { exit }' "$INFRA/nginx/nginx.conf")"
+  [ -n "$logfmt" ] || check_fail "nginx.conf has no log_format omniswarm"
+  for bad in '$remote_addr' '$request ' '$request_uri' '$args' '$query_string' '$request_body' '$http_' '$cookie_'; do
+    case "$logfmt" in *"$bad"*) check_fail "nginx log_format logs $bad" ;; esac
+  done
+  case "$logfmt" in *'$omni_log_addr'*) ;; *) check_fail 'nginx log_format does not use the truncated $omni_log_addr' ;; esac
+  grep -q 'access_log /dev/stdout omniswarm;' "$INFRA/nginx/nginx.conf" || check_fail "nginx access_log does not use log_format omniswarm"
+  if grep -rhE '^[[:space:]]*access_log' "$INFRA/nginx/templates" "$INFRA/nginx/snippets" | grep -vqE 'access_log (off|/dev/stdout omniswarm);'; then
+    check_fail "a server or location logs with another format"
+  fi
+  check_log "nginx access log: truncated client address, path without query, no headers or cookies"
+}
+assert_log_format
+
 render_and_test prod omniswarm.example reports.omniswarm.example \
   https://omniswarm.example https://reports.omniswarm.example
 render_and_test dev omniswarm.localhost reports.omniswarm.localhost \

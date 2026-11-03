@@ -1,0 +1,21 @@
+[Unit]
+Description=OmniSwarm health check (api, readiness, workers, disk), repair and alert
+Documentation=file:/srv/omniswarm/current/infra/README.md
+After=docker.service
+
+[Service]
+Type=oneshot
+# Root: reads /etc/omniswarm/stack.env (0600) for `docker compose`, restarts units.
+ExecStart=/srv/omniswarm/current/infra/deploy/health.sh
+EnvironmentFile=-/etc/omniswarm/ops.env
+Environment=DOCKER_CONFIG=/run/omniswarm-health/docker
+RuntimeDirectory=omniswarm-health
+RuntimeDirectoryMode=0700
+# Failure counts survive between runs.
+StateDirectory=omniswarm-health
+StateDirectoryMode=0700
+TimeoutStartSec=5min
+NoNewPrivileges=yes
+ProtectSystem=full
+ProtectHome=yes
+PrivateTmp=yes

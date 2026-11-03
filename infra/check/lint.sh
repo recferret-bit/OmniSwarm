@@ -48,7 +48,8 @@ if bash infra/deploy/deploy.sh --dry-run deploy-host.invalid HEAD --workers 'x;r
   check_fail "deploy.sh accepted a non-numeric --workers"
 fi
 OMNI_ENV_FILE="$CHECK_TMP/prod.env" OMNI_SRV="$CHECK_TMP/srv" bash infra/deploy/release.sh activate r1 --dry-run > "$CHECK_TMP/release-plan.txt" 2>&1
-for step in 'npm --prefix' 'docker compose' 'run --rm migrate' 'mv -T' '--scale api=2' 'systemctl restart omniswarm-worker@1.service'; do
+for step in 'npm --prefix' 'docker compose' 'run --rm migrate' 'mv -T' '--scale api=2' 'systemctl restart omniswarm-worker@1.service' \
+  'r1/omniswarm.config.json' 'omniswarm-health.timer omniswarm-prune.timer omniswarm-log-hygiene.timer'; do
   grep -qF -- "$step" "$CHECK_TMP/release-plan.txt" || check_fail "release.sh activate --dry-run lacks '$step'"
 done
 for script in "certbot.sh issue" "certbot.sh renew --staging" "backup.sh" "restore.sh drill" "restore.sh live x.dump --yes"; do
@@ -61,4 +62,12 @@ bash infra/deploy/smoke.sh --dry-run omniswarm.example > "$CHECK_TMP/smoke-plan.
 for step in health ready web-root admin-blocked reports-csp rate-limit; do
   grep -qF "[$step]" "$CHECK_TMP/smoke-plan.txt" || check_fail "smoke.sh --dry-run lacks the $step check"
 done
-check_log "deploy, release, certbot, backup, restore and smoke dry runs print their plans"
+for script in health.sh prune.sh log-hygiene.sh; do
+  OMNI_ENV_FILE="$CHECK_TMP/prod.env" OMNI_SRV="$CHECK_TMP/srv" OMNI_ALERT_WEBHOOK_URL=https://alert.invalid/secret-path \
+    OMNI_HEARTBEAT_URL=https://beat.invalid/secret-path bash "infra/deploy/$script" --dry-run > "$CHECK_TMP/plan.txt" 2>&1 \
+    || { cat "$CHECK_TMP/plan.txt"; check_fail "$script --dry-run"; }
+  grep -q '^+ ' "$CHECK_TMP/plan.txt" || check_fail "$script --dry-run printed no plan"
+  grep -q 'secret-path' "$CHECK_TMP/plan.txt" && check_fail "$script --dry-run printed an alert or heartbeat URL"
+done
+check_log "deploy, release, certbot, backup, restore, smoke, health, prune and log-hygiene dry runs print their plans"
+bash "$CHECK_DIR/timers.test.sh"
