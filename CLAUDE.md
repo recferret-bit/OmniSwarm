@@ -36,7 +36,7 @@ npm test
 
 Use `npm run test:docker` only when the sandbox image or a Docker-marked test is what changed.
 
-New engine modules stay flat in `scripts/` with a prefix (`reviewer-`, `provider-`, `debate-`, `orchestrator-`, `report-`, `bridge-tools-`), so `npm test` keeps finding them. `npm test` runs only `scripts/*.test.mjs`.
+New engine modules stay flat in `scripts/` with a prefix (`reviewer-`, `provider-`, `debate-`, `orchestrator-`, `report-`, `bridge-tools-`, `harness-`, `sandbox-`, `worker-`), so `npm test` keeps finding them. `npm test` runs only `scripts/*.test.mjs`.
 
 Per-track gates (see AGENTS.md "Tracks and boundaries"): `npm run test:schemas` (shared contract), `npm run test:intake` (`apps/api/`), `npm run test:contract` (`contracts/`), `npm run test:landing` and `npm run test:e2e -- landing` (`apps/web/`), `npm run check:infra` (`infra/`), `npm run check:all` (everything, empty tracks print "skipped (no package yet)"). The wave check is `npm run check:wNN`.
 

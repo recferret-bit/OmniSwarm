@@ -244,7 +244,7 @@ test('MCP JSON-RPC handler supports initialize, tools/list, get_review_plan, and
   assert.equal(fs.existsSync(path.join(reportDir, 'auditors/claude-s1-auth.md')), true);
 });
 
-test('analyzeStackAndPlans detects http, grpc, websockets, databases, crypto, scopes/roles, bots/economy, and api_dto_abuse', (t) => {
+test('analyzeStackAndPlans detects http, grpc, websockets, databases, crypto, scopes/roles, abuse/economy, and api_dto_abuse', (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'audit-stack-plans-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
 
@@ -297,18 +297,18 @@ test('analyzeStackAndPlans detects http, grpc, websockets, databases, crypto, sc
 
   const profile = analyzeStackAndPlans(root);
   const byId = Object.fromEntries(profile.domains.map((d) => [d.id, d]));
-  for (const id of ['http', 'grpc', 'websockets', 'databases', 'crypto', 'scopes_roles', 'bots_economy', 'api_dto_abuse']) {
+  for (const id of ['http', 'grpc', 'websockets', 'databases', 'crypto', 'scopes_roles', 'abuse_economy', 'api_dto_abuse']) {
     assert.equal(byId[id]?.detected, true, `expected domain ${id} to be detected`);
   }
   assert.ok(byId.api_dto_abuse.leads.some((l) => l.hits.some((h) => /User already registered/.test(h.snippet))));
-  assert.ok(byId.bots_economy.totalLeads > 0);
+  assert.ok(byId.abuse_economy.totalLeads > 0);
   assert.ok(byId.scopes_roles.totalLeads > 0);
 
   const md = renderReviewPlansMarkdown(profile, 'S1');
   assert.match(md, /Scopes, Roles & Access Control Misvalidation/);
   assert.match(md, /API Abuse, Response DTO Leakage & Enumeration Oracles/);
   assert.match(md, /User already registered/);
-  assert.match(renderSurfaceSkillGuidance('S3'), /Bot\/Economy Integrity/);
+  assert.match(renderSurfaceSkillGuidance('S3'), /Business Logic, Value Flows/);
 });
 
 test('buildCliInvocation configures isolated MCP bridge workspaces for claude, codex, grok, and agy', async (t) => {
