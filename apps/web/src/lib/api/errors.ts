@@ -4,7 +4,9 @@
 // intake-api.schema.json fails `tsc` here until it has a user-facing message.
 import type { ErrorCode } from './schema.gen';
 
-export type AppErrorCode = ErrorCode | 'WALLET_REJECTED' | 'WALLET_UNAVAILABLE' | 'NETWORK_ERROR' | 'CONTRACT_MISMATCH';
+// Failures that never come from the API: the wallet, the network and the contract pin.
+const CLIENT_CODES = ['WALLET_REJECTED', 'WALLET_UNAVAILABLE', 'NETWORK_ERROR', 'CONTRACT_MISMATCH'] as const;
+export type AppErrorCode = ErrorCode | (typeof CLIENT_CODES)[number];
 
 export const ERROR_COPY: Record<AppErrorCode, string> = {
   VALIDATION_ERROR: 'The request was not accepted. Check the repository and try again.',
@@ -39,9 +41,9 @@ export const ERROR_COPY: Record<AppErrorCode, string> = {
   CONTRACT_MISMATCH: 'The API named a different contract than this site pays. Payment was not sent.',
 };
 
+// True for a code the intake API may return (unknown codes map to INTERNAL).
 export function isErrorCode(value: unknown): value is ErrorCode {
-  return typeof value === 'string' && Object.hasOwn(ERROR_COPY, value)
-    && !['WALLET_REJECTED', 'WALLET_UNAVAILABLE', 'NETWORK_ERROR', 'CONTRACT_MISMATCH'].includes(value);
+  return typeof value === 'string' && Object.hasOwn(ERROR_COPY, value) && !(CLIENT_CODES as readonly string[]).includes(value);
 }
 
 export class AppError extends Error {

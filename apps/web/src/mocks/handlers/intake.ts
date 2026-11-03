@@ -57,12 +57,12 @@ const create = http.post('/api/requests', async ({ request }) => {
   if (takeError('NONCE_EXPIRED')) return apiError('NONCE_EXPIRED', 401, 'This challenge has expired');
   if (!nonce) return apiError('NONCE_UNKNOWN', 401, 'Unknown challenge');
   if (nonce.used) return apiError('NONCE_USED', 409, 'This challenge was already used');
-  const message = JSON.parse(body.message) as { account: string; commit: string; repo: string; nonce: string };
+  const message = JSON.parse(body.message) as { account: string; commit: string; deployed: string | null; repo: string; nonce: string };
   if (message.account !== body.accountId) return apiError('ACCOUNT_MISMATCH', 401, 'Signed account does not match accountId');
   if (message.nonce !== body.nonce) return apiError('SIG_INVALID', 401, 'Signed nonce does not match');
   const hash = await requestHash(body.message);
   const row = {
-    id: uuid(), account: body.accountId, repo: message.repo, commit: message.commit, requestHash: hash,
+    id: uuid(), account: body.accountId, repo: message.repo, commit: message.commit, deployed: message.deployed, requestHash: hash,
     priceYocto: MOCK_PRICE_YOCTO, createdAt: clock.now(), paidAt: null, txHash: null,
     fails: takeError('REVIEW_FAILED'), attestTx: null, refundTx: null,
   };

@@ -8,5 +8,7 @@
   "deployed": null,
   "code_hash": null,
   "max_severity": "high",
-  "block_height": 0
+  "block_height": 0,
+  "block_timestamp_ms": 1792497600000,
+  "binding_confirmed": false
 }

@@ -14,6 +14,7 @@ export interface MockRequest {
   account: string;
   repo: string;
   commit: string;
+  deployed: string | null;
   requestHash: string;
   priceYocto: string;
   createdAt: number;

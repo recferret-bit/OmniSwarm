@@ -1,6 +1,7 @@
 import { txUrl } from '@/lib/near/explorer';
 import { Button } from '../ui/Button';
 import { Pill } from '../ui/Pill';
+import { BindingStatus } from './BindingStatus';
 import type { VerificationState } from './useVerification';
 
 interface Props {
@@ -33,6 +34,7 @@ export function AttestationBadge({ state, sample = false, attestTx, onRecheck }:
           <dd><code data-testid="attested-hash">{result.state === 'unattested' ? 'none' : result.attestation.report_sha256}</code></dd>
         </dl>
       ) : null}
+      {result && result.state !== 'unattested' ? <BindingStatus attestation={result.attestation} /> : null}
       {attestTx && !sample ? <p><a href={txUrl(attestTx)} target="_blank" rel="noreferrer">View the attest transaction</a></p> : null}
       {onRecheck ? <Button variant="ghost" onClick={onRecheck} disabled={state.phase === 'checking'}>Verify again</Button> : null}
     </div>

@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { getAttestation, type OnChainAttestation } from '../near/rpc';
+import { getAttestation, parseAttestation, type OnChainAttestation } from '../near/rpc';
 import { useMockApi } from '@/test/msw';
 import { updateState } from '@/mocks/db';
 import { compareAttestation, loadReport, reportFiles, verifyReport } from './verify';
@@ -42,5 +42,10 @@ describe('get_attestation RPC view', () => {
     updateState((state) => { state.attestations[recorded.request_hash] = recorded; });
     await expect(getAttestation(recorded.request_hash)).resolves.toEqual(recorded);
     await expect(getAttestation('cd'.repeat(32))).resolves.toBeNull();
+  });
+
+  it('rejects a pre-v0.2 attestation without binding_confirmed and block_timestamp_ms', () => {
+    const { binding_confirmed: _b, block_timestamp_ms: _t, ...legacy } = recorded;
+    expect(() => parseAttestation(legacy)).toThrow(/unexpected shape/);
   });
 });

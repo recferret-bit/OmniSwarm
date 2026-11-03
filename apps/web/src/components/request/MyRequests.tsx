@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { messageFor } from '@/lib/api/errors';
 import { useMyRequests, type MyRequest } from '@/stores/my-requests';
 import { selectAccountId, selectWalletStatus, useWallet } from '@/stores/wallet';
@@ -25,7 +26,7 @@ export function MyRequests() {
   const accountId = useWallet(selectAccountId);
   const walletStatus = useWallet(selectWalletStatus);
   const connect = useWallet((state) => state.connect);
-  const { status, requests, error, load, clear } = useMyRequests();
+  const { status, requests, error, load, clear } = useMyRequests(useShallow(({ status, requests, error, load, clear }) => ({ status, requests, error, load, clear })));
 
   useEffect(() => {
     if (accountId) void load();

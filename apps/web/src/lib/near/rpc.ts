@@ -4,7 +4,8 @@
 import { env } from '../env';
 import type { Severity } from '../api/schema.gen';
 
-// The contract's `get_attestation` JSON (snake_case, contracts/review-registry).
+// The contract's `get_attestation` JSON (snake_case, review-registry v0.2,
+// contracts/review-registry/INTERFACE.md).
 export interface OnChainAttestation {
   request_hash: string;
   repo: string;
@@ -15,6 +16,10 @@ export interface OnChainAttestation {
   code_hash: string | null;
   max_severity: Severity;
   block_height: number;
+  // Block time of the attest call.
+  block_timestamp_ms: number;
+  // True once the `deployed` account itself paid or called confirm_binding.
+  binding_confirmed: boolean;
 }
 
 const HEX64 = /^[0-9a-f]{64}$/;
@@ -22,7 +27,8 @@ const HEX64 = /^[0-9a-f]{64}$/;
 export function parseAttestation(value: unknown): OnChainAttestation | null {
   if (value === null || value === undefined) return null;
   const record = value as Partial<OnChainAttestation>;
-  if (typeof record !== 'object' || !HEX64.test(String(record.request_hash)) || !HEX64.test(String(record.report_sha256))) {
+  if (typeof record !== 'object' || !HEX64.test(String(record.request_hash)) || !HEX64.test(String(record.report_sha256))
+    || typeof record.binding_confirmed !== 'boolean' || typeof record.block_timestamp_ms !== 'number') {
     throw new Error('get_attestation returned an unexpected shape');
   }
   return record as OnChainAttestation;

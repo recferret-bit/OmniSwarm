@@ -10,6 +10,7 @@ import { clock, randomBytes, readState, updateState, type MockRequest, type Mock
 import { snapshotAt } from './state-machine';
 
 export const REPORTS_ORIGIN = 'https://reports.omniswarm.mock';
+const MOCK_CODE_HASH = '9mZ3dQe1HhD4uWBQxkLn5a7cjVYgUFx2p8KrT6sNwEy';
 
 export function reportBase(id: string): string {
   return `${REPORTS_ORIGIN}/${id}/`;
@@ -41,7 +42,9 @@ export async function settle(request: MockRequest): Promise<MockRequest> {
       state.attestations[request.requestHash] = {
         request_hash: request.requestHash, repo: request.repo, commit: request.commit,
         report_sha256: reportSha256, report_uri: `${reportBase(request.id)}index.json`,
-        deployed: null, code_hash: null, max_severity: 'high', block_height: 1,
+        deployed: request.deployed, code_hash: request.deployed ? MOCK_CODE_HASH : null, max_severity: 'high', block_height: 1,
+        // The contract confirms the binding when the deployed account itself paid.
+        block_timestamp_ms: clock.now(), binding_confirmed: request.deployed !== null && request.deployed === request.account,
       };
       const row = state.requests.find((item) => item.id === request.id);
       if (row) row.attestTx = newTxHash();

@@ -5,7 +5,7 @@ import { setMockError, setWalletReject } from '@/mocks/controls';
 import { readState } from '@/mocks/db';
 import { useMockApi } from '@/test/msw';
 import { verifySignature } from '@/mocks/verify';
-import { createRequestFlowStore, type FlowDeps } from './request-flow';
+import { createRequestFlowStore, resumeStep, type FlowDeps } from './request-flow';
 
 useMockApi();
 
@@ -98,5 +98,13 @@ describe('request flow store', () => {
     await reloaded.getState().confirm();
     expect(confirmPayment).toHaveBeenCalledWith(store.getState().request!.requestId, { txHash: 'unconfirmed' });
     expect(reloaded.getState().error).toEqual({ code: 'PAYMENT_NOT_FOUND', stage: 'confirm' });
+  });
+
+  it('a reload mid-step falls back to the last step its data supports', () => {
+    const request = { requestId: 'r', requestHash: 'h', priceYocto: '1', contractId: 'c' };
+    expect(resumeStep({ step: 'paying', request })).toBe('created');
+    expect(resumeStep({ step: 'signing', quote: {} as never })).toBe('quoted');
+    expect(resumeStep({ step: 'quoting' })).toBe('idle');
+    expect(resumeStep({ step: 'confirming' })).toBe('confirming');
   });
 });

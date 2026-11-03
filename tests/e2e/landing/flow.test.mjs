@@ -43,10 +43,20 @@ function verifyNep413({ publicKey, signature, message, nonce, recipient }) {
   return crypto.verify(null, digest, key, Buffer.from(signature, 'base64'));
 }
 
-async function quoteAndSign(page, repo) {
-  await page.getByRole('button', { name: 'Connect NEAR wallet' }).first().click();
+// Every same-origin link on the page resolves, and every #fragment has a target.
+async function checkInternalLinks(page) {
+  const hrefs = await page.$$eval('a[href]', (links) => links.map((link) => link.getAttribute('href')));
+  for (const href of new Set(hrefs)) {
+    if (href.startsWith('#')) assert.equal(await page.locator(href).count(), 1, `missing anchor ${href}`);
+    else if (href.startsWith('/')) assert.equal((await fetch(new URL(href, BASE))).status, 200, `${href} does not resolve`);
+  }
+}
+
+async function quoteAndSign(page, repo, deployed = '') {
+  if (!(await page.getByTestId('account').count())) await page.getByRole('button', { name: 'Connect NEAR wallet' }).first().click();
   await page.getByTestId('account').waitFor();
   await page.getByLabel('GitHub repository').fill(repo);
+  if (deployed) await page.getByLabel('Deployed NEAR account (optional)').fill(deployed);
   await page.getByRole('button', { name: 'Get quote' }).click();
   await page.getByTestId('quote').waitFor();
   await page.getByRole('button', { name: 'Sign request' }).click();
@@ -67,6 +77,7 @@ describe('landing on mocks', { concurrency: false }, () => {
     assert.match(await page.getByTestId('chain-status').innerText(), /Chain: mock \(dev\)/);
     assert.match(await page.locator('#pricing').innerText(), /1 NEAR \(testnet\)[\s\S]*2 passes × 40 tool calls/);
     assert.deepEqual(await axeViolations(page), []);
+    await checkInternalLinks(page);
 
     await page.getByRole('link', { name: 'View a sample report' }).click();
     await page.getByText('No wallet is required to read a report.').waitFor();
@@ -81,7 +92,10 @@ describe('landing on mocks', { concurrency: false }, () => {
 
   test('connect, quote, sign NEP-413, pay, watch to done, verify, tamper, my requests', { timeout: 90_000 }, async () => {
     const page = await newPage('?mock=none');
-    await quoteAndSign(page, 'https://github.com/near-examples/guest-book-examples');
+    await page.getByRole('button', { name: 'Connect NEAR wallet' }).first().click();
+    await page.reload();
+    assert.match(await page.getByTestId('account').innerText(), /alice\.testnet/, 'the session survives a reload');
+    await quoteAndSign(page, 'https://github.com/near-examples/guest-book-examples', 'guest-book.testnet');
     const quote = await page.getByTestId('quote').innerText();
     assert.match(quote, /1 NEAR/);
     assert.match(quote, /#0 in queue/);
@@ -106,6 +120,8 @@ describe('landing on mocks', { concurrency: false }, () => {
     assert.equal(await read('report-hash'), recomputed);
     assert.equal(await read('attested-hash'), recomputed);
     assert.ok(await page.getByRole('link', { name: 'View the attest transaction' }).count());
+    assert.match(await page.getByTestId('binding-status').innerText(), /Binding not confirmed[\s\S]*guest-book\.testnet/);
+    assert.equal(JSON.parse(signed.message).deployed, 'guest-book.testnet');
     assert.deepEqual(await axeViolations(page), []);
 
     await page.getByRole('button', { name: 'Tamper the report' }).click();
