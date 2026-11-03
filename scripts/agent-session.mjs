@@ -30,7 +30,13 @@ function refusedToolName(call) {
 }
 
 const MAX_REFUSAL_CORRECTIONS = 3;
+const SUBMIT_TOOLS = ['submit_audit_report', 'submit_crosscheck_report'];
 const refusalCorrection = name => `The audit client refused your tool call ${name}: it is not one of the audit_docker review tools, and wrapped or nested tool calls are refused. Call each audit_docker tool directly by its own name, for example audit_docker__read_file or audit_docker__run_existing_tests. Continue the same assigned review from where you stopped, retain supported work, and submit the report.`;
+const submitTool = role => (role === 'crosscheck' ? 'submit_crosscheck_report' : 'submit_audit_report');
+// The one "hand in your report" turn a budgeted pass gets when the agent ends without submitting.
+export const submitNowText = role => `This pass ended without a report. Call ${submitTool(role)} now with what you can support from the source you read, and disclose what you did not cover.`;
+const CONTINUATION = '\n\nContinue the saved review for this exact source and assignment. Retain supported work and disclose remaining coverage. Use the current audit MCP bridge. If the report was already submitted successfully, finish without resubmitting it.';
+const PROVIDER_REASONS = ['provider_policy', 'usage_limit', 'auth_required', 'mcp_unavailable'];
 
 function modelValue(options) { return options?.find(option => option.category === 'model' || option.id === 'model')?.currentValue; }
 
@@ -44,176 +50,206 @@ export async function preflightBridge(server, { cwd, env, signal, expectedRole }
     rpc.notify('notifications/initialized');
     const result = await rpc.request('tools/list');
     const names = new Set(result.tools?.map(tool => tool.name));
-    const required = expectedRole === 'crosscheck' ? 'submit_crosscheck_report' : 'submit_audit_report';
-    if (['write_poc', 'run_container_check', 'get_attack_plan'].some(name => names.has(name)) || !names.has('list_existing_tests') || !names.has('run_existing_tests') || !names.has('get_audit_context') || !names.has('read_file') || !names.has(required)) throw new SessionError('mcp_unavailable');
+    if (['write_poc', 'run_container_check', 'get_attack_plan'].some(name => names.has(name)) || !['list_existing_tests', 'run_existing_tests', 'get_audit_context', 'read_file', submitTool(expectedRole)].every(name => names.has(name))) throw new SessionError('mcp_unavailable');
     await rpc.request('ping');
     return { state: 'ready', tools: [...names] };
   } catch (err) { throw err.reason === 'cancelled' ? err : new SessionError('mcp_unavailable'); }
   finally { signal?.removeEventListener('abort', abort); await rpc.close(); }
 }
 
+// Live state of one session across its turns and recoveries; heartbeats read it.
+function sessionState(store, options) {
+  const s = { store, options, started: Date.now(), phase: 'starting', sessionId: store.state.sessionId, recoveries: 0, rpc: null, activeModel: undefined, lastAgent: null, lastTransport: null, lastProcess: null };
+  s.result = (fields) => ({ code: 0, elapsedMs: Date.now() - s.started, sessionId: s.sessionId, directory: options.directory, recoveryAttempts: s.recoveries, ...fields });
+  return s;
+}
+
+function startHeartbeat(s, heartbeatMs) {
+  const progress = () => {
+    const now = Date.now();
+    const status = { phase: s.phase, elapsedMs: now - s.started, agentIdleMs: s.lastAgent == null ? null : now - s.lastAgent, transportIdleMs: s.lastTransport == null ? null : now - s.lastTransport, processIdleMs: s.lastProcess == null ? null : now - s.lastProcess, pid: s.rpc?.child.pid, sessionId: s.sessionId, timeLimitMs: null };
+    s.store.save(s.phase, { heartbeat: status });
+    (s.options.onProgress || (() => {}))(status);
+  };
+  return setInterval(() => {
+    try { progress(); }
+    catch { s.rpc?.fail(new SessionError('session_record_failed')); }
+  }, heartbeatMs);
+}
+
+// Tool calls the agent reports in this turn. More than N+3 counted calls without a submit cancels the pass.
+function onSessionUpdate(s, turn, params) {
+  // During load, an adapter may replay history before returning. Its notifications must still belong to the exact saved session.
+  if (s.sessionId && params?.sessionId !== s.sessionId) throw new SessionError('session_identity_rejected');
+  s.lastAgent = Date.now();
+  const update = params?.update;
+  if (update?.sessionUpdate === 'config_option_update') {
+    const value = modelValue(update.configOptions);
+    if (value && s.activeModel && value !== s.activeModel) throw new SessionError('model_changed');
+  }
+  if (update?.sessionUpdate === 'tool_call') {
+    turn.toolCalls += 1;
+    const title = String(update.title || '');
+    if (SUBMIT_TOOLS.some(name => title.includes(name))) turn.submitted = true;
+    const { budgets } = s.options;
+    if (budgets && !turn.submitted && !turn.budgetCancel && turn.toolCalls > budgets.toolBudget + GRACE) {
+      turn.budgetCancel = true;
+      try { s.rpc.notify('session/cancel', { sessionId: s.sessionId }); } catch { /* the prompt result records the stop */ }
+    }
+  }
+  if (['tool_call', 'tool_call_update', 'plan'].includes(update?.sessionUpdate)) s.store.save(s.phase, { activity: update.sessionUpdate });
+}
+
+function openRpc(s, spec, turn) {
+  const { logFile } = s.options;
+  const attempt = s.recoveries;
+  s.rpc = new AgentRpc(spec.invocation, {
+    logFile: logFile ? attempt ? `${logFile}.recovery-${attempt}` : logFile : undefined,
+    onActivity: kind => { if (kind === 'transport') s.lastTransport = Date.now(); else s.lastProcess = Date.now(); },
+    onRequest: async (method, params) => {
+      if (method !== 'session/request_permission') throw new SessionError('permission_denied');
+      s.phase = 'waiting_permission';
+      const decision = permissionDecision(params, s.sessionId);
+      const allowed = params?.options?.find(option => option.optionId === decision.outcome.optionId)?.kind === 'allow_once';
+      if (!allowed) turn.refused = refusedToolName(params?.toolCall);
+      s.store.save(s.phase, { event: allowed ? 'permission_decided' : 'permission_denied' });
+      s.phase = 'running';
+      return decision;
+    },
+    onNotification: (method, params) => { if (method === 'session/update') onSessionUpdate(s, turn, params); },
+  });
+}
+
+// initialize + session/new or session/load, with the model pin checked against what the agent reports.
+async function openSession(s, spec, turn) {
+  const { identity } = s.options;
+  s.phase = 'initializing';
+  const init = await s.rpc.request('initialize', { protocolVersion: 1, clientInfo: { name: 'omniswarm-audit', version: '1.0.0' }, clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false } });
+  if (init.protocolVersion !== 1) throw new SessionError('protocol_error');
+  turn.resumeCapable = init.agentCapabilities?.loadSession === true;
+  const agentInfo = init.agentInfo || (typeof init._meta?.agentVersion === 'string' ? { name: identity.agent, version: init._meta.agentVersion.slice(0, 128) } : {});
+  s.store.save(s.phase, { agentCapabilities: init.agentCapabilities || {}, agentInfo, resumeCapable: turn.resumeCapable });
+  const params = { cwd: s.store.workspace, mcpServers: spec.mcpServers, ...(spec.sessionMeta ? { _meta: spec.sessionMeta } : {}) };
+  let opened;
+  if (s.sessionId) {
+    if (!turn.resumeCapable) throw new SessionError('resume_unsupported');
+    s.phase = 'resuming';
+    opened = await s.rpc.request('session/load', { ...params, sessionId: s.sessionId }, 60_000);
+  } else {
+    opened = await s.rpc.request('session/new', params, 60_000);
+    if (typeof opened.sessionId !== 'string' || !/^[A-Za-z0-9_.:-]{1,200}$/.test(opened.sessionId)) throw new SessionError('protocol_error');
+    s.sessionId = opened.sessionId;
+  }
+  s.activeModel = modelValue(opened.configOptions) || opened.models?.currentModelId;
+  if (families.modelPinned({ family: identity.family || 'cli', provider: identity.provider || identity.agent }) && s.activeModel && s.activeModel.split('[')[0] !== identity.model) throw new SessionError('model_changed');
+  s.store.save('running', { sessionId: s.sessionId, selectedModel: s.activeModel || identity.model });
+  s.phase = 'running';
+  return init;
+}
+
+// Grok ends its whole turn when a tool call is refused. Answer the refusal in the same session so the review
+// continues instead of being recorded as user-cancelled.
+async function promptWithCorrections(s, turn, text) {
+  const { signal } = s.options;
+  for (let corrections = 0; ; corrections++) {
+    turn.refused = null;
+    const result = await s.rpc.request('session/prompt', { sessionId: s.sessionId, prompt: [{ type: 'text', text }] }, null);
+    if (result.stopReason !== 'cancelled' || signal?.aborted || !turn.refused) return result;
+    if (corrections === MAX_REFUSAL_CORRECTIONS) throw new SessionError('permission_denied');
+    s.store.save('running', { event: 'refusal_corrected' });
+    text = refusalCorrection(turn.refused);
+  }
+}
+
+function providerStop(store) {
+  try { return JSON.parse(fs.readFileSync(path.join(store.workspace, 'api-session.json'), 'utf8')).stop || null; }
+  catch { return null; } // cli sessions have no api-session file
+}
+
+async function endTurn(s, spec, stop, stopReason) {
+  const exit = await s.rpc.close();
+  s.phase = 'completed';
+  s.store.save(s.phase, { stop, stopReason, completedAt: new Date().toISOString() });
+  return s.result({ observedExitCode: exit.code, processSignal: exit.signal, transport: spec.transport, stop, stopReason });
+}
+
+// One chance to hand in the report. A second empty ending, or more than N+3 calls, cancels the pass.
+async function settleTurn(s, spec, turn, init, result) {
+  const { budgets, signal, identity } = s.options;
+  if (providerStop(s.store) === 'cost') return endTurn(s, spec, 'cost', result.stopReason);
+  if (budgets && result.stopReason === 'end_turn' && !turn.submitted && !turn.budgetCancel) {
+    s.store.save('running', { event: 'submit_now' });
+    result = await s.rpc.request('session/prompt', { sessionId: s.sessionId, prompt: [{ type: 'text', text: submitNowText(identity.role) }] }, null);
+  }
+  if (budgets && !turn.submitted && (turn.budgetCancel || result.stopReason === 'end_turn' || result.stopReason === 'cancelled')) {
+    try { s.rpc.notify('session/cancel', { sessionId: s.sessionId }); } catch { /* already cancelled */ }
+    return endTurn(s, spec, 'budget', 'cancelled');
+  }
+  // A loaded conversation can replay old errors, and a review can quote them.
+  // Only the current RPC failure/stop status controls whether this turn succeeded.
+  if (result.stopReason === 'cancelled' || signal?.aborted) throw new SessionError('cancelled');
+  if (result.stopReason !== 'end_turn') throw new SessionError('turn_incomplete');
+  if (init.agentCapabilities?.sessionCapabilities?.close) await s.rpc.request('session/close', { sessionId: s.sessionId });
+  const exit = await s.rpc.close();
+  if (exit.code != null && exit.code !== 0) throw new SessionError('process_error');
+  s.phase = 'completed';
+  const stop = budgets ? 'submitted' : undefined;
+  s.store.save(s.phase, { stopReason: result.stopReason, ...(stop ? { stop } : {}), completedAt: new Date().toISOString() });
+  return s.result({ observedExitCode: exit.code, processSignal: exit.signal, transport: spec.transport, stop, stopReason: result.stopReason });
+}
+
+function failureReason(error, signal) {
+  if (signal?.aborted) return 'cancelled';
+  const failure = classifyAuditFailure({ code: 1, rpcError: error.reason === 'provider_error' ? error.message : undefined });
+  return error.reason === 'provider_error' && PROVIDER_REASONS.includes(failure.reason) ? failure.reason : error.reason || 'process_error';
+}
+
+// One turn of a session. Returns the session result, or null when a lost transport is recovered (load and retry).
+async function runTurn(s, spec, maxRecoveries) {
+  const turn = { resumeCapable: false, refused: null, toolCalls: 0, submitted: false, budgetCancel: false };
+  const attempt = s.recoveries;
+  openRpc(s, spec, turn);
+  try {
+    const init = await openSession(s, spec, turn);
+    if (s.options.signal?.aborted) throw new SessionError('cancelled');
+    const result = await promptWithCorrections(s, turn, s.options.prompt + (attempt || s.options.resume ? CONTINUATION : ''));
+    return await settleTurn(s, spec, turn, init, result);
+  } catch (error) {
+    const reason = failureReason(error, s.options.signal);
+    if (reason === 'transport_lost' && turn.resumeCapable && s.sessionId && s.recoveries < maxRecoveries && !s.options.signal?.aborted) {
+      s.recoveries++;
+      s.store.save('interrupted', { reason, recoveryAttempts: (s.store.state.recoveryAttempts || 0) + 1 });
+      return null;
+    }
+    throw new SessionError(reason);
+  } finally { s.observedExit = await s.rpc.close(); s.rpc = null; }
+}
+
 // All four providers use this ACP client. Native CLI compatibility is isolated
 // behind native-acp-agent; the coordinator never parses their terminal prose.
 export async function runReviewSession(options, { launch = buildSessionLaunch, preflight = preflightBridge, heartbeatMs = 30_000, maxRecoveries = 1 } = {}) {
   if (!Number.isSafeInteger(heartbeatMs) || heartbeatMs < 10 || heartbeatMs > 2_147_483_647 || !Number.isInteger(maxRecoveries) || maxRecoveries < 0 || maxRecoveries > 2) throw new SessionError('setup_error');
-  const { directory, identity, bridgeArgs, prompt, signal, onProgress = () => {}, legacyConversationId, env = process.env, logFile, budgets, prices } = options;
-  const store = openSessionStore(directory, identity);
-  const started = Date.now();
-  let lastAgent = null;
-  let lastTransport = null;
-  let lastProcess = null;
-  let phase = 'starting';
-  let currentRpc = null;
-  let activeModel;
-  let sessionId = store.state.sessionId;
-  let totalRecoveries = 0;
-  let observedExit;
-  const progress = () => {
-    const now = Date.now();
-    const status = { phase, elapsedMs: now - started, agentIdleMs: lastAgent == null ? null : now - lastAgent, transportIdleMs: lastTransport == null ? null : now - lastTransport, processIdleMs: lastProcess == null ? null : now - lastProcess, pid: currentRpc?.child.pid, sessionId, timeLimitMs: null };
-    store.save(phase, { heartbeat: status });
-    onProgress(status);
-  };
-  const timer = setInterval(() => {
-    try { progress(); }
-    catch { currentRpc?.fail(new SessionError('session_record_failed')); }
-  }, heartbeatMs);
+  const { identity, bridgeArgs, signal, legacyConversationId, env = process.env, budgets, prices } = options;
+  const s = sessionState(openSessionStore(options.directory, identity), options);
+  const timer = startHeartbeat(s, heartbeatMs);
   const abort = () => {
-    phase = 'cancelling';
-    try { if (sessionId) currentRpc?.notify('session/cancel', { sessionId }); } catch { /* transport already lost */ }
-    currentRpc?.rejectPending(new SessionError('cancelled'));
+    s.phase = 'cancelling';
+    try { if (s.sessionId) s.rpc?.notify('session/cancel', { sessionId: s.sessionId }); } catch { /* transport already lost */ }
+    s.rpc?.rejectPending(new SessionError('cancelled'));
   };
   signal?.addEventListener('abort', abort, { once: true });
   try {
     if (signal?.aborted) throw new SessionError('cancelled');
-    const spec = launch({ agent: identity.agent, role: identity.role, family: identity.family, provider: identity.provider, model: identity.model, workDir: store.workspace, bridgeArgs, legacyConversationId, env, toolBudget: budgets?.toolBudget, maxTurns: budgets ? budgets.toolBudget + 3 : undefined, maxCostUsd: budgets?.maxCostUsd, prices });
-    const bridge = await preflight(spec.mcpServers[0], { cwd: store.workspace, env: spec.bridgeEnv || spec.invocation.env, signal, expectedRole: identity.role });
-    store.save('bridge_ready', { bridge, transport: spec.transport });
+    const spec = launch({ agent: identity.agent, role: identity.role, family: identity.family, provider: identity.provider, model: identity.model, workDir: s.store.workspace, bridgeArgs, legacyConversationId, env, toolBudget: budgets?.toolBudget, maxTurns: budgets ? budgets.toolBudget + GRACE : undefined, maxCostUsd: budgets?.maxCostUsd, prices });
+    const bridge = await preflight(spec.mcpServers[0], { cwd: s.store.workspace, env: spec.bridgeEnv || spec.invocation.env, signal, expectedRole: identity.role });
+    s.store.save('bridge_ready', { bridge, transport: spec.transport });
     for (;;) {
-      let resumeCapable = false;
-      let refused = null;
-      let toolCalls = 0;
-      let submitted = false;
-      let budgetCancel = false;
-      const attempt = totalRecoveries;
-      currentRpc = new AgentRpc(spec.invocation, {
-        logFile: logFile ? attempt ? `${logFile}.recovery-${attempt}` : logFile : undefined,
-        onActivity: kind => { if (kind === 'transport') lastTransport = Date.now(); else lastProcess = Date.now(); },
-        onRequest: async (method, params) => {
-          if (method !== 'session/request_permission') throw new SessionError('permission_denied');
-          phase = 'waiting_permission';
-          const decision = permissionDecision(params, sessionId);
-          const allowed = params?.options?.find(option => option.optionId === decision.outcome.optionId)?.kind === 'allow_once';
-          if (!allowed) refused = refusedToolName(params?.toolCall);
-          store.save(phase, { event: allowed ? 'permission_decided' : 'permission_denied' });
-          phase = 'running';
-          return decision;
-        },
-        onNotification: (method, params) => {
-          if (method !== 'session/update') return;
-          // During load, an adapter may replay history before returning. Its
-          // notifications must still belong to the exact saved session.
-          if (sessionId && params?.sessionId !== sessionId) throw new SessionError('session_identity_rejected');
-          lastAgent = Date.now();
-          const update = params?.update;
-          if (update?.sessionUpdate === 'config_option_update') {
-            const value = modelValue(update.configOptions);
-            if (value && activeModel && value !== activeModel) throw new SessionError('model_changed');
-          }
-          if (update?.sessionUpdate === 'tool_call') {
-            toolCalls += 1;
-            const title = String(update.title || '');
-            if (title.includes('submit_audit_report') || title.includes('submit_crosscheck_report')) submitted = true;
-            if (budgets && !submitted && toolCalls > budgets.toolBudget + GRACE) {
-              budgetCancel = true;
-              try { currentRpc.notify('session/cancel', { sessionId }); } catch { /* the prompt result records the stop */ }
-            }
-          }
-          if (['tool_call', 'tool_call_update', 'plan'].includes(update?.sessionUpdate)) store.save(phase, { activity: update.sessionUpdate });
-        },
-      });
-      try {
-        phase = 'initializing';
-        const init = await currentRpc.request('initialize', { protocolVersion: 1, clientInfo: { name: 'omniswarm-audit', version: '1.0.0' }, clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false } });
-        if (init.protocolVersion !== 1) throw new SessionError('protocol_error');
-        resumeCapable = init.agentCapabilities?.loadSession === true;
-        const agentInfo = init.agentInfo || (typeof init._meta?.agentVersion === 'string' ? { name: identity.agent, version: init._meta.agentVersion.slice(0, 128) } : {});
-        store.save(phase, { agentCapabilities: init.agentCapabilities || {}, agentInfo, resumeCapable });
-        const params = { cwd: store.workspace, mcpServers: spec.mcpServers, ...(spec.sessionMeta ? { _meta: spec.sessionMeta } : {}) };
-        let opened;
-        if (sessionId) {
-          if (!resumeCapable) throw new SessionError('resume_unsupported');
-          phase = 'resuming';
-          opened = await currentRpc.request('session/load', { ...params, sessionId }, 60_000);
-        } else {
-          opened = await currentRpc.request('session/new', params, 60_000);
-          if (typeof opened.sessionId !== 'string' || !/^[A-Za-z0-9_.:-]{1,200}$/.test(opened.sessionId)) throw new SessionError('protocol_error');
-          sessionId = opened.sessionId;
-        }
-        activeModel = modelValue(opened.configOptions) || opened.models?.currentModelId;
-        if (families.modelPinned({ family: identity.family || 'cli', provider: identity.provider || identity.agent }) && activeModel && activeModel.split('[')[0] !== identity.model) throw new SessionError('model_changed');
-        store.save('running', { sessionId, selectedModel: activeModel || identity.model });
-        phase = 'running';
-        if (signal?.aborted) throw new SessionError('cancelled');
-        const continuation = attempt || options.resume ? '\n\nContinue the saved review for this exact source and assignment. Retain supported work and disclose remaining coverage. Use the current audit MCP bridge. If the report was already submitted successfully, finish without resubmitting it.' : '';
-        let text = prompt + continuation;
-        let result;
-        for (let corrections = 0; ; corrections++) {
-          refused = null;
-          result = await currentRpc.request('session/prompt', { sessionId, prompt: [{ type: 'text', text }] }, null);
-          // Grok ends its whole turn when a tool call is refused. Answer the refusal in the
-          // same session so the review continues instead of being recorded as user-cancelled.
-          if (result.stopReason !== 'cancelled' || signal?.aborted || !refused) break;
-          if (corrections === MAX_REFUSAL_CORRECTIONS) throw new SessionError('permission_denied');
-          store.save('running', { event: 'refusal_corrected' });
-          text = refusalCorrection(refused);
-        }
-        // One chance to hand in the report. A second empty ending, or more than N+3 calls, cancels the pass.
-        let providerStop = null;
-        try { providerStop = JSON.parse(fs.readFileSync(path.join(store.workspace, 'api-session.json'), 'utf8')).stop || null; } catch { /* cli sessions have no api-session file */ }
-        if (providerStop === 'cost') {
-          const exit = await currentRpc.close();
-          phase = 'completed';
-          store.save(phase, { stop: 'cost', stopReason: result.stopReason, completedAt: new Date().toISOString() });
-          return { code: 0, observedExitCode: exit.code, processSignal: exit.signal, elapsedMs: Date.now() - started, sessionId, directory, transport: spec.transport, stop: 'cost', stopReason: result.stopReason, recoveryAttempts: totalRecoveries };
-        }
-        if (budgets && result.stopReason === 'end_turn' && !submitted && !budgetCancel) {
-          store.save('running', { event: 'submit_now' });
-          result = await currentRpc.request('session/prompt', { sessionId, prompt: [{ type: 'text', text: 'Budget exhausted. Call submit_audit_report now.' }] }, null);
-        }
-        if (budgets && !submitted && (budgetCancel || result.stopReason === 'end_turn' || result.stopReason === 'cancelled')) {
-          try { currentRpc.notify('session/cancel', { sessionId }); } catch { /* already cancelled */ }
-          const exit = await currentRpc.close();
-          phase = 'completed';
-          store.save(phase, { stop: 'budget', stopReason: 'cancelled', completedAt: new Date().toISOString() });
-          return { code: 0, observedExitCode: exit.code, processSignal: exit.signal, elapsedMs: Date.now() - started, sessionId, directory, transport: spec.transport, stop: 'budget', stopReason: 'cancelled', recoveryAttempts: totalRecoveries };
-        }
-        // A loaded conversation can replay old errors, and a review can quote them.
-        // Only the current RPC failure/stop status controls whether this turn succeeded.
-        if (result.stopReason === 'cancelled' || signal?.aborted) throw new SessionError('cancelled');
-        if (result.stopReason !== 'end_turn') throw new SessionError('turn_incomplete');
-        if (init.agentCapabilities?.sessionCapabilities?.close) await currentRpc.request('session/close', { sessionId });
-        const exit = await currentRpc.close();
-        if (exit.code != null && exit.code !== 0) throw new SessionError('process_error');
-        phase = 'completed';
-        const stop = budgets ? 'submitted' : undefined;
-        store.save(phase, { stopReason: result.stopReason, ...(stop ? { stop } : {}), completedAt: new Date().toISOString() });
-        return { code: 0, observedExitCode: exit.code, processSignal: exit.signal, elapsedMs: Date.now() - started, sessionId, directory, transport: spec.transport, stop, stopReason: result.stopReason, recoveryAttempts: totalRecoveries };
-      } catch (error) {
-        const failure = classifyAuditFailure({ code: 1, rpcError: error.reason === 'provider_error' ? error.message : undefined });
-        const reason = signal?.aborted ? 'cancelled' : error.reason === 'provider_error' && ['provider_policy', 'usage_limit', 'auth_required', 'mcp_unavailable'].includes(failure.reason) ? failure.reason : error.reason || 'process_error';
-        if (reason === 'transport_lost' && resumeCapable && sessionId && totalRecoveries < maxRecoveries && !signal?.aborted) {
-          totalRecoveries++;
-          store.save('interrupted', { reason, recoveryAttempts: (store.state.recoveryAttempts || 0) + 1 });
-          await currentRpc.close();
-          continue;
-        }
-        throw new SessionError(reason);
-      } finally { observedExit = await currentRpc.close(); currentRpc = null; }
+      const result = await runTurn(s, spec, maxRecoveries);
+      if (result) return result;
     }
   } catch (error) {
-    phase = error.reason === 'cancelled' ? 'cancelled' : 'failed';
-    store.save(phase, { failureReason: error.reason || 'process_error', observedExitCode: observedExit?.code ?? null, processSignal: observedExit?.signal ?? null });
-    return { code: error.reason === 'cancelled' ? 130 : 1, observedExitCode: observedExit?.code, processSignal: observedExit?.signal, elapsedMs: Date.now() - started, failureReason: error.reason || 'process_error', sessionId, directory };
+    s.phase = error.reason === 'cancelled' ? 'cancelled' : 'failed';
+    s.store.save(s.phase, { failureReason: error.reason || 'process_error', observedExitCode: s.observedExit?.code ?? null, processSignal: s.observedExit?.signal ?? null });
+    return { code: error.reason === 'cancelled' ? 130 : 1, observedExitCode: s.observedExit?.code, processSignal: s.observedExit?.signal, elapsedMs: Date.now() - s.started, failureReason: error.reason || 'process_error', sessionId: s.sessionId, directory: options.directory };
   } finally { clearInterval(timer); signal?.removeEventListener('abort', abort); }
 }
