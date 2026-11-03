@@ -29,6 +29,7 @@ export const FAILURE_MESSAGES = {
   native_turn_failed: 'Native CLI did not produce a successful structured turn result.',
   sandbox_unavailable: 'Docker sandbox was lost before review completion; inspect harness/host/lifecycle.json and resume into a fresh sandbox.',
   permission_denied: 'Agent requested a host capability unavailable to this audit session.',
+  cost_ceiling: 'The reviewer reached the run cost ceiling (--max-cost-usd) before this assignment, so it was not reviewed.',
 };
 
 const RPC_ERROR_REASONS = [

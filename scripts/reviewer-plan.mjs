@@ -8,26 +8,9 @@ import { GRACE } from './bridge-budget.mjs';
 import { families } from './reviewer-families.mjs';
 import { passRoles } from './review-briefs.mjs';
 import { formatReviewerSpec, parseReviewerSpec } from './reviewer-registry.mjs';
-import { SURFACES } from './orchestrator-surfaces.mjs';
+import { assignJobs, selectSurfaces } from './reviewer-plan-assign.mjs';
 
-export function selectSurfaces(surfaceArg) {
-  const want = String(surfaceArg || 'all').toLowerCase();
-  const selected = want === 'all' ? SURFACES : SURFACES.filter((s) => s.id === want || s.slug === want);
-  if (!selected.length) throw new Error(`Unknown surface: ${surfaceArg}`);
-  return selected;
-}
-
-// Jobs are `<reviewerId>-sN-<slug>`. matrix: every reviewer x every selected surface.
-// round-robin: with --surface all surface i goes to reviewer i % n (today's behaviour); a single surface goes to everyone.
-export function assignJobs({ reviewers, surfaceArg = 'all', assign = 'matrix' }) {
-  const surfaces = selectSurfaces(surfaceArg);
-  const all = String(surfaceArg || 'all').toLowerCase() === 'all';
-  const pairs = assign === 'round-robin' && all
-    ? surfaces.map((surface, i) => [reviewers[i % reviewers.length], surface])
-    : surfaces.flatMap((surface) => reviewers.map((reviewer) => [reviewer, surface]));
-  // Order by reviewer queue so one active job per reviewer keeps today's per-provider ordering.
-  return pairs.map(([reviewer, surface]) => ({ name: `${reviewer.id}-${surface.id}-${surface.slug}`, reviewer, surface }));
-}
+export { assignJobs, selectSurfaces };
 
 // OD-05 order. First usable one wins; `reason` says why it won or why none did.
 export const ORCHESTRATOR_ORDER = ['cli:claude:opus', 'key:anthropic:claude-opus-5-5', 'openrouter:anthropic/claude-opus-5.5', 'key:zai:glm-5.3', 'scripted:judge'];

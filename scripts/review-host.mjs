@@ -1,116 +1,118 @@
 #!/usr/bin/env node
-// Offline multi-pass review of the bundled demo fixture. Used when OMNI_DEMO_HOST=1 so the
-// budget check does not need a sandbox image. The bridge still serves the fixture read-only.
+// Offline review of the bundled demo fixture without a sandbox image: `audit demo --no-docker` and
+// `audit run` under OMNI_DEMO_HOST=1. The bridge serves the fixture read-only from the host (--demo-host);
+// target tests are not executed. Passes, budgets, usage rows and budget health come from the same pass
+// loop as the Docker path (reviewer-pass-loop.mjs).
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runReviewSession } from './agent-session.mjs';
 import { digest } from './agent-session-store.mjs';
+import { deriveSubmission, readCanonicalSubmission } from './audit-submission.mjs';
 import { digestTree } from './bridge-tools-common.mjs';
-import { assignJobs } from './reviewer-plan.mjs';
-import { writeReportFile, readReportJson } from './report-contract.mjs';
+import { renderMarkdownFromFindings } from './docker-mcp-bridge.mjs';
+import { writeReportFile } from './report-contract.mjs';
 import { REVIEW_WORKFLOW } from './review-workflow.mjs';
+import { families } from './reviewer-families.mjs';
+import { withKeyFingerprint } from './reviewer-env.mjs';
+import { runReviewerPasses } from './reviewer-pass-loop.mjs';
+import { assignJobs, defaultAssign } from './reviewer-plan-assign.mjs';
 import { DEMO_FIXTURE } from './scripted-strategies.mjs';
-import { renderBrief, passRole } from './review-briefs.mjs';
-import { archivePassSubmission, passCalls, writePassUsage } from './review-passes.mjs';
 import { budgetHealth } from './verification-health.mjs';
 
-const HERE = path.dirname(fileURLToPath(import.meta.url));
+const DEFAULT_BUDGETS = Object.freeze({ passes: 2, toolBudget: 40, maxCostUsd: null });
+const CODE_FILE = /\.(rs|ts|js|mjs)$/;
 
-function surfaceSlug(surface) {
-  return String(surface?.id || surface || 's1').toLowerCase();
+// Files the pass-2 brief may list as unread: fixture source, never its answer key.
+function briefFiles(files) {
+  return files.map((file) => file.path).filter((rel) => CODE_FILE.test(rel) && !rel.split('/').some((part) => part === 'answers' || part === 'node_modules'));
 }
 
-function readAgent(directory) {
-  try { return readReportJson(path.join(directory, 'workspace'), 'api-session.json'); }
-  catch { return {}; }
+function hostIdentity(job, sourceDigest) {
+  return {
+    name: job.name, agent: job.reviewer.id, role: 'auditor', workflow: REVIEW_WORKFLOW,
+    model: job.reviewer.model, family: job.reviewer.family, provider: job.reviewer.provider,
+    sourceDigest, assignmentDigest: digest(job.surface), surface: job.surface.code,
+  };
+}
+
+function bridgeArgs({ fixture, out, job, identityRel, pass, toolBudget }) {
+  return [
+    '--demo-host', fixture, '--report-dir', out, '--role', 'auditor', '--auditor', job.name,
+    '--agent', job.reviewer.id, '--surface', job.surface.code, '--pass', String(pass), '--tool-budget', String(toolBudget),
+    '--identity-file', path.join(out, identityRel), '--reviewers-file', path.join(out, 'harness', 'reviewers.json'),
+  ];
+}
+
+function writePlanRecords(run) {
+  const { out, request, published, budgets, assign, seen, jobs } = run;
+  writeReportFile(out, 'source-manifest.json', `${JSON.stringify({ version: 1, digest: seen.digest, files: seen.files }, null, 2)}\n`);
+  writeReportFile(out, 'harness/reviewers.json', `${JSON.stringify({ version: 1, reviewers: published, budgets, assign, preset: request.preset || null }, null, 2)}\n`);
+  writeReportFile(out, 'harness/sandbox.md', '# Sandbox\n\n| demo-host | ran | target tests are not executed on the host snapshot |\n');
+  run.meta = {
+    name: 'demo-fixture', mode: 'local', source: DEMO_FIXTURE, surface: run.surfaceArg, demo: true,
+    agents: published.map((r) => r.id), models: Object.fromEntries(published.map((r) => [r.id, r.model])),
+    reviewers: published, assign, budgets, preset: request.preset || null, auditors: jobs.map((job) => job.name),
+    workerExits: Object.fromEntries(jobs.map((job) => [job.name, null])), crosscheckExits: {}, stageFailures: [],
+    finalized: false, sandboxHardening: 1, workflow: REVIEW_WORKFLOW, submissionAuthority: 'mcp_commit',
+  };
+  writeReportFile(out, 'meta.json', `${JSON.stringify(run.meta, null, 2)}\n`);
+}
+
+async function reviewHostJob(run, job, env) {
+  const { out, budgets } = run;
+  const identity = hostIdentity(job, run.seen.digest);
+  const identityRel = `harness/identities/${job.name}.json`;
+  writeReportFile(out, identityRel, JSON.stringify(identity));
+  writeReportFile(out, `harness/assignments/${job.name}.json`, JSON.stringify(job.surface));
+  const directory = path.join(out, 'sessions', job.name);
+  writeReportFile(out, `harness/session-${job.name}.json`, JSON.stringify({ directory, identity, transport: families.get(job.reviewer.family).transport }));
+  const loop = await runReviewerPasses({
+    out, name: job.name, reviewerId: job.reviewer.id, surface: job.surface.code, budgets, files: run.files, ceilings: run.ceilings,
+    runPass: ({ pass, brief, resume }) => runReviewSession({
+      directory, identity, env, budgets, prices: run.request.prices || null, resume,
+      bridgeArgs: bridgeArgs({ fixture: run.fixture, out, job, identityRel, pass, toolBudget: budgets.toolBudget }),
+      prompt: `${brief}\nReview ${job.surface.code} as ${job.reviewer.provider}.`,
+      logFile: path.join(out, 'harness', 'host', `agent-${job.name}-pass-${pass}.log`),
+    }),
+  });
+  run.healthRows.push(...loop.health);
+  const committed = fs.existsSync(path.join(out, 'submissions', `${job.name}.json`));
+  if (committed) deriveSubmission(out, readCanonicalSubmission(out, job.name, identity), renderMarkdownFromFindings);
+  // A session error fails the run; a budget or cost stop without a report is recorded (budget health) and kept.
+  const state = loop.result.code !== 0 ? 'failed' : committed && !loop.result.skipped ? 'collected' : 'incomplete';
+  run.meta.workerExits[job.name] = state === 'collected' ? 0 : loop.result.code || 1;
+  if (state !== 'collected') run.meta.stageFailures.push(`auditor_${state === 'failed' ? 'error' : 'incomplete'}:${job.name}`);
+  const reason = loop.result.skipped ? 'cost_ceiling' : loop.result.failureReason || (committed ? 'process_error' : 'missing_report');
+  return { name: job.name, adapter: job.reviewer.id, state, passesCompleted: loop.passesCompleted, turnCode: loop.result.code ?? null, ...(loop.servedModel ? { servedModel: loop.servedModel } : {}), ...(state === 'collected' ? {} : { failure: { reason } }) };
 }
 
 export async function runHostReview(request, env = process.env) {
   const fixture = fs.realpathSync(DEMO_FIXTURE);
   if (fs.realpathSync(request.target) !== fixture) throw new Error('demo-host serves only the bundled fixture');
   const out = path.resolve(request.out);
-  fs.mkdirSync(path.join(out, 'harness', 'identities'), { recursive: true, mode: 0o700 });
-  fs.mkdirSync(path.join(out, 'harness', 'host'), { recursive: true, mode: 0o700 });
-  fs.mkdirSync(path.join(out, 'sessions'), { recursive: true, mode: 0o700 });
+  for (const dir of ['harness/identities', 'harness/assignments', 'harness/host', 'sessions', 'auditors']) fs.mkdirSync(path.join(out, dir), { recursive: true, mode: 0o700 });
   const reviewers = request.reviewers;
-  const budgets = request.budgets || { passes: 2, toolBudget: 40, maxCostUsd: null };
-  const passes = budgets.passes;
-  const toolBudget = budgets.toolBudget;
+  const surfaceArg = request.surface || 's1';
+  const assign = defaultAssign({ assign: request.assign, reviewers });
   const seen = digestTree(fixture);
-  const jobs = assignJobs({ reviewers, surfaceArg: request.surface || 's1', assign: request.assign || 'matrix' });
-  writeReportFile(out, 'source-manifest.json', `${JSON.stringify({ version: 1, digest: seen.digest, files: seen.files }, null, 2)}\n`);
-  writeReportFile(out, 'harness/reviewers.json', `${JSON.stringify({ version: 1, reviewers, budgets, assign: request.assign || 'matrix' }, null, 2)}\n`);
-  writeReportFile(out, 'harness/sandbox.md', '# Sandbox\n\n| demo-host | ran | target tests are not executed on the host snapshot |\n');
-  const files = [];
-  const walk = (dir, rel) => {
-    for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
-      if (ent.name === 'answers' || ent.name === 'node_modules') continue;
-      const next = rel ? `${rel}/${ent.name}` : ent.name;
-      if (ent.isDirectory()) walk(path.join(dir, ent.name), next);
-      else if (/\.(rs|ts|js|mjs)$/.test(ent.name)) files.push(next);
-    }
+  const run = {
+    out, request, fixture, seen, surfaceArg, assign, budgets: request.budgets || DEFAULT_BUDGETS,
+    published: reviewers.map((reviewer) => withKeyFingerprint(reviewer, families.envAllowlist(reviewer), env)),
+    jobs: assignJobs({ reviewers, surfaceArg, assign }), files: briefFiles(seen.files), healthRows: [], ceilings: new Set(),
   };
-  walk(fixture, '');
-  const healthRows = [];
-  const ceilings = new Set();
-  for (const job of jobs) {
-    const identity = {
-      name: job.name, agent: job.reviewer.id, role: 'auditor', workflow: REVIEW_WORKFLOW,
-      model: job.reviewer.model, family: job.reviewer.family, provider: job.reviewer.provider,
-      sourceDigest: seen.digest, assignmentDigest: digest(job.surface), surface: job.surface.code,
-    };
-    const identityRel = `harness/identities/${job.name}.json`;
-    writeReportFile(out, identityRel, JSON.stringify(identity));
-    const directory = path.join(out, 'sessions', job.name);
-    let completed = 0;
-    for (let pass = 1; pass <= passes; pass++) {
-      const startedAt = new Date().toISOString();
-      if (ceilings.has(job.reviewer.id)) {
-        writePassUsage(out, { reviewerId: job.reviewer.id, surface: surfaceSlug(job.surface), pass, role: passRole(pass), calls: 0, stop: 'cost', costSource: 'none', startedAt, endedAt: startedAt, skipped: 'cost_ceiling' });
-        continue;
-      }
-      if (pass > 1) archivePassSubmission(out, job.name, pass - 1);
-      const prior = passCalls(out, job.reviewer.id, job.surface.code, pass - 1);
-      const brief = renderBrief({ pass, passes, toolBudget, filesRead: prior.filesRead || [], files });
-      const bridgeArgs = [
-        '--demo-host', fixture, '--report-dir', out, '--role', 'auditor', '--auditor', job.name,
-        '--agent', job.reviewer.id, '--surface', job.surface.code, '--pass', String(pass), '--tool-budget', String(toolBudget),
-        '--identity-file', path.join(out, identityRel), '--reviewers-file', path.join(out, 'harness', 'reviewers.json'),
-      ];
-      const result = await runReviewSession({
-        directory, identity, bridgeArgs, env, budgets, prices: request.prices || null, resume: pass > 1,
-        prompt: `${brief}\nReview ${job.surface.code} as ${job.reviewer.provider}.`,
-        logFile: path.join(out, 'harness', 'host', `agent-${job.name}-pass-${pass}.log`),
-      });
-      const record = passCalls(out, job.reviewer.id, job.surface.code, pass);
-      const agent = readAgent(directory);
-      const agentStop = agent.stop || null;
-      const rows = Array.isArray(agent.usage) ? agent.usage : [];
-      const submitted = fs.existsSync(path.join(out, 'submissions', `${job.name}.json`));
-      let stop = agentStop === 'cost' ? 'cost' : agentStop === 'budget' ? 'budget' : submitted ? (record.calls >= toolBudget ? 'budget' : 'submitted') : 'error';
-      if (result.code !== 0 && stop !== 'cost') stop = 'error';
-      const endedAt = new Date().toISOString();
-      const costSource = rows.some((row) => row.costSource === 'reported') ? 'reported' : rows.some((row) => row.costSource === 'estimated') ? 'estimated' : 'none';
-      writePassUsage(out, {
-        reviewerId: job.reviewer.id, surface: surfaceSlug(job.surface), pass, role: passRole(pass),
-        calls: record.calls, tokensIn: rows.reduce((n, row) => n + (Number(row.prompt_tokens) || 0), 0),
-        tokensOut: rows.reduce((n, row) => n + (Number(row.completion_tokens) || 0), 0),
-        cost: rows.reduce((n, row) => n + (Number(row.cost) || 0), 0),
-        stop, costSource, startedAt, endedAt,
-      });
-      healthRows.push({ reviewer: job.reviewer.id, stop, submitted: stop === 'cost' ? false : submitted });
-      if (stop === 'cost') ceilings.add(job.reviewer.id);
-      if (result.code !== 0 && stop !== 'cost') throw new Error(`${job.name} pass ${pass} failed: ${result.failureReason || result.code}`);
-      completed = pass;
-    }
-    job.passesCompleted = completed;
-  }
-  const health = budgetHealth(healthRows);
+  writePlanRecords(run);
+  const workers = [];
+  for (const job of run.jobs) workers.push(await reviewHostJob(run, job, env));
+  const health = budgetHealth(run.healthRows);
   writeReportFile(out, 'harness/budget-health.json', `${JSON.stringify(health, null, 2)}\n`);
-  writeReportFile(out, 'workers.json', `${JSON.stringify({ version: 1, jobs: jobs.map((job) => ({ name: job.name, adapter: job.reviewer.id, state: 'collected', passesCompleted: job.passesCompleted, turnCode: 0 })) }, null, 2)}\n`);
-  writeReportFile(out, 'meta.json', `${JSON.stringify({ name: 'demo-fixture', demo: true, surface: request.surface || 's1', reviewers, budgets, agents: reviewers.map((r) => r.id), auditors: jobs.map((j) => j.name), workflow: REVIEW_WORKFLOW }, null, 2)}\n`);
-  return { out, health, jobs };
+  writeReportFile(out, 'workers.json', `${JSON.stringify({ version: 1, policy: 'demo_host_bridge', sourceDigest: seen.digest, jobs: workers }, null, 2)}\n`);
+  const served = Object.fromEntries(workers.filter((w) => w.servedModel).map((w) => [w.adapter, w.servedModel]));
+  run.meta.reviewers = run.published.map((r) => (served[r.id] ? { ...r, servedModel: served[r.id] } : r));
+  writeReportFile(out, 'meta.json', `${JSON.stringify({ ...run.meta, finalized: true, date: new Date().toISOString() }, null, 2)}\n`);
+  const failed = workers.filter((w) => w.state === 'failed');
+  if (failed.length) throw new Error(`${failed.map((w) => `${w.name} (${w.failure.reason})`).join(', ')} did not complete; partial output kept in ${out}`);
+  return { out, health, jobs: workers };
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
