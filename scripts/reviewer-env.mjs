@@ -2,14 +2,19 @@
 // ORCHESTRATION section 1.1: the process gets the base session variables plus its own allow-list.
 // The bridge and the sandbox get the base set only; a key never rides along with them.
 import crypto from 'node:crypto';
+import path from 'node:path';
 import { sessionEnvironment } from './provider-cli.mjs';
 
 const CONTROL = ['OMNI_HTTP_REPLAY', 'OMNI_HTTP_RECORD', 'OMNI_LIVE', 'OMNI_API_TIMEOUT_MS', 'OMNI_DEMO'];
+// The reviewer process runs with its session workspace as cwd, so a relative fixture directory is
+// resolved against the operator's cwd here, before it crosses into the child.
+const DIRECTORIES = new Set(['OMNI_HTTP_REPLAY', 'OMNI_HTTP_RECORD']);
 
-export function reviewerProcessEnv(source = process.env, allow = []) {
+export function reviewerProcessEnv(source = process.env, allow = [], cwd = process.cwd()) {
   const env = sessionEnvironment(source);
   for (const name of [...allow, ...CONTROL]) {
-    if (typeof source[name] === 'string' && source[name]) env[name] = source[name];
+    if (typeof source[name] !== 'string' || !source[name]) continue;
+    env[name] = DIRECTORIES.has(name) ? path.resolve(cwd, source[name]) : source[name];
   }
   return env;
 }
