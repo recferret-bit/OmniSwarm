@@ -29,6 +29,7 @@ docs/       plan, spec, hackathon, RULES.md
 | Engine report | fix/engine-report | debate on the run's real claims, debater/orchestrator bridge roles, adjudicate + general-review phases with a cross-vendor judge, `finalStatus` in data, six distinct golden repos with computed union/majority, sectioned report v2, reviewer pages with working filters and per-render nonce, screener on exit codes and real output, secret sweep with provider-key patterns |
 | Engine sandbox | fix/engine-sandbox | worker runtime mounted as its import closure, root-owned `node_modules` seal, generic plan names, harness/sandbox-lib split; Docker suite 14/33 → 34/34 |
 | Debate wiring | fix/debate-wiring | debate/judge/general-review sessions through the real bridge, submission ids for the new roles, debate in the host demo, `--debate-*` flags, plan-time `scripted_judge_demo_only` |
+| Contract peer rule | lead step | the report contract now expects cross-checks only from another vendor, the same rule the orchestrator uses; the Docker demo had ended INCOMPLETE because same-vendor scripted reviewers "owed" cross-checks nobody launched |
 | Engine move | lead step | engine under `engine/`; `bin/audit` sets REPO_ROOT and AUDIT_ROOT; reports and config stay at the repo root |
 
 ## Gates at the end
@@ -44,5 +45,5 @@ docs/       plan, spec, hackathon, RULES.md
 - A SIGTERM-interrupted job spends its one retry; `/api/ledger` and report disk hygiene not built.
 - W12 rows: provisioning, firewall, SECURITY.md, CI deploy, uptime, COST.md, OWNER_TASKS.md.
 - W14 content: README sections (real review, hosted demo, NEAR table, disclosures, eval table), SUBMISSION.md fields, dogfood review + attestation.
-- `--no-docker` host demo stays INCOMPLETE by design (no test catalog, scanners or cross-check without the sandbox).
+- The demo ends `INCOMPLETE VERIFICATION` with review outputs validated: the fixture has no test suite or lockfile and the sandbox has no cargo-near/WASM target. The `--no-docker` host demo has no test catalog or scanners at all.
 - `eval:golden` rewrites `engine/eval/RESULTS.md` with the current commit on every run.

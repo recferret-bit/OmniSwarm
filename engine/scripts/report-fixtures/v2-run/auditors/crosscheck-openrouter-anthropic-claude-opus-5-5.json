@@ -1,21 +1,5 @@
 [
   {
-    "id": "cli-claude-opus-s1-auth#0",
-    "verdict": "upheld",
-    "reason": "Read the cited line.",
-    "evidence": [
-      "src/lib.rs:16"
-    ]
-  },
-  {
-    "id": "cli-claude-opus-s1-auth#1",
-    "verdict": "upheld",
-    "reason": "Read the cited line.",
-    "evidence": [
-      "src/lib.rs:40"
-    ]
-  },
-  {
     "id": "key-zai-glm-5-3-s1-auth#0",
     "verdict": "upheld",
     "reason": "Read the cited line.",

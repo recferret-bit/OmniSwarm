@@ -266,10 +266,15 @@ function reviewerReportErrors(root) {
 }
 
 // Every reviewer with peer claims owes a validated cross-check; a cross-check with nothing assigned is unexpected.
+// Peers follow the orchestrator's rule (crosscheck.mjs peerClaims): another reviewer AND another vendor.
 function crosscheckAssignments(root, meta, reports, explain, errors) {
   const assignments = {};
+  const reviewers = reviewersOfMeta(meta);
+  const vendorOf = (id) => reviewers.find((r) => r.id === id)?.vendor ?? null;
   for (const adapter of meta.agents) {
-    const ids = reports.flatMap((r) => adapterOf(r.name) === adapter ? [] : r.data.slice(0, -1).map((_, i) => `${r.name}#${i}`));
+    const own = vendorOf(adapter);
+    const isPeer = (name) => adapterOf(name) !== adapter && (!own || vendorOf(adapterOf(name)) !== own);
+    const ids = reports.flatMap((r) => isPeer(r.name) ? r.data.slice(0, -1).map((_, i) => `${r.name}#${i}`) : []);
     if (!ids.length) continue;
     assignments[adapter] = ids;
     if (meta.crosscheckExits?.[adapter] !== 0) errors.push(`${adapter}: missing or failed cross-check exit. ${explain(adapter, true)}`);

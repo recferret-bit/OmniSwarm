@@ -116,6 +116,17 @@ test('W01-09: a matrix run over every surface validates every reviewer x surface
   assert.ok(loadAuditors(f.dir).health.errors.some((e) => /Declared auditor inventory does not match/.test(e)));
 });
 
+test('same-vendor reviewers owe no cross-check of each other, matching the orchestrator peer rule', (t) => {
+  const agents = ['scripted-baseline', 'scripted-paranoid'];
+  const reviewers = agents.map((id) => ({ id, family: 'scripted', provider: id.slice(9), vendor: 'scripted', model: id.slice(9) }));
+  const f = fixture(t, agents);
+  Object.assign(f.meta, { reviewers, models: { [agents[0]]: 'baseline', [agents[1]]: 'paranoid' } });
+  for (const id of agents) f.save(id, [finding({ title: `Claim ${id}`, location: [`src/${id}.ts:3`] }), controls]);
+  const { health } = loadAuditors(f.dir);
+  assert.ok(!health.errors.some((e) => /cross-check/.test(e)), health.errors.join('\n'));
+  assert.equal(health.state, 'validated_outputs', health.errors.join('\n'));
+});
+
 test('missing workers cannot become a complete zero-finding report', (t) => {
   const f = fixture(t, ['claude', 'grok']);
   f.save('claude', [controls]);

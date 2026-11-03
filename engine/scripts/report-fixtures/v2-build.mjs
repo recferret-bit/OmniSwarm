@@ -38,10 +38,12 @@ for (const id of reviewers.map((r) => r.id)) {
   put(`auditors/${id}-s1-auth.json`, [...(filed[id] || []), { verified_safe: [] }]);
   put(`auditors/${id}-s1-auth.md`, 'Source review only.\n');
 }
-// Every reviewer cross-checks every other reviewer's claims; one refutes the arithmetic claim (PARTIAL_REVIEW).
+// Every reviewer cross-checks the claims of reviewers from another vendor (crosscheck.mjs peerClaims); one refutes
+// the arithmetic claim (PARTIAL_REVIEW).
 const claims = Object.entries(filed).flatMap(([id, rows]) => rows.map((row, n) => ({ id, claimId: `${id}-s1-auth#${n}`, row })));
+const vendorOf = (id) => reviewers.find((r) => r.id === id).vendor;
 for (const reviewer of reviewers) {
-  const verdicts = claims.filter((c) => c.id !== reviewer.id).map((c) => ({
+  const verdicts = claims.filter((c) => c.id !== reviewer.id && vendorOf(c.id) !== reviewer.vendor).map((c) => ({
     id: c.claimId, verdict: reviewer.id === zai && c.row.title === 'Unchecked arithmetic' ? 'refuted' : 'upheld',
     reason: 'Read the cited line.', evidence: c.row.location,
   }));

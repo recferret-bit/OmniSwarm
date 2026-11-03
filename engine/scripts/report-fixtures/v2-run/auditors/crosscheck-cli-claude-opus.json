@@ -14,13 +14,5 @@
     "evidence": [
       "src/lib.rs:30"
     ]
-  },
-  {
-    "id": "openrouter-anthropic-claude-opus-5-5-s1-auth#0",
-    "verdict": "upheld",
-    "reason": "Read the cited line.",
-    "evidence": [
-      "src/log.ts:3"
-    ]
   }
 ]
