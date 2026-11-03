@@ -5,6 +5,7 @@
 // WORKER_STOP_TIMEOUT_S ends is failed by pg-boss and spends a retry. Exits within systemd's TimeoutStopSec=180.
 import { createCore, createEngine } from '../container.ts';
 import { createBoss } from '../queue/boss.ts';
+import { isAppError } from '../shared/errors.ts';
 import { configOrExit, onShutdown } from '../shared/lifecycle.ts';
 import { createLogger } from '../shared/logger.ts';
 import { startWorker } from '../worker/worker.ts';
@@ -12,7 +13,13 @@ import { startWorker } from '../worker/worker.ts';
 const config = configOrExit('worker');
 const log = createLogger(config.logLevel, 'omniswarm-worker');
 const core = await createCore(config, undefined, { operator: true });
-const engine = await createEngine(config);
+// Startup check: with the cli engine, HOSTED_PRESET must be a preset of omniswarm.config.json that runs
+// only hosted-allowed reviewer families; anything else exits now with one line, not on the first job.
+const engine = await createEngine(config).catch((error: unknown) => {
+  if (!isAppError(error, 'PRESET_NOT_ALLOWED')) throw error;
+  process.stderr.write(`invalid environment: HOSTED_PRESET ${error.message}\n`);
+  process.exit(1);
+});
 const boss = createBoss(config, 'worker');
 boss.on('error', (error) => log.error({ err: error }, 'pg-boss error'));
 await boss.start();

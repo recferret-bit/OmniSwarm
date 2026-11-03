@@ -12,7 +12,7 @@ const BASE = {
 };
 const PROD = {
   ...BASE, NODE_ENV: 'production', ADMIN_TOKEN: 't'.repeat(40), RPC_URLS: 'https://rpc.testnet.fastnear.com',
-  REPORTS_BASE_URL: 'https://reports.example', OPERATOR_KEY_FILE: '/run/credentials/omniswarm-worker@1/operator-key',
+  REPORTS_BASE_URL: 'https://reports.example', OPERATOR_KEY_FILE: '/run/credentials/omniswarm-worker@1/operator-key', HOSTED_PRESET: 'hosted',
 };
 
 function issue(role: Parameters<typeof loadConfig>[0], env: Record<string, string | undefined>): string {
@@ -54,6 +54,8 @@ test('production refuses test adapters, a missing admin token and insecure cooki
   assert.match(issue('worker', { ...PROD, REPORTS_BASE_URL: undefined }), /REPORTS_BASE_URL/);
   assert.match(issue('api', { ...PROD, COOKIE_SECURE: '0' }), /COOKIE_SECURE/);
   assert.equal(loadConfig('api', PROD).http.cookieSecure, true);
+  for (const role of ['api', 'worker'] as const) assert.match(issue(role, { ...PROD, HOSTED_PRESET: undefined }), /HOSTED_PRESET must be set in production/);
+  assert.equal(loadConfig('api', BASE).intake.hostedPreset, 'hosted', 'outside production the default is the hosted preset');
 });
 
 test('the factories refuse test adapters in production even if config were bypassed', async () => {

@@ -12,6 +12,7 @@ import { CliEngineRunner } from '../../src/engine/cli/cli-runner.ts';
 import { assertPassable } from '../../src/engine/cli/env.ts';
 import type { EngineRunner } from '../../src/engine/port.ts';
 import { AppError } from '../../src/shared/errors.ts';
+import { APP_ROOT } from '../../src/shared/paths.ts';
 import { presetEnv, resolvePreset } from '../../src/worker/preset.ts';
 
 const SHA = 'a'.repeat(40);
@@ -70,9 +71,15 @@ test('the hosted preset gets only its provider keys; intake secrets never reach 
   assert.throws(() => assertPassable(['OPERATOR_KEY_FILE']), /may not be passed/);
 });
 
-test('presets with CLI subscriptions or an unvetted orchestrator are refused', () => {
-  assert.deepEqual(presetEnv('demo', ['scripted:baseline', 'scripted:judge']).envNames, []);
-  assert.throws(() => presetEnv('x', ['openrouter:a/b', 'cli:claude:opus']), (error: unknown) => error instanceof AppError && error.code === 'PRESET_NOT_ALLOWED');
+test('presets with CLI subscriptions, scripted reviewers or an unvetted orchestrator are refused', () => {
+  const notAllowed = (error: unknown) => error instanceof AppError && error.code === 'PRESET_NOT_ALLOWED';
+  assert.throws(() => presetEnv('demo', ['scripted:baseline', 'scripted:judge']), notAllowed, 'scripted runs on OmniSwarm fixtures only');
+  assert.throws(() => presetEnv('x', ['openrouter:a/b', 'cli:claude:opus']), notAllowed);
+  const example = path.join(APP_ROOT, '../../engine/omniswarm.config.example.json');
+  const hosted = resolvePreset(example, loadConfig('worker', { DATABASE_URL: 'postgres://u@h/d', CONTRACT_ID: 'registry.testnet' }).intake.hostedPreset);
+  assert.equal(hosted.name, 'hosted', 'the default HOSTED_PRESET exists in the example config and is allowed');
+  assert.deepEqual(hosted.envNames, ['OPENROUTER_API_KEY', 'ZAI_API_KEY', 'ZAI_BASE_URL']);
+  assert.throws(() => resolvePreset(example, 'demo'), notAllowed, 'the demo preset (scripted judge) is refused');
   const root = fakeEngine('', { presets: { auto: { reviewers: ['scripted:baseline'], orchestrator: 'recommended' } } });
   assert.throws(() => resolvePreset(path.join(root, 'omniswarm.config.json'), 'auto'), /orchestrator explicitly/);
   assert.throws(() => resolvePreset(path.join(root, 'omniswarm.config.json'), 'missing'), /not defined/);

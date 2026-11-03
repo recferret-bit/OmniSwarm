@@ -50,7 +50,9 @@ export const envSchema = z.object({
   ETA_MINUTES_PER_JOB: int(1, 1440).default(15),
   REPO_ALLOWLIST: list,
   REPO_DENYLIST: list,
-  HOSTED_PRESET: z.string().regex(PRESET).default('scripted'),
+  // The preset every request signs and the worker runs (engine omniswarm.config.json). Defaults to
+  // `hosted` (API-key reviewers, OD-04); production must name it. `scripted` runs only with the mock engine.
+  HOSTED_PRESET: z.string().regex(PRESET).optional(),
   ALLOWED_PRESETS: list,
   RATE_LIMIT_PER_MINUTE: int(1, 10_000).default(30),
   REQUESTS_PER_DAY: int(1, 1000).default(5),

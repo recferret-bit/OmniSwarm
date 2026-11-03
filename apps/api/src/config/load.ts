@@ -45,6 +45,13 @@ export class ConfigError extends Error {
 
 type Issue = { key: string; message: string };
 
+/** `hosted` exists in engine/omniswarm.config.example.json and runs only API-key reviewers (OD-04). */
+export const DEFAULT_HOSTED_PRESET = 'hosted';
+
+function hostedPreset(raw: RawEnv): string {
+  return raw.HOSTED_PRESET ?? DEFAULT_HOSTED_PRESET;
+}
+
 /** Production runs the real adapters by default; a test adapter must be named and is refused there. */
 function adapters(raw: RawEnv) {
   const production = raw.NODE_ENV === 'production';
@@ -63,6 +70,8 @@ function productionIssues(raw: RawEnv, role: Role): Issue[] {
   need('CHAIN_ADAPTER', chosen.chain === 'near', 'must be "near" in production (mock is test-only)');
   need('GITHUB_ADAPTER', chosen.github === 'live', 'must be "live" in production (recorded is test-only)');
   need('COOKIE_SECURE', raw.COOKIE_SECURE !== false, 'cannot be disabled in production');
+  // The API cannot read the engine config, so the preset it accepts must be named, not defaulted.
+  if (role !== 'migrate') need('HOSTED_PRESET', raw.HOSTED_PRESET !== undefined, 'must be set in production (a preset defined in omniswarm.config.json)');
   if (role === 'api') need('ADMIN_TOKEN', Boolean(raw.ADMIN_TOKEN), 'is required in production');
   if (role === 'worker') {
     need('ENGINE_RUNNER', chosen.engine === 'cli', 'must be "cli" in production (mock is test-only)');
@@ -84,8 +93,9 @@ function adapterIssues(raw: RawEnv, role: Role): Issue[] {
     if (!raw.RPC_URLS.length) issues.push({ key: 'RPC_URLS', message: 'is required for the near chain adapter' });
     if (role === 'worker' && !raw.OPERATOR_KEY_FILE) issues.push({ key: 'OPERATOR_KEY_FILE', message: 'is required for the near chain adapter' });
   }
-  const presets = raw.ALLOWED_PRESETS.length ? raw.ALLOWED_PRESETS : [raw.HOSTED_PRESET];
-  if (!presets.includes(raw.HOSTED_PRESET)) issues.push({ key: 'HOSTED_PRESET', message: 'must be one of ALLOWED_PRESETS' });
+  const hosted = hostedPreset(raw);
+  const presets = raw.ALLOWED_PRESETS.length ? raw.ALLOWED_PRESETS : [hosted];
+  if (!presets.includes(hosted)) issues.push({ key: 'HOSTED_PRESET', message: 'must be one of ALLOWED_PRESETS' });
   if (presets.some((preset) => !/^[a-z0-9-]{1,40}$/.test(preset))) issues.push({ key: 'ALLOWED_PRESETS', message: 'has an invalid preset name' });
   if (raw.ENGINE_TIMEOUT_S >= raw.QUEUE_EXPIRE_S) issues.push({ key: 'ENGINE_TIMEOUT_S', message: 'must be below QUEUE_EXPIRE_S' });
   return issues;
@@ -111,7 +121,7 @@ function build(raw: RawEnv): Config {
       priceYocto: raw.PRICE_YOCTO ?? (raw.NETWORK === 'testnet' ? '1000000000000000000000000' : null),
       recipient: raw.INTAKE_RECIPIENT ?? '', contractId: raw.CONTRACT_ID ?? '', maxRepoKb: raw.MAX_REPO_KB, maxQueue: raw.MAX_QUEUE,
       etaMinutesPerJob: raw.ETA_MINUTES_PER_JOB, allowlist: raw.REPO_ALLOWLIST, denylist: raw.REPO_DENYLIST,
-      hostedPreset: raw.HOSTED_PRESET, allowedPresets: raw.ALLOWED_PRESETS.length ? raw.ALLOWED_PRESETS : [raw.HOSTED_PRESET],
+      hostedPreset: hostedPreset(raw), allowedPresets: raw.ALLOWED_PRESETS.length ? raw.ALLOWED_PRESETS : [hostedPreset(raw)],
       requestsPerDay: raw.REQUESTS_PER_DAY,
     },
     chain: {

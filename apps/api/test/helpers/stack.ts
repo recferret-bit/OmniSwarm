@@ -33,7 +33,8 @@ export function testEnv(databaseUrl: string, overrides: Record<string, string> =
   return {
     NODE_ENV: 'test', LOG_LEVEL: process.env.TEST_LOG_LEVEL ?? 'silent', DATABASE_URL: databaseUrl,
     SESSION_SECRET: 'test-session-secret-0123456789abcdef0123', ADMIN_TOKEN, INTAKE_RECIPIENT: RECIPIENT, CONTRACT_ID: CONTRACT,
-    CHAIN_ADAPTER: 'mock', GITHUB_ADAPTER: 'recorded', ENGINE_RUNNER: 'mock', MOCK_ENGINE_STEP_MS: '20',
+    // The mock engine runs any preset name; `scripted` is what the dev wallet signs.
+    CHAIN_ADAPTER: 'mock', GITHUB_ADAPTER: 'recorded', ENGINE_RUNNER: 'mock', MOCK_ENGINE_STEP_MS: '20', HOSTED_PRESET: 'scripted',
     RUNS_ROOT: path.join(dir, 'runs'), REPORTS_ROOT: path.join(dir, 'published'), REPORTS_BASE_URL: 'https://reports.test',
     QUEUE_HEARTBEAT_S: '10', QUEUE_MONITOR_S: '1', QUEUE_RETRY_DELAY_S: '0', PROGRESS_POLL_MS: '50', RATE_LIMIT_PER_MINUTE: '10000', PATH: process.env.PATH ?? '',
     HOME: process.env.HOME ?? '', ...overrides,
