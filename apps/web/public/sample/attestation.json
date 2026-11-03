@@ -1,0 +1,14 @@
+{
+  "_fixture": "Recorded sample attestation. Not read from chain: /sample compares the bundled report files against this record and labels the result 'Attested (sample)'.",
+  "request_hash": "5a1e5a1e5a1e5a1e5a1e5a1e5a1e5a1e5a1e5a1e5a1e5a1e5a1e5a1e5a1e5a1e",
+  "repo": "near-examples/guest-book-examples",
+  "commit": "0123456789abcdef0123456789abcdef01234567",
+  "report_sha256": "cd8a533dc78a6d48e47e7fbe6bb7f9f591badd1e5854564cd4f3dd8f09ca38ab",
+  "report_uri": "https://reports.omniswarm.example/sample/index.json",
+  "deployed": null,
+  "code_hash": null,
+  "max_severity": "high",
+  "block_height": 0,
+  "block_timestamp_ms": 1792497600000,
+  "binding_confirmed": false
+}
