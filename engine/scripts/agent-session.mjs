@@ -30,17 +30,28 @@ function refusedToolName(call) {
 }
 
 const MAX_REFUSAL_CORRECTIONS = 3;
-const SUBMIT_TOOLS = ['submit_audit_report', 'submit_crosscheck_report'];
 const refusalCorrection = name => `The audit client refused your tool call ${name}: it is not one of the audit_docker review tools, and wrapped or nested tool calls are refused. Call each audit_docker tool directly by its own name, for example audit_docker__read_file or audit_docker__run_existing_tests. Continue the same assigned review from where you stopped, retain supported work, and submit the report.`;
-const submitTool = role => (role === 'crosscheck' ? 'submit_crosscheck_report' : 'submit_audit_report');
+// Per bridge role (bridge-tools-<role>.mjs): the one submit that ends this session's assignment, and the tools
+// the bridge must offer before an agent is launched. Debate and judge roles have read tools only, no test runs.
+// An orchestrator session is a judgement or the general review; its name (audit-submission ROLE_NAME) says which.
+const REVIEW_READS = ['list_existing_tests', 'run_existing_tests', 'get_audit_context', 'read_file'];
+const DEBATE_READS = ['get_audit_context', 'read_file'];
+const ROLE_TOOLS = {
+  auditor: { submit: () => 'submit_audit_report', reads: REVIEW_READS },
+  crosscheck: { submit: () => 'submit_crosscheck_report', reads: REVIEW_READS },
+  debater: { submit: () => 'submit_debate_turn', reads: DEBATE_READS },
+  orchestrator: { submit: name => (/-general-review$/.test(String(name)) ? 'submit_general_review' : 'submit_adjudication'), reads: DEBATE_READS },
+};
+const toolsOf = role => ROLE_TOOLS[role] || ROLE_TOOLS.auditor;
+const submitTool = (role, name) => toolsOf(role).submit(name);
 // The one "hand in your report" turn a budgeted pass gets when the agent ends without submitting.
-export const submitNowText = role => `This pass ended without a report. Call ${submitTool(role)} now with what you can support from the source you read, and disclose what you did not cover.`;
+export const submitNowText = (role, name) => `This pass ended without a report. Call ${submitTool(role, name)} now with what you can support from the source you read, and disclose what you did not cover.`;
 const CONTINUATION = '\n\nContinue the saved review for this exact source and assignment. Retain supported work and disclose remaining coverage. Use the current audit MCP bridge. If the report was already submitted successfully, finish without resubmitting it.';
 const PROVIDER_REASONS = ['provider_policy', 'usage_limit', 'auth_required', 'mcp_unavailable'];
 
 function modelValue(options) { return options?.find(option => option.category === 'model' || option.id === 'model')?.currentValue; }
 
-export async function preflightBridge(server, { cwd, env, signal, expectedRole }) {
+export async function preflightBridge(server, { cwd, env, signal, expectedRole, expectedName }) {
   const rpc = new AgentRpc({ executable: server.command, args: server.args, cwd, env });
   const abort = () => rpc.fail(new SessionError('cancelled'));
   signal?.addEventListener('abort', abort, { once: true });
@@ -50,7 +61,7 @@ export async function preflightBridge(server, { cwd, env, signal, expectedRole }
     rpc.notify('notifications/initialized');
     const result = await rpc.request('tools/list');
     const names = new Set(result.tools?.map(tool => tool.name));
-    if (['write_poc', 'run_container_check', 'get_attack_plan'].some(name => names.has(name)) || !['list_existing_tests', 'run_existing_tests', 'get_audit_context', 'read_file', submitTool(expectedRole)].every(name => names.has(name))) throw new SessionError('mcp_unavailable');
+    if (['write_poc', 'run_container_check', 'get_attack_plan'].some(name => names.has(name)) || ![...toolsOf(expectedRole).reads, submitTool(expectedRole, expectedName)].every(name => names.has(name))) throw new SessionError('mcp_unavailable');
     await rpc.request('ping');
     return { state: 'ready', tools: [...names] };
   } catch (err) { throw err.reason === 'cancelled' ? err : new SessionError('mcp_unavailable'); }
@@ -90,7 +101,8 @@ function onSessionUpdate(s, turn, params) {
   if (update?.sessionUpdate === 'tool_call') {
     turn.toolCalls += 1;
     const title = String(update.title || '');
-    if (SUBMIT_TOOLS.some(name => title.includes(name))) turn.submitted = true;
+    const { identity } = s.options;
+    if (title.includes(submitTool(identity?.role, identity?.name))) turn.submitted = true;
     const { budgets } = s.options;
     if (budgets && !turn.submitted && !turn.budgetCancel && turn.toolCalls > budgets.toolBudget + GRACE) {
       turn.budgetCancel = true;
@@ -179,7 +191,7 @@ async function settleTurn(s, spec, turn, init, result) {
   if (providerStop(s.store) === 'cost') return endTurn(s, spec, 'cost', result.stopReason);
   if (budgets && result.stopReason === 'end_turn' && !turn.submitted && !turn.budgetCancel) {
     s.store.save('running', { event: 'submit_now' });
-    result = await s.rpc.request('session/prompt', { sessionId: s.sessionId, prompt: [{ type: 'text', text: submitNowText(identity.role) }] }, null);
+    result = await s.rpc.request('session/prompt', { sessionId: s.sessionId, prompt: [{ type: 'text', text: submitNowText(identity.role, identity.name) }] }, null);
   }
   if (budgets && !turn.submitted && (turn.budgetCancel || result.stopReason === 'end_turn' || result.stopReason === 'cancelled')) {
     try { s.rpc.notify('session/cancel', { sessionId: s.sessionId }); } catch { /* already cancelled */ }
@@ -241,7 +253,7 @@ export async function runReviewSession(options, { launch = buildSessionLaunch, p
   try {
     if (signal?.aborted) throw new SessionError('cancelled');
     const spec = launch({ agent: identity.agent, role: identity.role, family: identity.family, provider: identity.provider, model: identity.model, workDir: s.store.workspace, bridgeArgs, legacyConversationId, env, toolBudget: budgets?.toolBudget, maxTurns: budgets ? budgets.toolBudget + GRACE : undefined, maxCostUsd: budgets?.maxCostUsd, prices });
-    const bridge = await preflight(spec.mcpServers[0], { cwd: s.store.workspace, env: spec.bridgeEnv || spec.invocation.env, signal, expectedRole: identity.role });
+    const bridge = await preflight(spec.mcpServers[0], { cwd: s.store.workspace, env: spec.bridgeEnv || spec.invocation.env, signal, expectedRole: identity.role, expectedName: identity.name });
     s.store.save('bridge_ready', { bridge, transport: spec.transport });
     for (;;) {
       const result = await runTurn(s, spec, maxRecoveries);

@@ -120,6 +120,58 @@ readline.createInterface({input:process.stdin}).on('line', line => {
   assert.equal(handedIn.stop, 'submitted');
 });
 
+test('debate, judge and general-review sessions are forced to their own role\'s submit, not a review submit', async t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'audit-role-submit-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const executable = path.join(root, 'fixture.mjs');
+  fs.writeFileSync(executable, `
+import fs from 'node:fs';
+import readline from 'node:readline';
+const submit = process.argv[2];
+const send = msg => process.stdout.write(JSON.stringify({jsonrpc:'2.0',...msg})+'\\n');
+const sid = 'role-session';
+readline.createInterface({input:process.stdin}).on('line', line => {
+  const msg = JSON.parse(line);
+  if (msg.method === 'initialize') send({id:msg.id,result:{protocolVersion:1,agentCapabilities:{loadSession:true}}});
+  else if (msg.method === 'session/new') send({id:msg.id,result:{sessionId:sid}});
+  else if (msg.method === 'session/prompt') {
+    fs.appendFileSync('prompts.txt', JSON.stringify(msg.params.prompt[0].text) + '\\n');
+    send({method:'session/update',params:{sessionId:sid,update:{sessionUpdate:'tool_call',toolCallId:'s',title:submit}}});
+    send({id:msg.id,result:{stopReason:'end_turn'}});
+  }
+});
+`);
+  const run = (role, name, submit, dir) => runReviewSession(
+    { directory: path.join(root, dir), identity: { ...identity, role, name, surface: undefined }, bridgeArgs: [], prompt: 'Debate.', budgets: { toolBudget: 4, passes: 1, maxCostUsd: null } },
+    { heartbeatMs: 30_000, preflight: async () => ({ state: 'ready', tools: [] }), launch: ({ workDir }) => ({ invocation: { executable: process.execPath, args: [executable, submit], cwd: workDir, env: process.env }, mcpServers: [{}], transport: 'inert_acp_fixture' }) },
+  );
+  const cases = [
+    ['debater', 'claude-debate-cluster-1-r1', 'submit_debate_turn'],
+    ['orchestrator', 'claude-judge-cluster-1', 'submit_adjudication'],
+    ['orchestrator', 'claude-general-review', 'submit_general_review'],
+  ];
+  for (const [role, name, own] of cases) {
+    assert.equal((await run(role, name, own, `${name}-own`)).stop, 'submitted', `${name} submitting ${own}`);
+    const reviewSubmit = await run(role, name, 'submit_audit_report', `${name}-review`);
+    assert.equal(reviewSubmit.stop, 'budget', `${name}: a review submit does not hand in a ${role} assignment`);
+    const prompts = fs.readFileSync(path.join(root, `${name}-review`, 'workspace', 'prompts.txt'), 'utf8').trim().split('\n');
+    assert.match(prompts[1], new RegExp(`Call ${own} now`), name);
+  }
+});
+
+test('the bridge preflight accepts the debater and orchestrator tool sets, which have no test runs', async t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'audit-mcp-preflight-roles-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const bridge = new URL('./docker-mcp-bridge.mjs', import.meta.url).pathname;
+  const server = (role) => ({ command: process.execPath, args: [bridge, '--report-dir', root, '--role', role, '--agent', 'claude'] });
+  const debater = await preflightBridge(server('debater'), { cwd: root, env: process.env, expectedRole: 'debater', expectedName: 'claude-debate-cluster-1-r1' });
+  assert.ok(debater.tools.includes('submit_debate_turn') && !debater.tools.includes('run_existing_tests'));
+  for (const name of ['claude-judge-cluster-1', 'claude-general-review']) {
+    assert.equal((await preflightBridge(server('orchestrator'), { cwd: root, env: process.env, expectedRole: 'orchestrator', expectedName: name })).state, 'ready', name);
+  }
+  await assert.rejects(preflightBridge(server('debater'), { cwd: root, env: process.env, expectedRole: 'orchestrator', expectedName: 'claude-judge-cluster-1' }), /mcp_unavailable/);
+});
+
 test('W04-07: more than N+3 counted tool calls without a submit cancels the pass; the correction names the role\'s submit tool', async t => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'audit-flood-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
