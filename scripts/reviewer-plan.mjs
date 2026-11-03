@@ -63,14 +63,15 @@ export function renderPlan({ reviewers, assign, budgets, orchestrator, alternate
   lines.push(`Pass roles: ${passRoles(budgets.passes).join(', ')}. Worst case ${worst} calls.`);
   for (const r of reviewers) {
     const roles = passRoles(Math.min(budgets.passes, 2)).join(', ');
-    const gate = r.family === 'cli' && r.provider === 'grok' ? 'bridge+acp+--max-turns' : r.family === 'cli' ? 'bridge+acp' : 'bridge+loop';
+    const maxTurnsFlag = r.family === 'cli' && families.get('cli').providers[r.provider]?.maxTurnsFlag === true;
+    const gate = maxTurnsFlag ? 'bridge+acp+--max-turns' : r.family === 'cli' ? 'bridge+acp' : 'bridge+loop';
     lines.push(`${r.id}  ${budgets.passes} × ${budgets.toolBudget} (+${GRACE})  ${roles}  max ${worst} calls  gate: ${gate}`);
-    if (r.provider === 'grok') lines.push(`--max-turns ${budgets.toolBudget + GRACE}`);
+    if (maxTurnsFlag) lines.push(`--max-turns ${budgets.toolBudget + GRACE}`);
   }
   if (orchestrator === 'recommended') {
     const rec = recommendedOrchestrator({ env });
-    lines.push(`Orchestrator: recommended -> ${rec.spec || 'none'}; ${rec.reason}. No phase uses it yet.`);
-  } else if (orchestrator) lines.push(`Orchestrator: ${formatReviewerSpec(orchestrator)} (no phase uses it yet)`);
+    lines.push(`Orchestrator: recommended -> ${rec.spec || 'none'}; ${rec.reason}. It runs the debate and general-review phases.`);
+  } else if (orchestrator) lines.push(`Orchestrator: ${formatReviewerSpec(orchestrator)} (runs the debate and general-review phases)`);
   else lines.push('Orchestrator: none');
   if (alternateJudge) lines.push(`Alternate judge: ${formatReviewerSpec(alternateJudge)}`);
   for (const warning of warnings) lines.push(`Warning: ${warning}`);

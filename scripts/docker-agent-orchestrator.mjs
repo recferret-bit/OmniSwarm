@@ -21,7 +21,7 @@ import { HOST_DIR } from './sandbox-host-paths.mjs';
 import { runReviewSession } from './agent-session.mjs';
 import { REVIEW_WORKFLOW, buildExistingTestCatalog } from './review-workflow.mjs';
 import { families } from './reviewer-families.mjs';
-import { withKeyFingerprint } from './reviewer-env.mjs';
+import { publishReviewers } from './reviewer-publish.mjs';
 import { reviewersOfMeta } from './reviewer-registry.mjs';
 import { assignJobs, defaultAssign } from './reviewer-plan-assign.mjs';
 import { loadPhases, runPhases } from './orchestrator-phases.mjs';
@@ -106,7 +106,7 @@ function createRun(request, output, sealed, planned, options) {
   const run = {
     request, output, ...sealed, ...planned, review, startSandbox, cancellation, signal: cancellation.signal,
     reviewerById: new Map(planned.reviewers.map((r) => [r.id, r])),
-    published: planned.reviewers.map((reviewer) => withKeyFingerprint(reviewer, families.has(reviewer.family) ? families.envAllowlist(reviewer) : [], process.env)),
+    published: publishReviewers(planned.reviewers, process.env),
     budgets: request.budgets || null, prices: request.prices || null, dockerBin: resolveDockerBin(),
     stageFailures: [], providerFailures: {}, crosscheckExits: {}, budgetRows: [], costCeilings: new Set(),
     workerExits: Object.fromEntries(planned.jobs.map((j) => [j.name, null])),

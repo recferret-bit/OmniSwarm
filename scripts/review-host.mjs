@@ -14,7 +14,7 @@ import { renderMarkdownFromFindings } from './docker-mcp-bridge.mjs';
 import { writeReportFile } from './report-contract.mjs';
 import { REVIEW_WORKFLOW } from './review-workflow.mjs';
 import { families } from './reviewer-families.mjs';
-import { withKeyFingerprint } from './reviewer-env.mjs';
+import { publishReviewers } from './reviewer-publish.mjs';
 import { runReviewerPasses } from './reviewer-pass-loop.mjs';
 import { assignJobs, defaultAssign } from './reviewer-plan-assign.mjs';
 import { DEMO_FIXTURE } from './scripted-strategies.mjs';
@@ -98,7 +98,7 @@ export async function runHostReview(request, env = process.env) {
   const seen = digestTree(fixture);
   const run = {
     out, request, fixture, seen, surfaceArg, assign, budgets: request.budgets || DEFAULT_BUDGETS,
-    published: reviewers.map((reviewer) => withKeyFingerprint(reviewer, families.envAllowlist(reviewer), env)),
+    published: publishReviewers(reviewers, env),
     jobs: assignJobs({ reviewers, surfaceArg, assign }), files: briefFiles(seen.files), healthRows: [], ceilings: new Set(),
   };
   writePlanRecords(run);

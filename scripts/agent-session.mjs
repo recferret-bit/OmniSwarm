@@ -86,7 +86,7 @@ export async function runReviewSession(options, { launch = buildSessionLaunch, p
   signal?.addEventListener('abort', abort, { once: true });
   try {
     if (signal?.aborted) throw new SessionError('cancelled');
-    const spec = launch({ agent: identity.agent, family: identity.family, provider: identity.provider, model: identity.model, workDir: store.workspace, bridgeArgs, legacyConversationId, env, toolBudget: budgets?.toolBudget, maxTurns: budgets ? budgets.toolBudget + 3 : undefined, maxCostUsd: budgets?.maxCostUsd, prices });
+    const spec = launch({ agent: identity.agent, role: identity.role, family: identity.family, provider: identity.provider, model: identity.model, workDir: store.workspace, bridgeArgs, legacyConversationId, env, toolBudget: budgets?.toolBudget, maxTurns: budgets ? budgets.toolBudget + 3 : undefined, maxCostUsd: budgets?.maxCostUsd, prices });
     const bridge = await preflight(spec.mcpServers[0], { cwd: store.workspace, env: spec.bridgeEnv || spec.invocation.env, signal, expectedRole: identity.role });
     store.save('bridge_ready', { bridge, transport: spec.transport });
     for (;;) {
