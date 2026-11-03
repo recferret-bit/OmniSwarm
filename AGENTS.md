@@ -18,6 +18,7 @@ node scripts/harness.mjs --self-test              # lead patterns must hit fixtu
 npm run test:docker                               # Docker fixtures; needs the local image
 npm run check                                     # shell syntax, then npm test
 npm run test:schemas                              # packages/schemas examples, canonical message and helpers
+npm run test:tools                                # tools/*.test.mjs: screener, secret sweep, wave and worktree helpers
 npm run check:all                                 # every track gate; empty tracks print "skipped (no package yet)"
 ./bin/audit setup-agents                          # lockfile-pinned adapters into runtime/
 ./bin/audit check-agents                          # Docker and CLI presence only
@@ -87,7 +88,7 @@ The repository has six tracks with disjoint owned roots. A wave edits only its o
 | F Front | `apps/web/`, `tests/e2e/landing/` | `npm run test:landing && npm run test:e2e -- landing` |
 | I Infra | `infra/` | `npm run check:infra` |
 | S Security | `packages/guard/` (with its demo in `packages/guard/demo/`) | `npm run check:w13` |
-| Lead | `packages/schemas/`, `tools/`, `docs/plan/`, `docs/spec/`, root `package.json`, this file, `CLAUDE.md`, `.github/workflows/ci.yml` | `npm run test:schemas`, `npm run check:all` |
+| Lead | `packages/schemas/`, `tools/`, `docs/plan/`, `docs/spec/`, root `package.json`, this file, `CLAUDE.md`, `.github/workflows/ci.yml` | `npm run test:schemas`, `npm run test:tools`, `npm run check:all` |
 
 Rules for every track:
 
