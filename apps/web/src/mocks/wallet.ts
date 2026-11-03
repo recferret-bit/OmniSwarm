@@ -10,7 +10,6 @@ import type { PaymentTransaction } from '@/lib/near/payment';
 import { recordPayment } from './chain';
 import { updateState } from './db';
 
-export const connectorName = 'MockConnector';
 export const MOCK_ACCOUNT = 'alice.testnet';
 const SESSION_KEY = 'omniswarm.mock.wallet';
 
