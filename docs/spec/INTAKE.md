@@ -62,7 +62,7 @@ Statuses: `awaiting_payment → queued → running → publishing → done | fai
 - Rate limits: `/challenge` and `/quote` 30/min/IP; `/requests` 5/day and 1 active per account; global `MAX_QUEUE` (default 10).
 - Repo rules: public only, `size ≤ MAX_REPO_KB` (default 200 MB), optional allow-list mode for the hackathon demo, deny-list.
 - Inputs: repo regex `^[A-Za-z0-9-]{1,39}/[A-Za-z0-9._-]{1,100}$`; commit SHA `^[0-9a-f]{40}$`; everything else zod-validated; body limit 16 KB.
-- Ports: `ChainPort` (`verifyMessage`, `getTx`, `getRequest`, `attest`, `refund`, `viewAccount`, `viewCodeHash`), `GitHubPort`, `ClockPort`. Mocks for each with contract suites that W10 re-runs against testnet.
+- Ports: `ChainPort` (`health`, `keyPermission`, `getPaymentTx`, `getRequest`, `getAttestation`, `getPrice`, `viewAccount`, `getAttestationForAccount`, `blockTimestampMs`, `isReported`, `viewRegistry`; operator writes `markRunning`, `attest`, `refund`, `reportAddress`, signed by the worker only), `GitHubPort`, `ClockPort` (apps/api/src/chain/port.ts). Mocks for each with contract suites that W10 re-runs against testnet.
 - Secrets: provider keys, the backend FC key and the GitHub token live in `/etc/omniswarm/*.env` (root 0600) on the host; never in Postgres, never in the repo, never in the sandbox.
 - Logs: request id, account, repo, status; never message signatures beyond the hash, never keys.
 
