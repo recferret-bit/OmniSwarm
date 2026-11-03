@@ -344,6 +344,11 @@ if ! docker run -d --name "$SBX" \
   -v "$STAGE/src:/src:ro" \
   -v "$RUN":/out \
   -v "$SCRIPT_DIR/sandbox-inside.mjs:/opt/audit/sandbox-inside.mjs:ro" \
+  -v "$SCRIPT_DIR/sandbox-inside-builds.mjs:/opt/audit/sandbox-inside-builds.mjs:ro" \
+  -v "$SCRIPT_DIR/sandbox-inside-exec.mjs:/opt/audit/sandbox-inside-exec.mjs:ro" \
+  -v "$SCRIPT_DIR/sandbox-inside-node.mjs:/opt/audit/sandbox-inside-node.mjs:ro" \
+  -v "$SCRIPT_DIR/sandbox-inside-scans.mjs:/opt/audit/sandbox-inside-scans.mjs:ro" \
+  -v "$SCRIPT_DIR/sandbox-inside-state.mjs:/opt/audit/sandbox-inside-state.mjs:ro" \
   -v "$SCRIPT_DIR/sandbox-lib.mjs:/opt/audit/sandbox-lib.mjs:ro" \
   -v "$SCRIPT_DIR/sandbox-net.mjs:/opt/audit/sandbox-net.mjs:ro" \
   -v "$SCRIPT_DIR/sandbox-tree.mjs:/opt/audit/sandbox-tree.mjs:ro" \

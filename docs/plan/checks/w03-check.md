@@ -36,6 +36,8 @@ See exit 0 and two submissions; the OpenRouter replay reads a file, searches, th
 
 See `DEMO — not a review`, then `Demo report saved to: <out>`. `<out>/submissions/` has four files. `<out>/harness/bridge-scripted-*.json` contains `read_file`. `<out>/meta.json` has `"demo": true`. `<out>/report.html` contains `DEMO — not a review`. About 2 seconds.
 
+With Docker running, the same command without `--no-docker` reviews the fixture in the sandbox (about 4 minutes; the first run also builds the image, which compiles `cargo-near`). The coordinator runs three catalogued checks offline: `npm existing tests in client`, the NEAR WASM build (`cargo near build non-reproducible-wasm`) and NEAR clippy. All three pass, and `cargo-audit`, `npm-audit` and `node-deps` run against the committed lockfiles. `<out>/report-health.json` stays `incomplete` with exactly one gap, `NEAR contract tests in . are a local-sandbox coverage gap…`: the fixture is a near-sdk contract and `near-sandbox` cannot run offline. The demo prints `DEMO — verification limited by design`, then `Demo report saved to: <out>`, and exits 0. Any other gap, or a report that is not the bundled fixture's, exits 2. `./bin/audit run --repo <a NEAR repo>` with the same single gap still exits 2 (`audit-demo-verdict.test.mjs`).
+
 **4. check-agents.** Unset `OPENROUTER_API_KEY`, then:
 
 ```sh
