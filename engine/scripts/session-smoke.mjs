@@ -11,7 +11,6 @@ import { REVIEW_WORKFLOW } from './review-workflow.mjs';
 import { writeReportFile, readReportJson } from './report-files.mjs';
 
 const MODELS = { claude: 'opus', codex: 'gpt-6.1-sol', grok: 'grok-4.7', agy: 'gemini-4-argon-high' };
-const BRIDGE = fileURLToPath(new URL('./docker-mcp-bridge.mjs', import.meta.url));
 const IMAGE = 'node@sha256:c3de60bf2f9dd0ac6370e6117950ff62d6e339527e7472301c9c78a017978392';
 
 export async function qualifyAgentSessions({ out, agents = Object.keys(MODELS), models = MODELS, signal }) {

@@ -24,7 +24,6 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { readReportText, writeReportFile } from './report-files.mjs';
 import { newestReportDir as newestWith } from './report-util-files.mjs';
 
-const scriptsDir = path.dirname(fileURLToPath(import.meta.url));
 export const PAGES = [['report.html', 'report.pdf'], ['findings-by-model.html', 'findings-by-model.pdf'], ['reviewers.html', 'reviewers.pdf']];
 const PRINT_STYLE = '<style>@page { size: A4; margin: 12mm; }</style>';
 const BROWSERS = [

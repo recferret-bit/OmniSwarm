@@ -107,4 +107,3 @@ export const commonHandlers = Object.freeze({
   list_existing_tests: listExistingTests,
   run_existing_tests: runExistingTests,
 });
-export const COMMON_TOOL_NAMES = Object.keys(commonHandlers);

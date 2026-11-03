@@ -34,6 +34,3 @@ export function passCalls(root, reviewerId, surface, pass) {
   return budget.passes[passKey(surface, pass)] || { calls: 0, filesRead: [], finalizeOnlyAt: null };
 }
 
-export function sumCost(usage) {
-  return (usage || []).reduce((total, row) => total + (Number(row.cost) || 0), 0);
-}

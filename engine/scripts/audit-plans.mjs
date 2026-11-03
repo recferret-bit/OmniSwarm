@@ -376,7 +376,7 @@ export const PYTHON_CHECKS = {
   api_dto_abuse: ['FastAPI: every route should declare `response_model` (or return an explicit schema); flag returning ORM objects, `**row.__dict__`, `.dict()` of internal models, verbose `HTTPException(detail=...)` and debug tracebacks/`DEBUG=True` responses.'],
 };
 
-export function renderEcosystemLines(profile) {
+function renderEcosystemLines(profile) {
   const eco = profile.ecosystems;
   if (!eco) return [];
   const row = (name, e, extra = '') => `- **${name}**: ${e.detected ? 'DETECTED' : 'absent'}${e.sourceFiles != null ? ` (${e.sourceFiles} production source files${e.testFiles ? `, ${e.testFiles} test/script files` : ''})` : ''}${extra}`;
