@@ -69,6 +69,10 @@ test('hardening: the hostile fixture cannot influence what reviewers see (six in
   assert.match(attempts['write /work/node-shim'], /^refused/);
   assert.equal(attempts['spawn setsid daemon'], 'started');
   assert.equal(attempts['write /out/lifecycle.json'], 'succeeded', 'precondition: /out is still writable, so only host-side placement protects the lifecycle');
+  const firstRun = readReportJson(report, 'harness/existing-test-results-verification.json').at(-1);
+  assert.equal(firstRun.dependencies, 'sealed', 'the per-run copy took node_modules from the root-owned /work/deps seal');
+  assert.equal(await sh('stat -c "%U:%G %a" /work/deps'), 'root:root 755');
+  assert.equal(await sh('touch /work/deps/planted 2>/dev/null && echo wrote || echo refused'), 'refused', 'uid 10001 cannot write the dependency seal');
 
   await t.test(`${invariant('R-01-bridge-node').id}: the bridge still runs the real node`, async () => {
     assert.equal(await exec("process.stdout.write(require('node:fs').readlinkSync('/proc/self/exe'))"), '/usr/local/bin/node');
@@ -143,4 +147,31 @@ test('hardening: the hostile fixture cannot influence what reviewers see (six in
     process.stderr.write(`\nHOLD ${container} ${report}\n`);
     await new Promise(resolve => setTimeout(resolve, hold * 1000));
   }
+});
+
+// The handoff seal script on its own, on a scratch volume: which node_modules trees it copies, and that uid 10001
+// can read but not change the copy.
+test('hardening: the handoff seal copies prepared node_modules into a root-owned /work/deps', { skip: imagesPresent || required ? false : 'local image audit-sandbox:local is required' }, async t => {
+  assert.ok(imagesPresent, 'OMNI_REQUIRE_HARDENING=1 but the local image audit-sandbox:local is missing');
+  const volume = `omni-seal-test-${process.pid}-${Date.now()}`;
+  assert.equal(docker(['volume', 'create', volume]).status, 0);
+  t.after(() => docker(['volume', 'rm', '-f', volume]));
+  const inVolume = (user, script, extra = []) => docker(['run', '--rm', '--network', 'none', '--user', user, '--entrypoint', 'bash', '-v', `${volume}:/work`, ...extra, 'audit-sandbox:local', '-c', script]);
+  const prepared = inVolume('0:0', [
+    'mkdir -p /work/src/app/node_modules/dep /work/src/node_modules/.bin /work/src/.git/node_modules/x /work/src/target/node_modules/y /work/src/app/node_modules/dep/node_modules/inner',
+    'echo ok > /work/src/app/node_modules/dep/index.js && chmod 600 /work/src/app/node_modules/dep/index.js',
+    'echo root > /work/src/node_modules/root.js && ln -s ../root.js /work/src/node_modules/.bin/root',
+    'echo nested > /work/src/app/node_modules/dep/node_modules/inner/i.js',
+    'chown -R 10001:10001 /work/src',
+  ].join(' && '));
+  assert.equal(prepared.status, 0, prepared.stderr);
+  const sealed = inVolume('0:0', '/opt/audit/sandbox-seal.sh /work', ['--cap-drop', 'ALL', '--cap-add', 'CHOWN', '--cap-add', 'DAC_OVERRIDE', '--cap-add', 'FOWNER', '--security-opt', 'no-new-privileges', '--read-only', '-v', `${path.join(here, 'sandbox-seal.sh')}:/opt/audit/sandbox-seal.sh:ro`]);
+  assert.equal(sealed.status, 0, sealed.stderr);
+  const listing = inVolume('10001:10001', 'cd /work/deps && find . | sort && stat -c "%U:%G %a" /work /work/bin /work/deps app/node_modules/dep app/node_modules/dep/index.js && cat app/node_modules/dep/index.js && echo "link $(readlink node_modules/.bin/root)"');
+  assert.equal(listing.status, 0, listing.stderr);
+  const lines = listing.stdout.trim().split('\n');
+  assert.deepEqual(lines.filter(line => line.startsWith('.')), ['.', './app', './app/node_modules', './app/node_modules/dep', './app/node_modules/dep/index.js', './app/node_modules/dep/node_modules', './app/node_modules/dep/node_modules/inner', './app/node_modules/dep/node_modules/inner/i.js', './node_modules', './node_modules/.bin', './node_modules/.bin/root', './node_modules/root.js'], 'node_modules under .git and target stay behind');
+  assert.deepEqual(lines.filter(line => !line.startsWith('.')), ['root:root 755', 'root:root 755', 'root:root 755', 'root:root 755', 'root:root 644', 'ok', 'link ../root.js']);
+  const tamper = inVolume('10001:10001', 'for p in /work/deps/app/node_modules/dep/index.js /work/deps/app/node_modules/planted /work/deps/planted; do (echo x >> "$p") 2>/dev/null && echo "wrote $p"; done; mv /work/deps /work/deps-moved 2>/dev/null && echo moved; true');
+  assert.equal(tamper.stdout.trim(), '', 'uid 10001 cannot change, add to or move the seal');
 });
