@@ -72,7 +72,8 @@ export function createBeforeCall({ reportDir, reviewerId, surface, pass, toolBud
 }
 
 export function attachBudget(ctx) {
-  if (!ctx?.reportDir || !ctx.agent || ctx.role === 'verification') return ctx;
+  // Debater and orchestrator sessions are bounded per session by debate-bridge.mjs, not by a review pass.
+  if (!ctx?.reportDir || !ctx.agent || ['verification', 'debater', 'orchestrator'].includes(ctx.role)) return ctx;
   let toolBudget = Number(ctx.toolBudget) || 0;
   if (!toolBudget) {
     try { toolBudget = Number(readReportJson(ctx.reportDir, 'harness/reviewers.json').budgets?.toolBudget) || 40; }

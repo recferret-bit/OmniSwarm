@@ -21,8 +21,11 @@ export function heartbeatReporter(output, name) {
 function bridgeArguments(run, { role, agent, name, surface, identityFile, pass }) {
   const args = ['--docker-bin', run.dockerBin, '--container', run.session.container, '--report-dir', run.output, '--role', role, '--agent', agent, '--identity-file', identityFile, '--reviewers-file', path.join(run.output, 'harness', 'reviewers.json')];
   if (pass) args.push('--pass', String(pass), '--tool-budget', String(run.budgets.toolBudget));
-  // Cross-check reviewers span every surface, so their context and plans must too (R-06).
-  args.push(...(role === 'auditor' ? ['--auditor', name, '--surface', surface] : ['--surface', 'ALL']));
+  // Cross-check, debate and judge sessions span every surface, so their context and plans must too (R-06).
+  // Every session except a cross-check (named by its reviewer) carries its own name for the bridge identity.
+  if (role === 'auditor') args.push('--auditor', name, '--surface', surface);
+  else if (role === 'crosscheck') args.push('--surface', 'ALL');
+  else args.push('--auditor', name, '--surface', 'ALL');
   return args;
 }
 
@@ -38,8 +41,10 @@ function recordExit(output, name, result) {
 export function createExecute(run) {
   return async ({ name, agent, role, surface, prompt, assignment, logFile, pass, passResume = false }) => {
     if (run.sandboxFailure) throw run.sandboxFailure;
+    // reviewerById holds the run's reviewers and its judges (orchestrator, alternate judge).
     const reviewer = run.reviewerById.get(agent);
-    const identity = { name, agent, role, workflow: REVIEW_WORKFLOW, model: run.request.models[agent], family: reviewer.family, provider: reviewer.provider, sourceDigest: run.sourceDigest, assignmentDigest: digest(assignment), ...(surface ? { surface } : {}) };
+    if (!reviewer) throw new Error(`${String(agent).slice(0, 80)} is neither a reviewer nor a judge of this run`);
+    const identity = { name, agent, role, workflow: REVIEW_WORKFLOW, model: reviewer.model, family: reviewer.family, provider: reviewer.provider, sourceDigest: run.sourceDigest, assignmentDigest: digest(assignment), ...(surface ? { surface } : {}) };
     const identityFile = path.join(run.output, 'harness', 'identities', `${name}.json`);
     writeReportFile(run.output, `harness/identities/${name}.json`, JSON.stringify(identity));
     writeReportFile(run.output, `harness/assignments/${name}.json`, JSON.stringify(assignment));

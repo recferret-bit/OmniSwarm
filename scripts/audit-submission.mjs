@@ -7,16 +7,28 @@ import { REVIEWER_ID_PATTERN, isReviewerId, validModelId } from './reviewer-regi
 
 const stable = value => Array.isArray(value) ? value.map(stable) : value && typeof value === 'object' ? Object.fromEntries(Object.keys(value).sort().map(key => [key, stable(value[key])])) : value;
 const fingerprint = value => crypto.createHash('sha256').update(JSON.stringify(stable(value))).digest('hex');
-const validKey = key => new RegExp(`^(?:${REVIEWER_ID_PATTERN}-s[1-6]-(?:auth|input|logic|config|deps|client)|crosscheck-${REVIEWER_ID_PATTERN})$`).test(key);
+// Session names per role. Auditors and cross-checkers commit a canonical submission; debaters and the
+// orchestrator commit a debate inbox entry (debate-inbox.mjs) under the same identity rules.
+const ROLE_NAME = {
+  auditor: (id) => `${id}-s[1-6]-(?:auth|input|logic|config|deps|client)`,
+  crosscheck: (id) => `crosscheck-${id}`,
+  debater: (id) => `${id}-debate-cluster-[1-9][0-9]{0,3}-r[1-3]`,
+  orchestrator: (id) => `${id}-(?:judge-cluster-[1-9][0-9]{0,3}|general-review)`,
+};
+const SUBMISSION_ROLES = new Set(['auditor', 'crosscheck']);
+const anyName = new RegExp(`^(?:${Object.values(ROLE_NAME).map((name) => name(REVIEWER_ID_PATTERN)).join('|')})$`);
 
 export function validateSubmissionIdentity(identity, key) {
-  if (!validKey(key) || !identity || !['auditor', 'crosscheck'].includes(identity.role) || !/^[a-f0-9]{64}$/.test(identity.sourceDigest) || !/^[a-f0-9]{64}$/.test(identity.assignmentDigest) || !validModelId(identity.model) || !isReviewerId(identity.agent) || identity.name !== key) throw new Error('Invalid submission identity');
-  if (identity.role === 'crosscheck' ? key !== `crosscheck-${identity.agent}` : !key.startsWith(`${identity.agent}-`)) throw new Error('Submission reviewer mismatch');
+  if (typeof key !== 'string' || !anyName.test(key) || !identity || !Object.hasOwn(ROLE_NAME, identity.role) || !/^[a-f0-9]{64}$/.test(identity.sourceDigest) || !/^[a-f0-9]{64}$/.test(identity.assignmentDigest) || !validModelId(identity.model) || !isReviewerId(identity.agent) || identity.name !== key) throw new Error('Invalid submission identity');
+  // The name must be this role's name for this reviewer (a debater cannot hold a judge or auditor name).
+  // isReviewerId above limits the id to [a-z0-9-], so it is safe inside the pattern.
+  if (!new RegExp(`^${ROLE_NAME[identity.role](identity.agent)}$`).test(key)) throw new Error('Submission reviewer mismatch');
   return identity;
 }
 
 export function commitSubmission(root, key, identity, payload, summary = '') {
   validateSubmissionIdentity(identity, key);
+  if (!SUBMISSION_ROLES.has(identity.role)) throw new Error(`The ${identity.role} role commits through the debate inbox, not a canonical submission`);
   if (identity.role === 'auditor') validateAuditor(payload, key);
   else if (!Array.isArray(payload) || !payload.every(validCrosscheckRow)) throw new Error('Invalid canonical peer report');
   if (typeof summary !== 'string' || Buffer.byteLength(summary) > 2 * 1024 * 1024) throw new Error('Invalid report summary');
