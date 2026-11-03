@@ -3,16 +3,13 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { commitSubmission } from '../audit-submission.mjs';
 import { digest } from '../agent-session-store.mjs';
+import { parseReviewerList } from '../reviewer-registry.mjs';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const out = path.join(root, 'w05-run');
 fs.rmSync(out, { recursive: true, force: true });
-const reviewers = [
-  { id: 'cli-claude-opus', family: 'cli', provider: 'claude', vendor: 'anthropic', model: 'opus' },
-  { id: 'key-zai-glm-5-3', family: 'key', provider: 'zai', vendor: 'zai', model: 'glm-5.3' },
-  { id: 'openrouter-qwen-qwen3-8-max', family: 'openrouter', provider: 'openrouter', vendor: 'alibaba', model: 'qwen3.8-max-0902' },
-  { id: 'scripted-baseline', family: 'scripted', provider: 'baseline', vendor: 'scripted', model: 'baseline' },
-];
+// Parsed by the registry, so ids and models are exactly what a real run records (openrouter keeps `qwen/`).
+const reviewers = parseReviewerList(['cli:claude:opus', 'key:zai:glm-5.3', 'openrouter:qwen/qwen3.8-max-0902', 'scripted:baseline']);
 const surfaces = [['S1', 's1-auth', 'auth'], ['S2', 's2-input', 'input'], ['S3', 's3-logic', 'logic']];
 const finding = (reviewer, surface, n) => ({
   title: `${reviewer.id} ${surface} finding ${n}`, surface, severity: 'high', confidence: 'confirmed',
