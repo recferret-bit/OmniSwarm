@@ -164,6 +164,11 @@ export async function queuePosition(pool: pg.Pool, id: string) {
   return result.rows[0].position as number;
 }
 
+export async function runningIds(pool: pg.Pool) {
+  const result = await pool.query(`SELECT id FROM request WHERE status = 'running' ORDER BY updated_at, id`);
+  return result.rows.map((row) => row.id as string);
+}
+
 export async function claimNext(pool: pg.Pool, now: Date) {
   const client = await pool.connect();
   try {

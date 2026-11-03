@@ -101,6 +101,17 @@ export async function resume(pool: store.Pool, id: string, opts: { reportsRoot: 
   return store.attestationCount(pool, row.request_hash);
 }
 
+export async function recoverInFlight(pool: store.Pool, opts: { reportsRoot: string; engineRoot?: string; mode?: 'ok' | 'findings' | 'infra' }) {
+  const ids = await store.runningIds(pool);
+  const recovered = [];
+  for (const id of ids) {
+    await resume(pool, id, opts);
+    const row = await store.getRequest(pool, id);
+    recovered.push({ id, status: row.status as string });
+  }
+  return recovered;
+}
+
 export async function drainOne(pool: store.Pool, opts: {
   mode?: 'ok' | 'findings' | 'infra';
   crashAfter?: 'before-attest' | 'attested';

@@ -10,8 +10,7 @@ The check is `npm run check:w09`. It drives the shipped worker.
 - A completed mock run is `done`, with a 64-hex `reportSha256`. `node backend/intake/scripts/report-hash.ts <dir>` prints that same hash. The mock chain has one attestation.
 - `MOCK` mode `infra` sets `refunded` and a second refund does not insert another row.
 - A finished run with a critical finding is `done` and has no refund.
-- Stopping after the attestation is written, then resuming, leaves exactly one attestation and status `done`, and does not spawn again.
-- Stopping after a successful spawn and before the attestation, then resuming, spawns once more and finishes `done` with exactly one attestation.
+- Stopping after the attestation is written leaves the job `running` with one attestation. Stopping after a successful spawn and before the attestation leaves it `running` with zero attestations. Starting `backend/intake/scripts/worker.ts` again finishes both as `done`. Only the job that had no attestation is spawned again. Each request still has exactly one attestation.
 - Three queued jobs start at positions 1, 2, 3. After the worker takes one, the other two are 1 and 2.
 - `POST /api/admin/requests/:id/refund` with the admin token on a `done` request returns `409 REFUND_NOT_ALLOWED`.
 

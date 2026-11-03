@@ -8,7 +8,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { createApp } from '../../backend/intake/src/app.ts';
 import { attestationCount, createPool, getRequest, insertRequest, migrate, queuePosition, refundOnce, reset, setStatus } from '../../backend/intake/src/store.ts';
-import { auditArgv, drainOne, resume } from '../../backend/intake/src/worker.ts';
+import { auditArgv, drainOne } from '../../backend/intake/src/worker.ts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const DATABASE_URL = process.env.DATABASE_URL || 'postgres://omniswarm:omniswarm@127.0.0.1:55432/omniswarm';
@@ -109,14 +109,9 @@ test('mock worker spawns ./bin/audit, attests once, refunds infra once, and resu
   assert.equal(await attestationCount(pool, criticalHash), 1);
 
   const attestedId = await seed(4);
-  const beforeAttestedResume = spawns(engine);
   const attested = await drainOne(pool, { ...opts, crashAfter: 'attested' });
   assert.equal(attested?.id, attestedId);
   assert.equal(attested?.status, 'running');
-  assert.equal(await attestationCount(pool, (await getRequest(pool, attestedId)).request_hash), 1);
-  assert.equal(await resume(pool, attestedId, opts), 1);
-  assert.equal(spawns(engine), beforeAttestedResume + 1);
-  assert.equal((await getRequest(pool, attestedId)).status, 'done');
   assert.equal(await attestationCount(pool, (await getRequest(pool, attestedId)).request_hash), 1);
 
   const earlyId = await seed(5);
@@ -124,10 +119,19 @@ test('mock worker spawns ./bin/audit, attests once, refunds infra once, and resu
   assert.equal(early?.id, earlyId);
   assert.equal(early?.status, 'running');
   assert.equal(await attestationCount(pool, (await getRequest(pool, earlyId)).request_hash), 0);
-  const beforeResume = spawns(engine);
-  assert.equal(await resume(pool, earlyId, opts), 1);
-  assert.equal(spawns(engine), beforeResume + 1);
+  const beforeRestart = spawns(engine);
+  const restarted = spawnSync(process.execPath, [path.join(ROOT, 'backend/intake/scripts/worker.ts')], {
+    env: { ...process.env, DATABASE_URL, REPORTS_ROOT: reports, ENGINE_ROOT: engine },
+    encoding: 'utf8',
+  });
+  assert.equal(restarted.status, 0, restarted.stderr);
+  assert.match(restarted.stdout, new RegExp(`${attestedId} done`));
+  assert.match(restarted.stdout, new RegExp(`${earlyId} done`));
+  assert.match(restarted.stdout, /worker finished 2/);
+  assert.equal(spawns(engine), beforeRestart + 1);
+  assert.equal((await getRequest(pool, attestedId)).status, 'done');
   assert.equal((await getRequest(pool, earlyId)).status, 'done');
+  assert.equal(await attestationCount(pool, (await getRequest(pool, attestedId)).request_hash), 1);
   assert.equal(await attestationCount(pool, (await getRequest(pool, earlyId)).request_hash), 1);
 
   const app = await createApp({ databaseUrl: DATABASE_URL, sessionSecret: 'test-session-secret', adminToken: 'admin-test' });
