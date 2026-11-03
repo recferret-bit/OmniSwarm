@@ -7,6 +7,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { readReportJson, writeReportFile } from './report-contract.mjs';
+import { loadAgentConfig, sendAcp, serveAcpStdio } from './agent-acp-stdio.mjs';
 import { SessionError } from './agent-rpc.mjs';
 import { runToolLoop } from './provider-openai-compat.mjs';
 import { toOpenAiTools, toolResultText } from './api-tool-schema.mjs';
@@ -16,7 +17,6 @@ import { passFromBrief, runStrategy } from './scripted-strategies.mjs';
 const LOOP_FAILURES = { auth: 'auth_required', live_required: 'live_required' };
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const send = (message) => process.stdout.write(`${JSON.stringify({ jsonrpc: '2.0', ...message })}\n`);
 
 export function writeLaunchConfig(workDir, config) {
   const file = path.join(workDir, 'api-launch.json');
@@ -97,7 +97,7 @@ export class McpClient {
 }
 
 export class ApiAcpAgent {
-  constructor(config, output = send) {
+  constructor(config, output = sendAcp) {
     if (!config?.mcp?.command || !Array.isArray(config.mcp.args) || !path.isAbsolute(config.cwd)) throw new SessionError('setup_error');
     this.config = config;
     this.output = output;
@@ -202,23 +202,5 @@ export class ApiAcpAgent {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const configPath = path.resolve(process.argv[2]);
-  const config = readReportJson(path.dirname(configPath), path.basename(configPath));
-  const agent = new ApiAcpAgent(config);
-  let buffer = '';
-  process.stdin.on('data', (data) => {
-    buffer += data.toString('utf8');
-    if (buffer.length > 4 * 1024 * 1024) { process.exitCode = 2; process.stdin.destroy(); return; }
-    for (let at; (at = buffer.indexOf('\n')) >= 0;) {
-      const line = buffer.slice(0, at);
-      buffer = buffer.slice(at + 1);
-      if (!line.trim()) continue;
-      let msg;
-      try { msg = JSON.parse(line); } catch { process.exitCode = 2; continue; }
-      Promise.resolve().then(() => agent.request(msg.method, msg.params)).then(
-        (result) => { if (msg.id != null) send({ id: msg.id, result }); },
-        (err) => { if (msg.id != null) send({ id: msg.id, error: { code: -32000, message: err.reason || 'provider_error' } }); },
-      );
-    }
-  });
+  serveAcpStdio(new ApiAcpAgent(loadAgentConfig(process.argv[2])), { errorReason: 'provider_error' });
 }
