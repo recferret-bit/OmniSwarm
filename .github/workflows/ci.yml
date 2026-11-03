@@ -109,17 +109,16 @@ jobs:
       - if: steps.has.outputs.present == 'true'
         run: npm run test:contract
 
+  # The same gate as on a laptop: static checks (compose, env contract, nginx -t,
+  # shellcheck, hadolint, systemd-analyze verify, dry runs), the api image
+  # checks, and the local stack bring-up with the stub apps (loopback ports,
+  # torn down after). Pinned tool images, no secrets, no host contacted.
   infra:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - name: Detect infra
-        id: has
-        run: |
-          if [ -f infra/check.sh ] || ls infra/compose/*.y*ml >/dev/null 2>&1; then echo "present=true" >> "$GITHUB_OUTPUT"; else echo "present=false" >> "$GITHUB_OUTPUT"; echo "::notice::infra: skipped (no infra/check.sh or infra/compose yet)"; fi
-      - if: steps.has.outputs.present == 'true'
-        name: docker compose config and shellcheck
-        run: |
-          set -e
-          for f in infra/compose/*.y*ml; do [ -e "$f" ] && docker compose -f "$f" config -q; done
-          find infra -name '*.sh' -print0 | xargs -0 -r shellcheck
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm run check:infra
