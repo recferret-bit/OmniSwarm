@@ -12,7 +12,7 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-# No secrets, no provider calls, no Docker-marked tests (scripts/*.docker.mjs).
+# No secrets, no provider calls, no Docker-marked tests (engine/scripts/*.docker.mjs).
 # Every non-engine job turns itself into a notice until its folder has a package.
 
 jobs:
@@ -24,10 +24,10 @@ jobs:
         with:
           node-version: 24
       - run: npm ci
-      - run: node scripts/harness.mjs --self-test
+      - run: node engine/scripts/harness.mjs --self-test
       - run: npm test
       - name: Skill copies are byte-identical
-        run: cmp skills/security-audit/SKILL.md .claude/skills/security-audit/SKILL.md
+        run: cmp engine/skills/security-audit/SKILL.md .claude/skills/security-audit/SKILL.md
 
   schemas:
     runs-on: ubuntu-latest

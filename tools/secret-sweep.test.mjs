@@ -41,11 +41,11 @@ test('OpenRouter, xAI, Z.ai and env-assigned provider keys fail, also when only 
   }
 });
 
-test('every tracked env file except .env.example fails, as do reports/ and runtime/node_modules/', () => {
-  for (const rel of ['.env', '.env.local', 'apps/web/.env.production', 'reports/run/meta.json', 'runtime/node_modules/x/index.js']) {
+test('every tracked env file except .env.example fails, as do reports/ and engine/runtime/node_modules/', () => {
+  for (const rel of ['.env', '.env.local', 'apps/web/.env.production', 'reports/run/meta.json', 'engine/runtime/node_modules/x/index.js']) {
     const result = sweep(repo({ [rel]: 'x\n' }));
     assert.equal(result.status, 1, rel);
-    assert.match(result.stderr, /tracked reports\/, pocs\/, runtime\/node_modules\/ or an env file/, rel);
+    assert.match(result.stderr, /tracked reports\/, pocs\/, engine\/runtime\/node_modules\/ or an env file/, rel);
   }
 });
 

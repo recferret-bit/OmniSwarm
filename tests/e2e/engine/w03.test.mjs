@@ -11,7 +11,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.
 const run = (args, env = {}) => spawnSync(path.join(ROOT, 'bin', 'audit'), args, { cwd: ROOT, encoding: 'utf8', env: { ...process.env, ...env }, timeout: 180_000 });
 
 test('plan lists key, openrouter and scripted reviewers without printing a key', () => {
-  const result = run(['run', '--repo', 'scripts/demo-fixture', '--reviewers', 'key:zai:glm-5.3,openrouter:qwen/qwen3.8-max-0902,scripted:baseline', '--surface', 's1', '--plan'], { ZAI_API_KEY: 'zk-secret', OPENROUTER_API_KEY: 'or-secret' });
+  const result = run(['run', '--repo', 'engine/scripts/demo-fixture', '--reviewers', 'key:zai:glm-5.3,openrouter:qwen/qwen3.8-max-0902,scripted:baseline', '--surface', 's1', '--plan'], { ZAI_API_KEY: 'zk-secret', OPENROUTER_API_KEY: 'or-secret' });
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /key-zai-glm-5-3\s+key\s+zai\s+glm-5\.3\s+yes/);
   assert.match(result.stdout, /env ZAI_API_KEY,ZAI_BASE_URL/);
@@ -55,8 +55,8 @@ test('demo refuses a foreign repo and the host snapshot stamps the banner', () =
 test('a replayed zai and openrouter run reads, searches and submits through the bridge', () => {
   const out = fs.mkdtempSync(path.join(os.tmpdir(), 'w03-replay-'));
   fs.rmSync(out, { recursive: true });
-  const result = run(['run', '--repo', 'scripts/demo-fixture', '--reviewers', 'key:zai:glm-5.3,openrouter:qwen/qwen3.8-max-0902', '--surface', 's1', '--passes', '1', '--out', out], {
-    OMNI_DEMO_HOST: '1', OMNI_HTTP_REPLAY: 'scripts/provider-fixtures/w03', ZAI_API_KEY: 'zk-test', OPENROUTER_API_KEY: 'or-test',
+  const result = run(['run', '--repo', 'engine/scripts/demo-fixture', '--reviewers', 'key:zai:glm-5.3,openrouter:qwen/qwen3.8-max-0902', '--surface', 's1', '--passes', '1', '--out', out], {
+    OMNI_DEMO_HOST: '1', OMNI_HTTP_REPLAY: 'engine/scripts/provider-fixtures/w03', ZAI_API_KEY: 'zk-test', OPENROUTER_API_KEY: 'or-test',
   });
   assert.equal(result.status, 0, `${result.stderr}\n${result.stdout}`);
   const submissions = fs.readdirSync(path.join(out, 'submissions'));

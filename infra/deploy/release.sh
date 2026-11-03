@@ -44,7 +44,7 @@ install_host_deps() {
   # The worker runs from this tree on the host. Root owns it; the omniswarm
   # user only reads it. No install scripts run.
   omni_run npm --prefix "$dir" ci --omit=dev --ignore-scripts --no-audit --no-fund --workspace @omniswarm/api
-  omni_run npm --prefix "$dir/runtime" ci --ignore-scripts --no-audit --no-fund
+  omni_run npm --prefix "$dir/engine/runtime" ci --ignore-scripts --no-audit --no-fund
 }
 
 install_host_config() {

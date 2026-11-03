@@ -5,21 +5,21 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { budgetHealth } from '../../../scripts/verification-health.mjs';
-import { runOrchestratedAudit } from '../../../scripts/docker-agent-orchestrator.mjs';
-import { commitSubmission } from '../../../scripts/audit-submission.mjs';
-import { keyFingerprint } from '../../../scripts/reviewer-env.mjs';
-import { parseReviewerList } from '../../../scripts/reviewer-registry.mjs';
+import { budgetHealth } from '../../../engine/scripts/verification-health.mjs';
+import { runOrchestratedAudit } from '../../../engine/scripts/docker-agent-orchestrator.mjs';
+import { commitSubmission } from '../../../engine/scripts/audit-submission.mjs';
+import { keyFingerprint } from '../../../engine/scripts/reviewer-env.mjs';
+import { parseReviewerList } from '../../../engine/scripts/reviewer-registry.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const run = (args, env = {}) => spawnSync(path.join(ROOT, 'bin', 'audit'), args, { cwd: ROOT, encoding: 'utf8', env: { ...process.env, ...env }, timeout: 180_000 });
 
 test('plan prints passes, grace and the worst-case call count', () => {
-  const result = run(['run', '--repo', 'scripts/demo-fixture', '--reviewers', 'scripted:baseline,scripted:lazy,key:zai:glm-5.3', '--passes', '2', '--tool-budget', '5', '--surface', 's1', '--plan']);
+  const result = run(['run', '--repo', 'engine/scripts/demo-fixture', '--reviewers', 'scripted:baseline,scripted:lazy,key:zai:glm-5.3', '--passes', '2', '--tool-budget', '5', '--surface', 's1', '--plan']);
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /scripted-lazy\s+2 × 5 \(\+3\)\s+discover, self-verify\s+max 16 calls\s+gate: bridge\+loop/);
   assert.match(result.stdout, /Pass roles: discover, self-verify/);
-  const zero = run(['run', '--repo', 'scripts/demo-fixture', '--reviewers', 'scripted:baseline', '--passes', '0', '--plan']);
+  const zero = run(['run', '--repo', 'engine/scripts/demo-fixture', '--reviewers', 'scripted:baseline', '--passes', '0', '--plan']);
   assert.equal(zero.status, 2);
   assert.match(zero.stderr, /passes must be 1–5/);
 });
@@ -27,7 +27,7 @@ test('plan prints passes, grace and the worst-case call count', () => {
 test('scripted and replayed reviewers record two passes, a budget stop and a cost stop', () => {
   const out = fs.mkdtempSync(path.join(os.tmpdir(), 'w04-'));
   fs.rmSync(out, { recursive: true });
-  const result = run(['run', '--repo', 'scripts/demo-fixture', '--reviewers', 'scripted:baseline,scripted:lazy', '--surface', 's1', '--passes', '2', '--tool-budget', '5', '--out', out], { OMNI_DEMO_HOST: '1' });
+  const result = run(['run', '--repo', 'engine/scripts/demo-fixture', '--reviewers', 'scripted:baseline,scripted:lazy', '--surface', 's1', '--passes', '2', '--tool-budget', '5', '--out', out], { OMNI_DEMO_HOST: '1' });
   assert.equal(result.status, 0, `${result.stderr}\n${result.stdout}`);
   const lazy = JSON.parse(fs.readFileSync(path.join(out, 'harness', 'usage', 'scripted-lazy', 's1-pass-1.json'), 'utf8'));
   assert.equal(lazy.calls, 5);
@@ -50,8 +50,8 @@ test('scripted and replayed reviewers record two passes, a budget stop and a cos
 test('a priced replay under the cost ceiling records stop cost and skips pass 2', () => {
   const out = fs.mkdtempSync(path.join(os.tmpdir(), 'w04-cost-'));
   fs.rmSync(out, { recursive: true });
-  const result = run(['run', '--repo', 'scripts/demo-fixture', '--reviewers', 'key:zai:glm-5.3', '--surface', 's1', '--passes', '2', '--tool-budget', '5', '--max-cost-usd', '0.0001', '--out', out], {
-    OMNI_DEMO_HOST: '1', OMNI_HTTP_REPLAY: path.join(ROOT, 'scripts', 'provider-fixtures', 'w04'), ZAI_API_KEY: 'zk-test',
+  const result = run(['run', '--repo', 'engine/scripts/demo-fixture', '--reviewers', 'key:zai:glm-5.3', '--surface', 's1', '--passes', '2', '--tool-budget', '5', '--max-cost-usd', '0.0001', '--out', out], {
+    OMNI_DEMO_HOST: '1', OMNI_HTTP_REPLAY: path.join(ROOT, 'engine', 'scripts', 'provider-fixtures', 'w04'), ZAI_API_KEY: 'zk-test',
   });
   assert.equal(result.status, 0, `${result.stderr}\n${result.stdout}`);
   const first = JSON.parse(fs.readFileSync(path.join(out, 'harness', 'usage', 'key-zai-glm-5-3', 's1-pass-1.json'), 'utf8'));
@@ -98,7 +98,7 @@ test('Docker path: budgets and prices reach every session, each pass is recorded
 });
 
 test('grok plan shows max-turns derived from the budget', () => {
-  const result = run(['run', '--repo', 'scripts/demo-fixture', '--reviewers', 'cli:grok:grok-4.7', '--tool-budget', '10', '--passes', '1', '--plan']);
+  const result = run(['run', '--repo', 'engine/scripts/demo-fixture', '--reviewers', 'cli:grok:grok-4.7', '--tool-budget', '10', '--passes', '1', '--plan']);
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /--max-turns 13/);
 });

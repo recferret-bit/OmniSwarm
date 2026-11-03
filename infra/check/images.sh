@@ -1,7 +1,7 @@
 #!/bin/bash
 # Builds apps/api/Dockerfile from the current tree and checks the W12-03
-# acceptance: < 300 MB, non-root uid, a HEALTHCHECK, no engine code (scripts/,
-# docker/), no .env file, and nothing under /app writable by the runtime user.
+# acceptance: < 300 MB, non-root uid, a HEALTHCHECK, no engine code (engine/,
+# bin/), no .env file, and nothing under /app writable by the runtime user.
 # (apps/web/Dockerfile is built by `infra/check.sh --apps=real`: it needs the
 # Next.js standalone build.)
 set -euo pipefail
@@ -19,7 +19,7 @@ size="$(docker image inspect "$image" --format '{{.Size}}')"
 
 report="$(docker run --rm --network none --entrypoint sh "$image" -c '
   echo "uid=$(id -u)"
-  for p in /app/scripts /app/docker /app/bin /app/apps/api/test; do [ -e "$p" ] && echo "present=$p"; done
+  for p in /app/engine /app/scripts /app/docker /app/bin /app/apps/api/test; do [ -e "$p" ] && echo "present=$p"; done
   find / -xdev -name ".env*" 2>/dev/null | sed "s/^/envfile=/"
   find /app -writable 2>/dev/null | head -n 3 | sed "s/^/writable=/"
   true

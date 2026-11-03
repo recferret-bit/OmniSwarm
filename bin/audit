@@ -14,8 +14,11 @@ set -euo pipefail
 #   report  [<report-dir>]                             Show findings and risk scores
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-AUDIT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-# shellcheck source=../scripts/resolve-target.sh
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+# The review engine (scripts/, docker/, native/, skills/, runtime/, eval/) lives under engine/.
+# Run output (reports/) and the operator's omniswarm.config.json stay at the repository root.
+AUDIT_ROOT="$REPO_ROOT/engine"
+# shellcheck source=../engine/scripts/resolve-target.sh
 source "$AUDIT_ROOT/scripts/resolve-target.sh"
 
 COMMAND="${1:-help}"
@@ -25,7 +28,7 @@ ARG_REPO="" ARG_GITHUB="" ARG_REF="" ARG_WORKDIR="" ARG_CLEAN=0
 SURFACE="all" OUT_DIR="" POSITIONAL=()
 PLAN=0
 RPC="" RESUME_FROM="" TEST_ARTIFACTS="" RESTART_FAILED=0
-REVIEWER_ARGS=()   # reviewer, model, preset and budget flags, resolved by scripts/run-config.mjs
+REVIEWER_ARGS=()   # reviewer, model, preset and budget flags, resolved by engine/scripts/run-config.mjs
 
 # Flags for `run`; anything else is a positional argument.
 parse_flags() {
@@ -57,7 +60,7 @@ parse_flags() {
 # The newest directory under reports/ that holds findings, auditor logs or a meta file.
 latest_report() {
   local d
-  for d in $(ls -1dt "$AUDIT_ROOT"/reports/*/ 2>/dev/null); do
+  for d in $(ls -1dt "$REPO_ROOT"/reports/*/ 2>/dev/null); do
     if [ -d "${d}auditors" ] || [ -f "${d}findings-and-scores.json" ]; then
       printf '%s' "${d%/}"
       return 0
@@ -67,7 +70,7 @@ latest_report() {
 }
 
 report_dir_arg() {
-  if [ -n "${1:-}" ]; then printf '%s' "$1"; else latest_report || die "no report found under $AUDIT_ROOT/reports; pass a report directory"; fi
+  if [ -n "${1:-}" ]; then printf '%s' "$1"; else latest_report || die "no report found under $REPO_ROOT/reports; pass a report directory"; fi
 }
 
 case "$COMMAND" in
@@ -111,7 +114,7 @@ case "$COMMAND" in
     resolve_target
     arm_cleanup
     if [ -z "$OUT_DIR" ]; then
-      OUT_DIR="$AUDIT_ROOT/reports/$(date +%Y-%m-%d-%H%M%S)-$TARGET_NAME"
+      OUT_DIR="$REPO_ROOT/reports/$(date +%Y-%m-%d-%H%M%S)-$TARGET_NAME"
     fi
     model_args=(${REVIEWER_ARGS[@]+"${REVIEWER_ARGS[@]}"})
     [ "$PLAN" -eq 1 ] && model_args+=(--plan)
@@ -166,7 +169,7 @@ Usage:
       Check Docker, CLIs and pinned adapters. --reviewers checks key presence for key/openrouter/scripted/claude-zai and never prints a key.
       --live explicitly runs inert inference, bridge access and saved-session recovery checks.
   audit demo [--surface s1|all] [--out <empty-dir>] [--no-docker]
-      Review the bundled scripts/demo-fixture with scripted reviewers. Refuses --repo and --github.
+      Review the bundled engine/scripts/demo-fixture with scripted reviewers. Refuses --repo and --github.
       Docker absent, or --no-docker, serves a read-only host snapshot stamped DEMO — not a review.
   audit verify [<report-dir>]    Validate and score model claims on an existing report directory
   audit report [<report-dir>]    Show findings and risk scores
@@ -191,7 +194,7 @@ Options (run):
   --reviewers <list>       comma-separated reviewer specs <family>:<provider>:<model>[#label]. Families: cli (claude, codex, grok, agy,
                            claude-zai), key (zai), openrouter (<vendor>/<model>), scripted (fixture strategies, demo only).
                            Example: cli:claude:opus,cli:codex:gpt-6.1-sol,key:zai:glm-5.3,openrouter:qwen/qwen3.8-max-0902
-  --config <file>          run config (default: ./omniswarm.config.json in the OmniSwarm checkout, if present); see omniswarm.config.example.json
+  --config <file>          run config (default: omniswarm.config.json at the OmniSwarm repository root, if present); see engine/omniswarm.config.example.json
   --preset <name>          a preset from the config file (local-subscriptions, api-only, mixed, hosted, demo)
   --assign <mode>          matrix (every reviewer x every surface; default with --reviewers/--preset up to 8 reviewers)
                            or round-robin (one reviewer per surface; default with --agents)
@@ -201,7 +204,7 @@ Options (run):
                            fixtures (scripted_judge_demo_only)
   --alternate-judge <spec>            judge for a cluster whose authors share the orchestrator's vendor
                            (default: the first run reviewer of another vendor; with none the cluster stays DISPUTED)
-  --debate-rounds <n>      debate rounds, 1-3 (default 2, the golden-eval rule in eval/RESULTS.md)
+  --debate-rounds <n>      debate rounds, 1-3 (default 2, the golden-eval rule in engine/eval/RESULTS.md)
   --debate-max-clusters <n>  clusters debated, 1-500 (default 25); the rest are listed as coverage gaps
   --debate-tool-budget <n> read calls per debate turn or judgement, 1-100 (default 12), plus its submit
   --passes <n>             passes per reviewer, 1-5 (default 2)

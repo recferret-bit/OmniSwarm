@@ -4,13 +4,13 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { runPanel } from '../../../eval/panel.mjs';
-import { loadPhases, runPhases } from '../../../scripts/orchestrator-phases.mjs';
-import { SCRIPTS, builtinWithReport, phaseContext, runFromPanel, tempDir } from '../../../scripts/debate-test-run.mjs';
-import { writeText } from '../../../scripts/report-util-files.mjs';
+import { runPanel } from '../../../engine/eval/panel.mjs';
+import { loadPhases, runPhases } from '../../../engine/scripts/orchestrator-phases.mjs';
+import { SCRIPTS, builtinWithReport, phaseContext, runFromPanel, tempDir } from '../../../engine/scripts/debate-test-run.mjs';
+import { writeText } from '../../../engine/scripts/report-util-files.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
-const GOLDEN = path.join(ROOT, 'eval', 'golden', 'near-escrow');
+const GOLDEN = path.join(ROOT, 'engine', 'eval', 'golden', 'near-escrow');
 const expected = JSON.parse(fs.readFileSync(path.join(GOLDEN, 'expected.json'), 'utf8'));
 const node = (script, args) => spawnSync(process.execPath, [path.join(SCRIPTS, script), ...args], { cwd: ROOT, encoding: 'utf8' });
 const json = (dir, rel) => JSON.parse(fs.readFileSync(path.join(dir, rel), 'utf8'));
@@ -26,7 +26,7 @@ async function orchestrated(rounds) {
 }
 
 test('the plan prints the orchestrator, debate rounds and the cluster cap', () => {
-  const result = spawnSync(path.join(ROOT, 'bin', 'audit'), ['run', '--repo', 'eval/golden/near-escrow', '--reviewers', 'scripted:baseline,scripted:paranoid,scripted:wrong,scripted:lazy', '--orchestrator', 'recommended', '--surface', 's1', '--plan'], {
+  const result = spawnSync(path.join(ROOT, 'bin', 'audit'), ['run', '--repo', 'engine/eval/golden/near-escrow', '--reviewers', 'scripted:baseline,scripted:paranoid,scripted:wrong,scripted:lazy', '--orchestrator', 'recommended', '--surface', 's1', '--plan'], {
     cwd: ROOT, encoding: 'utf8', env: { ...process.env, PATH: `${path.dirname(process.execPath)}:/usr/bin:/bin`, OMNI_DEMO: '1' },
   });
   assert.equal(result.status, 0, result.stderr);

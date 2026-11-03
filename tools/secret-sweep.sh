@@ -1,5 +1,5 @@
 #!/bin/bash
-# Fail if the index tracks reports/, pocs/, runtime/node_modules/ or an env file other than .env.example or a NEXT_PUBLIC_-only file, or if
+# Fail if the index tracks reports/, pocs/, engine/runtime/node_modules/ or an env file other than .env.example or a NEXT_PUBLIC_-only file, or if
 # git history holds a high-confidence secret. gitleaks (pinned version below) runs when it is installed; the
 # pattern sweep over every commit always runs, so a machine without gitleaks still gets the provider-key shapes.
 #   SECRET_SWEEP_NO_GITLEAKS=1   skip gitleaks (tests use this to exercise the fallback alone)
@@ -11,7 +11,7 @@ GITLEAKS_ALLOW=(
 )
 
 tracked="$(git ls-files)"
-candidates="$(printf '%s\n' "$tracked" | grep -E '(^|/)(reports/|pocs/)|^runtime/node_modules/|(^|/)\.env(\.[^/]+)?$' | grep -Ev '(^|/)\.env\.example$' || true)"
+candidates="$(printf '%s\n' "$tracked" | grep -E '(^|/)(reports/|pocs/)|^engine/runtime/node_modules/|(^|/)\.env(\.[^/]+)?$' | grep -Ev '(^|/)\.env\.example$' || true)"
 # A tracked env file is allowed only when it is public by construction: every non-blank, non-comment line is a
 # NEXT_PUBLIC_* assignment (values inlined into the browser bundle anyway). Anything else in it fails the sweep.
 public_env_only() {
@@ -28,7 +28,7 @@ while IFS= read -r file; do
 done <<<"$candidates"
 forbidden="${forbidden%$'\n'}"
 if [ -n "$forbidden" ]; then
-  echo "tracked reports/, pocs/, runtime/node_modules/ or an env file" >&2
+  echo "tracked reports/, pocs/, engine/runtime/node_modules/ or an env file" >&2
   printf '%s\n' "$forbidden" | head -20 >&2
   exit 1
 fi

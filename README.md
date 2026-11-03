@@ -49,7 +49,7 @@ See the [architecture notes](docs/how-it-works.md) and [visual operator guide](d
 ## Try it without a paid key
 
 <!-- screener
-run: node scripts/harness.mjs --self-test
+run: node engine/scripts/harness.mjs --self-test
 you should see: harness self-test ok
 -->
 

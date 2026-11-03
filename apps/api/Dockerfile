@@ -1,7 +1,7 @@
 # @omniswarm/api image: the HTTP API and the one-shot migration runner.
 # Build context is the repository root (npm workspaces need the root lockfile):
 #   docker build -f apps/api/Dockerfile .
-# The allow-list in apps/api/Dockerfile.dockerignore keeps scripts/, docker/,
+# The allow-list in apps/api/Dockerfile.dockerignore keeps engine/, bin/,
 # reports/, tests and every .env out of the context.
 # The review worker does NOT run from this image: it spawns ./bin/audit and the
 # Docker sandbox, so it runs as a systemd unit on the host (infra/systemd/).

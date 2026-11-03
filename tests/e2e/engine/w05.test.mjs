@@ -7,8 +7,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
-const FIXTURE = path.join(ROOT, 'scripts', 'report-fixtures', 'w05-run');
-const run = (script, args) => spawnSync(process.execPath, [path.join(ROOT, 'scripts', script), ...args], { cwd: ROOT, encoding: 'utf8' });
+const FIXTURE = path.join(ROOT, 'engine', 'scripts', 'report-fixtures', 'w05-run');
+const run = (script, args) => spawnSync(process.execPath, [path.join(ROOT, 'engine', 'scripts', script), ...args], { cwd: ROOT, encoding: 'utf8' });
 
 function copyFixture() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'w05-'));

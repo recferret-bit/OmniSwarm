@@ -4,16 +4,16 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { PAGES, findBrowser, printableHtml } from '../../../scripts/report-pdf.mjs';
-import { runOfflineDebate } from '../../../scripts/debate-run.mjs';
-import { read, renderV2 } from '../../../scripts/report-cards-fixtures.mjs';
-import { reportRun, finding } from '../../../scripts/debate-test-run.mjs';
-import { writeText } from '../../../scripts/report-util-files.mjs';
+import { PAGES, findBrowser, printableHtml } from '../../../engine/scripts/report-pdf.mjs';
+import { runOfflineDebate } from '../../../engine/scripts/debate-run.mjs';
+import { read, renderV2 } from '../../../engine/scripts/report-cards-fixtures.mjs';
+import { reportRun, finding } from '../../../engine/scripts/debate-test-run.mjs';
+import { writeText } from '../../../engine/scripts/report-util-files.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const SENTENCE = /Model agreement and passing checks do not certify security\./;
 const IDS = ['cli-claude-opus', 'key-zai-glm-5-3', 'openrouter-qwen-qwen3-8-max-0902', 'openrouter-anthropic-claude-opus-5-5', 'scripted-baseline'];
-const render = (dir) => spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'generate-html-report.mjs'), dir], { cwd: ROOT, encoding: 'utf8' });
+const render = (dir) => spawnSync(process.execPath, [path.join(ROOT, 'engine', 'scripts', 'generate-html-report.mjs'), dir], { cwd: ROOT, encoding: 'utf8' });
 
 function railLabels(html) {
   const nav = html.match(/<nav aria-label="Report">([\s\S]*?)<\/nav>/);
@@ -85,7 +85,7 @@ test('a legacy-meta run with a debate keeps its by-model rows when reviewers/ind
   delete meta.reviewers;
   writeText(out, 'meta.json', JSON.stringify(meta));
   writeText(out, 'harness/sandbox.md', '# Sandbox\n| fixture | impossible | Benign data fixture, no target execution. |\n');
-  await runOfflineDebate(out, path.join(ROOT, 'eval/golden/near-escrow'));
+  await runOfflineDebate(out, path.join(ROOT, 'engine/eval/golden/near-escrow'));
   const rendered = render(out);
   assert.ok(rendered.status === 0 || rendered.status === 2, rendered.stderr);
   assert.equal(fs.existsSync(path.join(out, 'reviewers', 'index.json')), false);
