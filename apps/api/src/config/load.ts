@@ -133,7 +133,8 @@ function build(raw: RawEnv): Config {
 
 /** Parse and validate the environment. Throws ConfigError with one line naming every bad key. */
 export function loadConfig(role: Role, env: NodeJS.ProcessEnv = process.env): Config {
-  const parsed = envSchema.safeParse(env);
+  // `KEY=` (as in .env.example) means unset.
+  const parsed = envSchema.safeParse(Object.fromEntries(Object.entries(env).filter(([, value]) => value !== '')));
   if (!parsed.success) {
     fail(parsed.error.issues.map((issue: z.core.$ZodIssue) => ({ key: String(issue.path[0] ?? '?'), message: issue.message })));
   }
