@@ -31,7 +31,7 @@ A user who holds a NEAR testnet key can go **challenge → quote → signed requ
 
 - [x] Package skeleton, config loader (zod env schema), Fastify app factory, error shape — W08-01, W08-02
 - [x] Postgres migrations and DB layer: `nonce`, `request`, `payment`, `request_progress`, `audit_log` — W08-03, W08-04
-- [x] Ports + mocks + contract suites: `ChainPort`, `GitHubPort` (recorded fixtures), `ClockPort` — W08-05..08
+- [ ] Ports + mocks + contract suites: `ChainPort`, `GitHubPort` (recorded fixtures), `ClockPort` — W08-05..08
 - [x] Canonical message builder + `requestHash` shared with the landing (CR-08a) — W08-09
 - [x] NEP-413 verification with generated test vectors — W08-10, W08-11
 - [x] `POST /api/challenge` — W08-12

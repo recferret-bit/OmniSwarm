@@ -31,11 +31,11 @@ A Claude Code or Codex screener that clones the repo and follows the README **ru
 
 ## Features covered
 
-- [ ] Submission checklist and owner-only list — W14-01
-- [ ] Baseline section and compare link (Q-001/Q-003) — W14-02
+- [x] Submission checklist and owner-only list — W14-01
+- [x] Baseline section and compare link (Q-001/Q-003) — W14-02
 - [ ] README: try-it, local mixed run, hosted demo, NEAR role and mock/real table, tracks, disclosures — W14-03..07
-- [ ] RULES.md (swarm rules) — W14-08
-- [ ] Golden-eval table in the README (OD-14) — W14-09
+- [x] RULES.md (swarm rules) — W14-08
+- [x] Golden-eval table in the README (OD-14) — W14-09
 - [ ] Dogfood run on `contracts/review-registry` + attestation — W14-10, W14-11
 - [ ] Screener script and a real Claude Code / Codex screener dry run — W14-12, W14-13
 - [ ] Video script, recording support, X post — W14-14..16

@@ -37,7 +37,7 @@ Every other wave can open in its own worktree on D3 without touching a shared fi
 - [x] Engine tests self-contained (R-19) — W00-12
 - [x] CI workflow with one job per track — W00-13
 - [x] Baseline tag preparation + README stub (OD-11) — W00-14
-- [x] Worktree isolation script — W00-15
+- [ ] Worktree isolation script — W00-15
 - [x] Minimal wave tool — W00-16 (H+)
 - [x] Owner check guide + tag — W00-17
 
