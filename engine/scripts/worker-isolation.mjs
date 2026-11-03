@@ -51,6 +51,40 @@ function secretName(name) {
     || ['id.json', '.npmrc', '.netrc', '.pypirc', '.git-credentials', '.envrc', 'auth.json', 'credentials', 'credentials.json', '.credentials.json', 'settings.local.json'].includes(n);
 }
 
+// Why a regular file is left out of the snapshot (before it is opened), or null to capture it.
+function fileOmission(name, rel, stat, limits) {
+  if (!stat.isFile()) return 'special_file';
+  if (secretName(name) || rel === '.claude/settings.json') return 'credential_name';
+  if (stat.nlink !== 1) return 'hardlink';
+  if (SKIP_NAME.test(name)) return 'non_code_artifact';
+  const text = TEXT_EXT.has(path.extname(name).toLowerCase()) || /^(\.dockerignore|requirements[\w.-]*\.txt|constraints\.txt|Dockerfile(?:\..*)?|Makefile|Cargo\.lock|go\.mod|go\.sum)$/.test(name);
+  if (!text) return 'non_source_extension';
+  if (stat.size > limits.fileBytes) return 'file_byte_limit';
+  return null;
+}
+
+// Check descriptor identity and containment; seal exactly the bytes copied,
+// not an asserted atomic point-in-time view of a changing checkout.
+function readCapturedFile(from, stat, root, limits) {
+  const fd = fs.openSync(from, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK);
+  try {
+    const current = fs.fstatSync(fd);
+    if (!current.isFile() || current.nlink !== 1 || current.dev !== stat.dev || current.ino !== stat.ino || !inside(root, fs.realpathSync(from))) throw new Error('snapshot source changed during capture');
+    const buffer = Buffer.alloc(limits.fileBytes + 1);
+    let n = 0;
+    for (let count; (count = fs.readSync(fd, buffer, n, buffer.length - n, null));) {
+      n += count;
+      if (n > limits.fileBytes) throw new Error('snapshot file grew beyond budget');
+    }
+    return buffer.subarray(0, n);
+  } finally { fs.closeSync(fd); }
+}
+
+function sealTree(dir) {
+  for (const ent of fs.readdirSync(dir, { withFileTypes: true })) if (ent.isDirectory()) sealTree(path.join(dir, ent.name));
+  fs.chmodSync(dir, 0o555);
+}
+
 export function createSnapshot(source, { exclude = [], limits = LIMITS, only = null } = {}) {
   const root = fs.realpathSync(source);
   if (!fs.statSync(root).isDirectory()) throw new Error('snapshot source is not a directory');
@@ -94,28 +128,9 @@ export function createSnapshot(source, { exclude = [], limits = LIMITS, only = n
         walk(from, next, depth + 1);
         continue;
       }
-      if (!stat.isFile()) { omit(next, 'special_file'); continue; }
-      if (secretName(name) || next === '.claude/settings.json') { omit(next, 'credential_name'); continue; }
-      if (stat.nlink !== 1) { omit(next, 'hardlink'); continue; }
-      if (SKIP_NAME.test(name)) { omit(next, 'non_code_artifact'); continue; }
-      const text = TEXT_EXT.has(path.extname(name).toLowerCase()) || /^(\.dockerignore|requirements[\w.-]*\.txt|constraints\.txt|Dockerfile(?:\..*)?|Makefile|Cargo\.lock|go\.mod|go\.sum)$/.test(name);
-      if (!text) { omit(next, 'non_source_extension'); continue; }
-      if (stat.size > limits.fileBytes) { omit(next, 'file_byte_limit'); continue; }
-      // Check descriptor identity and containment; seal exactly the bytes copied,
-      // not an asserted atomic point-in-time view of a changing checkout.
-      const fd = fs.openSync(from, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK);
-      let data;
-      try {
-        const current = fs.fstatSync(fd);
-        if (!current.isFile() || current.nlink !== 1 || current.dev !== stat.dev || current.ino !== stat.ino || !inside(root, fs.realpathSync(from))) throw new Error('snapshot source changed during capture');
-        const buffer = Buffer.alloc(limits.fileBytes + 1);
-        let n = 0;
-        for (let count; (count = fs.readSync(fd, buffer, n, buffer.length - n, null));) {
-          n += count;
-          if (n > limits.fileBytes) throw new Error('snapshot file grew beyond budget');
-        }
-        data = buffer.subarray(0, n);
-      } finally { fs.closeSync(fd); }
+      const skipped = fileOmission(name, next, stat, limits);
+      if (skipped) { omit(next, skipped); continue; }
+      const data = readCapturedFile(from, stat, root, limits);
       if (data.includes(0)) { omit(next, 'binary_content'); continue; }
       try { new TextDecoder('utf-8', { fatal: true }).decode(data); } catch { omit(next, 'non_utf8_text'); continue; }
       if (files.length >= limits.files || bytes + data.length > limits.totalBytes) throw new Error('snapshot content budget exceeded');
@@ -129,11 +144,7 @@ export function createSnapshot(source, { exclude = [], limits = LIMITS, only = n
     files.sort((a, b) => a.path.localeCompare(b.path, 'en'));
     omissions.sort((a, b) => a.path.localeCompare(b.path, 'en'));
     const manifest = { version: 1, scope: 'read_only_text_source', files, omissions, bytes, digest: hash(JSON.stringify(files)), secretFree: 'not_guaranteed' };
-    const seal = (dir) => {
-      for (const ent of fs.readdirSync(dir, { withFileTypes: true })) if (ent.isDirectory()) seal(path.join(dir, ent.name));
-      fs.chmodSync(dir, 0o555);
-    };
-    seal(snapshot);
+    sealTree(snapshot);
     const capture = { staging, snapshot, manifest };
     CAPTURES.set(capture, { staging, snapshot, digest: manifest.digest });
     return capture;
