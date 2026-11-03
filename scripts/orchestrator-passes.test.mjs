@@ -36,6 +36,9 @@ function setup(t, { target, failPass = null, reviewers = ['scripted:baseline'] }
     calls.push({ name: identity.name, role: identity.role, pass, budgets: options.budgets, prices: options.prices, prompt: options.prompt, resume: options.resume });
     fs.mkdirSync(options.directory, { recursive: true });
     fs.writeFileSync(path.join(options.directory, 'state.json'), JSON.stringify({ identity, sessionId: identity.name }));
+    // What the API shim records per turn: served model and usage rows.
+    fs.mkdirSync(path.join(options.directory, 'workspace'), { recursive: true });
+    fs.writeFileSync(path.join(options.directory, 'workspace', 'api-session.json'), JSON.stringify({ servedModel: 'served-baseline-0901', usage: [{ prompt_tokens: 7, completion_tokens: 3, cost: 0.01, costSource: 'estimated' }] }));
     if (pass && pass === failPass) return { code: 1, failureReason: 'turn_incomplete', sessionId: identity.name, directory: options.directory, elapsedMs: 1, observedExitCode: 0 };
     const payload = identity.role === 'auditor' ? finding(identity, pass) : readReportJson(out, `crosscheck/${identity.agent}.json`).map((row) => ({ id: row.id, verdict: 'upheld', reason: 'Inert source', evidence: ['source.js:1'] }));
     commitSubmission(out, identity.name, identity, payload);
@@ -67,6 +70,11 @@ test('the Docker path hands every session its budgets and prices and runs exactl
   const job = readReportJson(out, 'workers.json').jobs[0];
   assert.equal(job.passesCompleted, 2);
   assert.match(readReportJson(out, 'auditors/scripted-baseline-s1-auth.json')[0].title, /^Pass 2 finding/);
+  const usage = readReportJson(out, 'harness/usage/scripted-baseline/s1-pass-1.json');
+  assert.deepEqual([usage.tokensIn, usage.tokensOut, usage.costSource], [7, 3, 'estimated']);
+  assert.equal(job.servedModel, 'served-baseline-0901', 'W03-10: the served model reaches workers.json');
+  assert.equal(readReportJson(out, 'meta.json').reviewers[0].servedModel, 'served-baseline-0901', 'and meta.reviewers');
+  assert.ok(!loadAuditors(out).health.errors.some((e) => /Invalid reviewer inventory/.test(e)));
 });
 
 test('a failed later pass keeps the earlier pass, counts only completed passes and resumes at the failed pass', async (t) => {
