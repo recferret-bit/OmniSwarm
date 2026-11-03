@@ -50,6 +50,10 @@ export type ErrorCode =
   | 'REQUEST_NOT_FOUND';
 export type GuardReportStatus = 'pending' | 'approved' | 'reported' | 'rejected';
 /**
+ * Deposits of paid requests that were not refunded
+ */
+export type Yocto1 = string;
+/**
  * 202 refund_queued: the API recorded the refund and a worker (the only operator-key holder) sends it. 200 refunded: already refunded; refundTx is null when the tx hash was not recorded.
  */
 export type AdminRefundResponse =
@@ -256,14 +260,32 @@ export interface AdminGuardDecisionResponse {
   status: GuardReportStatus;
   reportTx: string | null;
 }
+/**
+ * GET /api/ledger (public, W09-18): paid requests, newest first (at most 500), with the deposit paid, the model cost summed from every attempt's reviewers/* /usage.json (recorded when the request is published or refunded) and the refund. Totals cover every paid request. No account ids.
+ */
 export interface LedgerResponse {
+  /**
+   * @maxItems 500
+   */
   entries: {
     requestId: Uuid;
+    repo: Repo;
     status: Status;
     priceYocto: Yocto;
+    paidYocto: Yocto;
     modelCostUsd: number;
+    /**
+     * Reviewers that reported usage; 0 until the cost is recorded
+     */
+    reviewers: number;
     refundTx?: string;
   }[];
+  totals: {
+    requests: number;
+    salesYocto: Yocto1;
+    refundedYocto: Yocto;
+    modelCostUsd: number;
+  };
 }
 /**
  * GET /api/health: liveness plus status. chain.rpc/contract come from ChainPort.health (cached 30 s); workers counts live pg-boss worker instances.

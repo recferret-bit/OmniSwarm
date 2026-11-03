@@ -1,12 +1,21 @@
 {
-  "reviewer": "scripted-baseline",
   "passes": [
     {
-      "pass": 1,
-      "prompt_tokens": 0,
-      "completion_tokens": 0,
-      "cost": 0
+      "k": 1,
+      "calls": 0,
+      "tokensIn": 0,
+      "tokensOut": 0,
+      "cost": 0,
+      "costSource": "none",
+      "stop": "submitted",
+      "startedAt": "2026-11-03T12:00:00.000Z",
+      "endedAt": "2026-11-03T12:00:01.000Z"
     }
   ],
-  "costUsd": 0
+  "totals": {
+    "calls": 0,
+    "tokensIn": 0,
+    "tokensOut": 0,
+    "cost": 0
+  }
 }

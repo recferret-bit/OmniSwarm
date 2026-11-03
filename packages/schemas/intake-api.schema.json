@@ -242,23 +242,39 @@
       "properties": {"status": {"$ref": "#/$defs/guard-report-status"}, "reportTx": {"type": ["string", "null"], "minLength": 1}}
     },
     "ledger-response": {
+      "description": "GET /api/ledger (public, W09-18): paid requests, newest first (at most 500), with the deposit paid, the model cost summed from every attempt's reviewers/*/usage.json (recorded when the request is published or refunded) and the refund. Totals cover every paid request. No account ids.",
       "type": "object",
-      "required": ["entries"],
+      "required": ["entries", "totals"],
       "additionalProperties": false,
       "properties": {
         "entries": {
           "type": "array",
+          "maxItems": 500,
           "items": {
             "type": "object",
-            "required": ["requestId", "status", "priceYocto", "modelCostUsd"],
+            "required": ["requestId", "repo", "status", "priceYocto", "paidYocto", "modelCostUsd", "reviewers"],
             "additionalProperties": false,
             "properties": {
               "requestId": {"$ref": "#/$defs/uuid"},
+              "repo": {"$ref": "#/$defs/repo"},
               "status": {"$ref": "#/$defs/status"},
               "priceYocto": {"$ref": "#/$defs/yocto"},
+              "paidYocto": {"$ref": "#/$defs/yocto"},
               "modelCostUsd": {"type": "number", "minimum": 0},
+              "reviewers": {"type": "integer", "minimum": 0, "description": "Reviewers that reported usage; 0 until the cost is recorded"},
               "refundTx": {"type": "string", "minLength": 1}
             }
+          }
+        },
+        "totals": {
+          "type": "object",
+          "required": ["requests", "salesYocto", "refundedYocto", "modelCostUsd"],
+          "additionalProperties": false,
+          "properties": {
+            "requests": {"type": "integer", "minimum": 0},
+            "salesYocto": {"$ref": "#/$defs/yocto", "description": "Deposits of paid requests that were not refunded"},
+            "refundedYocto": {"$ref": "#/$defs/yocto"},
+            "modelCostUsd": {"type": "number", "minimum": 0}
           }
         }
       }

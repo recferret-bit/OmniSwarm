@@ -2087,6 +2087,195 @@
         }
       }
     },
+    "/api/ledger": {
+      "get": {
+        "summary": "Public ledger: deposits, model costs and refunds per paid request",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "entries": {
+                      "maxItems": 500,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "requestId": {
+                            "type": "string",
+                            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+                          },
+                          "repo": {
+                            "type": "string",
+                            "pattern": "^[A-Za-z0-9-]{1,39}\\/[A-Za-z0-9._-]{1,100}$"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "awaiting_payment",
+                              "queued",
+                              "running",
+                              "publishing",
+                              "done",
+                              "failed",
+                              "refunded",
+                              "expired"
+                            ]
+                          },
+                          "priceYocto": {
+                            "type": "string",
+                            "pattern": "^(0|[1-9][0-9]{0,38})$"
+                          },
+                          "paidYocto": {
+                            "type": "string",
+                            "pattern": "^(0|[1-9][0-9]{0,38})$"
+                          },
+                          "modelCostUsd": {
+                            "type": "number",
+                            "minimum": 0
+                          },
+                          "reviewers": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "refundTx": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "required": [
+                          "requestId",
+                          "repo",
+                          "status",
+                          "priceYocto",
+                          "paidYocto",
+                          "modelCostUsd",
+                          "reviewers"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "totals": {
+                      "type": "object",
+                      "properties": {
+                        "requests": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "salesYocto": {
+                          "type": "string",
+                          "pattern": "^(0|[1-9][0-9]{0,38})$"
+                        },
+                        "refundedYocto": {
+                          "type": "string",
+                          "pattern": "^(0|[1-9][0-9]{0,38})$"
+                        },
+                        "modelCostUsd": {
+                          "type": "number",
+                          "minimum": 0
+                        }
+                      },
+                      "required": [
+                        "requests",
+                        "salesYocto",
+                        "refundedYocto",
+                        "modelCostUsd"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "entries",
+                    "totals"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "VALIDATION_ERROR",
+                            "MESSAGE_INVALID",
+                            "REPO_INVALID",
+                            "REPO_PRIVATE",
+                            "REPO_ARCHIVED",
+                            "REPO_TOO_LARGE",
+                            "REPO_DENIED",
+                            "REPO_NOT_FOUND",
+                            "REF_NOT_FOUND",
+                            "REF_CHANGED",
+                            "NETWORK_DISABLED",
+                            "PRESET_NOT_ALLOWED",
+                            "PAYLOAD_TOO_LARGE",
+                            "QUEUE_FULL",
+                            "NONCE_EXPIRED",
+                            "NONCE_USED",
+                            "NONCE_UNKNOWN",
+                            "SIG_INVALID",
+                            "KEY_NOT_FULL_ACCESS",
+                            "ACCOUNT_MISMATCH",
+                            "UNAUTHORIZED",
+                            "FORBIDDEN",
+                            "PAYMENT_NOT_FOUND",
+                            "PAYMENT_MISMATCH",
+                            "PAYMENT_SIGNER_MISMATCH",
+                            "TX_ALREADY_USED",
+                            "ACTIVE_REQUEST_EXISTS",
+                            "INVALID_TRANSITION",
+                            "REFUND_NOT_ALLOWED",
+                            "RATE_LIMITED",
+                            "NOT_FOUND",
+                            "REQUEST_NOT_FOUND",
+                            "CHAIN_UNAVAILABLE",
+                            "GITHUB_UNAVAILABLE",
+                            "INTERNAL"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 2000
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "retryable"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/requests/{id}/events": {
       "get": {
         "summary": "Server-Sent Events: progress and status of one request",

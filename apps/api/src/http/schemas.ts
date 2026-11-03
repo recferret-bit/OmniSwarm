@@ -71,6 +71,14 @@ export const adminGuardReportListResponse = z.strictObject({
 });
 export const adminGuardDecisionResponse = z.strictObject({ status: guardReportStatus, reportTx: z.string().min(1).nullable() });
 
+export const ledgerResponse = z.strictObject({
+  entries: z.array(z.strictObject({
+    requestId: uuid, repo, status, priceYocto: yocto, paidYocto: yocto, modelCostUsd: z.number().min(0), reviewers: z.int().min(0),
+    refundTx: z.string().min(1).optional(),
+  })).max(500),
+  totals: z.strictObject({ requests: z.int().min(0), salesYocto: yocto, refundedYocto: yocto, modelCostUsd: z.number().min(0) }),
+});
+
 export const healthResponse = z.strictObject({
   ok: z.boolean(), network, queueDepth: z.int().min(0), workers: z.int().min(0),
   chain: z.strictObject({ rpc: z.boolean(), contract: z.boolean() }),

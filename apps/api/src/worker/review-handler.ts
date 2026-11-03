@@ -13,8 +13,10 @@ import type { ReviewJob } from '../queue/review-queue.ts';
 import type { Clock } from '../shared/clock.ts';
 import { isAppError } from '../shared/errors.ts';
 import type { Logger } from '../shared/logger.ts';
-import { attemptDirs, completedAttempt, recordResult, runCostUsd } from './attempts.ts';
+import { recordRequestCost } from '../db/repositories/costs.ts';
+import { attemptDirs, completedAttempt, recordResult } from './attempts.ts';
 import { classify, type Outcome } from './classify.ts';
+import { requestCost } from './cost.ts';
 import { ProgressTailer } from './progress-tailer.ts';
 import { publishReport, readPublished } from './publish.ts';
 import { maxSeverity } from './report.ts';
@@ -41,7 +43,15 @@ function reportUrl(config: Config, requestId: string): string {
   return `${config.storage.reportsBaseUrl}/${requestId}/report.html`;
 }
 
+/** Sum every attempt's model cost into request_cost (W09-18) before the request settles. */
+async function recordCost(deps: HandlerDeps, requestId: string): Promise<number> {
+  const cost = requestCost(deps.config.storage.runsRoot, requestId);
+  await recordRequestCost(deps.pool, requestId, cost, deps.clock.now());
+  return cost.costUsd;
+}
+
 async function attest(deps: HandlerDeps, row: RequestRow, sourceDir: string | null, incomplete: boolean): Promise<HandlerResult> {
+  const costUsd = await recordCost(deps, row.id);
   if (row.status === 'running') {
     const published = sourceDir
       ? publishReport({ reportsRoot: deps.config.storage.reportsRoot, requestId: row.id, sourceDir, repo: row.repo, commitSha: row.commit_sha, preset: row.preset })
@@ -55,11 +65,12 @@ async function attest(deps: HandlerDeps, row: RequestRow, sourceDir: string | nu
   const dir = readPublished(deps.config.storage.reportsRoot, row.id)?.dir ?? '';
   return {
     status: row.incomplete ? 'incomplete' : 'done', reportSha256: row.report_sha256 ?? '', maxSeverityConfirmed: row.max_severity ?? 'none',
-    reportDir: dir, costUsd: dir ? runCostUsd(dir) : 0,
+    reportDir: dir, costUsd,
   };
 }
 
 async function refund(deps: HandlerDeps, row: RequestRow, cause: string): Promise<HandlerResult> {
+  await recordCost(deps, row.id);
   if (row.status !== 'failed') await markFailed(deps, row.id, cause);
   await refundRequest(deps, row.id, { actor: 'worker', cause });
   deps.log.info({ requestId: row.id, cause }, 'review refunded');
