@@ -1,5 +1,5 @@
 // Declarations for index.mjs. The runtime is plain ESM with JSDoc checked against these types.
-import type { Level, ReasonCode, ChainAttestation, ChainReader, Policy, Signals, SchemaAttestation, Verdict, WalletAction, TxIntent, Target, IntentVerdict, GuardOptions, OnWarn, Signer, Guard, RecordedChain } from './types.js';
+import type { Level, ReasonCode, ChainAttestation, ChainReader, Policy, Signals, SchemaAttestation, Verdict, TxIntent, Target, IntentVerdict, GuardOptions, Guard, RegistryView } from './types.js';
 
 export type * from './types.js';
 
@@ -8,6 +8,7 @@ export function evaluate(signals: Signals, severity: string | null, policy?: Pol
 export function assertVerdict(value: unknown): Verdict;
 export function toSchemaAttestation(attestation: ChainAttestation): SchemaAttestation;
 export function httpSource(options: { apiUrl: string; network: 'testnet' | 'mainnet'; apiKey?: string; fetch?: typeof fetch }): (accountId: string) => Promise<Verdict>;
+export function registryReader(view: RegistryView): Pick<Required<ChainReader>, 'getAttestationForAccount' | 'isReported' | 'getReport'>;
 export function targetsOf(intent: TxIntent, beneficiaryArgs?: readonly string[]): Target[];
 export function isAccountId(value: unknown): value is string;
 export const DEFAULT_POLICY: Readonly<Policy>;

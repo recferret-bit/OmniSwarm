@@ -1,14 +1,15 @@
 // @ts-check
-// A ChainReader over recorded chain answers (a snapshot), for tests, the attack demo and the
-// API's mock-chain mode. Not a fixture itself: the caller passes the records.
+// A ChainReader and an AccountAgeSource over recorded answers (a snapshot), for tests, the attack
+// demo and the API's mock-chain mode. Not fixtures themselves: the caller passes the records.
 
 /** @typedef {import('../types.js').ChainReader} ChainReader */
 /** @typedef {import('../types.js').RecordedChain} RecordedChain */
+/** @typedef {import('../types.js').AccountAgeSource} AccountAgeSource */
 
 /**
  * @param {RecordedChain} records
  * @param {{ fail?: ReadonlySet<keyof ChainReader> }} [options]  methods that reject (outage simulation)
- * @returns {ChainReader}
+ * @returns {Required<ChainReader>}
  */
 export function createRecordedReader(records, { fail = new Set() } = {}) {
   /**
@@ -22,12 +23,14 @@ export function createRecordedReader(records, { fail = new Set() } = {}) {
     return answer();
   };
   const accounts = records.accounts ?? {};
-  /** @type {ChainReader} */
+  const reports = records.reports ?? {};
+  /** @type {Required<ChainReader>} */
   const reader = {
     getAccount: (id) => read('getAccount', () => (accounts[id] ? { codeHash: accounts[id].code_hash } : null)),
     getAccountAgeDays: (id) => read('getAccountAgeDays', () => accounts[id]?.age_days ?? 0),
     getAttestationForAccount: (id) => read('getAttestationForAccount', () => records.attestations?.[id] ?? null),
-    isReported: (id) => read('isReported', () => (records.reported ?? []).includes(id)),
+    isReported: (id) => read('isReported', () => (records.reported ?? []).includes(id) || Object.hasOwn(reports, id)),
+    getReport: (id) => read('getReport', () => (Object.hasOwn(reports, id) ? reports[id] : null)),
     getBlockTimestampMs: (height) =>
       read('getBlockTimestampMs', () => {
         const at = records.blockTimestampsMs?.[String(height)];
@@ -36,4 +39,19 @@ export function createRecordedReader(records, { fail = new Set() } = {}) {
       }),
   };
   return Object.freeze(reader);
+}
+
+/**
+ * An AccountAgeSource over recorded creation times. Unknown accounts answer null.
+ * @param {Record<string, number>} createdAtMs  account id → creation time in ms
+ * @param {{ fail?: boolean }} [options]  reject every lookup (outage simulation)
+ * @returns {AccountAgeSource}
+ */
+export function createRecordedAgeSource(createdAtMs, { fail = false } = {}) {
+  return Object.freeze({
+    getCreatedAtMs: async (/** @type {string} */ id) => {
+      if (fail) throw new Error('account age source unavailable');
+      return Object.hasOwn(createdAtMs, id) ? createdAtMs[id] : null;
+    },
+  });
 }
