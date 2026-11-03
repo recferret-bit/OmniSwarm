@@ -1,124 +1,77 @@
-#!/usr/bin/env node
-// Offline debate for scripted reviewers. Each step writes a file under debate/.
-import fs from 'node:fs';
-import path from 'node:path';
+// The three debate stages over a plan from debate-plan.mjs. Each stage writes its files under debate/ (or
+// general-review.*) and returns state for the next. A stage that cannot finish throws a coded error; the phase
+// runner records it in meta.stageFailures and the report shows INCOMPLETE with every per-model finding intact.
 import { buildClusters } from './debate-cluster.mjs';
-import { checkCitations } from './debate-citations.mjs';
-import { anonymize, stripIdentity } from './debate-anonymize.mjs';
-import { classifyArgument, judgeVisible } from './debate-rules.mjs';
-import { scriptedArgument, scriptedFindings, lineOf } from './debate-scripted.mjs';
+import { runRounds } from './debate-rounds.mjs';
+import { adjudicateCluster, agreedAdjudication, pickJudge } from './debate-judge.mjs';
+import { composeGeneralReview, generalReviewMarkdown, rulesSummary } from './debate-general-review.mjs';
+import { offlinePlan, stageError } from './debate-plan.mjs';
 import { validate } from '../packages/schemas/index.mjs';
+import { writeJson, writeText } from './report-util-files.mjs';
 
-const DISCLAIMER = 'Model agreement and passing checks do not certify security.';
+const writeTrace = (out, rows) => writeText(out, 'debate/trace.jsonl', rows.map((row) => JSON.stringify(row)).join('\n') + (rows.length ? '\n' : ''));
 
-function write(root, rel, value) {
-  const file = path.join(root, rel);
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, typeof value === 'string' ? value : `${JSON.stringify(value, null, 2)}\n`);
+export async function debateStage(plan) {
+  const built = buildClusters(plan.claims, { reader: plan.reader, maxClusters: plan.maxClusters });
+  const names = [...plan.reviewers.flatMap((r) => [r.id, r.vendor, r.model])];
+  const result = await runRounds({ out: plan.out, clusters: built.clusters, voices: plan.voices, vendors: plan.vendors, reader: plan.reader, rounds: plan.rounds, seed: plan.seed, names });
+  const clusters = built.clusters.map((row) => (result.debated.has(row.id) ? { ...row, rounds: result.debated.get(row.id).rounds } : row));
+  writeJson(plan.out, 'debate/clusters.json', { clusters, coverageGaps: built.coverageGaps });
+  writeJson(plan.out, 'debate/anonymization.json', result.anonymization);
+  writeJson(plan.out, 'debate/citations.json', result.citations);
+  writeTrace(plan.out, result.trace);
+  return { clusters, coverageGaps: built.coverageGaps, debated: result.debated, gaps: result.gaps, trace: result.trace };
 }
 
-function strategyOf(auditor) {
-  return String(auditor).replace(/^scripted-/, '');
-}
-
-export function judgeCluster(cluster, turns) {
-  const visible = judgeVisible(turns);
-  const refuted = visible.filter((turn) => turn.verdict === 'refuted' && (turn.citations || []).some((citation) => citation.valid));
-  const upheld = visible.filter((turn) => turn.verdict === 'upheld' && (turn.citations || []).some((citation) => citation.valid));
-  let finalStatus = 'DISPUTED';
-  if (upheld.length && !refuted.length) finalStatus = cluster.vendors.length >= 2 ? 'CONFIRMED' : 'LIKELY';
-  else if (refuted.length && !upheld.length) finalStatus = 'REFUTED';
-  else if (!visible.length) finalStatus = cluster.vendors.length < 2 ? 'LIKELY' : 'INSUFFICIENT_EVIDENCE';
-  if (cluster.vendors.length < 2 && !refuted.length) finalStatus = 'LIKELY';
-  return finalStatus;
-}
-
-export function runDebate(out, { sourceRoot, findings, rounds = 2, maxClusters = 25, seed = 1, orchestrator = 'scripted:judge', reviewers = [], fault = process.env.OMNI_FAULT } = {}) {
-  if (fault === 'debate-round-2' || fault === 'general-review') {
-    write(out, 'meta.json', JSON.stringify({ stageFailures: [fault === 'debate-round-2' ? 'debate' : 'general-review'], reviewers: reviewers.length ? reviewers : findings.map((row) => ({ id: row.auditor })) }, null, 2));
-    write(out, 'report-health.json', JSON.stringify({ state: 'INCOMPLETE', errors: [`stageFailures: ${fault === 'debate-round-2' ? 'debate' : 'general-review'}`] }, null, 2));
-    if (reviewers.length) write(out, 'reviewers/index.json', JSON.stringify({ reviewers: reviewers.map((row) => row.id || row) }, null, 2));
-    const error = new Error(fault);
-    error.code = fault;
-    throw error;
+export async function adjudicateStage(plan, state) {
+  const rows = [];
+  const gaps = [];
+  for (const cluster of state.clusters) {
+    if (cluster.status === 'CAPPED') continue;
+    if (cluster.status === 'AGREED') { rows.push(agreedAdjudication(cluster)); continue; }
+    const turns = state.debated.get(cluster.id)?.turns || [];
+    const choice = pickJudge(cluster, plan);
+    const { row, gap } = await adjudicateCluster(cluster, turns, choice, plan.judgeVoice);
+    const check = validate('adjudication', row);
+    if (!check.ok) throw stageError('adjudication_invalid', `adjudication for ${cluster.id} failed its schema: ${check.errors[0]}`);
+    rows.push(row);
+    if (gap) gaps.push(gap);
+    state.trace.push({ phase: 'adjudicate', template: 'judge', clusterId: cluster.id, judge: row.judge.reviewerId, alternate: row.judge.alternate, stop: row.finalStatus });
   }
-  const bug = lineOf(sourceRoot, 'saturating_sub');
-  const safe = lineOf(sourceRoot, 'assert_eq!');
-  const vendors = Object.fromEntries(findings.map((row) => [row.auditor, row.vendor || 'scripted']));
-  const built = buildClusters(findings, { sourceRoot, maxClusters, vendors });
-  write(out, 'debate/clusters.json', built);
-  const ids = [...new Set(findings.map((row) => row.auditor))];
-  const names = anonymize(ids, seed);
-  write(out, 'debate/anonymization.json', names);
-  const trace = [];
-  const citations = [];
-  const adjudication = [];
-  for (const cluster of built.clusters) {
-    if (cluster.status !== 'QUEUED') {
-      if (cluster.status === 'AGREED') adjudication.push({ clusterId: cluster.id, finalStatus: 'CONFIRMED', severity: cluster.severity || 'high', severityReason: 'Two vendors cited the same lines.', judge: { reviewerId: 'scripted-judge', vendor: 'scripted', alternate: false }, rationale: 'Agreed before debate.', validArguments: [], discardedArguments: [] });
-      continue;
-    }
-    const authors = new Set(cluster.auditors);
-    const challengers = ids.filter((id) => !authors.has(id));
-    const advocate = challengers[seed % Math.max(challengers.length, 1)] || null;
-    const turns = [];
-    const speak = (speaker, round, role) => {
-      const raw = scriptedArgument({ strategy: strategyOf(speaker), round, bug, safe });
-      const checked = checkCitations(sourceRoot, raw.citations);
-      citations.push(...checked.map((row) => ({ ...row, speaker: names.map[speaker], clusterId: cluster.id })));
-      const turn = classifyArgument({
-        round, clusterId: cluster.id, role, anonId: names.map[speaker], verdict: raw.verdict,
-        citations: checked, argument: stripIdentity(raw.argument), conformitySuspect: raw.conformitySuspect,
-        devilAdvocate: role === 'devil', verdictChanged: raw.verdictChanged, discarded: false,
-      });
-      turns.push(turn);
-      const file = `debate/round-${round}/${names.map[speaker]}-${cluster.id}.json`;
-      const body = { round, clusterId: cluster.id, role, anonId: names.map[speaker], verdict: turn.verdict, citations: checked.map(({ file: f, startLine, endLine, quote }) => ({ file: f, startLine, endLine, quote })), argument: turn.argument, conformitySuspect: Boolean(turn.conformitySuspect), devilAdvocate: role === 'devil' };
-      write(out, file, body);
-      trace.push({ template: role, anonId: names.map[speaker], clusterId: cluster.id, stop: turn.discarded ? 'discarded' : turn.verdict });
-    };
-    challengers.forEach((speaker) => speak(speaker, 1, speaker === advocate ? 'devil' : 'challenge'));
-    let changed = turns.some((turn) => turn.verdictChanged);
-    if (rounds >= 2) {
-      for (const speaker of cluster.auditors) speak(speaker, 2, 'defend');
-      changed = turns.filter((turn) => turn.round === 2).some((turn) => turn.verdictChanged);
-    }
-    if (rounds >= 3 && changed) {
-      for (const speaker of challengers) speak(speaker, 3, 'rebut');
-    }
-    const finalStatus = judgeCluster(cluster, turns);
-    const discarded = turns.filter((turn) => turn.discarded).map((turn) => turn.anonId);
-    adjudication.push({
-      clusterId: cluster.id, finalStatus, severity: cluster.severity || 'medium', severityReason: 'Left at the reported severity.',
-      judge: { reviewerId: 'scripted-judge', vendor: 'scripted', alternate: false },
-      rationale: `${finalStatus} from verified citations only.`,
-      validArguments: judgeVisible(turns).map((turn) => turn.anonId),
-      discardedArguments: discarded,
-    });
-    trace.push({ template: 'judge', anonId: 'judge', clusterId: cluster.id, stop: finalStatus });
-  }
-  write(out, 'debate/citations.json', citations);
-  write(out, 'debate/adjudication.json', adjudication);
-  const general = {
-    executiveSummary: 'Scripted debate finished on the golden fixture.',
-    riskPosture: adjudication.some((row) => row.finalStatus === 'LIKELY' || row.finalStatus === 'CONFIRMED') ? 'high-risk' : 'moderate',
-    topFindings: adjudication.map((row) => ({ clusterId: row.clusterId, title: built.clusters.find((cluster) => cluster.id === row.clusterId)?.primaryTitle || row.clusterId, severity: row.severity, finalStatus: row.finalStatus })),
-    coverage: [{ surface: 'S1', covered: true, gaps: built.coverageGaps.map((gap) => gap.reason) }],
-    openDisagreements: adjudication.filter((row) => row.finalStatus === 'DISPUTED').map((row) => ({ clusterId: row.clusterId, summary: row.rationale })),
-    contributions: ids.map((id) => ({ reviewerId: id, uniqueConfirmed: 0, refuted: 0, toolCalls: 1, costUsd: 0 })),
-    methodology: { reviewers: ids, orchestrator, passes: 1, toolBudget: 12, debateRounds: rounds },
-    disclaimer: DISCLAIMER,
-  };
-  const check = validate('general-review', general);
-  if (!check.ok) throw new Error(check.errors[0]);
-  write(out, 'general-review.json', general);
-  write(out, 'general-review.md', `# General review\n\n${general.executiveSummary}\n\nRisk posture: ${general.riskPosture}\n\n${general.topFindings.map((row) => `- ${row.title}: ${row.finalStatus}`).join('\n')}\n\n${ids.map((id) => `- ${id}`).join('\n')}\n\n${DISCLAIMER}\n`);
-  trace.push({ template: 'general_review', anonId: 'orchestrator', stop: 'submitted' });
-  write(out, 'debate/trace.jsonl', `${trace.map((row) => JSON.stringify(row)).join('\n')}\n`);
-  return { clusters: built.clusters, adjudication, names };
+  writeJson(plan.out, 'debate/adjudication.json', rows);
+  writeTrace(plan.out, state.trace);
+  return { ...state, rows, missing: [...state.gaps, ...gaps] };
 }
 
-export function runGolden(sourceRoot, out, options = {}) {
-  const findings = options.findings || scriptedFindings(sourceRoot);
-  return runDebate(out, { sourceRoot, findings, ...options });
+// Turns or judgements that had no answer leave the run INCOMPLETE; the adjudication written above stays.
+export function missingAnswersError(missing) {
+  return stageError('debate_incomplete', `debate_incomplete: ${missing.length} turn(s) or judgement(s) had no answer (${[...new Set(missing.map((g) => g.reason))].join(', ')})`);
+}
+
+export async function generalReviewStage(plan, state) {
+  const listed = state.rows.map((row) => ({ clusterId: row.clusterId, finalStatus: row.finalStatus, severity: row.severity, title: state.clusters.find((c) => c.id === row.clusterId)?.primaryTitle || row.clusterId }));
+  const summary = state.rows.length ? await plan.summaryVoice({ rows: state.rows, clusters: listed }) : rulesSummary(state.rows);
+  if (!summary || summary.unavailable) throw stageError('general_review_unavailable', `general_review_unavailable: ${summary?.unavailable || 'no answer'}`);
+  const general = composeGeneralReview({
+    rows: state.rows, clusters: state.clusters, gaps: [...state.coverageGaps, ...state.gaps], scope: plan.scope, failedSurfaces: plan.failedSurfaces,
+    reviewers: plan.reviewers, usage: plan.usage, summary,
+    methodology: { ...plan.methodology, judgeAssignment: state.rows.map((row) => `${row.clusterId}: ${row.judge.reviewerId}${row.judge.alternate ? ' (alternate)' : ''}`) },
+  });
+  writeJson(plan.out, 'general-review.json', general);
+  writeText(plan.out, 'general-review.md', generalReviewMarkdown(general));
+  state.trace.push({ phase: 'general-review', template: 'general-review', stop: 'submitted' });
+  writeTrace(plan.out, state.trace);
+  return general;
+}
+
+// All three stages in one call, for the host demo and the golden eval. Missing answers are returned, not thrown.
+export async function runDebateStages(plan) {
+  const adjudicated = await adjudicateStage(plan, await debateStage(plan));
+  const general = await generalReviewStage(plan, adjudicated);
+  return { ...adjudicated, general };
+}
+
+// Host demo hook: debate the scripted submissions already in `out` (meta.json + auditors/) over the fixture source.
+export function runOfflineDebate(out, sourceRoot, options = {}) {
+  return runDebateStages(offlinePlan({ out, sourceRoot, ...options }));
 }

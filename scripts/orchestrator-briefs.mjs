@@ -1,37 +1,68 @@
-// Fixed briefs. Every template has the same four headings so a reviewer cannot wander.
+// Debate and orchestrator briefs (ORCHESTRATION 5). Review-pass briefs live in review-briefs.mjs.
+// Every brief has the same four headings so a reviewer cannot wander: Objective, Output schema,
+// Tools and sources, Boundaries. A brief carries one cluster only, its quoted evidence and the anonymized
+// arguments so far; it never names a vendor, a model or a vote count.
+export const BRIEF_HEADINGS = ['Objective', 'Output schema', 'Tools and sources', 'Boundaries'];
+
+const DEBATE_TOOLS = 'Read the sealed source with read_file, search_code and list_files; get_audit_context gives the scope.';
 const TEMPLATES = {
-  'review-pass': 'Inspect the assigned surface and submit only findings you can cite.',
-  challenge: 'Challenge this one cluster. Uphold, refute, or say the evidence is insufficient.',
-  'devil-advocate': 'Argue the strongest case that this cluster is a false positive.',
-  defend: 'Defend your finding with a new citation, or concede.',
-  rebut: 'Respond only because a verdict changed. Cite a line or leave the verdict.',
-  judge: 'Decide this cluster from the verified quotes only.',
-  'general-review': 'Summarize the debate. Do not add a finding that was not adjudicated.',
-  'merge-suggestions': 'Suggest merges only when two clusters cite the same file.',
+  challenge: {
+    objective: 'Challenge this one cluster. Decide whether the cited source supports it: upheld, partial, refuted, or insufficient_evidence.',
+    schema: 'debate-round', submit: 'submit_debate_turn',
+  },
+  'devil-advocate': {
+    objective: 'You are the devil\'s advocate for this cluster. Argue the strongest case that it is a false positive, citing the control that stops it. If no such control exists in source, answer insufficient_evidence.',
+    schema: 'debate-round', submit: 'submit_debate_turn',
+  },
+  defend: {
+    objective: 'You reported this cluster. Read the challenges below. Defend it with a new citation, or concede with the citation that convinced you.',
+    schema: 'debate-round', submit: 'submit_debate_turn',
+  },
+  rebut: {
+    objective: 'A verdict changed in the defence round. Respond to it with a citation, or keep your earlier verdict.',
+    schema: 'debate-round', submit: 'submit_debate_turn',
+  },
+  judge: {
+    objective: 'Judge this cluster from the verified quotes and the valid arguments only: CONFIRMED, LIKELY, DISPUTED, REFUTED or INSUFFICIENT_EVIDENCE. You may re-calibrate severity with a reason.',
+    schema: 'adjudication', submit: 'submit_adjudication',
+  },
+  'general-review': {
+    objective: 'Write the executive summary of the adjudicated clusters listed below and name the disagreements that stayed open. Do not add a finding that was not adjudicated.',
+    schema: 'general-review', submit: 'submit_general_review',
+  },
 };
 
-const HEADINGS = ['Objective', 'Output schema', 'Tools and sources', 'Boundaries'];
+export function briefIds() { return Object.keys(TEMPLATES); }
 
-export function renderBrief(id, { budget = 12 } = {}) {
-  const objective = TEMPLATES[id];
-  if (!objective) throw new Error(`unknown brief ${id}`);
-  return [
-    `# ${id}`,
-    '',
-    '## Objective',
-    objective,
-    '',
-    '## Output schema',
-    'Return the schema fields only. Cite file, startLine, endLine and quote, or the argument is discarded.',
-    '',
-    '## Tools and sources',
-    'Read the sealed source with read_file, search_code and list_files. One cluster only.',
-    '',
-    '## Boundaries',
-    `Insufficient evidence is allowed. No new findings outside this cluster. Budget: ${budget} calls.`,
-    '',
-  ].join('\n');
+function evidenceLines(cluster) {
+  return (cluster?.evidence || []).map((row) => `- ${row.file}:${row.startLine} ${row.valid ? `\`${row.quote}\`` : `(not checkable: ${row.reason})`}`);
 }
 
-export function briefIds() { return Object.keys(TEMPLATES); }
-export const BRIEF_HEADINGS = HEADINGS;
+function argumentLines(turns) {
+  return (turns || []).map((turn) => `- ${turn.anonId}, round ${turn.round} (${turn.role}): ${turn.verdict}. ${turn.argument}${(turn.citations || []).length ? ` Cites ${turn.citations.map((c) => `${c.file}:${c.startLine}`).join(', ')}.` : ''}`);
+}
+
+function subjectLines(id, { cluster, clusters }) {
+  if (id === 'general-review') {
+    return ['## Adjudicated clusters', ...(clusters || []).map((row) => `- ${row.clusterId}: ${row.finalStatus} (${row.severity}) ${row.title}`), ''];
+  }
+  return [`## Cluster ${cluster.id}`, `Claim: ${cluster.primaryTitle} (severity ${cluster.severity}, surface ${cluster.surface})`, 'Evidence:', ...evidenceLines(cluster), ''];
+}
+
+// id: a template id. options: {cluster, clusters, turns, anonId, round, budget}.
+export function renderDebateBrief(id, { cluster = null, clusters = [], turns = [], anonId = '', round = 0, budget = 12 } = {}) {
+  const template = TEMPLATES[id];
+  if (!template) throw new Error(`unknown brief ${id}`);
+  const you = anonId ? `You are ${anonId}${round ? ` in round ${round}` : ''}.` : '';
+  return [
+    `# ${id}`, '',
+    '## Objective', [template.objective, you].filter(Boolean).join(' '), '',
+    ...subjectLines(id, { cluster, clusters }),
+    ...(turns.length ? ['## Arguments so far', ...argumentLines(turns), ''] : []),
+    '## Output schema',
+    `Call ${template.submit} once with fields of the ${template.schema} schema. Cite file, startLine, endLine and an exact quote, or the argument is discarded.`, '',
+    '## Tools and sources', id === 'general-review' ? 'No source reads are needed; use the adjudication above.' : DEBATE_TOOLS, '',
+    '## Boundaries',
+    `${id === 'general-review' ? 'No new findings in this step.' : 'One cluster only; no new findings.'} insufficient_evidence is allowed. No exploits. Budget: ${budget} tool calls.`, '',
+  ].join('\n');
+}

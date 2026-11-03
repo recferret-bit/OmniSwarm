@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PAGES, findBrowser, printableHtml } from '../../../scripts/report-pdf.mjs';
-import { runGolden } from '../../../scripts/debate-run.mjs';
+import { runOfflineDebate } from '../../../scripts/debate-run.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const scripts = path.join(ROOT, 'scripts');
@@ -92,7 +92,7 @@ test('a v2 run without general-review.json shows the incomplete banner and no he
   assert.equal(html.includes('id="general-review-hero"'), false);
 });
 
-test('w06-run renders every debate cluster in the cross-check table', () => {
+test('w06-run renders every debate cluster in the cross-check table', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'w07-w06-'));
   fs.mkdirSync(path.join(dir, 'auditors'));
   fs.mkdirSync(path.join(dir, 'harness'));
@@ -107,7 +107,7 @@ test('w06-run renders every debate cluster in the cross-check table', () => {
   ]));
   fs.writeFileSync(path.join(dir, 'auditors/claude-s1-auth.md'), 'Source review only.\n');
   fs.writeFileSync(path.join(dir, 'harness/sandbox.md'), '# Sandbox\n| fixture | impossible | Benign data fixture, no target execution. |\n');
-  runGolden(path.join(ROOT, 'eval/golden/near-escrow'), dir, { rounds: 2, seed: 1 });
+  await runOfflineDebate(dir, path.join(ROOT, 'eval/golden/near-escrow'));
   const rendered = spawnSync(process.execPath, [path.join(scripts, 'generate-html-report.mjs'), dir], { cwd: ROOT, encoding: 'utf8' });
   assert.ok(rendered.status === 0 || rendered.status === 2, rendered.stderr);
   const clusters = JSON.parse(fs.readFileSync(path.join(dir, 'debate/clusters.json'), 'utf8'));

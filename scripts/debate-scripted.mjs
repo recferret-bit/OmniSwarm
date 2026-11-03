@@ -1,31 +1,63 @@
-// Offline debate voices. Quotes are taken from the golden source so the citation checker can accept or reject them.
-import fs from 'node:fs';
-import path from 'node:path';
+// Debate voices for the scripted family (W03 strategies baseline, paranoid, wrong, lazy). A scripted reviewer
+// argues only from what it committed in the review: its own findings and its own control assertions. Quotes
+// are the snapshot's lines, so the citation checker decides them like any model's. Nothing here knows the target.
+import { anchorEvidence, parseLocation, relevantTo } from './debate-citations.mjs';
 
-export function lineOf(root, needle) {
-  const file = 'src/lib.rs';
-  const lines = fs.readFileSync(path.join(root, file), 'utf8').split(/\r?\n/);
-  const index = lines.findIndex((line) => line.includes(needle));
-  if (index < 0) throw new Error(`missing ${needle}`);
-  return { file, startLine: index + 1, endLine: index + 1, quote: lines[index].trim() };
+const cite = (row) => ({ file: row.file, startLine: row.startLine, endLine: row.endLine, quote: row.quote });
+
+function ownEvidence(cluster, findings) {
+  const mine = new Set(findings.flatMap((finding) => finding.location || []));
+  return cluster.evidence.find((row) => row.valid && mine.has(`${row.file}:${row.startLine}`)) || null;
 }
 
-export function scriptedFindings(root) {
-  const bug = lineOf(root, 'saturating_sub');
-  const safe = lineOf(root, 'assert_eq!');
-  const cite = (row) => [`${row.file}:${row.startLine}`];
-  return [
-    { auditor: 'scripted-baseline', vendor: 'scripted', title: 'Missing owner check in withdraw', surface: 'S1', severity: 'high', confidence: 'confirmed', location: cite(bug), quote: bug.quote, claimId: 'scripted-baseline-s1-auth#0' },
-    { auditor: 'scripted-paranoid', vendor: 'scripted', title: 'Missing owner check in withdraw', surface: 'S1', severity: 'high', confidence: 'probable', location: cite(bug), quote: bug.quote, claimId: 'scripted-paranoid-s1-auth#0' },
-    { auditor: 'scripted-lazy', vendor: 'scripted', title: 'Missing owner check in withdraw', surface: 'S1', severity: 'medium', confidence: 'probable', location: cite(bug), quote: bug.quote, claimId: 'scripted-lazy-s1-auth#0' },
-    { auditor: 'scripted-wrong', vendor: 'scripted', title: 'deposit has no owner comparison', surface: 'S1', severity: 'low', confidence: 'probable', location: cite(safe), quote: 'no owner check on this line', claimId: 'scripted-wrong-s1-auth#0' },
-  ];
+// A control assertion that holds and names a file:line next to the cluster refutes it.
+function controlEvidence(cluster, controls, reader) {
+  for (const control of controls) {
+    if (control.holds === false) continue;
+    for (const match of String(control.evidence || control.how_attacked || '').matchAll(/([\w./-]+:\d+)/g)) {
+      const anchor = parseLocation(match[1]);
+      const row = anchor && anchorEvidence(reader, anchor);
+      if (row?.valid && relevantTo(row, cluster.anchors)) return { row, control: String(control.control || 'a control') };
+    }
+  }
+  return null;
 }
 
-export function scriptedArgument({ strategy, round, bug, safe }) {
-  if (strategy === 'wrong') return { verdict: 'refuted', citations: [{ ...safe, quote: 'no owner check on this line' }], argument: 'The cited line has no check.', verdictChanged: false };
-  if (strategy === 'lazy' && round >= 2) return { verdict: 'refuted', citations: [], argument: 'I concede without a new citation.', verdictChanged: true, conformitySuspect: true };
-  if (strategy === 'paranoid' && round >= 2) return { verdict: 'refuted', citations: [bug], argument: 'I flip after reading the challenge.', verdictChanged: true };
-  if (strategy === 'baseline') return { verdict: 'upheld', citations: [bug], argument: 'The withdraw body never compares the predecessor to the owner.', verdictChanged: false };
-  return { verdict: 'upheld', citations: [bug], argument: 'The citation matches the source.', verdictChanged: false };
+const lastRefutation = (turns) => [...turns].reverse().find((turn) => !turn.discarded && turn.verdict === 'refuted' && turn.citations.some((c) => c.valid));
+const insufficient = (argument) => ({ verdict: 'insufficient_evidence', citations: [], argument });
+
+const STRATEGIES = {
+  baseline({ own, control }) {
+    if (own) return { verdict: 'upheld', citations: [cite(own)], argument: 'The cited line is where the missing control should be.' };
+    if (control) return { verdict: 'refuted', citations: [cite(control.row)], argument: `${control.control} holds at the cited line.` };
+    return insufficient('My review did not cover this code path.');
+  },
+  paranoid({ own, cluster, role, turns }) {
+    const refutation = role === 'defend' ? lastRefutation(turns) : null;
+    if (own && refutation) return { verdict: 'refuted', citations: refutation.citations.filter((c) => c.valid).map(cite), argument: 'I concede: the cited control holds.' };
+    const line = own || cluster.evidence.find((row) => row.valid);
+    return line ? { verdict: 'upheld', citations: [cite(line)], argument: 'The cited line looks unsafe to me.' } : insufficient('No line to cite.');
+  },
+  wrong({ cluster }) {
+    const anchor = cluster.anchors[0];
+    if (!anchor) return insufficient('No line to cite.');
+    return { verdict: 'refuted', citations: [{ file: anchor.file, startLine: anchor.line, endLine: anchor.line, quote: 'no check on this line' }], argument: 'The cited line has no check.' };
+  },
+  lazy({ round, turns, speakerAnon }) {
+    const other = [...turns].reverse().find((turn) => turn.anonId !== speakerAnon && !turn.discarded && turn.verdict !== 'insufficient_evidence');
+    if (round === 1 || !other) return insufficient('I did not read this code.');
+    return { verdict: other.verdict, citations: other.citations.filter((c) => c.valid).map(cite), argument: 'I agree with the previous argument.' };
+  },
+};
+
+// Returns speak(task) for one scripted reviewer. task: {role, round, cluster, turns, anonId}.
+export function scriptedVoice(strategy, { findings = [], controls = [], reader }) {
+  const play = STRATEGIES[strategy];
+  return async ({ role, round, cluster, turns, anonId }) => {
+    if (!play) return insufficient('This scripted reviewer has no debate strategy.');
+    const own = ownEvidence(cluster, findings);
+    const control = controlEvidence(cluster, controls, reader);
+    if (role === 'devil') return control ? { verdict: 'refuted', citations: [cite(control.row)], argument: `${control.control} holds at the cited line.` } : insufficient('I found no control that stops this.');
+    return play({ own, control, cluster, role, round, turns, speakerAnon: anonId });
+  };
 }

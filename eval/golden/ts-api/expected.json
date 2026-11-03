@@ -1,10 +1,37 @@
 {
+  "stack": "node",
   "bugs": [
-    { "file": "src/lib.rs", "startLine": 16, "endLine": 16, "class": "missing-owner-check" },
-    { "file": "src/lib.rs", "startLine": 17, "endLine": 17, "class": "unchecked-balance-update" }
+    {
+      "file": "src/server.ts",
+      "startLine": 23,
+      "endLine": 23,
+      "class": "sql-injection",
+      "title": "user search interpolates the query string into SQL",
+      "severity": "high"
+    },
+    {
+      "file": "src/server.ts",
+      "startLine": 32,
+      "endLine": 32,
+      "class": "missing-authorization",
+      "title": "DELETE /users/:id has no admin check",
+      "severity": "high"
+    }
   ],
   "decoys": [
-    { "file": "src/lib.rs", "startLine": 11, "endLine": 11, "reason": "deposit compares the predecessor to the owner" },
-    { "file": "src/lib.rs", "startLine": 10, "endLine": 10, "reason": "the caller is read before the check" }
+    {
+      "file": "src/server.ts",
+      "startLine": 18,
+      "endLine": 18,
+      "reason": "the order id is a bound parameter",
+      "claim": "order lookup builds SQL from the path"
+    },
+    {
+      "file": "src/server.ts",
+      "startLine": 38,
+      "endLine": 38,
+      "reason": "safeRedirect allow-lists the target",
+      "claim": "login redirect is an open redirect"
+    }
   ]
 }

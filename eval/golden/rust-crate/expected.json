@@ -1,10 +1,40 @@
 {
+  "stack": "rust",
   "bugs": [
-    { "file": "src/lib.rs", "startLine": 16, "endLine": 16, "class": "missing-owner-check" },
-    { "file": "src/lib.rs", "startLine": 17, "endLine": 17, "class": "unchecked-balance-update" }
+    {
+      "file": "src/lib.rs",
+      "startLine": 15,
+      "endLine": 15,
+      "class": "unchecked-index",
+      "title": "field reads past the end of the buffer",
+      "severity": "high",
+      "missedBy": [
+        "paranoid"
+      ]
+    },
+    {
+      "file": "src/lib.rs",
+      "startLine": 23,
+      "endLine": 23,
+      "class": "unchecked-multiplication",
+      "title": "records multiplies untrusted header fields without a checked multiply",
+      "severity": "high"
+    }
   ],
   "decoys": [
-    { "file": "src/lib.rs", "startLine": 11, "endLine": 11, "reason": "deposit compares the predecessor to the owner" },
-    { "file": "src/lib.rs", "startLine": 10, "endLine": 10, "reason": "the caller is read before the check" }
+    {
+      "file": "src/lib.rs",
+      "startLine": 19,
+      "endLine": 19,
+      "reason": "get() returns None out of range",
+      "claim": "checked_field indexes without a bounds check"
+    },
+    {
+      "file": "src/lib.rs",
+      "startLine": 30,
+      "endLine": 30,
+      "reason": "from_utf8 validated the same bytes first",
+      "claim": "name builds a str from unchecked bytes"
+    }
   ]
 }

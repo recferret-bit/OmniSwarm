@@ -1,18 +1,13 @@
-// Runs after the built-in report phase. A failure is recorded and does not hide the main HTML report.
-import { readReportJson, writeReportFile } from './report-contract.mjs';
+// reviewers/<id>/ for every reviewer (W05). It runs before the report phase writes the final meta, so a failure
+// here lands in meta.stageFailures and the run reads INCOMPLETE without hiding the main report.
+// generate-html-report.mjs derives again after scoring, so per-reviewer statuses match findings-and-scores.json.
 import { deriveReviewerReports } from './reviewer-reports.mjs';
 
 export const phase = {
   name: 'reviewer-reports',
-  after: 'report',
+  after: 'general-review',
   optional: true,
   async run(ctx) {
-    try { await deriveReviewerReports(ctx.output); }
-    catch (error) {
-      const meta = readReportJson(ctx.output, 'meta.json');
-      meta.stageFailures = [...(meta.stageFailures || []), `phase_failed:reviewer-reports:${error.message}`];
-      writeReportFile(ctx.output, 'meta.json', `${JSON.stringify(meta, null, 2)}\n`);
-      throw error;
-    }
+    deriveReviewerReports(ctx.output);
   },
 };

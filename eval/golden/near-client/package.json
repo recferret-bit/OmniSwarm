@@ -1,0 +1,10 @@
+{
+  "name": "golden-near-client",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/wallet.ts",
+  "dependencies": {
+    "near-api-js": "5.1.1"
+  }
+}

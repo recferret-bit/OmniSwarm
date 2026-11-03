@@ -1,10 +1,37 @@
 {
+  "stack": "near-client",
   "bugs": [
-    { "file": "src/lib.rs", "startLine": 16, "endLine": 16, "class": "missing-owner-check" },
-    { "file": "src/lib.rs", "startLine": 17, "endLine": 17, "class": "unchecked-balance-update" }
+    {
+      "file": "src/wallet.ts",
+      "startLine": 7,
+      "endLine": 7,
+      "class": "secret-in-local-storage",
+      "title": "login stores the account secret in localStorage",
+      "severity": "high"
+    },
+    {
+      "file": "src/wallet.ts",
+      "startLine": 20,
+      "endLine": 20,
+      "class": "fixed-signature-nonce",
+      "title": "signLogin signs with an all-zero nonce, so a signature can be replayed",
+      "severity": "high"
+    }
   ],
   "decoys": [
-    { "file": "src/lib.rs", "startLine": 11, "endLine": 11, "reason": "deposit compares the predecessor to the owner" },
-    { "file": "src/lib.rs", "startLine": 10, "endLine": 10, "reason": "the caller is read before the check" }
+    {
+      "file": "src/wallet.ts",
+      "startLine": 14,
+      "endLine": 14,
+      "reason": "the contract id is checked against an allow-list",
+      "claim": "callContract calls any contract"
+    },
+    {
+      "file": "src/wallet.ts",
+      "startLine": 28,
+      "endLine": 28,
+      "reason": "the signature is verified against the public key",
+      "claim": "verifyLogin trusts the caller"
+    }
   ]
 }

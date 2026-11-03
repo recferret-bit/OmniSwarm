@@ -2,12 +2,28 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { runGolden } from '../../../scripts/debate-run.mjs';
+import { runPanel } from '../../../eval/panel.mjs';
+import { loadPhases, runPhases } from '../../../scripts/orchestrator-phases.mjs';
+import { SCRIPTS, builtinWithReport, phaseContext, runFromPanel, tempDir } from '../../../scripts/debate-test-run.mjs';
+import { writeText } from '../../../scripts/report-util-files.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
+const GOLDEN = path.join(ROOT, 'eval', 'golden', 'near-escrow');
+const expected = JSON.parse(fs.readFileSync(path.join(GOLDEN, 'expected.json'), 'utf8'));
+const node = (script, args) => spawnSync(process.execPath, [path.join(SCRIPTS, script), ...args], { cwd: ROOT, encoding: 'utf8' });
+const json = (dir, rel) => JSON.parse(fs.readFileSync(path.join(dir, rel), 'utf8'));
+
+// A finalized run with the scripted panel's real submissions on near-escrow, then the orchestrator's phases.
+async function orchestrated(rounds) {
+  const panel = await runPanel(GOLDEN, expected, tempDir('w06-panel-'));
+  const { out, reviewers } = runFromPanel(panel);
+  writeText(out, 'harness/sandbox.md', '# Sandbox\n| fixture | impossible | Benign data fixture, no target execution. |\n');
+  const ctx = phaseContext({ out, reviewers, target: GOLDEN, orchestrator: 'scripted:judge', rounds });
+  await runPhases(await loadPhases({ builtin: builtinWithReport(out), dir: SCRIPTS }), ctx);
+  return { out, ctx };
+}
 
 test('the plan prints the orchestrator, debate rounds and the cluster cap', () => {
   const result = spawnSync(path.join(ROOT, 'bin', 'audit'), ['run', '--repo', 'eval/golden/near-escrow', '--reviewers', 'scripted:baseline,scripted:paranoid,scripted:wrong,scripted:lazy', '--orchestrator', 'recommended', '--surface', 's1', '--plan'], {
@@ -19,23 +35,50 @@ test('the plan prints the orchestrator, debate rounds and the cluster cap', () =
   assert.match(result.stdout, /Orchestrator: recommended/);
 });
 
-test('scripted debate writes clusters, anonymized rounds, discarded quotes and a general review', () => {
-  const out = fs.mkdtempSync(path.join(os.tmpdir(), 'w06-'));
-  runGolden(path.join(ROOT, 'eval/golden/near-escrow'), out, { rounds: 3, seed: 1, reviewers: ['scripted-baseline', 'scripted-paranoid', 'scripted-wrong', 'scripted-lazy'] });
-  const clusters = JSON.parse(fs.readFileSync(path.join(out, 'debate', 'clusters.json'), 'utf8'));
-  assert.ok(clusters.clusters.length >= 1);
-  const round1 = fs.readdirSync(path.join(out, 'debate', 'round-1'));
-  assert.ok(round1.every((name) => name.startsWith('Reviewer ')));
-  assert.equal(JSON.stringify(fs.readdirSync(path.join(out, 'debate', 'round-1'))).includes('glm'), false);
-  const citations = JSON.parse(fs.readFileSync(path.join(out, 'debate', 'citations.json'), 'utf8'));
-  assert.ok(citations.some((row) => row.valid === false));
-  const adjudication = JSON.parse(fs.readFileSync(path.join(out, 'debate', 'adjudication.json'), 'utf8'));
-  assert.ok(adjudication.some((row) => row.finalStatus === 'LIKELY'));
-  assert.match(fs.readFileSync(path.join(out, 'general-review.md'), 'utf8'), /Model agreement and passing checks do not certify security\./);
-  const trace = fs.readFileSync(path.join(out, 'debate', 'trace.jsonl'), 'utf8');
-  assert.match(trace, /"template":"judge"/);
-  assert.match(trace, /"template":"general_review"/);
-  assert.throws(() => runGolden(path.join(ROOT, 'eval/golden/near-escrow'), path.join(out, 'fault'), { fault: 'general-review', reviewers: [{ id: 'scripted-baseline' }] }));
-  const health = JSON.parse(fs.readFileSync(path.join(out, 'fault', 'report-health.json'), 'utf8'));
-  assert.equal(health.state, 'INCOMPLETE');
+test('an orchestrated scripted run debates its own clusters in priority order and the report shows the outcome', async () => {
+  const { out, ctx } = await orchestrated(2);
+  assert.deepEqual(ctx.stageFailures, []);
+  const { clusters } = json(out, 'debate/clusters.json');
+  const queued = clusters.filter((c) => c.status === 'QUEUED');
+  assert.deepEqual(queued.map((c) => c.priority), [...queued.map((c) => c.priority)].sort((a, b) => b - a));
+  assert.equal(fs.existsSync(path.join(out, 'debate', 'round-3')), false);
+  const rounds = fs.readdirSync(path.join(out, 'debate'), { recursive: true }).filter((rel) => /^round-\d\/.+\.json$/.test(rel)).map((rel) => fs.readFileSync(path.join(out, 'debate', rel), 'utf8')).join('\n');
+  assert.equal(/scripted-|baseline|paranoid|glm|claude/.test(rounds), false);
+  for (const row of json(out, 'debate/adjudication.json')) assert.deepEqual(row.judge, { reviewerId: 'scripted-judge', vendor: 'scripted', alternate: false });
+  // The fixture run has no cross-check round, so the report is INCOMPLETE for that reason only.
+  const rendered = node('generate-html-report.mjs', [out]);
+  assert.ok(rendered.status === 0 || rendered.status === 2, rendered.stderr);
+  assert.deepEqual(json(out, 'report-health.json').errors.filter((e) => !/cross-check (output|exit)/.test(e)), []);
+  const scored = json(out, 'findings-and-scores.json');
+  for (const bug of expected.bugs) assert.equal(scored.find((row) => row.locations.includes(`${bug.file}:${bug.startLine}`)).finalStatus, 'LIKELY');
+  const html = fs.readFileSync(path.join(out, 'report.html'), 'utf8');
+  assert.match(html, /<summary>Debate<\/summary>/);
+  assert.match(html, /data-status="REFUTED"/);
+  assert.match(html, /05<\/span>Cross-check/);
+  assert.match(html, /Model agreement and passing checks do not certify security\./);
+  for (const id of ['scripted-baseline', 'scripted-paranoid', 'scripted-wrong', 'scripted-lazy']) assert.ok(fs.existsSync(path.join(out, 'reviewers', id, 'report.html')), id);
+});
+
+test('three rounds rebut only after a change and flag copied flips', async () => {
+  const { out } = await orchestrated(3);
+  const round3 = fs.readdirSync(path.join(out, 'debate', 'round-3')).map((name) => json(out, `debate/round-3/${name}`));
+  assert.ok(round3.length > 0);
+  const changed = new Set(fs.readdirSync(path.join(out, 'debate', 'round-2')).map((name) => json(out, `debate/round-2/${name}`)).filter((t) => t.verdict !== 'upheld').map((t) => t.clusterId));
+  assert.ok(round3.every((turn) => changed.has(turn.clusterId)));
+  assert.ok(round3.some((turn) => turn.conformitySuspect));
+});
+
+test('a debate-round-2 fault marks the run INCOMPLETE and keeps every per-model finding', async (t) => {
+  process.env.OMNI_FAULT = 'debate-round-2';
+  t.after(() => { delete process.env.OMNI_FAULT; });
+  const { out, ctx } = await orchestrated(2);
+  assert.ok(ctx.stageFailures.some((s) => s.startsWith('phase_failed:debate:')), ctx.stageFailures.join());
+  assert.equal(fs.existsSync(path.join(out, 'debate')), false);
+  const checked = node('report-contract.mjs', [out]);
+  assert.equal(checked.status, 2);
+  assert.match(checked.stderr, /One or more review stages failed/);
+  node('generate-html-report.mjs', [out]);
+  assert.equal(json(out, 'report-health.json').state, 'incomplete');
+  assert.ok(json(out, 'findings-and-scores.json').length >= expected.bugs.length);
+  assert.match(fs.readFileSync(path.join(out, 'report.html'), 'utf8'), /withdraw has no owner check/);
 });
