@@ -2,11 +2,12 @@
 // health. Responses follow intake-api.schema.json (vitest validates them).
 import { requestHash } from '@omniswarm/schemas/canonical-message';
 import { http, HttpResponse } from 'msw';
-import type { CreateRequestBody, ErrorCode, QuoteRequest } from '@/lib/api/schema.gen';
+import type { CreateRequestBody, ErrorCode, PaymentRequest, PaymentResponse, QuoteRequest } from '@/lib/api/schema.gen';
 import { bytesToBase64 } from '@/lib/near/nep413';
 import { env } from '@/lib/env';
 import { parseRepoInput } from '@/lib/repo';
-import { clock, randomBytes, readState, stamp, takeError, updateState, type MockError } from '../db';
+import { clock, randomBytes, readState, stamp, takeError, updateState, type MockError, type MockRequest } from '../db';
+import { snapshotAt } from '../state-machine';
 import { verifySignature } from '../verify';
 
 export const MOCK_PRICE_YOCTO = '1000000000000000000000000';
@@ -23,7 +24,7 @@ export function apiError(code: ErrorCode, status: number, message: string, retry
   return HttpResponse.json({ error: { code, message, retryable } }, { status });
 }
 
-function uuid(): string {
+export function uuid(): string {
   const hex = [...randomBytes(16)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-a${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
 }
@@ -74,20 +75,32 @@ const create = http.post('/api/requests', async ({ request }) => {
   return HttpResponse.json({ requestId: row.id, requestHash: hash, priceYocto: row.priceYocto, contractId: env.contractId }, { status: 201 });
 });
 
+// Where a paid request is now: its status and, while queued, its 1-based rank by payment time.
+function paidState(row: MockRequest): PaymentResponse {
+  const now = clock.now();
+  const status = snapshotAt(row, now).status;
+  if (status !== 'queued') return { status, position: null };
+  const ahead = readState().requests.filter((item) => item.id !== row.id && item.paidAt !== null
+    && snapshotAt(item, now).status === 'queued' && (item.paidAt < row.paidAt! || (item.paidAt === row.paidAt && item.id < row.id)));
+  return { status, position: ahead.length + 1 };
+}
+
+// A replay of the request's own tx is idempotent and answers with the current state (INTAKE section 4).
 const payment = http.post<{ id: string }>('/api/requests/:id/payment', async ({ params, request }) => {
-  const { txHash } = (await request.json()) as { txHash: string };
+  const { txHash } = (await request.json()) as PaymentRequest;
   const state = readState();
   const row = state.requests.find((item) => item.id === params.id);
-  if (!row || row.account !== state.session) return apiError('NOT_FOUND', 404, 'Request not found');
+  if (!row || row.account !== state.session) return apiError('REQUEST_NOT_FOUND', 404, 'Request not found');
+  if (row.txHash === txHash) return HttpResponse.json(paidState(row));
+  if (state.requests.some((item) => item.txHash === txHash)) return apiError('TX_ALREADY_USED', 409, 'This transaction was already used');
+  if (row.txHash) return apiError('INVALID_TRANSITION', 409, 'Request is not awaiting payment');
   if (takeError('PAYMENT_NOT_FOUND')) return apiError('PAYMENT_NOT_FOUND', 402, 'Payment transaction was not found', true);
   const tx = state.txs[txHash];
   if (!tx) return apiError('PAYMENT_NOT_FOUND', 402, 'Payment transaction was not found', true);
-  if (row.txHash) return apiError('TX_ALREADY_USED', 409, 'This transaction was already used');
   if (tx.receiver !== env.contractId || tx.requestHash !== row.requestHash) return apiError('PAYMENT_MISMATCH', 402, 'Payment does not match this request');
   if (BigInt(tx.deposit) < BigInt(row.priceYocto)) return apiError('PAYMENT_MISMATCH', 402, 'Deposit is below the quoted price');
-  const position = state.requests.filter((item) => item.paidAt !== null && item.id !== row.id).length + 1;
   updateState(() => { row.paidAt = clock.now(); row.txHash = txHash; });
-  return HttpResponse.json({ status: 'queued', position });
+  return HttpResponse.json(paidState(row));
 });
 
 const health = http.get('/api/health', () => HttpResponse.json({
