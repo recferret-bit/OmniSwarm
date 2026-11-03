@@ -1,7 +1,8 @@
 // `npm run worker -w @omniswarm/api`: a long-running review worker. Start as many processes as the
 // host allows; each takes up to WORKER_CONCURRENCY jobs at once. SIGTERM stops taking jobs and waits
 // for running reviews to stop: their engines get SIGTERM at once (SIGKILL after ENGINE_KILL_GRACE_S) and the
-// jobs are retried by another worker. Exits well within systemd's TimeoutStopSec=180.
+// jobs are handed back, retries intact, for another worker. A review still running when
+// WORKER_STOP_TIMEOUT_S ends is failed by pg-boss and spends a retry. Exits within systemd's TimeoutStopSec=180.
 import { createCore, createEngine } from '../container.ts';
 import { createBoss } from '../queue/boss.ts';
 import { configOrExit, onShutdown } from '../shared/lifecycle.ts';
@@ -20,7 +21,7 @@ await startWorker(boss, { ...core, engine, boss, log: config.queue.workerId ? lo
 log.info({ concurrency: config.queue.concurrency, engine: engine.kind, chain: core.chain.kind }, 'worker ready');
 
 onShutdown(log, async () => {
-  // Forward SIGTERM to running engines now; their jobs fail and are retried by another worker.
+  // Forward SIGTERM to running engines now; their jobs are released (worker.ts) for another worker.
   shutdown.abort();
   await boss.stop({ graceful: true, timeout: config.queue.stopTimeoutS * 1000 });
   await core.chain.close();
