@@ -360,6 +360,8 @@ if ! docker run -d --name "$SBX" \
   -v "$SCRIPT_DIR/harness-scanners.mjs:/opt/audit/harness-scanners.mjs:ro" \
   -v "$SCRIPT_DIR/harness-walk.mjs:/opt/audit/harness-walk.mjs:ro" \
   -v "$SCRIPT_DIR/audit-plans.mjs:/opt/audit/audit-plans.mjs:ro" \
+  -v "$SCRIPT_DIR/audit-plans-data-domains.mjs:/opt/audit/audit-plans-data-domains.mjs:ro" \
+  -v "$SCRIPT_DIR/audit-plans-data-surfaces.mjs:/opt/audit/audit-plans-data-surfaces.mjs:ro" \
   -v "$SCRIPT_DIR/scanner-evidence.mjs:/opt/audit/scanner-evidence.mjs:ro" \
   -v "$SCRIPT_DIR/stack-detect.mjs:/opt/audit/stack-detect.mjs:ro" \
   -v "$SCRIPT_DIR/cargo-manifest.mjs:/opt/audit/cargo-manifest.mjs:ro" \

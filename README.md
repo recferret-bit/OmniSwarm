@@ -77,7 +77,7 @@ You should see the golden-eval table and a `Default debate rounds:` line (see [G
 
 ### The same demo in Docker
 
-With Docker running, `./bin/audit demo` (no `--no-docker`) runs the same scripted reviewers, budgets, debate and general review through the real path: the sealed snapshot, the `audit-sandbox:local` container (built from `engine/docker/sandbox.Dockerfile` on first use, which takes a while and needs network for the build), the network-detach check and the MCP bridge. The report is stamped DEMO as well. It still ends with incomplete verification, because the fixture has no test suite or lockfile and the image has no `cargo-near` or WASM target.
+With Docker running, `./bin/audit demo` (no `--no-docker`) runs the same scripted reviewers, budgets, debate and general review through the real path: the sealed snapshot, the `audit-sandbox:local` container (built from `engine/docker/sandbox.Dockerfile` on first use, which takes a while and needs network for the build), the network-detach check and the MCP bridge. The report is stamped DEMO as well. Its suites (NEAR WASM build, NEAR clippy, the client's npm tests) and scanners run in the sandbox; the one gap left is the NEAR local-sandbox test run, which cannot run offline, so the demo reports "DEMO — verification limited by design" and exits 0. A real target with the same gap still exits 2.
 
 ## Run a real review
 
