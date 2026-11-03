@@ -1,0 +1,17 @@
+# Local overlay: the same stack on loopback ports with a self-signed
+# certificate for omniswarm.localhost and reports.omniswarm.localhost.
+# Env comes from infra/compose/dev-env.sh (stack.env.example + dev.env.example,
+# random secrets). Used by infra/compose/local.sh and the infra/check.sh bring-up.
+services:
+  postgres:
+    # For a worker run in the foreground on this machine (local.sh prints how).
+    ports:
+      - "127.0.0.1:${OMNI_PG_PORT:?set OMNI_PG_PORT (dev.env.example)}:5432"
+
+  nginx:
+    ports:
+      - "127.0.0.1:${OMNI_HTTP_PORT:?set OMNI_HTTP_PORT (dev.env.example)}:80"
+      - "127.0.0.1:${OMNI_HTTPS_PORT:?set OMNI_HTTPS_PORT (dev.env.example)}:443"
+    environment:
+      OMNI_APP_ORIGIN: https://${OMNI_DOMAIN:?set OMNI_DOMAIN}:${OMNI_HTTPS_PORT:?set OMNI_HTTPS_PORT (dev.env.example)}
+      OMNI_REPORTS_ORIGIN: https://${OMNI_REPORTS_DOMAIN:?set OMNI_REPORTS_DOMAIN}:${OMNI_HTTPS_PORT:?set OMNI_HTTPS_PORT (dev.env.example)}

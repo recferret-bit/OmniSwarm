@@ -1,0 +1,10 @@
+# Groups every enabled omniswarm-worker@N.service, so
+#   systemctl stop|start|restart omniswarm-workers.target
+# acts on all of them (the instances are PartOf= this target).
+[Unit]
+Description=OmniSwarm review workers
+Requires=docker.service
+After=docker.service
+
+[Install]
+WantedBy=multi-user.target

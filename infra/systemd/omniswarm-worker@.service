@@ -1,0 +1,96 @@
+# Review worker instance %i. Enable M instances for M workers:
+#   systemctl enable --now omniswarm-worker@{1..M}.service omniswarm-workers.target
+# Each instance runs `npm run worker -w @omniswarm/api` (pg-boss consumer,
+# WORKER_CONCURRENCY jobs at a time) from the release `current` points at.
+#
+# Why systemd and not a container: the worker spawns ./bin/audit, which drives
+# the host Docker daemon to build and run the review sandbox. Inside a
+# container that needs the Docker socket mounted, which hands root on the host
+# to whatever runs in that container (the API image, its dependencies). Here
+# only this unit gets Docker access (group `docker`, still root-equivalent:
+# see infra/README.md "Docker access"), and the sandbox it starts never
+# receives a key (AGENTS.md "Key policy").
+
+[Unit]
+Description=OmniSwarm review worker %i
+Documentation=file:/srv/omniswarm/current/infra/README.md
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+PartOf=omniswarm-workers.target
+StartLimitIntervalSec=300
+StartLimitBurst=10
+
+[Service]
+Type=exec
+User=omniswarm
+Group=omniswarm
+SupplementaryGroups=docker
+WorkingDirectory=/srv/omniswarm/current
+# Root-only (0600) files; systemd reads them before dropping to User=.
+EnvironmentFile=/etc/omniswarm/worker.env
+EnvironmentFile=/etc/omniswarm/providers.env
+# The operator function-call key stays root:root 0600 on disk; systemd copies
+# it into this unit's private credentials dir, readable by this process only.
+LoadCredential=operator-key:/etc/omniswarm/operator-key.json
+Environment=OPERATOR_KEY_FILE=%d/operator-key
+Environment=WORKER_ID=%i
+Environment=NODE_ENV=production
+Environment=ENGINE_ROOT=/srv/omniswarm/current
+# The engine bind-mounts its staging dirs into the sandbox. Docker resolves
+# those paths in the host namespace, so they must not live in a private /tmp.
+Environment=TMPDIR=/srv/omniswarm/work/tmp
+Environment=AUDIT_TMP=/srv/omniswarm/work/targets
+Environment=HOME=/var/lib/omniswarm-worker/%i
+Environment=DOCKER_CONFIG=/var/lib/omniswarm-worker/%i/.docker
+StateDirectory=omniswarm-worker/%i
+ExecStartPre=/usr/bin/mkdir -p /srv/omniswarm/work/tmp /srv/omniswarm/work/targets
+# Exec'd (not supervised by npm), so SIGTERM reaches the worker itself.
+ExecStart=/srv/omniswarm/current/infra/bin/exec-script.sh apps/api worker
+
+# Graceful stop: SIGTERM to the worker only; it stops taking jobs and lets the
+# running review finish or cancels it. Whatever is left is killed after
+# TimeoutStopSec, which must exceed the worker's shutdown grace.
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=180
+Restart=always
+RestartSec=5
+
+# Resource ceiling for the worker and the engine's node processes. Sandbox
+# containers run under dockerd's cgroup and carry their own --memory/--cpus.
+MemoryMax=2G
+CPUQuota=200%
+TasksMax=512
+LimitNOFILE=65536
+
+# Hardening that still lets the process talk to /run/docker.sock and git/https.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/srv/omniswarm/work /srv/omniswarm/reports
+ReadWritePaths=-/run/docker.sock
+ProtectHome=yes
+# Not PrivateTmp: see TMPDIR above. /tmp stays read-only under ProtectSystem=strict.
+PrivateTmp=no
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+# Reports must stay world-readable for nginx (uid 101 in its container).
+UMask=0022
+
+[Install]
+WantedBy=omniswarm-workers.target
