@@ -4,6 +4,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { resetReplayTurns, selectFetch } from './http-replay.mjs';
+import { parseToolCall } from './api-tool-schema.mjs';
 
 export const RETRY_STATUSES = new Set([429, 500, 502, 503, 504]);
 export const MAX_ATTEMPTS = 4;
@@ -61,22 +62,6 @@ function delayMs(attempt, response, random) {
   if (Number.isFinite(seconds) && seconds >= 0) return Math.min(seconds * 1000, 30_000);
   const base = 200 * (2 ** attempt);
   return Math.min(base + Math.floor(random() * 100), 30_000);
-}
-
-function parseToolCall(entry) {
-  const name = entry?.function?.name || entry?.name;
-  let args = entry?.function?.arguments ?? entry?.arguments ?? {};
-  if (typeof args === 'string') {
-    try { args = args ? JSON.parse(args) : {}; }
-    catch { args = { _raw: args }; }
-  }
-  if (!args || typeof args !== 'object' || Array.isArray(args)) args = {};
-  return { id: String(entry?.id || name || 'call'), name: String(name || ''), args };
-}
-
-function scrubBody(body) {
-  const copy = JSON.parse(JSON.stringify(body));
-  return copy;
 }
 
 export async function runToolLoop({
@@ -141,7 +126,7 @@ export async function runToolLoop({
     if (payload?.usage && typeof payload.usage === 'object') {
       usage.push(applyPrice({ ...payload.usage, model: payload.model }, { prices, provider, model }));
     }
-    writeTranscript({ turn, status: response.status, model: servedModel, request: scrubBody(body) });
+    writeTranscript({ turn, status: response.status, model: servedModel, request: body });
     if (!modelMatches(model, servedModel)) {
       return { stop: 'error', failure: 'model_mismatch', turns, usage, servedModel, transcriptPath: transcriptPath || null };
     }
@@ -156,8 +141,11 @@ export async function runToolLoop({
     let submitted = false;
     for (const call of calls) {
       let text;
-      try { text = String(await callTool(call.name, call.args) ?? ''); }
-      catch (error) { text = `Tool error: ${error.message || error}`; }
+      if (call.error) text = `Tool error: ${call.error}`;
+      else {
+        try { text = String(await callTool(call.name, call.args) ?? ''); }
+        catch (error) { text = `Tool error: ${error.message || error}`; }
+      }
       messages.push({ role: 'tool', tool_call_id: call.id, content: text });
       if (SUBMIT_TOOLS.has(call.name)) submitted = true;
     }

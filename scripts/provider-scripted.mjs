@@ -38,5 +38,4 @@ export const family = {
   available: (reviewer, env = process.env) => reviewer.provider !== 'judge' || env.OMNI_DEMO === '1',
   launch,
   envAllowlist: () => [],
-  vendorOf: () => 'scripted',
 };

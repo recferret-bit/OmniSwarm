@@ -40,10 +40,17 @@ export function vendorOf(reviewer) {
   if (r.family === 'nearai') return 'nearai';
   if (r.family === 'scripted') return 'scripted';
   if (r.family === 'openrouter') {
-    const org = String(r.model).split('/')[0].toLowerCase();
-    return String(r.model).includes('/') ? (ORG_VENDORS[org] || org.replace(/[^a-z0-9-]+/g, '-')) : 'openrouter';
+    return vendorOfOpenRouterModel(r.model);
   }
   return r.provider;
+}
+
+// OpenRouter slugs are <org>/<model>; the org names the vendor. A slug without an org is 'openrouter'.
+export function vendorOfOpenRouterModel(model) {
+  const text = String(model || '');
+  if (!text.includes('/')) return 'openrouter';
+  const org = text.split('/')[0].toLowerCase();
+  return ORG_VENDORS[org] || org.replace(/[^a-z0-9-]+/g, '-');
 }
 
 function splitSpec(text) {

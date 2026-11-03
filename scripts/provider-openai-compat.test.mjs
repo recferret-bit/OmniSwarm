@@ -98,3 +98,20 @@ test('a served model that is not the requested model stops as model_mismatch', a
   assert.equal(result.servedModel, 'glm-5.1');
   assert.equal(result.stop, 'error');
 });
+
+test('a tool call with malformed arguments is answered with an error, not sent to the bridge', async () => {
+  const seen = [];
+  const bad = { id: 'c1', type: 'function', function: { name: 'read_file', arguments: '{not json' } };
+  const { fetch, calls } = scriptedFetch([
+    { body: message('glm-5.3', [bad]) },
+    { body: message('glm-5.3', [toolCall('c2', 'submit_audit_report', { findings: [] })]) },
+  ]);
+  const result = await runToolLoop({
+    baseUrl: 'https://example.invalid/v1', apiKey: 'k', model: 'glm-5.3', tools: [],
+    callTool: async (name) => { seen.push(name); return 'ok'; }, brief: 'review', fetchImpl: fetch, sleep: async () => {},
+  });
+  assert.equal(result.stop, 'submitted');
+  assert.deepEqual(seen, ['submit_audit_report']);
+  const reply = calls[1].body.messages.find((row) => row.role === 'tool' && row.tool_call_id === 'c1');
+  assert.match(reply.content, /Tool error: invalid tool arguments/);
+});

@@ -33,5 +33,4 @@ export const family = {
     try { return presetFor(reviewer.provider).envAllowlist; }
     catch { return []; }
   },
-  vendorOf: (provider) => provider,
 };
