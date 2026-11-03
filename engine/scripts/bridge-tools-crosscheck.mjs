@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { validCrosscheckRow } from './report-contract.mjs';
+import { validCrosscheckRow } from './report-contract-auditor.mjs';
 import { commitSubmission, deriveSubmission } from './audit-submission.mjs';
 import { renderMarkdownFromFindings } from './bridge-tools-auditor.mjs';
 import { SAFE_ANNOTATIONS, BridgeError, objSchema, strProp, strArr, normalizeCitation, commonToolDefinitions, commonHandlers } from './bridge-tools-common.mjs';

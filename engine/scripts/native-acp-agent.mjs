@@ -5,7 +5,7 @@ import { spawn } from 'node:child_process';
 import { StringDecoder } from 'node:string_decoder';
 import { fileURLToPath } from 'node:url';
 import { buildCliInvocation } from './agent-launch.mjs';
-import { readReportJson, writeReportFile } from './report-contract.mjs';
+import { readReportJson, writeReportFile } from './report-files.mjs';
 import { loadAgentConfig, sendAcp, serveAcpStdio } from './agent-acp-stdio.mjs';
 import { SessionError } from './agent-rpc.mjs';
 

@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { STATUS_LEGEND, loadSections, loadV2, sectionDescriptors } from './report-sections/registry.mjs';
-import { citationState } from './report-sections/v2-data.mjs';
+import { STATUS_LEGEND, loadSections, loadV2, sectionDescriptors } from './report-section-registry.mjs';
+import { citationState } from './report-section-v2-data.mjs';
 import { read, renderV2 } from './report-cards-fixtures.mjs';
 
 test('sections are discovered from their files, sorted by order, and each one that renders owns render()', () => {
@@ -16,6 +16,14 @@ test('sections are discovered from their files, sorted by order, and each one th
     assert.ok(found, id);
     if (found.slot) assert.equal(typeof found.render, 'function', id);
   }
+});
+
+test('discovery reads the flat report-section-*.mjs modules and never a test file or the registry', () => {
+  const names = loadSections();
+  assert.ok(names.includes('report-section-by-model.mjs') && names.includes('report-section-v2-data.mjs'), names.join(', '));
+  assert.ok(names.every((name) => /^report-section-[a-z0-9-]+\.mjs$/.test(name)), names.join(', '));
+  assert.equal(names.some((name) => name.includes('.test.') || name === 'report-section-registry.mjs'), false, names.join(', '));
+  assert.equal(fs.existsSync(path.join(path.dirname(new URL(import.meta.url).pathname), 'report-sections')), false, 'no module subfolder under engine/scripts/');
 });
 
 test('the legend lists the six final statuses and the five statuses the engine emits', () => {

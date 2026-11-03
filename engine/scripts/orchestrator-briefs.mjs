@@ -39,7 +39,7 @@ function evidenceLines(cluster) {
 }
 
 function argumentLines(turns) {
-  return (turns || []).map((turn) => `- ${turn.anonId}, round ${turn.round} (${turn.role}): ${turn.verdict}. ${turn.argument}${(turn.citations || []).length ? ` Cites ${turn.citations.map((c) => `${c.file}:${c.startLine}`).join(', ')}.` : ''}`);
+  return (turns || []).map((turn) => `- ${turn.anonId}, round ${turn.round} (${turn.role}): ${turn.verdict}. ${turn.argument}${(turn.citations || []).length ? ` Cites ${turn.citations.map((c) => `${c.file}:${c.startLine}`).join(', ')}.` : ''}${turn.conformitySuspect ? ' [conformity suspect: the verdict changed without new evidence; it carries no weight]' : ''}`);
 }
 
 function subjectLines(id, { cluster, clusters }) {

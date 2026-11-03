@@ -344,6 +344,11 @@ if ! docker run -d --name "$SBX" \
   -v "$STAGE/src:/src:ro" \
   -v "$RUN":/out \
   -v "$SCRIPT_DIR/sandbox-inside.mjs:/opt/audit/sandbox-inside.mjs:ro" \
+  -v "$SCRIPT_DIR/sandbox-inside-builds.mjs:/opt/audit/sandbox-inside-builds.mjs:ro" \
+  -v "$SCRIPT_DIR/sandbox-inside-exec.mjs:/opt/audit/sandbox-inside-exec.mjs:ro" \
+  -v "$SCRIPT_DIR/sandbox-inside-node.mjs:/opt/audit/sandbox-inside-node.mjs:ro" \
+  -v "$SCRIPT_DIR/sandbox-inside-scans.mjs:/opt/audit/sandbox-inside-scans.mjs:ro" \
+  -v "$SCRIPT_DIR/sandbox-inside-state.mjs:/opt/audit/sandbox-inside-state.mjs:ro" \
   -v "$SCRIPT_DIR/sandbox-lib.mjs:/opt/audit/sandbox-lib.mjs:ro" \
   -v "$SCRIPT_DIR/sandbox-net.mjs:/opt/audit/sandbox-net.mjs:ro" \
   -v "$SCRIPT_DIR/sandbox-tree.mjs:/opt/audit/sandbox-tree.mjs:ro" \
@@ -355,6 +360,8 @@ if ! docker run -d --name "$SBX" \
   -v "$SCRIPT_DIR/harness-scanners.mjs:/opt/audit/harness-scanners.mjs:ro" \
   -v "$SCRIPT_DIR/harness-walk.mjs:/opt/audit/harness-walk.mjs:ro" \
   -v "$SCRIPT_DIR/audit-plans.mjs:/opt/audit/audit-plans.mjs:ro" \
+  -v "$SCRIPT_DIR/audit-plans-data-domains.mjs:/opt/audit/audit-plans-data-domains.mjs:ro" \
+  -v "$SCRIPT_DIR/audit-plans-data-surfaces.mjs:/opt/audit/audit-plans-data-surfaces.mjs:ro" \
   -v "$SCRIPT_DIR/scanner-evidence.mjs:/opt/audit/scanner-evidence.mjs:ro" \
   -v "$SCRIPT_DIR/stack-detect.mjs:/opt/audit/stack-detect.mjs:ro" \
   -v "$SCRIPT_DIR/cargo-manifest.mjs:/opt/audit/cargo-manifest.mjs:ro" \

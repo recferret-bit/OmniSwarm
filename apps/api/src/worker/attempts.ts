@@ -33,15 +33,3 @@ export function completedAttempt(runsRoot: string, requestId: string): { out: st
   }
   return null;
 }
-
-/** Total model cost of a run from reviewers/<id>/usage.json (0 when a reviewer reports none). */
-export function runCostUsd(outDir: string): number {
-  const dir = path.join(outDir, 'reviewers');
-  if (!fs.existsSync(dir)) return 0;
-  let total = 0;
-  for (const name of fs.readdirSync(dir)) {
-    const cost = Number(readJson(path.join(dir, name, 'usage.json'))?.costUsd ?? 0);
-    if (Number.isFinite(cost) && cost > 0) total += cost;
-  }
-  return Math.round(total * 1e6) / 1e6;
-}

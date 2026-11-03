@@ -4,7 +4,7 @@ import { connectTerminal } from './terminal-model-connector.mjs';
 import { ConnectorError } from './model-cli-claude.mjs';
 import { REVIEW_PROFILES, createReviewAdapter } from './model-cli-profile.mjs';
 import { terminalSafeJson } from './terminal-review-contract.mjs';
-import { writeReportFile } from './report-contract.mjs';
+import { writeReportFile } from './report-files.mjs';
 import { providerDiagnostic } from './provider-error-diagnostic.mjs';
 
 export function parseStaticReview(argv) {

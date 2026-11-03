@@ -2,7 +2,7 @@
 
 Wave file: [`../waves/W13-agent-guard.md`](../waves/W13-agent-guard.md). About 3 minutes. No `OMNI_LIVE` and no testnet.
 
-**Scope of the `wave-13` tag: an offline slice.** It covers the `@omniswarm/guard` engine and wrapper, a recorded mock-chain reader, and the attack demo. These plan gates are not in it: the API's chain signal collectors and FastNEAR age source (W13-02, -03), caching and rate limits on `GET /api/guard/verdict` (W13-06), the contract blocklist `report_address`/`is_reported` (W13-07), `POST /api/guard/reports` (W13-08), testnet fixture accounts (W13-10), the prior-interaction signal (W13-11), a testnet FC-key agent and `demo-payments` contract (W13-12), the committed testnet log with explorer URLs (W13-14), and `tests/e2e/intake/w13.spec.ts` (W13-16).
+**Scope of the `wave-13` tag: an offline slice.** It covers the `@omniswarm/guard` engine and wrapper, a recorded mock-chain reader, the attack demo, and the contract blocklist (W13-07: `report_address`, `retract_report`, `is_reported`, `get_report`, `get_reports` in review-registry v0.3.0, unit and sandbox tests in `w10-check.md`). The API still answers `isReported` with `false` until it reads `is_reported`. These plan gates are not in it: the API's chain signal collectors and turning on the age source (W13-02, -03; the guard has the `AccountAgeSource` port and a NearBlocks source behind a flag, off by default), caching and rate limits on `GET /api/guard/verdict` (W13-06), `POST /api/guard/reports` (W13-08), testnet fixture accounts (W13-10), the prior-interaction signal (W13-11), a testnet FC-key agent and `demo-payments` contract (W13-12), the committed testnet log with explorer URLs (W13-14), and `tests/e2e/intake/w13.spec.ts` (W13-16).
 
 ## Steps
 
@@ -13,10 +13,12 @@ npm test -w @omniswarm/guard
 npm run typecheck -w @omniswarm/guard
 ```
 
-62 tests pass and `tsc` (checkJs, strict) is clean. Covered:
+84 tests pass and `tsc` (checkJs, strict) is clean. Covered:
 
 - A 16-row engine table: block > warn > allow, every reason code; no combination with an unavailable signal is `allow`; thresholds come from the policy.
 - `check()` for 13 recorded accounts. Freshness uses the attested `block_timestamp_ms` and falls back to a block lookup for older records. Each response validates against `intake-api#guard-verdict-response`, with no extra fields and `signals` present. The attestation is in `attestation.schema.json` shape. Drift reports both hashes. An attestation with `binding_confirmed: false` is ignored. Each reader outage gives `warn` with `SIGNAL_UNAVAILABLE`. The blocklist still blocks during an outage. The local blocklist works. Invalid ids are rejected. `httpSource` sends account, network and `x-guard-key` and rejects bad answers.
+- Registry blocklist: `registryReader` calls `is_reported {account_id}`, `get_report {account_id}` and `get_attestation_for_account {account}`. A reported account is `block` with `REPORTED`, and its evidence is in `signals.report`. An unreported account never asks for a report. A non-boolean `is_reported` answer is unavailable, never `false`. Malformed reports and attestations reject. A failing `get_report` keeps the block. A reader without `getReport` (the API's today) still blocks.
+- Account age: with no source, `accountAge` is unavailable and the verdict warns. A recorded source makes an old attested contract `allow` and a young one `ACCOUNT_TOO_NEW`. The port takes precedence over `reader.getAccountAgeDays`. Unknown, failing or NaN answers are unavailable. The `accountAgeFromConfig` flag is `off` by default and refuses unknown providers. The NearBlocks source (fake `fetch` only) checks: base URL per network, bearer key, timeout signal, nanosecond parsing, empty/`null` as unknown, bad shapes and HTTP errors rejected, and a one-day bounded cache for known answers only.
 - Wrapper: the receiver is checked, not the signer; an async `block` is awaited and the signer spy stays at 0; `onWarn` must return exactly `true` (false, undefined, 1, `'yes'` and `{}` all decline; `true` reaches the signer once); a throwing lookup goes to `onWarn`; every transaction in a batch is checked before any is signed; a payee in `ft_transfer.receiver_id` or `pay_out.receiver` (including near-api-js byte args) is checked; only intercepted methods are exposed.
 - Demo: the agent extracts the injected line; guard on gives `refused_before_signing`; `--no-guard` builds the same transaction and logs `would_send`; a benign ticket reaches the dry signer once; the committed example logs match the current output.
 

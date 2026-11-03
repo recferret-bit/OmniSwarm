@@ -16,7 +16,8 @@
 | `validate.mjs` | Every range exists and is real code (not blank, not a lone brace); no two repos share source; at least six repos. |
 | `panel.mjs` | The offline panel: the W03 scripted strategies (`engine/scripts/scripted-strategies.mjs`) with answers derived from `expected.json` by one fixed policy. |
 | `metrics.mjs` | Recall, precision, decoy false-positive rate, dedup, conformity, and the OD-14 default-rounds rule. |
-| `run.mjs` | Union, majority and the 1- and 2-round debate from the same submissions; writes `RESULTS.md`. |
-| `runs/` | Output, gitignored. |
+| `run.mjs` | Union, majority and the 1- and 2-round debate from the same submissions; writes `RESULTS.md` only when the numbers change. |
+| `results.mjs` | Keeps `RESULTS.md` deterministic: its date and commit are those of the run that last changed the numbers. |
+| `runs/` | Output, gitignored. `runs/last-run.json` holds the date and commit of the latest run. |
 
 The offline numbers measure the debate protocol (citation checks, the conformity rule, the evidence floor), not model skill: the scripted answers come from `expected.json`. A live eval with real models (`OMNI_LIVE=1`) is not built yet. When it is, its target must be a copy of the repo without `expected.json`.

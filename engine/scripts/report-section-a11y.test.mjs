@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { STATUS_COLORS } from './report-sections/registry.mjs';
+import { STATUS_COLORS } from './report-section-registry.mjs';
 import { SCRIPTS, read, renderLegacy, renderV2 } from './report-cards-fixtures.mjs';
 
 function channel(hex, index) {

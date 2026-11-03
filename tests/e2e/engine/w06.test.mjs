@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runPanel } from '../../../engine/eval/panel.mjs';
+import { resultsBody, writeResults } from '../../../engine/eval/results.mjs';
 import { loadPhases, runPhases } from '../../../engine/scripts/orchestrator-phases.mjs';
 import { SCRIPTS, builtinWithReport, phaseContext, runFromPanel, tempDir } from '../../../engine/scripts/debate-test-run.mjs';
 import { writeText } from '../../../engine/scripts/report-util-files.mjs';
@@ -81,4 +82,28 @@ test('a debate-round-2 fault marks the run INCOMPLETE and keeps every per-model 
   assert.equal(json(out, 'report-health.json').state, 'incomplete');
   assert.ok(json(out, 'findings-and-scores.json').length >= expected.bugs.length);
   assert.match(fs.readFileSync(path.join(out, 'report.html'), 'utf8'), /withdraw has no owner check/);
+});
+
+test('eval RESULTS.md is rewritten only when its numbers change, and each run is recorded under eval/runs', () => {
+  const dir = tempDir('w06-results-');
+  const file = path.join(dir, 'RESULTS.md');
+  const runsDir = path.join(dir, 'runs');
+  const body = '| repo | mode | recall |\n|---|---|---:|\n| a | union | 1 |\n';
+  assert.deepEqual(writeResults({ file, runsDir, body, date: '2026-01-01', commit: 'aaaaaaa' }), { changed: true });
+  const first = fs.readFileSync(file, 'utf8');
+  assert.match(first, /date 2026-01-01 · commit aaaaaaa/);
+  assert.equal(resultsBody(first), body);
+  // Same numbers on another day and commit: the committed file keeps its bytes; the run is recorded on the side.
+  assert.deepEqual(writeResults({ file, runsDir, body, date: '2026-02-02', commit: 'bbbbbbb' }), { changed: false });
+  assert.equal(fs.readFileSync(file, 'utf8'), first);
+  assert.deepEqual(json(runsDir, 'last-run.json'), { date: '2026-02-02', commit: 'bbbbbbb', resultsChanged: false });
+  // Changed numbers: the new table carries the date and commit it was measured at.
+  assert.deepEqual(writeResults({ file, runsDir, body: body.replace('| 1 |', '| 0.5 |'), date: '2026-03-03', commit: 'ccccccc' }), { changed: true });
+  assert.match(fs.readFileSync(file, 'utf8'), /date 2026-03-03 · commit ccccccc[\s\S]*\| a \| union \| 0\.5 \|/);
+});
+
+test('the committed eval RESULTS.md has the deterministic header the runner compares against', () => {
+  const committed = fs.readFileSync(path.join(ROOT, 'engine', 'eval', 'RESULTS.md'), 'utf8');
+  assert.notEqual(resultsBody(committed), null);
+  assert.match(resultsBody(committed), /^Reviewers: scripted:/);
 });

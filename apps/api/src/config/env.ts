@@ -50,7 +50,9 @@ export const envSchema = z.object({
   ETA_MINUTES_PER_JOB: int(1, 1440).default(15),
   REPO_ALLOWLIST: list,
   REPO_DENYLIST: list,
-  HOSTED_PRESET: z.string().regex(PRESET).default('scripted'),
+  // The preset every request signs and the worker runs (engine omniswarm.config.json). Defaults to
+  // `hosted` (API-key reviewers, OD-04); production must name it. `scripted` runs only with the mock engine.
+  HOSTED_PRESET: z.string().regex(PRESET).optional(),
   ALLOWED_PRESETS: list,
   RATE_LIMIT_PER_MINUTE: int(1, 10_000).default(30),
   REQUESTS_PER_DAY: int(1, 1000).default(5),
@@ -62,6 +64,10 @@ export const envSchema = z.object({
   OPERATOR_ACCOUNT_ID: z.string().regex(ACCOUNT_ID).optional(),
   MOCK_CHAIN_FAIL_RATE: z.coerce.number().min(0).max(1).default(0),
   MOCK_CHAIN_HANG_AFTER: z.enum(['attest', 'refund']).optional(),
+
+  // Guard account-age signal (W13): off by default; `nearblocks` asks the NearBlocks API (API only).
+  GUARD_ACCOUNT_AGE: z.enum(['off', 'nearblocks']).default('off'),
+  NEARBLOCKS_API_KEY: z.string().min(1).optional(),
 
   GITHUB_ADAPTER: z.enum(['live', 'recorded']).optional(),
   GITHUB_API_URL: z.url().default('https://api.github.com'),
@@ -80,6 +86,9 @@ export const envSchema = z.object({
   MOCK_ENGINE_STEP_MS: int(0, 600_000).default(50),
   RUNS_ROOT: absPath.default(path.join(REPO_ROOT, 'reports/intake/runs')),
   REPORTS_ROOT: absPath.default(path.join(REPO_ROOT, 'reports/intake/published')),
+  // Disk hygiene (W09-19): finished requests whose run dirs are kept; how long an orphaned report stays.
+  KEEP_RUNS: int(1, 100_000).default(20),
+  ORPHAN_REPORT_RETENTION_H: int(1, 87_600).default(168),
   REPORTS_BASE_URL: z.url().refine((url) => url.startsWith('https://'), 'must be https').default('https://reports.localhost'),
 
   WORKER_ID: z.string().regex(/^[A-Za-z0-9._@-]{1,64}$/).optional(),

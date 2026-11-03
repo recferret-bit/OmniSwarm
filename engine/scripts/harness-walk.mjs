@@ -1,25 +1,28 @@
-// Bounded, symlink-free tree walk and regex lead collection shared by the harness lead writers and scanners.
+// Bounded, symlink-free tree walk and regex lead collection shared by the harness lead writers, the scanners
+// and the review plans (audit-plans.mjs). Mounted alone into the sandbox: keep it free of engine imports.
 import fs from 'node:fs';
 import path from 'node:path';
 
-const SKIP_DIRS = new Set([
+export const SKIP_DIRS = new Set([
   'node_modules', 'target', 'dist', 'build', '.git', 'vendor', 'coverage', '.next',
   '__pycache__', 'harness-fixtures', '.cargo',
 ]);
 const MAX_FILE = 512 * 1024;
 export const PER_PATTERN = 40;
 
-export function walk(root, onFile) {
+// Depth-first walk; onFile(fullPath) for every regular file. `sorted` visits each directory's entries by name.
+export function walk(root, onFile, { skipDirs = SKIP_DIRS, sorted = false } = {}) {
   const stack = [root];
   while (stack.length) {
     const dir = stack.pop();
     let entries;
     try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { continue; }
+    if (sorted) entries.sort((a, b) => a.name.localeCompare(b.name));
     for (const ent of entries) {
       if (ent.isSymbolicLink()) continue;
       const full = path.join(dir, ent.name);
       if (ent.isDirectory()) {
-        if (SKIP_DIRS.has(ent.name)) continue;
+        if (skipDirs.has(ent.name)) continue;
         stack.push(full);
       } else if (ent.isFile()) onFile(full);
     }
@@ -36,18 +39,20 @@ export function readText(file) {
   } catch { return null; }
 }
 
-function hits(text, re) {
+// 1-based line numbers of the first `max` matches of `re` in `text`.
+export function matchLines(text, re, max) {
   const out = [];
   const flags = re.flags.includes('g') ? re.flags : `${re.flags}g`;
   const r = new RegExp(re.source, flags);
   let m;
   while ((m = r.exec(text))) {
-    const line = text.slice(0, m.index).split('\n').length;
-    out.push(line);
-    if (out.length > PER_PATTERN) break;
+    out.push(text.slice(0, m.index).split('\n').length);
+    if (out.length >= max) break;
   }
   return out;
 }
+
+const hits = (text, re) => matchLines(text, re, PER_PATTERN + 1);
 
 export function cookieLeads(text) {
   const r = /\.cookie\s*\(|\bsetCookie\s*\(|Set-Cookie/g;

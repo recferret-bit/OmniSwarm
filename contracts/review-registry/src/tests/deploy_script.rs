@@ -6,7 +6,7 @@ use crate::OPERATOR_METHODS;
 use near_sdk::serde_json;
 
 const SCRIPT: &str = "scripts/deploy-testnet.sh";
-const SOURCES: [&str; 2] = [include_str!("../review.rs"), include_str!("../money.rs")];
+const SOURCES: [&str; 3] = [include_str!("../review.rs"), include_str!("../money.rs"), include_str!("../reports.rs")];
 
 fn run(args: &[&str], owner: &str) -> Output {
     Command::new("bash")
@@ -71,7 +71,7 @@ fn dry_run_prints_build_accounts_deploy_key_and_check() {
     assert_eq!(commands.len(), 6);
     assert_eq!(commands[0][..4], ["cargo", "near", "build", "non-reproducible-wasm"]);
     let text = commands.concat().join(" ");
-    for forbidden in ["print-to-terminal", "sponsor-by", "report_address", "reviewer_attest", "withdraw"] {
+    for forbidden in ["print-to-terminal", "sponsor-by", "reviewer_attest", "withdraw", "retract_report"] {
         assert!(!text.contains(forbidden), "{forbidden}");
     }
 }

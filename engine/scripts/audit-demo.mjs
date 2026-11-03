@@ -13,6 +13,7 @@ import { runHostReview } from './review-host.mjs';
 import { runOfflineDebate } from './debate-run.mjs';
 import { selectSurfaces } from './reviewer-plan.mjs';
 import { DEMO_FIXTURE } from './scripted-strategies.mjs';
+import { DEMO_LIMITED_STAMP, demoReportVerdict } from './audit-demo-verdict.mjs';
 import { REPORTS_ROOT } from './report-util-files.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -42,7 +43,16 @@ function runDockerDemo({ out, surface, env }) {
     '--surface', surface, '--reviewers', DEMO_REVIEWERS.join(','), '--orchestrator', 'scripted:judge',
     '--assign', 'matrix', '--passes', String(DEMO_BUDGETS.passes), '--tool-budget', String(DEMO_BUDGETS.toolBudget),
   ], { stdio: 'inherit', env });
-  return result.status === 0 ? 0 : result.status || 1;
+  if (result.status !== 2) return result.status === 0 ? 0 : result.status || 1;
+  // Exit 2 is an INCOMPLETE report. The bundled NEAR fixture keeps one coverage gap by design (see audit-demo-verdict.mjs).
+  const verdict = demoReportVerdict(out, DEMO_FIXTURE);
+  if (verdict.code !== 0) {
+    process.stderr.write(`demo: ${verdict.reason}\n`);
+    return verdict.code;
+  }
+  process.stdout.write(`${DEMO_LIMITED_STAMP}. The report stays INCOMPLETE VERIFICATION only for:\n${verdict.limited.map((gap) => `  - ${gap}`).join('\n')}\n`);
+  process.stdout.write(`Demo report saved to: ${out}\n`);
+  return 0;
 }
 
 async function runHostDemo({ out, surface, env }) {

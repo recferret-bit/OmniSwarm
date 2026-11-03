@@ -59,6 +59,7 @@ export async function installQueues(boss: PgBoss, config: Config): Promise<void>
   await ensure(REVIEW_DEAD_QUEUE, { policy: 'standard', retryLimit: 3, retryDelay: 30 });
   await ensure(REVIEW_QUEUE, reviewQueueOptions(config));
   await ensure(REFUND_QUEUE, { policy: 'exclusive', retryLimit: 5, retryDelay: 30, retryBackoff: true, expireInSeconds: 600 });
+  await ensure(GUARD_REPORT_QUEUE, { policy: 'exclusive', retryLimit: 5, retryDelay: 30, retryBackoff: true, expireInSeconds: 600 });
   await ensure(MAINTENANCE_QUEUE, { policy: 'exclusive', retryLimit: 0, expireInSeconds: 300 });
 }
 
@@ -67,6 +68,28 @@ export async function enqueueReview(boss: PgBoss, tx: Db, job: ReviewJob): Promi
   assertReviewJob(job);
   const db = { executeSql: (text: string, values?: unknown[]) => tx.query(text, values as unknown[]) };
   return boss.send(REVIEW_QUEUE, job, { singletonKey: job.requestHash, db });
+}
+
+/** The claim a worker holds on one delivery of a review job (pg-boss `includeMetadata`). */
+export interface ReviewAttempt { id: string; retryCount: number; retryLimit: number }
+
+/**
+ * Hand an interrupted job back without spending a retry (graceful worker shutdown). pg-boss counts a
+ * retry on every re-claim of a started job, and its public API has no retry-preserving release, so in
+ * one transaction: complete this delivery (fenced to the attempt, so a lost claim releases nothing)
+ * and send the same job again under the same singletonKey with the retries this delivery still had.
+ * Returns false when the claim was already lost (pg-boss then owns the retry).
+ */
+export async function releaseReview(boss: PgBoss, tx: Db, attempt: ReviewAttempt, job: ReviewJob): Promise<boolean> {
+  assertReviewJob(job);
+  const db = { executeSql: (text: string, values?: unknown[]) => tx.query(text, values as unknown[]) };
+  // pg-boss 12 returns {jobs, requested, affected} here; its typings declare CommandResponse empty.
+  const completed = await boss.complete(REVIEW_QUEUE, { id: attempt.id, retryCount: attempt.retryCount }, { released: true }, { db }) as { affected?: number };
+  if (completed.affected !== 1) return false;
+  const retryLimit = Math.max(0, attempt.retryLimit - attempt.retryCount);
+  const id = await boss.send(REVIEW_QUEUE, job, { singletonKey: job.requestHash, retryLimit, db });
+  if (!id) throw new Error(`release of request ${job.requestId} was refused: another review job holds its singleton key`);
+  return true;
 }
 
 export interface RefundJob { requestId: string; requestHash: string }
@@ -83,4 +106,21 @@ export function assertRefundJob(data: unknown): RefundJob {
 export async function enqueueRefund(boss: PgBoss, tx: Db, job: RefundJob): Promise<string | null> {
   const db = { executeSql: (text: string, values?: unknown[]) => tx.query(text, values as unknown[]) };
   return boss.send(REFUND_QUEUE, assertRefundJob(job), { singletonKey: job.requestHash, db });
+}
+
+/** Approved guard reports: `report_address` signed by a worker. */
+export const GUARD_REPORT_QUEUE = 'guard-report';
+
+export interface GuardReportJob { reportId: string }
+
+export function assertGuardReportJob(data: unknown): GuardReportJob {
+  const job = data as Partial<GuardReportJob> | null;
+  if (!job || !/^[0-9a-f-]{36}$/.test(String(job.reportId))) throw new JobContractError('guard report job payload rejected');
+  return { reportId: String(job.reportId) };
+}
+
+/** One pending job per approved report, sent inside the caller's transaction. */
+export async function enqueueGuardReport(boss: PgBoss, tx: Db, job: GuardReportJob): Promise<string | null> {
+  const db = { executeSql: (text: string, values?: unknown[]) => tx.query(text, values as unknown[]) };
+  return boss.send(GUARD_REPORT_QUEUE, assertGuardReportJob(job), { singletonKey: job.reportId, db });
 }

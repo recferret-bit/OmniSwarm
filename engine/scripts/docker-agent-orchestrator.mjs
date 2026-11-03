@@ -15,7 +15,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { stageTestArtifacts } from './test-artifacts.mjs';
 import { callBridgeTool, resolveDockerBin } from './docker-mcp-bridge.mjs';
-import { readReportJson, writeReportFile } from './report-contract.mjs';
+import { readReportJson, writeReportFile } from './report-files.mjs';
 import { createSnapshot, disposeSnapshot } from './worker-isolation.mjs';
 import { HOST_DIR } from './sandbox-host-paths.mjs';
 import { runReviewSession } from './agent-session.mjs';
@@ -33,11 +33,9 @@ import { createExecute } from './orchestrator-session.mjs';
 import { crosscheckPhase, reviewPhase, servedModels } from './orchestrator-review.mjs';
 import { checkBridgeAgents } from './agent-presence.mjs';
 
-export { resolveExecutable } from './agent-launch.mjs';
 export { buildAuditorPrompt } from './orchestrator-prompts.mjs';
 export { savedTurnCompleted } from './orchestrator-resume.mjs';
 export { startOneShotDocker } from './orchestrator-sandbox.mjs';
-export { checkBridgeAgents } from './agent-presence.mjs';
 
 function assertRequest(request) {
   if (request.rpc || request.resume) throw new Error('Source security review excludes deployed RPC comparisons and legacy adversarial-session finalization');

@@ -32,7 +32,7 @@ A paid request becomes a **durable pg-boss job**. One worker process takes it, r
 
 - [x] Job contract and engine exit contract (CR-09a) — W09-01
 - [x] pg-boss bootstrap with long-job settings; `enqueueReview` in the payment transaction — W09-02, W09-03
-- [x] Engine runner interface; mock runner writing a fixture report; real runner spawning `./bin/audit` with argv — W09-04, W09-05, W09-06
+- [ ] Engine runner interface; mock runner writing a fixture report; real runner spawning `./bin/audit` with argv — W09-04, W09-05, W09-06
 - [x] Preset resolution (`scripted` → hosted per OD-04) and per-preset env allow-list — W09-07
 - [x] Progress from `meta.json`/`workers.json`/`reviewers/*/usage.json` into `request_progress`; SSE endpoint — W09-08, W09-09
 - [x] Publish: copy, read-only permissions, canonical `reportSha256` — W09-10, W09-11
@@ -40,8 +40,8 @@ A paid request becomes a **durable pg-boss job**. One worker process takes it, r
 - [x] Failure classification and refund policy OD-07 — W09-13, W09-14
 - [x] Concurrency, queue position, crash recovery — W09-15, W09-16
 - [x] Admin refund — W09-17
-- [x] Cost ledger and public ledger data (H+) — W09-18
-- [x] Engine disk hygiene (old run dirs, Docker leftovers) — W09-19
+- [ ] Cost ledger and public ledger data (H+) — W09-18
+- [ ] Engine disk hygiene (old run dirs, Docker leftovers) — W09-19
 - [x] Wave check, owner guide, tag — W09-20
 
 ## Issues

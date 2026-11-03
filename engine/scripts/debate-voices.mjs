@@ -8,6 +8,9 @@ import { DEBATE_TOOL_BUDGET } from './debate-bridge.mjs';
 
 const TEMPLATE = { challenge: 'challenge', devil: 'devil-advocate', defend: 'defend', rebut: 'rebut' };
 const publicTurn = ({ round, role, anonId, verdict, argument, citations }) => ({ round, role, anonId, verdict, argument, citations: (citations || []).filter((c) => c.valid) });
+// The judge sees the arguments the rules weigh: discarded turns are left out, and a conformity-suspect turn (a
+// flip without new evidence) is shown marked so it is not counted as an independent vote.
+const judgeTurns = (turns) => turns.filter((t) => !t.discarded).map((t) => ({ ...publicTurn(t), ...(t.conformitySuspect ? { conformitySuspect: true } : {}) }));
 
 async function session(ctx, { name, agent, role, prompt, assignment, kind }) {
   try {
@@ -35,7 +38,7 @@ export function bridgeJudge(ctx, reviewer, budget = DEBATE_TOOL_BUDGET) {
   return async ({ cluster, turns, judge, validArguments, discardedArguments }) => {
     const name = `${reviewer.id}-judge-${cluster.id.toLowerCase()}`;
     const assignment = { kind: 'judge', clusterId: cluster.id, judge, validArguments, discardedArguments, budget };
-    const prompt = renderDebateBrief('judge', { cluster, turns: turns.map(publicTurn), budget });
+    const prompt = renderDebateBrief('judge', { cluster, turns: judgeTurns(turns), budget });
     const { body, reason } = await session(ctx, { name, agent: reviewer.id, role: 'orchestrator', prompt, assignment, kind: 'judge' });
     return body || { unavailable: reason };
   };

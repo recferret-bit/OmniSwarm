@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { createSnapshot, disposeSnapshot } from './worker-isolation.mjs';
-import { REVIEW_WORKFLOW, REVIEW_TOOLS, buildExistingTestCatalog, selectExistingTest } from './review-workflow.mjs';
+import { REVIEW_WORKFLOW, REVIEW_TOOLS, NEAR_BUILD_ARTIFACT, EXISTING_TEST_RUNNER, buildExistingTestCatalog, nearSandboxGap, selectExistingTest } from './review-workflow.mjs';
 import { callBridgeTool, toolDefinitions } from './docker-mcp-bridge.mjs';
 import { permissionDecision } from './agent-session.mjs';
 import { auditToolDecision } from './audit-tool-policy.mjs';
@@ -112,6 +113,80 @@ test('a near-sdk package and Intents npm tests are coverage gaps, not offline su
   assert.match(catalog.coverageGaps.join('\n'), /NEAR contract tests in \./);
   assert.match(catalog.coverageGaps.join('\n'), /NEAR contract tests in contracts/);
   assert.match(catalog.coverageGaps.join('\n'), /one-click-sdk-typescript/);
+  assert.match(catalog.coverageGaps.join('\n'), /NEAR build verification unavailable in contracts: the near-sdk crate is not a cdylib contract/);
+});
+
+test('a near-sdk cdylib contract gets the fixed NEAR build checks and never an offline cargo test', t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'security-review-near-build-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(root, 'tests/fixtures/near'), { recursive: true });
+  const contract = '[package]\nname = "c"\nversion = "0.1.0"\n\n[lib]\ncrate-type = ["cdylib", "rlib"]\n\n[dependencies]\nnear-sdk = "5.29.0"\n';
+  fs.writeFileSync(path.join(root, 'Cargo.toml'), contract);
+  fs.writeFileSync(path.join(root, 'tests/fixtures/near/Cargo.toml'), contract);
+  const snapshot = createSnapshot(root);
+  const catalog = buildExistingTestCatalog(snapshot.snapshot, snapshot.manifest);
+  disposeSnapshot(snapshot);
+  // The fixture copy is not production source, so it gets no build check; neither directory gets cargo test.
+  assert.deepEqual(catalog.tests.map((row) => `${row.kind}:${row.cwd}`), ['near-build:.', 'near-clippy:.']);
+  assert.match(catalog.coverageGaps.join('\n'), /NEAR contract tests in \. are a local-sandbox coverage gap/);
+  assert.doesNotMatch(catalog.coverageGaps.join('\n'), /NEAR build verification unavailable/);
+  const build = selectExistingTest(catalog, catalog.tests[0].id, catalog.sourceDigest);
+  assert.deepEqual([build.command, ...build.args], ['cargo', 'near', 'build', 'non-reproducible-wasm', '--locked', '--no-abi']);
+  const clippy = selectExistingTest(catalog, catalog.tests[1].id, catalog.sourceDigest);
+  assert.deepEqual([clippy.command, ...clippy.args], ['cargo', 'clippy', '--locked', '--offline', '--target', 'wasm32-unknown-unknown']);
+  assert.equal(nearSandboxGap('.'), catalog.coverageGaps[0]);
+});
+
+// Runs EXISTING_TEST_RUNNER in a vm with a fake file system and a child that exits 0.
+async function runnerWithFiles(entry, files) {
+  const { default: vm } = await import('node:vm');
+  const { EventEmitter } = await import('node:events');
+  const { PassThrough } = await import('node:stream');
+  const out = [], err = [];
+  const isDir = (p) => Object.keys(files).some((f) => f.startsWith(`${p}/`));
+  const fakeFs = {
+    existsSync: (p) => p in files || isDir(p), realpathSync: (p) => p, lstatSync: () => ({ isFile: () => true, nlink: 1 }),
+    readFileSync: (p) => { if (!(p in files)) throw Error('missing'); return files[p]; },
+    statSync: () => ({ mtimeMs: Date.now() }),
+    readdirSync: (p) => [...new Set(Object.keys(files).filter((f) => f.startsWith(`${p}/`)).map((f) => f.slice(p.length + 1).split('/')[0]))]
+      .map((name) => ({ name, isSymbolicLink: () => false, isDirectory: () => isDir(`${p}/${name}`), isFile: () => `${p}/${name}` in files })),
+  };
+  const spawn = () => {
+    const child = Object.assign(new EventEmitter(), { pid: 1, stdout: new PassThrough(), stderr: new PassThrough() });
+    setImmediate(() => { child.stdout.end(); child.stderr.end(); child.emit('close', 0); });
+    return child;
+  };
+  const proc = {
+    env: { CARGO_TARGET_DIR: '/work/target' }, argv: ['node', '/work/src'], exitCode: undefined, kill() {},
+    stdin: (async function* () { yield JSON.stringify(entry); })(), stdout: new PassThrough(), stderr: new PassThrough(),
+  };
+  proc.stdout.on('data', (c) => out.push(String(c)));
+  proc.stderr.on('data', (c) => err.push(String(c)));
+  // The runner sets process.exitCode in the child's close handler; wait for that, not for a fixed delay.
+  const done = (async () => { for (let i = 0; i < 500 && proc.exitCode === undefined; i++) await new Promise((r) => setTimeout(r, 10)); })();
+  vm.runInNewContext(EXISTING_TEST_RUNNER, {
+    require: (name) => (name === 'node:fs' ? fakeFs : name === 'node:path' ? path : name === 'node:crypto' ? crypto : { spawn, spawnSync() {} }),
+    process: proc, console: { log: (s) => out.push(`${s}\n`), error: (s) => err.push(`${s}\n`) }, setTimeout, clearTimeout,
+  });
+  await done;
+  return { code: proc.exitCode, stdout: out.join(''), stderr: err.join('') };
+}
+
+test('the runner accepts a NEAR build only with a fresh WASM module and prints its digest', async () => {
+  const entry = { kind: 'near-build', files: [], cwd: '.', command: 'cargo', args: ['near', 'build'], timeoutMs: 900000 };
+  const wasm = Buffer.from([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]);
+  const built = await runnerWithFiles(entry, { '/work/target/near/demo_vault.wasm': wasm });
+  assert.equal(built.code, 0, built.stderr);
+  assert.match(built.stdout, NEAR_BUILD_ARTIFACT);
+  assert.match(built.stdout, new RegExp(`demo_vault\\.wasm sha256 ${crypto.createHash('sha256').update(wasm).digest('hex')} bytes 8`));
+  const none = await runnerWithFiles(entry, {});
+  assert.equal(none.code, 1);
+  assert.match(none.stderr, /no WASM artifact was written/);
+  const bogus = await runnerWithFiles(entry, { '/work/target/near/demo_vault.wasm': Buffer.from('not wasm') });
+  assert.equal(bogus.code, 1);
+  assert.doesNotMatch(bogus.stdout, NEAR_BUILD_ARTIFACT);
+  // Any other kind keeps the child's exit status and is not checked for an artifact.
+  assert.equal((await runnerWithFiles({ ...entry, kind: 'cargo' }, {})).code, 0);
 });
 
 test('a Python project with tests gets a fixed, hash-bound pytest entry and no caller-controlled interpreter', t => {

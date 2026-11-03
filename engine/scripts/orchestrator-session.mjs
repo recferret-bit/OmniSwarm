@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { digest } from './agent-session-store.mjs';
 import { FAILURE_MESSAGES } from './audit-process.mjs';
-import { writeReportFile } from './report-contract.mjs';
+import { writeReportFile } from './report-files.mjs';
 import { REVIEW_WORKFLOW } from './review-workflow.mjs';
 import { families } from './reviewer-families.mjs';
 import { resumeSession } from './orchestrator-resume.mjs';

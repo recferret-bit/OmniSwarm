@@ -1,8 +1,8 @@
 // Environment handed to one reviewer process, and the fingerprint recorded in place of a key.
 // ORCHESTRATION section 1.1: the process gets the base session variables plus its own allow-list.
 // The bridge and the sandbox get the base set only; a key never rides along with them.
-import crypto from 'node:crypto';
 import path from 'node:path';
+import { sha256Hex } from './hash-util.mjs';
 import { sessionEnvironment } from './provider-cli.mjs';
 
 const CONTROL = ['OMNI_HTTP_REPLAY', 'OMNI_HTTP_RECORD', 'OMNI_LIVE', 'OMNI_API_TIMEOUT_MS', 'OMNI_DEMO'];
@@ -26,7 +26,7 @@ export function bridgeProcessEnv(source = process.env) {
 // First 4 and last 4 hex characters of sha256(key). Empty when the operator did not set the key.
 export function keyFingerprint(secret) {
   if (typeof secret !== 'string' || !secret) return null;
-  const hex = crypto.createHash('sha256').update(secret).digest('hex');
+  const hex = sha256Hex(secret);
   return `${hex.slice(0, 4)}${hex.slice(-4)}`;
 }
 

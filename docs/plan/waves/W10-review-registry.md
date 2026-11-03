@@ -34,12 +34,12 @@ A small (~150 lines of logic) `near-sdk` contract that turns a signed review req
 - [x] `request_review` payable with storage and hash checks — W10-03
 - [x] `mark_running`, `attest`, `refund`, `withdraw` with role checks — W10-04, W10-05, W10-06
 - [x] Views and NEP-297 events — W10-07
-- [x] near-workspaces test suite — W10-08
+- [ ] near-workspaces test suite — W10-08
 - [x] Build and testnet deploy script (owner runs) — W10-09
 - [x] Testnet RPC client with FastNEAR primary and Lava fallback — W10-10
-- [x] Real `ChainPort` adapter: `verifyMessage`, `getTx` FINAL, views, FC-key signing for operator calls; passes the W08 contract suite — W10-11, W10-13, W10-14
+- [ ] Real `ChainPort` adapter: `verifyMessage`, `getTx` FINAL, views, FC-key signing for operator calls; passes the W08 contract suite — W10-11, W10-13, W10-14
 - [x] Contract README: methods, events, key limits — W10-15
-- [x] Per-reviewer sub-accounts and sub-report attestations (H+, OD-02) — W10-12
+- [ ] Per-reviewer sub-accounts and sub-report attestations (H+, OD-02) — W10-12
 - [x] Wave check, owner guide, tag — W10-16
 
 ## Issues

@@ -30,20 +30,20 @@ One Linux VM (OD-13) serves the hosted demo from D10 until **2026-11-25** (HACKA
 ## Features covered
 
 - [ ] Env contract and infra check script — W12-01
-- [ ] Compose: Postgres, API, nginx, certbot — W12-02, W12-03, W12-05
-- [ ] nginx: TLS, API proxy with SSE, separate reports origin with CSP, rate limits — W12-04
+- [x] Compose: Postgres, API, nginx, certbot — W12-02, W12-03, W12-05
+- [x] nginx: TLS, API proxy with SSE, separate reports origin with CSP, rate limits — W12-04
 - [ ] Host provisioning, firewall, sshd — W12-06, W12-09
 - [ ] Worker systemd unit with limits; Docker-group risk and mitigations — W12-07, W12-08
 - [ ] Secrets install, root-only env files, no key in containers — W12-10
 - [ ] Report storage and retention — W12-11
-- [ ] Backups and a restore drill — W12-12
+- [x] Backups and a restore drill — W12-12
 - [ ] Log rotation and log hygiene — W12-13
 - [ ] Deploy and rollback over SSH; optional CI deploy — W12-14, W12-15
-- [ ] Smoke test — W12-16
+- [x] Smoke test — W12-16
 - [ ] Uptime until 2026-11-25 — W12-17
 - [ ] Hosted engine readiness and measured cost per run (feeds OD-08) — W12-18
 - [ ] Owner tasks — W12-19
-- [ ] Local stack for development and the D10 rehearsal — W12-20
+- [x] Local stack for development and the D10 rehearsal — W12-20
 - [ ] Wave check guide and tag — W12-21
 
 ## Issues

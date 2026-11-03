@@ -145,7 +145,10 @@ if [ "${OMNI_DEMO_HOST:-0}" != "1" ] && [ -f "$OUTPUT_DIR/meta.json" ]; then
   # HTML generation revalidates and scores current inputs before rendering.
   node "$SCRIPT_DIR/generate-html-report.mjs" "$OUTPUT_DIR" || code=2
 fi
-if [ "$code" -ne 0 ]; then
+if [ "$code" -ne 0 ] && [ "${OMNI_DEMO:-0}" = "1" ]; then
+  # The demo decides its own outcome (audit-demo-verdict.mjs); do not announce a failed audit first.
+  echo "Demo run finished (engine exit $code); checking the demo verdict for: $OUTPUT_DIR" >&2
+elif [ "$code" -ne 0 ]; then
   echo "AUDIT FAILED (exit $code); partial output at: $OUTPUT_DIR" >&2
 else
   echo "Audit report saved to: $OUTPUT_DIR"

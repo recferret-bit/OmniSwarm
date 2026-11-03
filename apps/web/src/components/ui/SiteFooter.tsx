@@ -8,7 +8,7 @@ export function SiteFooter() {
       <nav aria-label="Footer">
         <ul className="site-footer__links">
           <li><a href={REPO_URL}>Source on GitHub</a></li>
-          <li><a href={`${REPO_URL}/blob/main/RULES.md`}>Review rules (RULES.md)</a></li>
+          <li><a href={`${REPO_URL}/blob/main/docs/RULES.md`}>Review rules (RULES.md)</a></li>
           <li><a href={`${REPO_URL}/blob/main/README.md`}>README</a></li>
           <li><a href={`${REPO_URL}/blob/main/LICENSE`}>MIT licence</a></li>
           <li><Link href="/sample">Sample report</Link></li>

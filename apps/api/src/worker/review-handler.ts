@@ -13,18 +13,26 @@ import type { ReviewJob } from '../queue/review-queue.ts';
 import type { Clock } from '../shared/clock.ts';
 import { isAppError } from '../shared/errors.ts';
 import type { Logger } from '../shared/logger.ts';
-import { attemptDirs, completedAttempt, recordResult, runCostUsd } from './attempts.ts';
+import { recordRequestCost } from '../db/repositories/costs.ts';
+import { attemptDirs, completedAttempt, recordResult } from './attempts.ts';
 import { classify, type Outcome } from './classify.ts';
+import { requestCost } from './cost.ts';
 import { ProgressTailer } from './progress-tailer.ts';
 import { publishReport, readPublished } from './publish.ts';
 import { maxSeverity } from './report.ts';
 
 export interface HandlerDeps { config: Config; pool: Pool; clock: Clock; chain: ChainPort; engine: EngineRunner; log: Logger }
-export interface JobContext { retryCount: number; signal: AbortSignal }
+/** `lastAttempt`: this delivery has no retry left. `signal`: the worker is stopping (or lost the claim). */
+export interface JobContext { lastAttempt: boolean; signal: AbortSignal }
 
-/** Thrown to make pg-boss retry the job (engine error or interrupted run with retries left). */
+/** Thrown to make pg-boss retry the job (engine error with retries left). */
 export class RetryJobError extends Error {
   override name = 'RetryJobError';
+}
+
+/** The run was stopped by the worker (shutdown) before it produced a result: release, do not settle. */
+export class RunInterruptedError extends Error {
+  override name = 'RunInterruptedError';
 }
 
 export type HandlerResult =
@@ -35,7 +43,15 @@ function reportUrl(config: Config, requestId: string): string {
   return `${config.storage.reportsBaseUrl}/${requestId}/report.html`;
 }
 
+/** Sum every attempt's model cost into request_cost (W09-18) before the request settles. */
+async function recordCost(deps: HandlerDeps, requestId: string): Promise<number> {
+  const cost = requestCost(deps.config.storage.runsRoot, requestId);
+  await recordRequestCost(deps.pool, requestId, cost, deps.clock.now());
+  return cost.costUsd;
+}
+
 async function attest(deps: HandlerDeps, row: RequestRow, sourceDir: string | null, incomplete: boolean): Promise<HandlerResult> {
+  const costUsd = await recordCost(deps, row.id);
   if (row.status === 'running') {
     const published = sourceDir
       ? publishReport({ reportsRoot: deps.config.storage.reportsRoot, requestId: row.id, sourceDir, repo: row.repo, commitSha: row.commit_sha, preset: row.preset })
@@ -49,11 +65,12 @@ async function attest(deps: HandlerDeps, row: RequestRow, sourceDir: string | nu
   const dir = readPublished(deps.config.storage.reportsRoot, row.id)?.dir ?? '';
   return {
     status: row.incomplete ? 'incomplete' : 'done', reportSha256: row.report_sha256 ?? '', maxSeverityConfirmed: row.max_severity ?? 'none',
-    reportDir: dir, costUsd: dir ? runCostUsd(dir) : 0,
+    reportDir: dir, costUsd,
   };
 }
 
 async function refund(deps: HandlerDeps, row: RequestRow, cause: string): Promise<HandlerResult> {
+  await recordCost(deps, row.id);
   if (row.status !== 'failed') await markFailed(deps, row.id, cause);
   await refundRequest(deps, row.id, { actor: 'worker', cause });
   deps.log.info({ requestId: row.id, cause }, 'review refunded');
@@ -65,6 +82,8 @@ async function runEngine(deps: HandlerDeps, row: RequestRow, attempt: number, si
   const abort = new AbortController();
   const onStop = () => abort.abort();
   signal.addEventListener('abort', onStop, { once: true });
+  // A shutdown that landed before the listener existed must still stop this run.
+  if (signal.aborted) onStop();
   const tailer = new ProgressTailer(deps, row.id, dirs.out, onStop);
   tailer.start(deps.config.progressPollMs);
   try {
@@ -77,7 +96,8 @@ async function runEngine(deps: HandlerDeps, row: RequestRow, attempt: number, si
   }
 }
 
-async function settle(deps: HandlerDeps, row: RequestRow, outcome: Outcome, out: string, lastAttempt: boolean): Promise<HandlerResult> {
+async function settle(deps: HandlerDeps, row: RequestRow, outcome: Outcome, out: string, ctx: JobContext): Promise<HandlerResult> {
+  const { lastAttempt } = ctx;
   switch (outcome.kind) {
     case 'completed':
       return attest(deps, row, out, outcome.incomplete);
@@ -95,7 +115,7 @@ async function settle(deps: HandlerDeps, row: RequestRow, outcome: Outcome, out:
     case 'aborted': {
       const fresh = await findRequest(deps.pool, row.id);
       if (fresh?.status === 'refunded') return { status: 'skipped', reason: 'refunded while running' };
-      throw new RetryJobError('run interrupted by worker shutdown');
+      throw new RunInterruptedError('run interrupted by worker shutdown');
     }
   }
 }
@@ -110,9 +130,10 @@ export async function handleReview(deps: HandlerDeps, job: ReviewJob, ctx: JobCo
     if (row.failure_cause?.startsWith('operator:')) return { status: 'failed', reason: row.failure_cause };
     return refund(deps, row, row.failure_cause ?? 'infra');
   }
-  const lastAttempt = ctx.retryCount >= deps.config.queue.retryLimit;
+  // Attempts count engine runs started for this request, across deliveries and released jobs alike.
+  const attempt = row.attempts;
   row = await transition(deps.pool, row.id, {
-    to: 'running', patch: { attempts: ctx.retryCount + 1 }, actor: 'worker', event: 'review_started', data: { attempt: ctx.retryCount + 1 }, now: deps.clock.now(),
+    to: 'running', patch: { attempts: attempt + 1 }, actor: 'worker', event: 'review_started', data: { attempt: attempt + 1 }, now: deps.clock.now(),
   });
   const earlier = completedAttempt(deps.config.storage.runsRoot, row.id);
   // A crash after publishing but before the status write: attest the published report.
@@ -123,9 +144,10 @@ export async function handleReview(deps: HandlerDeps, job: ReviewJob, ctx: JobCo
   }
   // A crash after the engine finished but before publishing: publish that run instead of re-running.
   if (earlier) return attest(deps, row, earlier.out, earlier.incomplete);
-  const { outcome, out } = await runEngine(deps, row, ctx.retryCount, ctx.signal);
+  if (ctx.signal.aborted) throw new RunInterruptedError('worker shutdown before the engine started');
+  const { outcome, out } = await runEngine(deps, row, attempt, ctx.signal);
   try {
-    return await settle(deps, row, outcome, out, lastAttempt);
+    return await settle(deps, row, outcome, out, ctx);
   } catch (error) {
     // An admin refunded the request while it ran: nothing left to do.
     if (isAppError(error, 'INVALID_TRANSITION') && (await findRequest(deps.pool, row.id))?.status === 'refunded') {

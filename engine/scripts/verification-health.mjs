@@ -1,6 +1,22 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import { scannerEvidence, testCounts, missingTestArtifact, testSetupCause, dominantTestFailure } from './scanner-evidence.mjs';
+import { NEAR_BUILD_ARTIFACT, NEAR_BUILD_KINDS } from './review-workflow.mjs';
+
+// A suite passes with nonzero test counts and nothing failed or skipped. A NEAR build check has no test counts:
+// near-build passes with the runner's verified WASM artifact line, near-clippy with cargo's Finished line.
+function executionPassed(entry, row, evidence) {
+  if (row.exitCode !== 0 || evidence.omittedBytes) return false;
+  if (entry.kind === 'near-build') return NEAR_BUILD_ARTIFACT.test(evidence.stdout);
+  if (entry.kind === 'near-clippy') return /^\s*Finished\b/m.test(evidence.stderr);
+  const counts = testCounts(evidence.stdout);
+  return counts?.passed > 0 && counts.failed === 0 && counts.skipped === 0;
+}
+
+function failureSummary(entry, row, counts) {
+  if (NEAR_BUILD_KINDS.includes(entry.kind)) return `Exit ${row.exitCode}; ${entry.kind === 'near-build' ? 'no verified WASM artifact' : 'no completed clippy run'} in the output.`;
+  return `Exit ${row.exitCode}; ${counts ? `${counts.passed} passed, ${counts.failed} failed or errored, ${counts.skipped} skipped` : 'no test summary in the output'}.`;
+}
 
 // Review output validation and executed coverage are different gates.
 export function verificationHealth(root, read) {
@@ -39,16 +55,17 @@ export function verificationHealth(root, read) {
         if (row.exitCode !== 0) { const detail = missingTestArtifact(evidence.stderr) || testSetupCause(evidence.stdout, evidence.stderr); if (detail) details.add(detail); }
         // Aggregated per-crate summaries can sit in the omitted middle of an oversized output.
         if (evidence.omittedBytes) details.add(`Output exceeded the capture limit (${evidence.omittedBytes} bytes omitted).`);
-        if (!(row.exitCode === 0 && counts?.passed > 0 && counts.failed === 0 && counts.skipped === 0 && !evidence.omittedBytes)) {
+        if (!executionPassed(entry, row, evidence)) {
           passed = false;
-          details.add(`Exit ${row.exitCode}; ${counts ? `${counts.passed} passed, ${counts.failed} failed or errored, ${counts.skipped} skipped` : 'no test summary in the output'}.`);
+          details.add(failureSummary(entry, row, counts));
           const cause = dominantTestFailure(evidence.stdout);
           if (cause) details.add(`Most common failure (${cause.count}x): ${cause.message}`);
         }
       } catch { passed = false; gaps.push(`Missing or altered test output for ${entry.id}.`); }
     }
     suites.push({ id: entry.id, state: passed ? 'passed' : rows.length ? 'failed_or_unverified' : 'not_run', attempts: rows.length });
-    if (!passed) gaps.push(`${entry.description}: no successful execution with nonzero test counts and no skipped tests.${details.size ? ' ' + [...details].join(' ') : ''}`);
+    const want = NEAR_BUILD_KINDS.includes(entry.kind) ? 'no successful offline build' : 'no successful execution with nonzero test counts and no skipped tests';
+    if (!passed) gaps.push(`${entry.description}: ${want}.${details.size ? ' ' + [...details].join(' ') : ''}`);
   }
   try {
     const record = read('harness/scanner-results.json');

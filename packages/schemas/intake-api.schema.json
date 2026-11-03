@@ -96,10 +96,11 @@
       "properties": {"txHash": {"type": "string", "pattern": "^[1-9A-HJ-NP-Za-km-z]{43,44}$"}}
     },
     "payment-response": {
+      "description": "The request after its payment was confirmed. A replay of the same tx is idempotent and answers with the current status; position is the 1-based queue rank while queued, else null.",
       "type": "object",
       "required": ["status", "position"],
       "additionalProperties": false,
-      "properties": {"status": {"const": "queued"}, "position": {"type": "integer", "minimum": 0}}
+      "properties": {"status": {"$ref": "#/$defs/status"}, "position": {"type": ["integer", "null"], "minimum": 1}}
     },
     "progress": {
       "type": "object",
@@ -195,29 +196,85 @@
       "additionalProperties": false,
       "properties": {
         "account": {"$ref": "#/$defs/account-id"},
-        "evidenceUrl": {"type": "string", "pattern": "^https://[^\\s]+$", "maxLength": 2000},
-        "reason": {"type": "string", "minLength": 1, "maxLength": 2000}
+        "evidenceUrl": {"type": "string", "pattern": "^https://[!-~]+$", "maxLength": 2000, "description": "Visible ASCII only, so 2000 characters are the registry's 2000-byte evidence_uri limit"},
+        "reason": {"type": "string", "minLength": 1, "maxLength": 280, "pattern": "^[^\\u0000-\\u001f\\u007f]*[^\\s\\u0000-\\u001f\\u007f][^\\u0000-\\u001f\\u007f]*$", "description": "The registry's report_address reason: 1-280 characters, not only whitespace, no control characters"}
       }
     },
-    "guard-report-response": {"type": "object", "required": ["queued"], "additionalProperties": false, "properties": {"queued": {"const": true}}},
-    "ledger-response": {
+    "guard-report-response": {
+      "description": "202: the report waits for the owner's review (admin listener); an approved report is sent on chain as report_address by a worker. A resubmission of an open report returns the same reportId.",
       "type": "object",
-      "required": ["entries"],
+      "required": ["queued"],
+      "additionalProperties": false,
+      "properties": {"queued": {"const": true}, "reportId": {"$ref": "#/$defs/uuid"}}
+    },
+    "guard-report-status": {"enum": ["pending", "approved", "reported", "rejected"]},
+    "admin-guard-report-list-response": {
+      "description": "GET /api/admin/guard/reports[?status=] on the loopback admin listener.",
+      "type": "object",
+      "required": ["reports"],
+      "additionalProperties": false,
+      "properties": {
+        "reports": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["reportId", "account", "reporter", "evidenceUrl", "reason", "status", "reportTx", "createdAt"],
+            "additionalProperties": false,
+            "properties": {
+              "reportId": {"$ref": "#/$defs/uuid"},
+              "account": {"$ref": "#/$defs/account-id"},
+              "reporter": {"$ref": "#/$defs/account-id"},
+              "evidenceUrl": {"type": "string", "pattern": "^https://[^\\s]+$"},
+              "reason": {"type": "string", "minLength": 1},
+              "status": {"$ref": "#/$defs/guard-report-status"},
+              "reportTx": {"type": ["string", "null"], "minLength": 1},
+              "createdAt": {"$ref": "#/$defs/timestamp"}
+            }
+          }
+        }
+      }
+    },
+    "admin-guard-decision-response": {
+      "description": "POST /api/admin/guard/reports/:id/approve (202 approved: a worker sends report_address) or /reject (200). Repeating a decision answers with the current state; reportTx is set once the worker sent it, null when the chain already listed the account.",
+      "type": "object",
+      "required": ["status", "reportTx"],
+      "additionalProperties": false,
+      "properties": {"status": {"$ref": "#/$defs/guard-report-status"}, "reportTx": {"type": ["string", "null"], "minLength": 1}}
+    },
+    "ledger-response": {
+      "description": "GET /api/ledger (public, W09-18): paid requests, newest first (at most 500), with the deposit paid, the model cost summed from every attempt's reviewers/*/usage.json (recorded when the request is published or refunded) and the refund. Totals cover every paid request. No account ids.",
+      "type": "object",
+      "required": ["entries", "totals"],
       "additionalProperties": false,
       "properties": {
         "entries": {
           "type": "array",
+          "maxItems": 500,
           "items": {
             "type": "object",
-            "required": ["requestId", "status", "priceYocto", "modelCostUsd"],
+            "required": ["requestId", "repo", "status", "priceYocto", "paidYocto", "modelCostUsd", "reviewers"],
             "additionalProperties": false,
             "properties": {
               "requestId": {"$ref": "#/$defs/uuid"},
+              "repo": {"$ref": "#/$defs/repo"},
               "status": {"$ref": "#/$defs/status"},
               "priceYocto": {"$ref": "#/$defs/yocto"},
+              "paidYocto": {"$ref": "#/$defs/yocto"},
               "modelCostUsd": {"type": "number", "minimum": 0},
+              "reviewers": {"type": "integer", "minimum": 0, "description": "Reviewers that reported usage; 0 until the cost is recorded"},
               "refundTx": {"type": "string", "minLength": 1}
             }
+          }
+        },
+        "totals": {
+          "type": "object",
+          "required": ["requests", "salesYocto", "refundedYocto", "modelCostUsd"],
+          "additionalProperties": false,
+          "properties": {
+            "requests": {"type": "integer", "minimum": 0},
+            "salesYocto": {"$ref": "#/$defs/yocto", "description": "Deposits of paid requests that were not refunded"},
+            "refundedYocto": {"$ref": "#/$defs/yocto"},
+            "modelCostUsd": {"type": "number", "minimum": 0}
           }
         }
       }

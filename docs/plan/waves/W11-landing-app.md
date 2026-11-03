@@ -32,24 +32,24 @@ A visitor understands what OmniSwarm does in one screen, can open a **sample rep
 
 ## Features covered
 
-- [ ] App scaffold, typed API client from the schema, env contract — W11-01
+- [x] App scaffold, typed API client from the schema, env contract — W11-01
 - [ ] Design tokens copied from the report CSS, light/dark — W11-02
-- [ ] MSW mocks with a request state machine, SSE and error injection — W11-03
-- [ ] Mock wallet (NEP-413 test key) for dev and e2e — W11-04
+- [x] MSW mocks with a request state machine, SSE and error injection — W11-03
+- [x] Mock wallet (NEP-413 test key) for dev and e2e — W11-04
 - [ ] Hero, how-it-works, trust, pricing, sample report — W11-05..09
-- [ ] NearConnector provider (testnet, `signMessage` filter, sign-in/out) — W11-10
-- [ ] Quote form with repo validation and mapped error codes — W11-11
-- [ ] Sign step (challenge, canonical message, `signMessage`, request hash) — W11-12
-- [ ] Pay step with pending / failed / retry — W11-13
+- [x] NearConnector provider (testnet, `signMessage` filter, sign-in/out) — W11-10
+- [x] Quote form with repo validation and mapped error codes — W11-11
+- [x] Sign step (challenge, canonical message, `signMessage`, request hash) — W11-12
+- [x] Pay step with pending / failed / retry — W11-13
 - [ ] Live status page (SSE, reviewer passes, debate rounds) — W11-14
-- [ ] Report viewer + in-browser attestation check — W11-15
-- [ ] My requests — W11-16
-- [ ] Mobile layout and accessibility — W11-17
-- [ ] Playwright e2e on mocks (happy path, failure paths) — W11-18, W11-19
-- [ ] Bundle check: no mocks, no secrets in production — W11-20
+- [x] Report viewer + in-browser attestation check — W11-15
+- [x] My requests — W11-16
+- [x] Mobile layout and accessibility — W11-17
+- [x] Playwright e2e on mocks (happy path, failure paths) — W11-18, W11-19
+- [x] Bundle check: no mocks, no secrets in production — W11-20
 - [ ] Real-API testnet e2e after the D10 gate — W11-21
 - [ ] SEO / OG metadata — W11-22
-- [ ] Wave check guide and tag — W11-23
+- [x] Wave check guide and tag — W11-23
 
 ## Issues
 

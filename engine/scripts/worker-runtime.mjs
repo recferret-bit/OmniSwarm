@@ -1,7 +1,7 @@
 // Trusted review-only runtime. No shell, scanner, installer or model-auth tools.
 // Live subscription transport is intentionally absent; fixtures are not audits.
 import fs from 'node:fs';
-import { readReportJson, readReportText } from './report-contract.mjs';
+import { readReportJson, readReportText } from './report-files.mjs';
 import { LIMITS, backendStatus, expectedFiles, hash } from './worker-isolation.mjs';
 import { validateReviewRequest, exactKeys, validateResult, terminalReport, encodeFrame, readJsonLine, terminalSafeJson } from './terminal-review-contract.mjs';
 

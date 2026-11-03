@@ -123,3 +123,29 @@ test('missing NEAR clippy and WASM verification stays an explicit health gap', t
   assert.equal(f.check().state, 'incomplete');
   assert.match(f.check().gaps.join('\n'), /NEAR build verification unavailable/);
 });
+
+// A NEAR build check is in the same catalog as the suites but has no test counts. Before near-build existed the
+// only NEAR state was a fixed "not provisioned" gap; now that gap closes only on a verified offline build.
+test('a NEAR build check passes only on exit 0 with its verified artifact, never on test counts', t => {
+  const f = fixture(t);
+  const catalog = f.data['harness/existing-tests.json'];
+  const row = f.data['harness/existing-test-results-verification.json'][0];
+  const set = (stdout, stderr = '', exitCode = 0) => {
+    f.data[f.output] = { stdout, stderr };
+    Object.assign(row, { exitCode, evidenceHash: crypto.createHash('sha256').update(JSON.stringify(f.data[f.output])).digest('hex') });
+  };
+  const artifact = (bytes) => `near-build artifact: demo_vault.wasm sha256 ${'a'.repeat(64)} bytes ${bytes}\n`;
+  catalog.tests[0] = { id: 'suite', kind: 'near-build', description: 'NEAR WASM build in .' };
+  set(`Contract successfully built!\n${artifact(104857)}`);
+  assert.equal(f.check().state, 'passed');
+  for (const [stdout, exitCode] of [['# pass 2\n# fail 0\n', 0], ['Contract successfully built!\n', 0], [artifact(0), 0], [artifact(9), 101]]) {
+    set(stdout, '', exitCode);
+    assert.equal(f.check().state, 'incomplete', stdout);
+    assert.match(f.check().gaps.join('\n'), /NEAR WASM build in \.: no successful offline build\./);
+  }
+  catalog.tests[0] = { id: 'suite', kind: 'near-clippy', description: 'NEAR clippy in .' };
+  set('', '    Checking demo-vault v0.1.0\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 4.1s\n');
+  assert.equal(f.check().state, 'passed');
+  set('', 'error: could not compile `demo-vault`\n', 101);
+  assert.match(f.check().gaps.join('\n'), /NEAR clippy in \.: no successful offline build\. Exit 101; no completed clippy run/);
+});

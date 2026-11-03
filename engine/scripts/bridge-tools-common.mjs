@@ -1,7 +1,7 @@
 // Tools every role has, and the helpers role files share. Role files (bridge-tools-<role>.mjs) add their submit tool.
 // The handlers live in bridge-context.mjs (scope and plans), bridge-reads.mjs (list/read/search of the sealed source)
 // and bridge-existing-tests.mjs (catalogued suites); the container boundary is bridge-container.mjs.
-import { citation } from './report-contract.mjs';
+import { citation } from './report-contract-auditor.mjs';
 import { getAuditContext, getReviewPlan } from './bridge-context.mjs';
 import { listFiles, readFile, searchCode } from './bridge-reads.mjs';
 import { listExistingTests, runExistingTests } from './bridge-existing-tests.mjs';
@@ -107,4 +107,3 @@ export const commonHandlers = Object.freeze({
   list_existing_tests: listExistingTests,
   run_existing_tests: runExistingTests,
 });
-export const COMMON_TOOL_NAMES = Object.keys(commonHandlers);

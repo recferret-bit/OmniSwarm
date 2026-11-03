@@ -1,9 +1,10 @@
-//! OmniSwarm review registry: a paid, single-use review request, its attestation, and the
-//! deployed-account binding the agent guard reads. The public interface is in INTERFACE.md.
+//! OmniSwarm review registry: a paid, single-use review request, its attestation, the
+//! deployed-account binding, and the abuse-report blocklist the agent guard reads. The public interface is in INTERFACE.md.
 
 mod admin;
 mod events;
 mod money;
+mod reports;
 mod review;
 mod validate;
 mod views;
@@ -15,6 +16,7 @@ use near_sdk::json_types::U128;
 use near_sdk::store::LookupMap;
 use near_sdk::{env, near, AccountId, BorshStorageKey, PanicOnDefault};
 
+pub use reports::Report;
 pub use validate::{OPERATOR_METHODS, SEVERITIES};
 
 /// Storage prefixes. Append new variants at the end: the borsh index is the on-chain prefix.
@@ -26,6 +28,7 @@ enum Key {
     ByAccount,
     RepoCount,
     RepoEntries,
+    Reports,
 }
 
 #[near(serializers = [borsh, json])]
@@ -89,6 +92,7 @@ pub struct Contract {
     by_account: LookupMap<AccountId, String>,
     repo_count: LookupMap<String, u32>,
     repo_entries: LookupMap<(String, u32), String>,
+    reports: reports::Reports,
 }
 
 #[near]
@@ -108,6 +112,7 @@ impl Contract {
             by_account: LookupMap::new(Key::ByAccount),
             repo_count: LookupMap::new(Key::RepoCount),
             repo_entries: LookupMap::new(Key::RepoEntries),
+            reports: reports::Reports::new(Key::Reports),
         }
     }
 }
@@ -137,5 +142,6 @@ impl Contract {
         self.by_account.flush();
         self.repo_count.flush();
         self.repo_entries.flush();
+        self.reports.flush();
     }
 }

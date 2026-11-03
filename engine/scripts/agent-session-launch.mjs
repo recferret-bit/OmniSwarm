@@ -1,5 +1,5 @@
 import { families } from './reviewer-families.mjs';
-export { ADAPTER_PINS, sessionEnvironment, runtimeAdapter } from './provider-cli.mjs';
+export { sessionEnvironment, runtimeAdapter } from './provider-cli.mjs';
 
 // Dispatcher: the family registry owns every launch branch. Callers that pass only `agent`
 // (tests, check-agents) get the `cli` family with the provider named by `agent`.

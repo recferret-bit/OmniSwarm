@@ -65,6 +65,14 @@ describe('review worker (mock engine, mock chain)', NEEDS_DB, () => {
       const attestation = await api.deps.chain.getAttestation(request.requestHash);
       assert.equal(attestation?.reportSha256, view.body.reportSha256);
       assert.equal(attestation?.maxSeverity, 'medium');
+      const index = await call(api.base, `/api/reports/${request.requestId}`);
+      assert.equal(index.status, 200, JSON.stringify(index.body));
+      conforms('report-index-response', index.body);
+      assert.deepEqual(
+        { url: index.body.reportUrl, sha: index.body.reportSha256, reviewers: index.body.reviewers, general: index.body.generalReviewUrl },
+        { url: view.body.reportUrl, sha: view.body.reportSha256, reviewers: ['scripted-baseline'], general: `https://reports.test/${request.requestId}/general-review.json` });
+      assert.equal(index.body.attestation.reportSha256, view.body.reportSha256, 'the attestation is read from the registry');
+      assert.equal(index.body.attestation.requestHash, request.requestHash);
       const dirs = fs.readdirSync(path.join(t.config.storage.runsRoot, request.requestId));
       assert.deepEqual(dirs, ['0']);
       assert.ok(fs.existsSync(path.join(t.config.storage.runsRoot, request.requestId, '0', 'worker.log')));
@@ -88,6 +96,10 @@ describe('review worker (mock engine, mock chain)', NEEDS_DB, () => {
     const view = await call(api.base, `/api/requests/${failed.requestId}`);
     conforms('request-status-response', view.body);
     assert.ok(view.body.refundTx);
+    const noReport = await call(api.base, `/api/reports/${failed.requestId}`);
+    assert.deepEqual([noReport.status, noReport.body.error.code], [404, 'NOT_FOUND'], 'a refunded request has no report index');
+    const unknown = await call(api.base, `/api/reports/${crypto.randomUUID()}`);
+    assert.equal(unknown.body.error.code, 'REQUEST_NOT_FOUND');
 
     const critical = await startWorkerInProcess({ ...t.env, MOCK_ENGINE_FAIL: 'findings' });
     try {
