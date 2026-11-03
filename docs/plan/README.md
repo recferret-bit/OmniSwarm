@@ -14,6 +14,21 @@ Plan only (2026-11-02, hackathon day D2). Start with [`PRODUCT_WAVES.md`](./PROD
 | [`../spec/DECISIONS.md`](../spec/DECISIONS.md) | Open owner decisions OD-01..OD-16 with recommendations |
 | [`../hackathon/TRACKS.md`](../hackathon/TRACKS.md) | Track rules and fit: 06 security (primary), 07 agents, 13 open |
 
+## Path map (2026-11-03)
+
+The non-engine tracks moved after most wave files were written. Wave files under [`waves/`](./waves/) and the owner guides under [`checks/`](./checks/) are closed records and keep the old paths; read them through this table. The engine (`bin/`, `scripts/`, `docker/`, `native/`, `skills/`, `runtime/`, `eval/`) did not move.
+
+| Old path | New path | Notes |
+|---|---|---|
+| `shared/schemas/` | `packages/schemas/` | Still `@omniswarm/schemas`, lead only. Also holds `canonical-json.mjs` and `nep413.mjs`, shared by both apps |
+| `backend/intake/` | `apps/api/` | Package `@omniswarm/intake` is now `@omniswarm/api` (`npm run dev -w apps/api`) |
+| `frontend/landing/` | `apps/web/` | Package `@omniswarm/landing` is now `@omniswarm/web` (`npm run guard -w apps/web`) |
+| `backend/README.md`, `frontend/README.md` | `apps/README.md` | One README for both apps |
+| `e2e/` | `tests/e2e/` | Same package and runner (`npm run test:e2e`). The `intake/` specs need an explicit `DATABASE_URL` and skip without one |
+| `demos/attack/` | `packages/guard/demo/attack/` | `node packages/guard/demo/attack/run.mjs [--no-guard]` |
+| `demos/dogfood/README.md` | `docs/hackathon/dogfood.md` | |
+| `RULES.md` | `docs/RULES.md` | |
+
 ## How to run it with agents
 
 1. The lead runs W00 alone (one session), lands it after the owner check.

@@ -9,24 +9,24 @@
 
 1. **Every wave ships something that runs.** An engine wave ends with a `./bin/audit` command that shows the new behaviour on a fixture; a service wave ends with an endpoint, page or contract method that a check script or e2e drives.
 2. **Every wave can be tested on its own.** Each wave has a git tag, a fixture or seed, and its own check (`npm run check:wNN`, a `node --test` file, or an e2e spec).
-3. **Waves run in parallel** on six tracks with disjoint owned paths (§4). Cross-track dependencies are **contract-only**: they meet at the JSON Schemas in `shared/schemas/` that W00 lands.
+3. **Waves run in parallel** on six tracks with disjoint owned paths (§4). Cross-track dependencies are **contract-only**: they meet at the JSON Schemas in `packages/schemas/` that W00 lands.
 4. **An issue is at most one agent-day.** `S` ≤ ½ day, `M` ≤ 1 day. One acceptance check per issue, written as "do X → see Y". Anything bigger is split.
 5. **Every wave is built in its own branch and worktree** and reaches `main` only after the owner's check (§7).
-6. **The review boundary does not move.** `scripts/`, `docker/`, `native/` and `skills/` stay the offline review engine. NEAR RPC, wallets, payments, GitHub API calls and the queue live only in `backend/`, `contracts/`, `frontend/` and `infra/`. The intake worker runs `./bin/audit run` as a black box with an argv array and never adds a flag that widens a reviewer's permissions (AGENTS.md "Boundaries that the code enforces").
+6. **The review boundary does not move.** `scripts/`, `docker/`, `native/` and `skills/` stay the offline review engine. NEAR RPC, wallets, payments, GitHub API calls and the queue live only in `apps/`, `contracts/` and `infra/`. The intake worker runs `./bin/audit run` as a black box with an argv array and never adds a flag that widens a reviewer's permissions (AGENTS.md "Boundaries that the code enforces").
 
 ## 2. Layout after W00
 
 | Path | Owner track | What |
 |---|---|---|
 | `bin/`, `scripts/`, `docker/`, `native/`, `skills/`, `runtime/` | Engine (E) | The review engine. New engine modules stay **flat in `scripts/`** with prefixes (`reviewer-*.mjs`, `provider-*.mjs`, `debate-*.mjs`, `orchestrator-*.mjs`, `report-*.mjs`, `bridge-tools-*.mjs`) so the existing `node --test scripts/*.test.mjs` glob keeps finding their tests |
-| `shared/schemas/` | Lead only | JSON Schemas (draft 2020-12) + tiny ESM validators: `reviewer-spec`, `run-config`, `reviewer-report`, `debate-round`, `adjudication`, `general-review`, `job` (intake ↔ engine), `intake-api` DTOs, `attestation` |
-| `backend/intake/` | Intake (B) | Fastify API + pg-boss worker, TypeScript run directly by Node 24 type stripping (no build step), Postgres |
+| `packages/schemas/` | Lead only | JSON Schemas (draft 2020-12) + tiny ESM validators: `reviewer-spec`, `run-config`, `reviewer-report`, `debate-round`, `adjudication`, `general-review`, `job` (intake ↔ engine), `intake-api` DTOs, `attestation` |
+| `apps/api/` | Intake (B) | Fastify API + pg-boss worker, TypeScript run directly by Node 24 type stripping (no build step), Postgres |
 | `contracts/review-registry/` | Chain (C) | Rust `near-sdk` contract: paid requests, refunds, report attestations, guard blocklist |
-| `frontend/landing/` | Front (F) | Vite + React + TS landing and review app, `@hot-labs/near-connect` |
+| `apps/web/` | Front (F) | Vite + React + TS landing and review app, `@hot-labs/near-connect` |
 | `infra/` | Infra (I) | `compose/`, `nginx/`, `systemd/`, `deploy/`, `hosts/` for the remote box |
-| `packages/guard/` | Security (S) | `@omniswarm/guard`: agent-side allow/warn/block wrapper (W13) |
+| `packages/guard/` | Security (S) | `@omniswarm/guard`: agent-side allow/warn/block wrapper (W13), attack demo in `demo/attack/` |
 | `eval/golden/` | Engine (E) | Golden fixture repos with seeded bugs and decoys, and the eval runner (W06) |
-| `e2e/` | each track its own subfolder | Playwright (`e2e/landing/`), API e2e (`e2e/intake/`), engine e2e (`e2e/engine/`) |
+| `tests/e2e/` | each track its own subfolder | Playwright (`tests/e2e/landing/`), API e2e (`tests/e2e/intake/`), engine e2e (`tests/e2e/engine/`) |
 | `tools/` | Lead only | Dev tooling outside the engine: `tools/worktree-env.mjs` (per-worktree ports/DB), `tools/wave.mjs` (`H+`) |
 | `docs/plan/`, `docs/spec/`, `docs/hackathon/` | Lead only (wave files: their wave lead) | Plan, specs, submission pack |
 
@@ -73,7 +73,7 @@ flowchart LR
 **Critical path:** W00 (3.0 units) → W01 (5.5) → W03 (5.5) → W06 (6.5) → W14 (3.0) = **23.5 units** of chained issues; it fits D2 → D14 only at ≥ 2 units per agent per day ([`HACKATHON_CUT.md`](./HACKATHON_CUT.md) §1 has the pace check and calibration). The hosted path W00 (3.0) → W08 (9.0) → W09 (6.0) → D10 gate = 18 units runs beside it. Totals: 306 issues, **H = 191.5 units**, H+ = 19.
 
 **Soft dependencies** (a hook that lights up when the other wave lands, with a stub until then):
-- W07 renders debate and general-review sections from `shared/schemas/` fixtures until W06 lands; W06's e2e re-renders through W07.
+- W07 renders debate and general-review sections from `packages/schemas/` fixtures until W06 lands; W06's e2e re-renders through W07.
 - W03-18 (`./bin/audit demo` without Docker) waits for W02 to land, because it adds a `--demo-host` root check to the bridge W02 owns; the rest of W03 does not.
 - W06 uses W04's budget counters when present; without W04 it caps debate turns by its own round limit.
 - W11 runs on MSW mocks of `intake-api` until W08/W09 land; W11's e2e switches to the real API on the D10 gate.
@@ -92,9 +92,9 @@ flowchart LR
 | **Root scripts** | W00-11 reserves every `check:w00..w14`, `test:*`, `eval:golden` script name and the `packages/*` workspace up front (pointing at a no-op until the wave fills it); `.gitignore` entries (`eval/runs/`) and CI jobs (Rust for W10) are added by the lead in a pre-step |
 | **Bridge hook** | W02-03 adds `beforeCall(ctx, name)` in the bridge dispatcher; W04's budget counter and W06's debate roles plug into it instead of editing the dispatcher |
 | **AGENTS.md / CLAUDE.md** | Lead only. A wave that changes a boundary (W02 `/src` reads, W03 key policy) files a change request; the lead lands it as a pre-step before the wave's check |
-| **Contract-first** | Each wave's `-01` issue lands its schemas or DTOs. The schemas every track shares are written by the lead in W00 (`shared/schemas/`); a wave that needs a schema change files a change request and the lead lands it as a pre-step |
+| **Contract-first** | Each wave's `-01` issue lands its schemas or DTOs. The schemas every track shares are written by the lead in W00 (`packages/schemas/`); a wave that needs a schema change files a change request and the lead lands it as a pre-step |
 | **Mocks for missing waves** | Chain: `ChainPort` mock (Postgres) until W10. LLMs: `scripted:*` reviewers and a scripted orchestrator. Intake API: MSW handlers generated from `intake-api.schema.json`. GitHub: a recorded-fixture `GitHubPort` |
-| **Shared files** | Root `package.json`, `package-lock.json` files, `AGENTS.md`, `CLAUDE.md`, `shared/schemas/**`, `.github/workflows/ci.yml`, `docs/spec/**`: lead only, in a wave pre-step |
+| **Shared files** | Root `package.json`, `package-lock.json` files, `AGENTS.md`, `CLAUDE.md`, `packages/schemas/**`, `.github/workflows/ci.yml`, `docs/spec/**`: lead only, in a wave pre-step |
 | **Both skill copies** | Any wave that changes the reviewer skill edits `skills/security-audit/SKILL.md` and copies it byte-for-byte to `.claude/skills/security-audit/SKILL.md` in the same commit (CLAUDE.md) |
 | **Engine guardrails stay green** | Every engine issue ends with `node scripts/harness.mjs --self-test && npm test`; Docker-marked tests only when the sandbox changed (`npm run test:docker`) |
 

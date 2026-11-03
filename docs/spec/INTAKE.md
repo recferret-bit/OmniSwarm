@@ -31,7 +31,7 @@ The intake service is a **separate layer**. It may call NEAR RPC, GitHub and the
 9. **Publish.** Copy the report folder to `REPORTS_ROOT/<requestId>/`, served read-only by nginx from a **separate origin** `reports.<domain>` (reports quote untrusted target text and run their own script; the app embeds them in `<iframe sandbox="allow-scripts">` and reads the index with a CORS GET allowed only from the app origin), compute `reportSha256 = sha256(findings-and-scores.json ‖ general-review.json)` (canonical), read `code_hash` of `deployed` (if any) via `view_account`, call `attest(request_hash, repo, commit, report_sha256, report_uri, deployed, code_hash, max_severity_confirmed)` with the backend's **function-call key** (scoped to `attest`, `refund`, `mark_running`). Status `done`.
 10. **Refund.** Infra failure (sandbox, provider outage, timeout) or rejection after payment → `refund(request_hash)`; status `refunded`. A completed review is never refunded (OD-07).
 
-## 4. API surface (`shared/schemas/intake-api.schema.json`)
+## 4. API surface (`packages/schemas/intake-api.schema.json`)
 
 | Method | Path | Auth | Body → Response |
 |---|---|---|---|
@@ -85,4 +85,4 @@ Events: NEP-297 `EVENT_JSON:{"standard":"omniswarm","version":"1.0.0","event":�
 - **warn** if the account is a contract with no attestation, its live `code_hash` differs from the attested one (code changed since review), the account is younger than `MIN_AGE_DAYS`, or the attestation is older than `MAX_ATTEST_AGE_DAYS`.
 - **allow** otherwise. Every verdict lists reasons and the signal values (account age from first-seen block via FastNEAR indexer API or RPC, `code_hash` via `view_account`, attestations via `get_attestation_for_account`, populated from the `deployed` field the requester signed).
 
-`@omniswarm/guard` wraps any signer: `guard.wrap(signer, {onWarn: askHuman})` → refuses `block`, calls `onWarn` for `warn`. The demo agent holds only a function-call key, which cannot transfer NEAR, so it pays through a small `demo-payments` contract method `pay_out(receiver, amount)` funded for the demo; a prompt-injected instruction tells it to pay a known-bad address; the guard blocks it and the log is committed under `demos/attack/`.
+`@omniswarm/guard` wraps any signer: `guard.wrap(signer, {onWarn: askHuman})` → refuses `block`, calls `onWarn` for `warn`. The demo agent holds only a function-call key, which cannot transfer NEAR, so it pays through a small `demo-payments` contract method `pay_out(receiver, amount)` funded for the demo; a prompt-injected instruction tells it to pay a known-bad address; the guard blocks it and the log is committed under `packages/guard/demo/attack/`.

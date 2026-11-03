@@ -38,11 +38,11 @@ Use `npm run test:docker` only when the sandbox image or a Docker-marked test is
 
 New engine modules stay flat in `scripts/` with a prefix (`reviewer-`, `provider-`, `debate-`, `orchestrator-`, `report-`, `bridge-tools-`), so `npm test` keeps finding them. `npm test` runs only `scripts/*.test.mjs`.
 
-Per-track gates (see AGENTS.md "Tracks and boundaries"): `npm run test:schemas` (shared contract), `npm run test:intake` (`backend/`), `npm run test:contract` (`contracts/`), `npm run test:landing` and `npm run test:e2e -- landing` (`frontend/`), `npm run check:infra` (`infra/`), `npm run check:all` (everything, empty tracks print "skipped (no package yet)"). The wave check is `npm run check:wNN`.
+Per-track gates (see AGENTS.md "Tracks and boundaries"): `npm run test:schemas` (shared contract), `npm run test:intake` (`apps/api/`), `npm run test:contract` (`contracts/`), `npm run test:landing` and `npm run test:e2e -- landing` (`apps/web/`), `npm run check:infra` (`infra/`), `npm run check:all` (everything, empty tracks print "skipped (no package yet)"). The wave check is `npm run check:wNN`.
 
 Our own `contracts/` is built and tested with `cargo test` on the developer host. The "no `cargo test` for `near-sdk`" rule in this file and in AGENTS.md is about audited targets in the sandbox.
 
-Edit `shared/schemas/**` only as the lead, in a wave pre-step.
+Edit `packages/schemas/**` only as the lead, in a wave pre-step.
 
 Keep stack behavior consistent across `stack-detect.mjs`, `harness.mjs`, `audit-plans.mjs`, `review-workflow.mjs`, the HTML coverage row, and both skill copies. A NEAR `near-sdk` package must remain absent from the offline `cargo test` catalog. A Solana `cdylib` must still compile with platform-tools. Absent ecosystems must not receive checks.
 
