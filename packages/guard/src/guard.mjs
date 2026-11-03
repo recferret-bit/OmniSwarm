@@ -16,6 +16,7 @@ import { collectSignals } from './signals.mjs';
 /** @typedef {import('../types.js').TxIntent} TxIntent */
 /** @typedef {import('../types.js').ChainAttestation} ChainAttestation */
 /** @typedef {import('../types.js').ChainReader} ChainReader */
+/** @typedef {import('../types.js').AccountAgeSource} AccountAgeSource */
 /** @typedef {import('../types.js').Policy} Policy */
 
 /** Signer methods the wrapper intercepts, and how each one's params become intents. */
@@ -61,11 +62,12 @@ export function assertVerdict(v) {
  * @param {ChainReader} reader
  * @param {Policy} policy
  * @param {() => number} now
+ * @param {AccountAgeSource} [accountAge]
  * @returns {(accountId: string) => Promise<Verdict>}
  */
-function readerSource(reader, policy, now) {
+function readerSource(reader, policy, now, accountAge) {
   return async (accountId) => {
-    const { signals, attestation } = await collectSignals(reader, accountId, now);
+    const { signals, attestation } = await collectSignals(reader, accountId, now, accountAge);
     const { verdict, reasons } = evaluate(signals, attestation ? attestation.max_severity : null, policy);
     return attestation ? { verdict, reasons, signals, attestation: toSchemaAttestation(attestation) } : { verdict, reasons, signals };
   };
@@ -87,8 +89,10 @@ function unavailableVerdict(accountId, error) {
  * @returns {(accountId: string) => Promise<Verdict>}
  */
 function pickSource(options, policy) {
+  const accountAge = options?.accountAge;
+  if (accountAge !== undefined && typeof accountAge?.getCreatedAtMs !== 'function') throw new TypeError('accountAge must have getCreatedAtMs');
   if (options?.source) return options.source;
-  if (options?.reader) return readerSource(options.reader, policy, options.now ?? Date.now);
+  if (options?.reader) return readerSource(options.reader, policy, options.now ?? Date.now, accountAge);
   throw new TypeError('createGuard needs a reader or a source');
 }
 

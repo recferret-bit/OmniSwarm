@@ -40,9 +40,10 @@
     "check:w12": "npm run check:infra",
     "stack:local": "bash infra/compose/local.sh up",
     "stack:local:down": "bash infra/compose/local.sh down",
-    "check:w13": "npm test --workspace packages/guard && node packages/guard/demo/attack/run.mjs && node packages/guard/demo/attack/run.mjs --no-guard",
+    "check:w13": "npm test --workspace packages/guard && npm run typecheck --workspace packages/guard && node packages/guard/demo/attack/run.mjs && node packages/guard/demo/attack/run.mjs --no-guard",
     "check:w14": "bash tools/screener-check.sh && npm run check:all",
-    "readme:eval": "node tools/readme-eval-table.mjs"
+    "readme:eval": "node tools/readme-eval-table.mjs",
+    "test:contract:sandbox": "bash contracts/review-registry/scripts/test-sandbox.sh"
   },
   "keywords": [
     "solana",

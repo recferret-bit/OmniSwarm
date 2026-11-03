@@ -10,5 +10,5 @@
     "skipLibCheck": true,
     "types": []
   },
-  "include": ["index.mjs", "index.d.mts", "types.d.ts", "recorded-reader.d.mts", "src", "demo/attack/agent.mjs", "demo/attack/log.mjs"]
+  "include": ["index.mjs", "index.d.mts", "types.d.ts", "recorded-reader.d.mts", "account-age.d.mts", "src", "demo/attack/agent.mjs", "demo/attack/log.mjs"]
 }
