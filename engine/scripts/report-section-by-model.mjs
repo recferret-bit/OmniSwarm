@@ -1,7 +1,7 @@
 // findings-by-model.html keyed by reviewer id, from reviewers/index.json. Counts are each reviewer's own
 // submitted findings by severity (critical counts as high). Without an index the pre-v2 page is kept.
-import { esc } from '../report-cards.mjs';
-import { reviewerBadge, severityOf } from './reviewer-badge.mjs';
+import { esc } from './report-cards.mjs';
+import { reviewerBadge, severityOf } from './report-section-reviewer-badge.mjs';
 
 export const section = {
   id: 'by-model',

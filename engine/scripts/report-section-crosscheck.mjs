@@ -1,8 +1,8 @@
 // Rail 05: one row per debate cluster (AGREED clusters show 0 rounds), the judge and whether it was the
 // alternate, verified and discarded citations, conformity-suspect turns, and the clusters the cap left out.
-import { esc } from '../report-cards.mjs';
-import { FINAL, statusPill } from './status-legend.mjs';
-import { citationState, turnsOf } from './v2-data.mjs';
+import { esc } from './report-cards.mjs';
+import { FINAL, statusPill } from './report-section-status-legend.mjs';
+import { citationState, turnsOf } from './report-section-v2-data.mjs';
 
 const statusOf = (data, cluster) => (cluster.status === 'AGREED' || cluster.status === 'CAPPED' ? cluster.status : data.byCluster.get(cluster.id)?.finalStatus || cluster.status || '');
 const roundsOf = (cluster, turns) => (cluster.status === 'AGREED' || cluster.rounds === 0 ? 0 : Number.isFinite(cluster.rounds) ? cluster.rounds : turns.reduce((n, t) => Math.max(n, t.round || 0), 0));

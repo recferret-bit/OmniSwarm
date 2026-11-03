@@ -8,8 +8,8 @@ import { adapterOf, readReportJson, writeReportFile } from './report-contract.mj
 import { validate } from '../../packages/schemas/index.mjs';
 import { readJsonOr, writeJson, writeText } from './report-util-files.mjs';
 import { reportShell } from './report-cards-shell.mjs';
-import { loadV2 } from './report-sections/registry.mjs';
-import { FAMILY_ORDER } from './report-sections/v2-data.mjs';
+import { loadV2 } from './report-section-registry.mjs';
+import { FAMILY_ORDER } from './report-section-v2-data.mjs';
 import { indexPageHtml, reviewerPageHtml, usageLine } from './reviewer-reports-pages.mjs';
 import { loadUsage } from './reviewer-reports-usage.mjs';
 

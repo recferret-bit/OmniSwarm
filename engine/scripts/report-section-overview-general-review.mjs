@@ -1,8 +1,8 @@
 // Overview hero: risk posture, three summary lines and the top five findings, linked to their cards by the
 // debate cluster id the card carries (joined by claim id in verify-and-adjudicate-debate.mjs).
-import { esc } from '../report-cards.mjs';
-import { DISCLAIMER } from '../debate-general-review.mjs';
-import { statusPill } from './status-legend.mjs';
+import { esc } from './report-cards.mjs';
+import { DISCLAIMER } from './debate-general-review.mjs';
+import { statusPill } from './report-section-status-legend.mjs';
 
 export const section = {
   id: 'overview-general-review',

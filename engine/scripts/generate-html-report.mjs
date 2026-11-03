@@ -19,7 +19,7 @@ import { deriveReviewerReports } from './reviewer-reports.mjs';
 import { readReportJson, writeReportFile } from './report-contract.mjs';
 import { esc } from './report-cards.mjs';
 import { reportShell } from './report-cards-shell.mjs';
-import { loadV2 } from './report-sections/registry.mjs';
+import { loadV2 } from './report-section-registry.mjs';
 import { loadContext } from './generate-html-report-context.mjs';
 import { SEVERITY_LEVELS, loadModelRows, modelChart, modelTable } from './generate-html-report-models.mjs';
 import { evidencePanels, isolationDetails, validationDetails } from './generate-html-report-evidence.mjs';
