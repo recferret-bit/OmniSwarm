@@ -65,6 +65,8 @@ assert_log_format() {
   done
   case "$logfmt" in *'$omni_log_addr'*) ;; *) check_fail 'nginx log_format does not use the truncated $omni_log_addr' ;; esac
   grep -q 'access_log /dev/stdout omniswarm;' "$INFRA/nginx/nginx.conf" || check_fail "nginx access_log does not use log_format omniswarm"
+  grep -q 'proxy_set_header X-Request-ID $request_id;' "$INFRA/nginx/snippets/proxy.conf" \
+    || check_fail "proxy.conf must overwrite X-Request-ID (the API logs it as the request id)"
   if grep -rhE '^[[:space:]]*access_log' "$INFRA/nginx/templates" "$INFRA/nginx/snippets" | grep -vqE 'access_log (off|/dev/stdout omniswarm);'; then
     check_fail "a server or location logs with another format"
   fi
