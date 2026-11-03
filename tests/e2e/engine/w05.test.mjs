@@ -29,7 +29,9 @@ test('demo steps derive one folder per reviewer and keep the run complete', () =
   const html = fs.readFileSync(path.join(dir, 'reviewers', 'key-zai-glm-5-3', 'report.html'), 'utf8');
   assert.match(html, /Approach 2 · API key · vendor zai · model glm-5\.3 · 2 passes · 63 calls · \$0\.41/);
   assert.match(html, /Content-Security-Policy/);
-  assert.match(html, /nonce="w05-reviewer-page"/);
+  const nonce = html.match(/script-src &#39;nonce-([A-Za-z0-9+/=]{32,})&#39;/)[1];
+  assert.match(html, new RegExp(`<script nonce="${nonce.replace(/[+/=]/g, '\\$&')}">`));
+  assert.match(html, /id="search-box"/);
   const index = fs.readFileSync(path.join(dir, 'reviewers.html'), 'utf8');
   for (const heading of ['Local subscriptions', 'API keys', 'OpenRouter', 'Demo']) assert.match(index, new RegExp(heading));
   const report = JSON.parse(fs.readFileSync(path.join(dir, 'reviewers', 'key-zai-glm-5-3', 'report.json'), 'utf8'));

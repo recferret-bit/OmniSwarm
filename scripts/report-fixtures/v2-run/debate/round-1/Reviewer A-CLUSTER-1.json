@@ -3,7 +3,7 @@
   "clusterId": "CLUSTER-1",
   "role": "devil",
   "anonId": "Reviewer A",
-  "verdict": "upheld",
+  "verdict": "refuted",
   "citations": [
     {
       "file": "src/lib.rs",
@@ -12,7 +12,7 @@
       "quote": "saturating_sub"
     }
   ],
-  "argument": "The withdraw body is the bug.",
+  "argument": "The guard sits in the caller.",
   "devilAdvocate": true,
   "conformitySuspect": false
 }

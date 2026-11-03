@@ -1,0 +1,10 @@
+{
+  "k": 1,
+  "role": "discover",
+  "calls": 4,
+  "tokensIn": 100,
+  "tokensOut": 40,
+  "stop": "submitted",
+  "cost": 0,
+  "costSource": "none"
+}

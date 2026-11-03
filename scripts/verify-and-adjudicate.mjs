@@ -174,7 +174,7 @@ export async function adjudicate(reportDir) {
   return { scoredFindings, health, verifiedSafe: allVerifiedSafe, exitCode: health.state === 'incomplete' ? 2 : 0, auditorCount: reports.length };
 }
 
-function printSummary(reportDir, { scoredFindings, health, auditorCount }) {
+export function printSummary(reportDir, { scoredFindings, health, auditorCount }) {
   const dedup = health.dedup;
   console.log(`\n======================================================`);
   console.log(` Output validation: ${health.state}; ${scoredFindings.length} model-claim clusters`);

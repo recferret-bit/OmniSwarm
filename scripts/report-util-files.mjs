@@ -29,5 +29,5 @@ export function newestReportDir(marker, root = path.join(path.dirname(new URL(im
 export function listJsonFiles(root, rel) {
   const dir = path.join(root, rel);
   if (!fs.existsSync(dir)) return [];
-  return fs.readdirSync(dir).filter((name) => name.endsWith('.json')).sort().map((name) => readReportJson(root, `${rel}/${name}`));
+  return fs.readdirSync(dir).filter((name) => name.endsWith('.json')).sort().map((name) => readJsonOr(root, `${rel}/${name}`, null)).filter(Boolean);
 }

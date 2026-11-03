@@ -22,6 +22,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { readReportText, writeReportFile } from './report-contract.mjs';
+import { newestReportDir as newestWith } from './report-util-files.mjs';
 
 const scriptsDir = path.dirname(fileURLToPath(import.meta.url));
 export const PAGES = [['report.html', 'report.pdf'], ['findings-by-model.html', 'findings-by-model.pdf'], ['reviewers.html', 'reviewers.pdf']];
@@ -34,12 +35,8 @@ const BROWSERS = [
 ];
 const BROWSER_COMMANDS = ['google-chrome', 'google-chrome-stable', 'chromium', 'chromium-browser', 'microsoft-edge'];
 
-export function newestReportDir(root = path.join(scriptsDir, '..', 'reports')) {
-  if (!fs.existsSync(root)) return null;
-  return fs.readdirSync(root, { withFileTypes: true })
-    .filter((d) => d.isDirectory() && fs.existsSync(path.join(root, d.name, 'report.html')))
-    .map((d) => ({ dir: path.join(root, d.name), mtime: fs.statSync(path.join(root, d.name)).mtimeMs }))
-    .sort((a, b) => b.mtime - a.mtime)[0]?.dir || null;
+export function newestReportDir(root) {
+  return newestWith('report.html', root);
 }
 
 // Opens every <details> so collapsed findings and evidence panels are printed in full.
