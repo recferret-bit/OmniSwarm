@@ -1,7 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import crypto from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { classifyAuditFailure, FAILURE_MESSAGES } from './audit-process.mjs';
 import { verificationHealth } from './verification-health.mjs';
@@ -12,10 +11,12 @@ import { validate } from '../packages/schemas/index.mjs';
 import { hostLogRel } from './sandbox-host-paths.mjs';
 import { expectedJobNames } from './reviewer-plan-assign.mjs';
 import { sha256Json } from './hash-util.mjs';
+import { MAX_REPORT_BYTES as MAX_BYTES, readReportJson, readReportText, writeReportFile } from './report-files.mjs';
+
+export { readReportJson, readReportText, writeReportFile };
 
 const LEVELS = new Set(['critical', 'high', 'medium', 'low', 'info']);
 const CONFIDENCE = new Set(['confirmed', 'probable']);
-const MAX_BYTES = 4 * 1024 * 1024;
 const SLUGS = ['auth', 'input', 'logic', 'config', 'deps', 'client'];
 // "<reviewer-id>-sN-<slug>"; the reviewer id may contain hyphens. Legacy reports use the adapter name as id.
 const NAME = new RegExp(`^(${REVIEWER_ID_PATTERN})-(s[1-6])-(${SLUGS.join('|')})$`);
@@ -25,35 +26,6 @@ export function adapterOf(name) {
   const match = NAME.exec(String(name));
   return match && SLUGS[Number(match[2].slice(1)) - 1] === match[3] ? match[1] : null;
 }
-export function readReportJson(root, rel, max = MAX_BYTES) {
-  return JSON.parse(readReportText(root, rel, max));
-}
-
-// Atomic: the bytes go to a private temp file in the same directory, then rename over the target (R-13).
-// A crash leaves the old file or the new file, never a truncated one. An existing target must be a
-// singly linked regular file; a symlink or hard link there is refused and never followed.
-export function writeReportFile(root, rel, value) {
-  const bytes = Buffer.from(value);
-  if (bytes.length > 64 * 1024 * 1024) throw new Error('derived report exceeds byte limit');
-  const target = reportPath(root, rel);
-  let existing = null;
-  try { existing = fs.lstatSync(target); } catch (error) { if (error.code !== 'ENOENT') throw error; }
-  if (existing && (!existing.isFile() || existing.nlink !== 1)) throw new Error('report output must be a singly linked regular file');
-  const temp = path.join(path.dirname(target), `.${path.basename(target)}.${process.pid}.${crypto.randomBytes(4).toString('hex')}.tmp`);
-  const fd = fs.openSync(temp, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_NOFOLLOW, 0o600);
-  try {
-    fs.writeFileSync(fd, bytes);
-    fs.fsyncSync(fd);
-  } catch (error) {
-    fs.closeSync(fd);
-    fs.rmSync(temp, { force: true });
-    throw error;
-  }
-  fs.closeSync(fd);
-  try { fs.renameSync(temp, target); }
-  catch (error) { fs.rmSync(temp, { force: true }); throw error; }
-}
-
 // Vendor of a job name. Reviewer identity is an assertion, not attestation of the served model/provider.
 // Pass the report's reviewers (reviewersOfMeta(meta)); without them only the legacy adapter names resolve.
 export function providerOf(name, reviewers) {
@@ -61,35 +33,6 @@ export function providerOf(name, reviewers) {
   if (!id) return null;
   if (reviewers) return vendorOfJob(name, reviewers);
   return Object.hasOwn(CLI_DEFAULT_MODELS, id) ? reviewersOfMeta({ agents: [id] })[0].vendor : null;
-}
-
-function reportPath(root, rel) {
-  const base = fs.realpathSync(root);
-  const file = path.resolve(base, rel);
-  if (!file.startsWith(`${base}${path.sep}`)) throw new Error('report path outside root');
-  const parent = fs.realpathSync(path.dirname(file));
-  if (parent !== base && !parent.startsWith(`${base}${path.sep}`)) throw new Error('report parent outside root');
-  return file;
-}
-
-export function readReportText(root, rel, max = MAX_BYTES) {
-  const fd = fs.openSync(reportPath(root, rel), fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK);
-  try {
-    const stat = fs.fstatSync(fd);
-    if (!stat.isFile() || stat.nlink !== 1 || stat.size > max) throw new Error('report must be a bounded, singly linked regular file');
-    const chunks = [];
-    const buf = Buffer.alloc(64 * 1024);
-    let total = 0;
-    while (total <= max) {
-      const n = fs.readSync(fd, buf, 0, Math.min(buf.length, max + 1 - total), null);
-      if (!n) return new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(Buffer.concat(chunks));
-      total += n;
-      chunks.push(Buffer.from(buf.subarray(0, n)));
-    }
-    throw new Error('report grew beyond the byte limit');
-  } finally {
-    fs.closeSync(fd);
-  }
 }
 
 const record = (x) => x && typeof x === 'object' && !Array.isArray(x);
@@ -228,32 +171,35 @@ export function expectedAuditors(meta) {
   return expectedJobNames(meta, meta.agents.map((id) => ({ id })));
 }
 
-export function loadAuditors(root) {
-  const errors = [];
-  let meta = {};
+function readMeta(root, errors) {
   try {
-    meta = readReportJson(root, 'meta.json');
+    const meta = readReportJson(root, 'meta.json');
     if (!meta || typeof meta !== 'object' || Array.isArray(meta)) throw new Error('invalid metadata');
+    return meta;
   } catch {
-    meta = {};
     errors.push('Missing or invalid meta.json; expected reviewers are unknown.');
+    return {};
   }
-  normalizeMeta(meta, errors);
-  let expected = expectedAuditors({ ...meta, auditors: undefined });
+}
+
+function expectedInventory(meta, errors) {
+  const expected = expectedAuditors({ ...meta, auditors: undefined });
   if (meta.auditors != null && (!Array.isArray(meta.auditors) || !meta.auditors.every((n) => typeof n === 'string') || JSON.stringify([...meta.auditors].sort()) !== JSON.stringify([...expected].sort()))) {
     errors.push('Declared auditor inventory does not match requested scope.');
   }
   if (!expected.length || !expected.every((n) => typeof n === 'string' && adapterOf(n) && (meta.agents.length === 0 || meta.agents.includes(adapterOf(n)))) || new Set(expected).size !== expected.length) {
     errors.push('Missing or invalid expected auditor inventory.');
-    expected = [];
+    return [];
   }
-  const reports = [];
+  return expected;
+}
+
+// One-line explanation of a failed job or cross-check from recorded structured reasons (never log text).
+function failureExplainer(root, meta) {
   let jobs = [];
-  try {
-    const manifest = readReportJson(root, 'workers.json');
-    if (Array.isArray(manifest?.jobs)) jobs = manifest.jobs;
-  } catch { /* older reports may not include process diagnostics */ }
-  const failureDetail = (name, crosscheck = false) => {
+  try { const manifest = readReportJson(root, 'workers.json'); if (Array.isArray(manifest?.jobs)) jobs = manifest.jobs; }
+  catch { /* older reports may not include process diagnostics */ }
+  return (name, crosscheck = false) => {
     const code = crosscheck ? meta.crosscheckExits?.[name] : meta.workerExits?.[name];
     const rel = hostLogRel(crosscheck ? `crosscheck-${name}` : name);
     let hasLog = false;
@@ -263,64 +209,90 @@ export function loadAuditors(root) {
     const message = Object.hasOwn(FAILURE_MESSAGES, recorded) ? FAILURE_MESSAGES[recorded] : classifyAuditFailure({ code }).message;
     return `${message}${hasLog ? ` Log: ${rel}.` : ''}`;
   };
+}
+
+function runRecordErrors(root, meta) {
+  const errors = [];
   try {
     const sandbox = readReportText(root, 'harness/sandbox.md');
     if (!/^# Sandbox/m.test(sandbox) || !/^\| .+ \| (ran|failed|impossible) \| .+ \|$/m.test(sandbox)) throw new Error('invalid coverage record');
-  } catch {
-    errors.push('Sandbox coverage record is missing or invalid; coverage is unknown.');
-  }
+  } catch { errors.push('Sandbox coverage record is missing or invalid; coverage is unknown.'); }
   if (meta.sandboxHardening === 1) {
     const problem = sourceReadDigestProblem(root);
     if (problem) errors.push(`SOURCE_DIGEST_MISMATCH: ${problem}`);
   }
-  errors.push(...budgetHealthErrors(root, meta));
+  return [...errors, ...budgetHealthErrors(root, meta)];
+}
+
+function loadAuditorReports(root, meta, expected, explain, errors) {
+  const reports = [];
   for (const name of expected) {
     try {
       const data = validateAuditor(readReportJson(root, `auditors/${name}.json`), name);
       verifyCommittedOutput(root, meta, name, data);
       // Require both declared outputs, without interpreting markdown as evidence.
-      const md = path.join(root, 'auditors', `${name}.md`);
-      const stat = fs.lstatSync(md);
+      const stat = fs.lstatSync(path.join(root, 'auditors', `${name}.md`));
       if (!stat.isFile() || stat.size === 0 || stat.size > MAX_BYTES) throw new Error('missing or invalid markdown output');
-      if (meta.workerExits?.[name] !== 0) errors.push(`${name}: worker exit is missing or nonzero. ${failureDetail(name)} The committed report passed validation, so its findings are kept; rerun with --resume-from <this report> to get a clean turn without repeating the audit.`);
+      if (meta.workerExits?.[name] !== 0) errors.push(`${name}: worker exit is missing or nonzero. ${explain(name)} The committed report passed validation, so its findings are kept; rerun with --resume-from <this report> to get a clean turn without repeating the audit.`);
       reports.push({ name, data });
     } catch (err) {
-      errors.push(`${name}: missing or invalid outputs (${err.code || 'contract validation failed'}). ${failureDetail(name)}`);
+      errors.push(`${name}: missing or invalid outputs (${err.code || 'contract validation failed'}). ${explain(name)}`);
     }
   }
   try {
     const extra = fs.readdirSync(path.join(root, 'auditors')).filter((n) => n.endsWith('.json') && !n.startsWith('crosscheck-') && !expected.includes(n.slice(0, -5)));
     if (extra.length) errors.push(`unexpected auditor ${extra.map((name) => name.replace(/\.json$/, '')).join(', ')}`);
   } catch { errors.push('Auditor directory is missing.'); }
-  if (Array.isArray(meta.stageFailures) && meta.stageFailures.length) errors.push('One or more review stages failed.');
-  if (fs.existsSync(path.join(root, 'reviewers'))) {
-    const walk = (dir) => {
-      for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
-        const full = path.join(dir, ent.name);
-        if (ent.isDirectory()) walk(full);
-        else if (ent.name === 'report.json') {
-          const rel = path.relative(root, full);
-          const check = validate('reviewer-report', readReportJson(root, rel));
-          if (!check.ok) errors.push(`${rel}: ${check.errors[0]}`);
-        }
+  return reports;
+}
+
+// reviewers/**/report.json (W05) must match the reviewer-report schema when present.
+function reviewerReportErrors(root) {
+  if (!fs.existsSync(path.join(root, 'reviewers'))) return [];
+  const errors = [];
+  const walk = (dir) => {
+    for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, ent.name);
+      if (ent.isDirectory()) walk(full);
+      else if (ent.name === 'report.json') {
+        const rel = path.relative(root, full);
+        const check = validate('reviewer-report', readReportJson(root, rel));
+        if (!check.ok) errors.push(`${rel}: ${check.errors[0]}`);
       }
-    };
-    try { walk(path.join(root, 'reviewers')); } catch (error) { errors.push(`reviewers/: ${error.message}`); }
-  }
+    }
+  };
+  try { walk(path.join(root, 'reviewers')); } catch (error) { errors.push(`reviewers/: ${error.message}`); }
+  return errors;
+}
+
+// Every reviewer with peer claims owes a validated cross-check; a cross-check with nothing assigned is unexpected.
+function crosscheckAssignments(root, meta, reports, explain, errors) {
   const assignments = {};
   for (const adapter of meta.agents) {
     const ids = reports.flatMap((r) => adapterOf(r.name) === adapter ? [] : r.data.slice(0, -1).map((_, i) => `${r.name}#${i}`));
     if (!ids.length) continue;
     assignments[adapter] = ids;
-    if (meta.crosscheckExits?.[adapter] !== 0) errors.push(`${adapter}: missing or failed cross-check exit. ${failureDetail(adapter, true)}`);
-    try {
-      const data = readReportJson(root, `auditors/crosscheck-${adapter}.json`);
-      verifyCommittedOutput(root, meta, `crosscheck-${adapter}`, data);
-    } catch { errors.push(`${adapter}: expected cross-check output is missing or invalid.`); }
+    if (meta.crosscheckExits?.[adapter] !== 0) errors.push(`${adapter}: missing or failed cross-check exit. ${explain(adapter, true)}`);
+    try { verifyCommittedOutput(root, meta, `crosscheck-${adapter}`, readReportJson(root, `auditors/crosscheck-${adapter}.json`)); }
+    catch { errors.push(`${adapter}: expected cross-check output is missing or invalid.`); }
   }
   for (const adapter of Object.keys(record(meta.crosscheckExits) ? meta.crosscheckExits : {})) {
     if (!assignments[adapter]) errors.push('Unexpected cross-check worker was excluded.');
   }
+  return assignments;
+}
+
+export function loadAuditors(root) {
+  const errors = [];
+  const meta = readMeta(root, errors);
+  normalizeMeta(meta, errors);
+  const expected = expectedInventory(meta, errors);
+  const explain = failureExplainer(root, meta);
+  errors.push(...runRecordErrors(root, meta));
+  const reports = loadAuditorReports(root, meta, expected, explain, errors);
+  if (Array.isArray(meta.stageFailures) && meta.stageFailures.length) errors.push('One or more review stages failed.');
+  errors.push(...reviewerReportErrors(root));
+  const assignments = crosscheckAssignments(root, meta, reports, explain, errors);
   const verification = meta.workflow === REVIEW_WORKFLOW ? verificationHealth(root, rel => readReportJson(root, rel, 40 * 1024 * 1024)) : null;
   const reviewState = errors.length ? 'incomplete' : 'validated_outputs';
   if (verification) errors.push(...verification.gaps);
