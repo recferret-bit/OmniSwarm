@@ -49,11 +49,12 @@ export function removeTree(dir: string): void {
   fs.rmSync(dir, { recursive: true, force: true });
 }
 
-export function readPublished(reportsRoot: string, requestId: string): Published | null {
+export function readPublished(reportsRoot: string, requestId: string): (Published & { files: string[] }) | null {
   const dir = path.join(reportsRoot, requestId);
   try {
-    const manifest = JSON.parse(fs.readFileSync(path.join(dir, 'published.json'), 'utf8')) as { reportSha256?: string };
-    return manifest.reportSha256 ? { dir, reportSha256: manifest.reportSha256, created: false } : null;
+    const manifest = JSON.parse(fs.readFileSync(path.join(dir, 'published.json'), 'utf8')) as { reportSha256?: string; files?: unknown };
+    const files = Array.isArray(manifest.files) ? manifest.files.filter((file): file is string => typeof file === 'string') : [];
+    return manifest.reportSha256 ? { dir, reportSha256: manifest.reportSha256, created: false, files } : null;
   } catch {
     return null;
   }

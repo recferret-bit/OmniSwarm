@@ -77,6 +77,20 @@ export const adminGuardReportListResponse = z.strictObject({
 });
 export const adminGuardDecisionResponse = z.strictObject({ status: guardReportStatus, reportTx: z.string().min(1).nullable() });
 
+const severity = z.enum(['critical', 'high', 'medium', 'low', 'info', 'none']);
+
+/** packages/schemas/attestation.schema.json */
+export const attestation = z.strictObject({
+  requestHash: sha256Hex, reportSha256: sha256Hex, reportUri: https.max(2000), deployed: accountId.nullable().optional(),
+  codeHash: z.string().min(1).max(128).nullable().optional(), maxSeverity: severity, repo: repo.optional(), commit: commitSha.optional(),
+  bindingConfirmed: z.boolean().optional(), blockHeight: z.int().min(0).optional(), blockTimestampMs: z.int().min(0).optional(),
+});
+
+export const reportIndexResponse = z.strictObject({
+  requestId: uuid, reportUrl: https, reportSha256: sha256Hex, reviewers: z.array(z.string()).optional(), generalReviewUrl: https.optional(),
+  attestation: attestation.optional(),
+});
+
 export const ledgerResponse = z.strictObject({
   entries: z.array(z.strictObject({
     requestId: uuid, repo, status, priceYocto: yocto, paidYocto: yocto, modelCostUsd: z.number().min(0), reviewers: z.int().min(0),
