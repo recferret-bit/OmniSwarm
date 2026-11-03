@@ -1,14 +1,15 @@
-import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { readReportJson, writeReportFile } from './report-contract.mjs';
+import { sha256Hex } from './hash-util.mjs';
 import { SessionError } from './agent-rpc.mjs';
 import { isReviewerId, validModelId } from './reviewer-registry.mjs';
 
 export { validModelId };
 
-export const digest = value => crypto.createHash('sha256').update(typeof value === 'string' ? value : JSON.stringify(value)).digest('hex');
+// A string is hashed as is; anything else as its JSON text (assignment and source digests).
+export const digest = value => sha256Hex(typeof value === 'string' ? value : JSON.stringify(value));
 
 export function openSessionStore(directory, identity) {
   if (!identity || !isReviewerId(identity.agent) || !/^[a-f0-9]{64}$/.test(identity.sourceDigest) || !/^[a-f0-9]{64}$/.test(identity.assignmentDigest) || !validModelId(identity.model)) throw new SessionError('session_identity_rejected');
@@ -28,8 +29,7 @@ export function openSessionStore(directory, identity) {
     state = { ...state, ...details, phase, updatedAt: new Date().toISOString(), sequence: state.sequence + 1 };
     const { event, activity } = details;
     state.events = [...state.events, { sequence: state.sequence, at: state.updatedAt, phase, ...(event ? { event } : {}), ...(activity ? { activity } : {}) }].slice(-200);
-    writeReportFile(directory, 'state.next.json', JSON.stringify(state, null, 2) + '\n');
-    fs.renameSync(path.join(directory, 'state.next.json'), path.join(directory, 'state.json'));
+    writeReportFile(directory, 'state.json', JSON.stringify(state, null, 2) + '\n');
     return state;
   };
   return { directory, workspace, get state() { return state; }, save };

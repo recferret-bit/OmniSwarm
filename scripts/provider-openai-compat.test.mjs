@@ -26,6 +26,23 @@ function scriptedFetch(steps) {
 const toolCall = (id, name, args) => ({ id, type: 'function', function: { name, arguments: JSON.stringify(args) } });
 const message = (model, calls) => ({ model, choices: [{ message: { role: 'assistant', content: null, tool_calls: calls } }], usage: { prompt_tokens: 3, completion_tokens: 2 } });
 
+test('the loop transcript records each message once, not the whole conversation every turn', async (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'loop-transcript-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const transcriptPath = path.join(dir, 'loop-transcript.jsonl');
+  const { fetch } = scriptedFetch([
+    { body: message('glm-5.3', [toolCall('a', 'read_file', { path: 'src/lib.rs' })]) },
+    { body: message('glm-5.3', [toolCall('b', 'search_code', { pattern: 'owner' })]) },
+    { body: message('glm-5.3', [toolCall('c', 'submit_audit_report', { findings: [] })]) },
+  ]);
+  const result = await runToolLoop({ baseUrl: 'https://example.invalid/v1', model: 'glm-5.3', callTool: async (name) => `${name} text`, brief: 'Review S1', fetchImpl: fetch, transcriptPath });
+  assert.equal(result.stop, 'submitted');
+  const rows = fs.readFileSync(transcriptPath, 'utf8').trim().split('\n').map((line) => JSON.parse(line));
+  assert.deepEqual(rows.map((row) => row.request.messagesFrom), [0, 1, 3]);
+  assert.deepEqual(rows.map((row) => row.request.messages.length), [1, 2, 2], 'only the messages added since the previous turn');
+  assert.equal(rows.flatMap((row) => row.request.messages).filter((m) => m.role === 'user').length, 1);
+});
+
 test('a 3-turn script executes each tool call and stops on submit', async () => {
   const seen = [];
   const { fetch, calls } = scriptedFetch([
