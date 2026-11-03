@@ -31,7 +31,7 @@ OPERATOR_ALLOWANCE="${OPERATOR_ALLOWANCE:-1 NEAR}"
 MANIFEST="contracts/review-registry/Cargo.toml"
 WASM="${WASM:-contracts/review-registry/target/near/review_registry.wasm}"
 # Must equal review_registry::OPERATOR_METHODS (a unit test compares them).
-OPERATOR_METHODS="mark_running, attest, refund"
+OPERATOR_METHODS="mark_running, attest, refund, report_address"
 
 for value in "$OWNER" "$CONTRACT" "$OPERATOR" "$TREASURY"; do
   if ! [[ "$value" =~ ^[a-z0-9._-]{2,64}$ ]]; then
@@ -78,6 +78,8 @@ run near account create-account fund-myself "$OPERATOR" '1 NEAR' autogenerate-ne
 run near contract deploy "$CONTRACT" use-file "$WASM" with-init-call new json-args "$init_args" prepaid-gas '30 Tgas' attached-deposit '0 NEAR' "${network[@]}" sign-with-keychain send
 # 5. The function-call key on the operator, limited to the registry and the operator methods.
 #    Saved to ~/.near-credentials/testnet/$OPERATOR/ for the owner to move into the host env file.
+#    A key's method list cannot be edited: when OPERATOR_METHODS changes, add a new key with this
+#    command and delete the old one (`near account delete-keys $OPERATOR`).
 run near account add-key "$OPERATOR" grant-function-call-access --allowance "$OPERATOR_ALLOWANCE" --contract-account-id "$CONTRACT" --function-names "$OPERATOR_METHODS" autogenerate-new-keypair save-to-legacy-keychain "${network[@]}" sign-with-keychain send
 # 6. Read back the price.
 run near contract call-function as-read-only "$CONTRACT" get_price json-args '{}' "${network[@]}" now

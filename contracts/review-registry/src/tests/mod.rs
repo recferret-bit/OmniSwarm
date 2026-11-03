@@ -4,6 +4,7 @@ mod admin;
 mod deploy_script;
 mod events;
 mod money;
+mod reports;
 mod review;
 mod validation;
 mod views;

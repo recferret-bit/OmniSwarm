@@ -4,10 +4,10 @@ use near_sdk::json_types::U128;
 use near_sdk::serde::Serialize;
 use near_sdk::{env, serde_json, AccountId};
 
-use crate::Status;
+use crate::{Report, Status};
 
 pub const STANDARD: &str = "omniswarm";
-pub const VERSION: &str = "1.1.0";
+pub const VERSION: &str = "1.2.0";
 
 pub(crate) fn emit<T: Serialize>(event: &str, data: &T) {
     let body = serde_json::json!({
@@ -52,4 +52,12 @@ pub(crate) struct AdminEvent<'a> {
     pub by: &'a AccountId,
     pub old: String,
     pub new: String,
+}
+
+/// `report_retracted`: who retracted it, and the report as it was.
+#[derive(Serialize)]
+#[serde(crate = "near_sdk::serde")]
+pub(crate) struct RetractEvent<'a> {
+    pub by: &'a AccountId,
+    pub report: &'a Report,
 }
