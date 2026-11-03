@@ -1,6 +1,7 @@
-// MockChainAdapter: the registry contract simulated on Postgres tables (migration 002). Test and
-// local-demo only; container.ts refuses it when NODE_ENV=production. It mirrors the contract's status
-// rules (lib.rs) so the worker's idempotency is exercised against the same panics.
+// MockChainAdapter: the registry contract simulated on Postgres tables (src/chain/mock/migrations,
+// applied only for CHAIN_ADAPTER=mock). Test and local-demo only; container.ts refuses it when
+// NODE_ENV=production. It mirrors the contract's status rules (lib.rs) so the worker's idempotency is
+// exercised against the same panics.
 import crypto from 'node:crypto';
 import { b58encode } from '@omniswarm/schemas/nep413';
 import type { Db, Pool } from '../../db/pool.ts';
