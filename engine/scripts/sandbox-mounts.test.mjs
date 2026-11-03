@@ -1,7 +1,7 @@
 // sandbox.sh bind-mounts engine modules one by one into /opt/audit. A module that one of them imports but that is
 // not mounted breaks the container at load time, and only a Docker run would notice. This reads every `docker run`
 // in sandbox.sh and checks that the mounts cover the static import closure of each module that run starts, plus
-// the modules sandbox-inside.mjs starts in the container (the harness).
+// the modules sandbox-inside.mjs and its sandbox-inside-*.mjs parts start in the container (the harness).
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -43,8 +43,9 @@ const closureNames = (entry) => importClosure(path.join(scripts, entry)).map((fi
 test('every module a sandbox.sh container loads is mounted at /opt/audit under its own name', () => {
   const runs = dockerRuns(fs.readFileSync(path.join(scripts, 'sandbox.sh'), 'utf8')).filter((run) => run.started.size);
   assert.ok(runs.length >= 3, 'the export, proxy and sandbox containers start /opt/audit modules');
-  const inside = fs.readFileSync(path.join(scripts, 'sandbox-inside.mjs'), 'utf8');
-  const spawnedInside = [...inside.matchAll(STARTED)].map((m) => m[1]);
+  // sandbox-inside.mjs is split into sandbox-inside-*.mjs; any module of its closure may start another one.
+  const inside = closureNames('sandbox-inside.mjs').map((name) => fs.readFileSync(path.join(scripts, name), 'utf8')).join('\n');
+  const spawnedInside = [...new Set([...inside.matchAll(STARTED)].map((m) => m[1]))].filter((name) => !name.startsWith('sandbox-inside'));
   assert.ok(spawnedInside.includes('harness.mjs'), 'sandbox-inside.mjs starts the harness in the container');
   for (const run of runs) {
     for (const [dst, src] of run.mounts) assert.equal(dst, src, `mount ${src} -> /opt/audit/${dst} renames the module`);
