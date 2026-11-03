@@ -1,5 +1,6 @@
-// One sha256 for the engine. sha256Json hashes JSON.stringify(value), which is how manifests,
-// assignments and evidence files have always been digested; it is not a canonical (key-sorted) form.
+// One sha256 for the engine. sha256Json hashes JSON.stringify(value) exactly (no key sorting), which is how
+// manifests, assignments and evidence files have always been digested; the canonical (sorted-key) report
+// hash lives in packages/schemas.
 import crypto from 'node:crypto';
 
 export function sha256Hex(value) {
