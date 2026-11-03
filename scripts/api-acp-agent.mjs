@@ -179,6 +179,7 @@ export class ApiAcpAgent {
         callTool: (name, args) => this.callBridge(name, args),
         brief,
         maxTurns: this.config.maxTurns || 40,
+        submitTool: this.config.submitTool || 'submit_audit_report',
         maxCostUsd: this.config.maxCostUsd ?? null,
         prices: this.config.prices || null,
         provider: this.config.provider,

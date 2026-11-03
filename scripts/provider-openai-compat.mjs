@@ -65,11 +65,12 @@ function delayMs(attempt, response, random) {
 }
 
 export async function runToolLoop({
-  baseUrl, apiKey, model, headers = {}, extraBody = {}, tools = [], callTool, brief, maxTurns = 40,
+  baseUrl, apiKey, model, headers = {}, extraBody = {}, tools = [], callTool, brief, maxTurns = 40, submitTool = 'submit_audit_report',
   provider = 'zai', env = process.env, fetchImpl, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
   random = Math.random, transcriptPath, timeoutMs = Number(env.OMNI_API_TIMEOUT_MS) || 300_000, maxCostUsd = null, prices = null,
 } = {}) {
   if (!baseUrl || !model || typeof callTool !== 'function') throw new Error('runToolLoop needs baseUrl, model and callTool');
+  if (!SUBMIT_TOOLS.has(submitTool)) throw new Error(`runToolLoop: unknown submit tool ${submitTool}`);
   if (!fetchImpl && env.OMNI_HTTP_REPLAY) resetReplayTurns();
   const fetchFn = fetchImpl || selectFetch({ env, provider });
   const messages = [{ role: 'user', content: String(brief || '') }];
@@ -86,7 +87,7 @@ export async function runToolLoop({
   for (let turn = 1; turn <= maxTurns; turn++) {
     const body = {
       model, messages, tools, stream: false, ...extraBody,
-      ...(turn === maxTurns ? { tool_choice: { type: 'function', function: { name: 'submit_audit_report' } } } : {}),
+      ...(turn === maxTurns ? { tool_choice: { type: 'function', function: { name: submitTool } } } : {}),
     };
     let response;
     let attempt = 0;

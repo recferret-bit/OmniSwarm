@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { modelMatches, presetFor, runToolLoop } from './provider-openai-compat.mjs';
+import { buildApiLaunch } from './provider-api-launch.mjs';
 
 function scriptedFetch(steps) {
   const calls = [];
@@ -97,6 +101,36 @@ test('a served model that is not the requested model stops as model_mismatch', a
   assert.equal(result.failure, 'model_mismatch');
   assert.equal(result.servedModel, 'glm-5.1');
   assert.equal(result.stop, 'error');
+});
+
+test('the last turn forces the submit tool of the reviewer role', async () => {
+  for (const [submitTool, expected] of [[undefined, 'submit_audit_report'], ['submit_crosscheck_report', 'submit_crosscheck_report']]) {
+    const { fetch, calls } = scriptedFetch([
+      { body: message('glm-5.3', [toolCall('c1', 'read_file', { path: 'a' })]) },
+      { body: message('glm-5.3', [toolCall('c2', 'read_file', { path: 'b' })]) },
+      { body: message('glm-5.3', [toolCall('c3', expected, { verdicts: [] })]) },
+    ]);
+    const result = await runToolLoop({
+      baseUrl: 'https://example.invalid/v1', apiKey: 'k', model: 'glm-5.3', tools: [], maxTurns: 3, ...(submitTool ? { submitTool } : {}),
+      callTool: async () => 'ok', brief: 'review', fetchImpl: fetch, sleep: async () => {},
+    });
+    assert.equal(result.stop, 'submitted');
+    assert.equal(calls[0].body.tool_choice, undefined);
+    assert.equal(calls[1].body.tool_choice, undefined);
+    assert.deepEqual(calls[2].body.tool_choice, { type: 'function', function: { name: expected } });
+  }
+  await assert.rejects(runToolLoop({ baseUrl: 'https://example.invalid/v1', model: 'm', callTool: async () => '', submitTool: 'read_file' }), /unknown submit tool/);
+});
+
+test('a crosscheck launch configures the crosscheck submit tool', () => {
+  const work = fs.mkdtempSync(path.join(os.tmpdir(), 'api-role-'));
+  const env = { PATH: '/bin', HOME: '/tmp', ZAI_API_KEY: 'zk-test' };
+  for (const [role, tool] of [['auditor', 'submit_audit_report'], ['crosscheck', 'submit_crosscheck_report']]) {
+    buildApiLaunch({ provider: 'zai', model: 'glm-5.3' }, { workDir: work, env, role, toolBudget: 5 }, presetFor('zai'));
+    const config = JSON.parse(fs.readFileSync(path.join(work, 'api-launch.json'), 'utf8'));
+    assert.equal(config.submitTool, tool);
+    assert.equal(config.maxTurns, 8);
+  }
 });
 
 test('a tool call with malformed arguments is answered with an error, not sent to the bridge', async () => {
