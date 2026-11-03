@@ -2,7 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { sha256Hex } from './hash-util.mjs';
-import { readReportJson, writeReportFile, validateAuditor, validCrosscheckRow } from './report-contract.mjs';
+import { readReportJson, writeReportFile } from './report-files.mjs';
+import { validateAuditor, validCrosscheckRow } from './report-contract-auditor.mjs';
 import { REVIEWER_ID_PATTERN, isReviewerId, validModelId } from './reviewer-registry.mjs';
 
 const stable = value => Array.isArray(value) ? value.map(stable) : value && typeof value === 'object' ? Object.fromEntries(Object.keys(value).sort().map(key => [key, stable(value[key])])) : value;

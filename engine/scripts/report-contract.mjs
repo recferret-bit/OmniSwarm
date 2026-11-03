@@ -1,3 +1,6 @@
+// The report contract: which outputs a report directory must hold and whether they validate. loadAuditors is the
+// one entry; the auditor output shape lives in report-contract-auditor.mjs and the run-record checks in
+// report-contract-health.mjs. Report files are read and written through report-files.mjs.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -6,34 +9,17 @@ import { classifyAuditFailure, FAILURE_MESSAGES } from './audit-process.mjs';
 import { verificationHealth } from './verification-health.mjs';
 import { REVIEW_WORKFLOW } from './review-workflow.mjs';
 import { readCanonicalSubmission } from './audit-submission.mjs';
-import { CLI_DEFAULT_MODELS, REVIEWER_ID_PATTERN, isReviewerId, reviewersOfMeta, vendorOfJob } from './reviewer-registry.mjs';
+import { isReviewerId, reviewersOfMeta } from './reviewer-registry.mjs';
 import { validate } from '../../packages/schemas/index.mjs';
 import { hostLogRel } from './sandbox-host-paths.mjs';
 import { expectedJobNames } from './reviewer-plan-assign.mjs';
 import { sha256Json } from './hash-util.mjs';
 import { MAX_REPORT_BYTES as MAX_BYTES, readReportJson, readReportText, writeReportFile } from './report-files.mjs';
+import { adapterOf, citation, filledText as text, validCrosscheckRow, validateAuditor } from './report-contract-auditor.mjs';
+import { reviewerReportErrors, runRecordErrors, sourceReadDigestProblem } from './report-contract-health.mjs';
 
 export { readReportJson, readReportText, writeReportFile };
-
-const LEVELS = new Set(['critical', 'high', 'medium', 'low', 'info']);
-const CONFIDENCE = new Set(['confirmed', 'probable']);
-const SLUGS = ['auth', 'input', 'logic', 'config', 'deps', 'client'];
-// "<reviewer-id>-sN-<slug>"; the reviewer id may contain hyphens. Legacy reports use the adapter name as id.
-const NAME = new RegExp(`^(${REVIEWER_ID_PATTERN})-(s[1-6])-(${SLUGS.join('|')})$`);
-
-// Reviewer id that authored a job name (null when the name is not a job name).
-export function adapterOf(name) {
-  const match = NAME.exec(String(name));
-  return match && SLUGS[Number(match[2].slice(1)) - 1] === match[3] ? match[1] : null;
-}
-// Vendor of a job name. Reviewer identity is an assertion, not attestation of the served model/provider.
-// Pass the report's reviewers (reviewersOfMeta(meta)); without them only the legacy adapter names resolve.
-export function providerOf(name, reviewers) {
-  const id = adapterOf(name);
-  if (!id) return null;
-  if (reviewers) return vendorOfJob(name, reviewers);
-  return Object.hasOwn(CLI_DEFAULT_MODELS, id) ? reviewersOfMeta({ agents: [id] })[0].vendor : null;
-}
+export { adapterOf, citation, validCrosscheckRow, validateAuditor, sourceReadDigestProblem };
 
 const record = (x) => x && typeof x === 'object' && !Array.isArray(x);
 // meta.reviewers entries are the parsed spec plus what the run observed: the key fingerprint (first and last
@@ -75,16 +61,6 @@ function normalizeMeta(meta, errors) {
   }
 }
 
-const text = (x) => typeof x === 'string' && x.trim().length > 0 && x.length <= 20_000;
-const strings = (x, allowEmpty = false) => Array.isArray(x) && x.length <= 100 && (allowEmpty || x.length > 0) && x.every(text);
-export const citation = (p) => typeof p === 'string' && p.length <= 1000 && /^[^:\n]+:[1-9]\d*$/.test(p) && !path.isAbsolute(p) && !p.split(/[\\/]/).includes('..');
-export function validCrosscheckRow(row) {
-  return row && typeof row.id === 'string' && ['upheld', 'partial', 'refuted'].includes(row.verdict)
-    && typeof row.reason === 'string' && row.reason.trim().length > 0 && row.reason.length <= 20_000
-    && Array.isArray(row.evidence) && row.evidence.length > 0 && row.evidence.length <= 100 && row.evidence.every(citation)
-    && (row.severity == null || (typeof row.severity === 'string' && LEVELS.has(row.severity)));
-}
-
 function verifyCommittedOutput(root, meta, name, data) {
   // A run that wrote submissions/ is a committed-submission run, whatever its meta says (R-03).
   if (meta.submissionAuthority !== 'mcp_commit' && fs.existsSync(path.join(root, 'submissions'))) throw new Error('submissions exist but meta does not declare mcp_commit authority');
@@ -99,68 +75,6 @@ function verifyCommittedOutput(root, meta, name, data) {
   const submission = readCanonicalSubmission(root, name, identity);
   if (meta.workflow === REVIEW_WORKFLOW && identity.role === 'auditor' && (data.slice(0, -1).some(row => row.attack.length || row.poc || !text(row.analysis) || !text(row.validation)) || data.at(-1).verified_safe.some(row => !text(row.evidence)))) throw new Error('Source review evidence contract mismatch');
   if (!isDeepStrictEqual(submission.report.payload, data)) throw new Error('Derived report differs from the canonical submission');
-}
-
-export function validateAuditor(data, name) {
-  const match = NAME.exec(String(name));
-  if (!match) throw new Error('unknown auditor identity');
-  const [, , surface, slug] = match;
-  if (SLUGS[Number(surface.slice(1)) - 1] !== slug) throw new Error('auditor surface mismatch');
-  if (!Array.isArray(data) || !data.length || data.length > 1000) throw new Error('expected findings plus a final control-assertions object');
-  for (const row of data.slice(0, -1)) {
-    if (!row || typeof row !== 'object' || Array.isArray(row) || row.verified_safe) throw new Error('invalid finding object');
-    if (!text(row.title) || !LEVELS.has(row.severity) || !CONFIDENCE.has(row.confidence)) throw new Error('invalid finding title, severity or confidence');
-    if (row.surface !== surface.toUpperCase()) throw new Error('finding surface mismatch');
-    if (!strings(row.location) || !row.location.every(citation)) throw new Error('expected relative file:line citations');
-    if (!text(row.impact) || typeof row.preconditions !== 'string' || row.preconditions.length > 20_000 || !strings(row.attack, true)) throw new Error('invalid finding evidence fields');
-    if (typeof row.poc !== 'string' || row.poc.length > 20_000 || !text(row.fix)) throw new Error('invalid finding remediation fields');
-  }
-  const final = data.at(-1);
-  if (!final || !Array.isArray(final.verified_safe) || final.verified_safe.length > 1000 || final.title) throw new Error('missing final control assertions');
-  for (const row of final.verified_safe) {
-    if (!row || !text(row.control) || !text(row.how_attacked) || typeof row.holds !== 'boolean') throw new Error('invalid control assertion');
-  }
-  return data;
-}
-
-// R-02: the bridge records the digest of the /src tree it served at the first read, and it must equal the sealed
-// source manifest. /src is `sandbox-lib copyTree` of the sealed snapshot, and every name copyTree drops the snapshot
-// already dropped (report-contract-digest.test.mjs pins that), so a served subset is a different tree, not a benign copy.
-// A run that produced reviewer output without any recorded read fails closed.
-export function sourceReadDigestProblem(root) {
-  let served;
-  try { served = readReportJson(root, 'harness/source-read-digest.json', 64 * 1024 * 1024); }
-  catch (error) {
-    if (error?.code !== 'ENOENT') return 'the recorded digest of the served source is unreadable.';
-    return hasReviewerOutput(root) ? 'reviewer output exists but the bridge recorded no digest of the source it served.' : null;
-  }
-  let manifest;
-  try { manifest = readReportJson(root, 'source-manifest.json', 64 * 1024 * 1024); }
-  catch { return 'source-manifest.json is missing or invalid, so the served source cannot be checked.'; }
-  if (!served || typeof served.digest !== 'string' || !Array.isArray(served.files)) return 'the recorded digest of the served source is malformed.';
-  // The file list must hash to the digest it claims before either is compared with the manifest.
-  if (sha256Json(served.files) !== served.digest) return 'the recorded digest does not match the file list it was computed from.';
-  return served.digest === manifest.digest ? null : 'the source reviewers read differs from the sealed source manifest.';
-}
-
-function hasReviewerOutput(root) {
-  if (fs.existsSync(path.join(root, 'submissions'))) return true;
-  try { return fs.readdirSync(path.join(root, 'auditors')).some((name) => name.endsWith('.json')); }
-  catch { return false; }
-}
-
-// W04-15: a budget or cost stop that never submitted makes the report INCOMPLETE. The pass loop writes
-// harness/budget-health.json; a run with budgets whose record is missing or unreadable is not trusted either.
-export function budgetHealthErrors(root, meta) {
-  let health;
-  try { health = readReportJson(root, 'harness/budget-health.json'); }
-  catch (error) {
-    if (error?.code === 'ENOENT' && !(meta.budgets && meta.submissionAuthority === 'mcp_commit' && fs.existsSync(path.join(root, 'submissions')))) return [];
-    return ['BUDGET: harness/budget-health.json is missing or unreadable.'];
-  }
-  if (!record(health) || !['COMPLETE', 'INCOMPLETE'].includes(health.state) || !Array.isArray(health.errors) || !health.errors.every((e) => typeof e === 'string' && e.length <= 300)) return ['BUDGET: harness/budget-health.json is malformed.'];
-  if (health.state === 'INCOMPLETE' && !health.errors.length) return ['BUDGET: budget health is INCOMPLETE without a reason.'];
-  return health.errors.map((e) => `BUDGET: ${e}`);
 }
 
 // The job inventory a report must hold: the same assignment function that launched the jobs (W01-09),
@@ -211,19 +125,6 @@ function failureExplainer(root, meta) {
   };
 }
 
-function runRecordErrors(root, meta) {
-  const errors = [];
-  try {
-    const sandbox = readReportText(root, 'harness/sandbox.md');
-    if (!/^# Sandbox/m.test(sandbox) || !/^\| .+ \| (ran|failed|impossible) \| .+ \|$/m.test(sandbox)) throw new Error('invalid coverage record');
-  } catch { errors.push('Sandbox coverage record is missing or invalid; coverage is unknown.'); }
-  if (meta.sandboxHardening === 1) {
-    const problem = sourceReadDigestProblem(root);
-    if (problem) errors.push(`SOURCE_DIGEST_MISMATCH: ${problem}`);
-  }
-  return [...errors, ...budgetHealthErrors(root, meta)];
-}
-
 function loadAuditorReports(root, meta, expected, explain, errors) {
   const reports = [];
   for (const name of expected) {
@@ -244,25 +145,6 @@ function loadAuditorReports(root, meta, expected, explain, errors) {
     if (extra.length) errors.push(`unexpected auditor ${extra.map((name) => name.replace(/\.json$/, '')).join(', ')}`);
   } catch { errors.push('Auditor directory is missing.'); }
   return reports;
-}
-
-// reviewers/**/report.json (W05) must match the reviewer-report schema when present.
-function reviewerReportErrors(root) {
-  if (!fs.existsSync(path.join(root, 'reviewers'))) return [];
-  const errors = [];
-  const walk = (dir) => {
-    for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
-      const full = path.join(dir, ent.name);
-      if (ent.isDirectory()) walk(full);
-      else if (ent.name === 'report.json') {
-        const rel = path.relative(root, full);
-        const check = validate('reviewer-report', readReportJson(root, rel));
-        if (!check.ok) errors.push(`${rel}: ${check.errors[0]}`);
-      }
-    }
-  };
-  try { walk(path.join(root, 'reviewers')); } catch (error) { errors.push(`reviewers/: ${error.message}`); }
-  return errors;
 }
 
 // Every reviewer with peer claims owes a validated cross-check; a cross-check with nothing assigned is unexpected.
