@@ -8,6 +8,8 @@ export function SiteHeader() {
         <Link className="site-header__brand" href="/">OmniSwarm</Link>
         <Link href="/sample">Sample report</Link>
         <Link href="/me">My requests</Link>
+        <Link href="/local">Local</Link>
+        <Link href="/dashboard">Dashboard</Link>
       </nav>
       <WalletSlot />
     </header>

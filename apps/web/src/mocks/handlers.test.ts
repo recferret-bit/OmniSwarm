@@ -9,6 +9,7 @@ import { createRequestFlowStore } from '@/stores/request-flow';
 import { useMockApi } from '@/test/msw';
 import { setMockError } from './controls';
 import { clock, readState, updateState } from './db';
+import { MOCK_COMMIT } from './handlers/intake';
 import { progressEvent, statusOf } from './handlers/status';
 import { DONE_AFTER_MS, snapshotAt } from './state-machine';
 import { createMockConnector } from './wallet';
@@ -134,5 +135,87 @@ describe('mock intake API', () => {
     const first = (await post('/api/guard/reports', report)).body as { reportId: string };
     const again = (await post('/api/guard/reports', { ...report, reason: 'resubmitted' })).body as { reportId: string };
     expect(again.reportId).toBe(first.reportId);
+  });
+
+  it('signs in operator/operator, rejects a wrong password, and lists the dashboard job for that session', async () => {
+    const denied = await post('/api/dashboard/jobs', { repo: 'near/near-sdk-rs' });
+    expect(denied.status).toBe(401);
+    expectValid('error-response', denied.body);
+
+    const bad = await post('/api/login', { login: 'operator', password: 'nope' });
+    expect(bad.status).toBe(401);
+    expect(bad.body).toEqual({ error: { code: 'UNAUTHORIZED', message: 'Sign in failed', retryable: false } });
+    expect(readState().session).toBeNull();
+
+    expect(await api.login({ login: 'operator', password: 'operator' })).toEqual({ account: 'operator' });
+    expect(readState().session).toBe('operator');
+    expect(await (await fetch('/api/session')).json()).toEqual({ account: 'operator' });
+
+    const invalid = await post('/api/dashboard/jobs', { repo: 'not a repo' });
+    expect(invalid.status).toBe(400);
+    expect(invalid.body).toMatchObject({ error: { code: 'REPO_INVALID' } });
+
+    let requestId = '';
+    await withClock(1_700_000_000_000, async () => {
+      const created = await post('/api/dashboard/jobs', { repo: 'https://github.com/near/near-sdk-rs' });
+      expect(created.status).toBe(201);
+      expect(created.body).toMatchObject({ repo: 'near/near-sdk-rs', commitSha: MOCK_COMMIT, status: 'queued' });
+      requestId = (created.body as { requestId: string }).requestId;
+      const mine = await api.listMine();
+      expectValid('request-list-response', mine);
+      expect(mine.requests).toEqual([expect.objectContaining({ requestId, repo: 'near/near-sdk-rs', status: 'queued' })]);
+      const early = await fetch(`/api/requests/${requestId}/report.pdf`);
+      expect(early.status).toBe(404);
+      expectValid('error-response', await early.json());
+    });
+
+    const pdf = await withClock(1_700_000_000_000 + DONE_AFTER_MS, () => fetch(`/api/requests/${requestId}/report.pdf`));
+    expect(pdf.headers.get('content-type')).toContain('application/pdf');
+    const bytes = await pdf.text();
+    expect(bytes.startsWith('%PDF-1.1')).toBe(true);
+    expect(bytes).toContain('OmniSwarm report');
+
+    await api.logout();
+    expect(readState().session).toBeNull();
+    const hidden = await withClock(1_700_000_000_000 + DONE_AFTER_MS, () => fetch(`/api/requests/${requestId}/report.pdf`));
+    expect(hidden.status).toBe(404);
+  });
+
+  it('accepts exactly one absolute path or github repo and serves the local pdf', async () => {
+    const neither = await post('/api/local/jobs', {});
+    expect(neither.status).toBe(400);
+    expect(neither.body).toMatchObject({ error: { code: 'VALIDATION_ERROR' } });
+    const both = await post('/api/local/jobs', { path: '/tmp/repo', github: 'near/near-sdk-rs' });
+    expect(both.status).toBe(400);
+    const relative = await post('/api/local/jobs', { path: 'tmp/repo' });
+    expect(relative.status).toBe(400);
+    const badRepo = await post('/api/local/jobs', { github: 'not a repo' });
+    expect(badRepo.status).toBe(400);
+    expect(badRepo.body).toMatchObject({ error: { code: 'REPO_INVALID' } });
+
+    const pathJob = await post('/api/local/jobs', { path: '/tmp/repo' });
+    expect(pathJob.status).toBe(201);
+    expect(pathJob.body).toMatchObject({ kind: 'path', source: '/tmp/repo', status: 'done' });
+    const pathId = (pathJob.body as { id: string }).id;
+    const githubJob = await post('/api/local/jobs', { github: 'https://github.com/near/near-sdk-rs@main' });
+    expect(githubJob.status).toBe(201);
+    expect(githubJob.body).toMatchObject({ kind: 'github', source: 'near/near-sdk-rs', status: 'done' });
+    const githubId = (githubJob.body as { id: string }).id;
+
+    const detail = await (await fetch(`/api/local/jobs/${githubId}`)).json();
+    expect(detail).toMatchObject({ kind: 'github', source: 'near/near-sdk-rs', ref: 'main', commitSha: MOCK_COMMIT, status: 'done', pdfReady: true, error: null });
+    const listed = await (await fetch('/api/local/jobs')).json() as { jobs: { id: string; createdAt: string }[] };
+    expect(listed.jobs.map((job) => job.id)).toEqual([githubId, pathId]);
+    expect(listed.jobs[0]!.createdAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+
+    const pdf = await fetch(`/api/local/jobs/${pathId}/report.pdf`);
+    expect(pdf.status).toBe(200);
+    expect(pdf.headers.get('content-type')).toContain('application/pdf');
+    const bytes = await pdf.text();
+    expect(bytes.startsWith('%PDF-1.1')).toBe(true);
+    expect(bytes).toContain('OmniSwarm report');
+    const missing = await fetch('/api/local/jobs/00000000-0000-4000-a000-000000000000/report.pdf');
+    expect(missing.status).toBe(404);
+    expectValid('error-response', await missing.json());
   });
 });

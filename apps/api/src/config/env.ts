@@ -39,6 +39,10 @@ export const envSchema = z.object({
   SESSION_SECRET: z.string().min(32, 'must be at least 32 characters').optional(),
   COOKIE_SECURE: flag.optional(),
   LANDING_ORIGIN: z.url().optional(),
+  // No default: a non-production operator/operator fallback lives only in the login function.
+  LOCAL_MODE: flag.optional(),
+  DASHBOARD_LOGIN: z.string().min(1).optional(),
+  DASHBOARD_PASSWORD: z.string().min(1).optional(),
 
   NETWORK: z.enum(['testnet', 'mainnet']).default('testnet'),
   // Price on NETWORK. Testnet defaults to 1 NEAR (OD-08); mainnet has no default, so it stays off unless priced.

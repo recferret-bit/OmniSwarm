@@ -49,6 +49,27 @@ export const requestListResponse = z.strictObject({
   requests: z.array(z.strictObject({ requestId: uuid, repo, status, createdAt: timestamp })),
 });
 
+export const loginBody = z.strictObject({ login: z.string().min(1).max(256), password: z.string().min(1).max(256) });
+export const sessionResponse = z.strictObject({ account: accountId });
+
+export const dashboardJobBody = z.strictObject({ repo: z.string().min(1).max(300) });
+export const dashboardJobResponse = z.strictObject({ requestId: uuid, repo, commitSha, status: z.literal('queued') });
+
+const operatorKind = z.enum(['path', 'github']);
+const operatorStatus = z.enum(['queued', 'running', 'done', 'failed']);
+export const localJobBody = z.union([
+  z.strictObject({ path: z.string().min(1).max(4096) }),
+  z.strictObject({ github: z.string().min(1).max(300) }),
+]);
+export const localJobCreated = z.strictObject({ id: uuid, kind: operatorKind, source: z.string().min(1), status: z.literal('queued') });
+export const localJobListResponse = z.strictObject({
+  jobs: z.array(z.strictObject({ id: uuid, kind: operatorKind, source: z.string().min(1), status: operatorStatus, createdAt: timestamp })),
+});
+export const localJobResponse = z.strictObject({
+  id: uuid, kind: operatorKind, source: z.string().min(1), ref: z.string().min(1).nullable(), commitSha: commitSha.nullable(),
+  status: operatorStatus, error: z.string().min(1).nullable(), createdAt: timestamp, pdfReady: z.boolean(),
+});
+
 export const guardQuery = z.strictObject({ account: accountId, network: network.optional() });
 export const guardVerdictResponse = z.strictObject({
   verdict: z.enum(['allow', 'warn', 'block']), reasons: z.array(z.string().min(1)), signals: z.record(z.string(), z.unknown()),

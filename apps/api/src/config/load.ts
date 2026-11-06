@@ -37,6 +37,10 @@ export interface Config {
     retryLimit: number; retryDelayS: number; monitorS: number;
   };
   progressPollMs: number;
+  /** Loopback operator routes. Unset follows NODE_ENV (on outside production). */
+  localMode: boolean;
+  /** Both null unless the operator set them. The login module owns any non-production fallback. */
+  dashboard: { login: string | null; password: string | null };
 }
 
 export class ConfigError extends Error {
@@ -151,6 +155,8 @@ function build(raw: RawEnv): Config {
       monitorS: raw.QUEUE_MONITOR_S,
     },
     progressPollMs: raw.PROGRESS_POLL_MS,
+    localMode: raw.LOCAL_MODE ?? (raw.NODE_ENV !== 'production'),
+    dashboard: { login: raw.DASHBOARD_LOGIN ?? null, password: raw.DASHBOARD_PASSWORD ?? null },
   };
 }
 

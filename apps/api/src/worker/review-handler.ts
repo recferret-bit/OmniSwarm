@@ -20,6 +20,7 @@ import { requestCost } from './cost.ts';
 import { ProgressTailer } from './progress-tailer.ts';
 import { publishReport, readPublished } from './publish.ts';
 import { maxSeverity } from './report.ts';
+import { ensureReportPdf } from '../shared/report-pdf.ts';
 
 export interface HandlerDeps { config: Config; pool: Pool; clock: Clock; chain: ChainPort; engine: EngineRunner; log: Logger }
 /** `lastAttempt`: this delivery has no retry left. `signal`: the worker is stopping (or lost the claim). */
@@ -53,6 +54,8 @@ async function recordCost(deps: HandlerDeps, requestId: string): Promise<number>
 async function attest(deps: HandlerDeps, row: RequestRow, sourceDir: string | null, incomplete: boolean): Promise<HandlerResult> {
   const costUsd = await recordCost(deps, row.id);
   if (row.status === 'running') {
+    // Copied by publishReport. Do not chmod here; the publisher seals the tree.
+    if (sourceDir) ensureReportPdf(sourceDir, deps.config.engine.root);
     const published = sourceDir
       ? publishReport({ reportsRoot: deps.config.storage.reportsRoot, requestId: row.id, sourceDir, repo: row.repo, commitSha: row.commit_sha, preset: row.preset })
       : readPublished(deps.config.storage.reportsRoot, row.id);

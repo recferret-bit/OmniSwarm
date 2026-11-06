@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { requestReportHref } from '@/lib/api/client';
 import { messageFor } from '@/lib/api/errors';
 import { phasesSeen, reviewerRows, selectRequestView, useRequestStatus } from '@/stores/request-status';
 import { selectAnnounce, useUi } from '@/stores/ui';
@@ -35,7 +36,13 @@ export function RequestStatusView({ id }: { id: string }) {
         {current.progress?.percent !== undefined ? <progress max={100} value={current.progress.percent} aria-label="Review progress" /> : null}
         <ReviewerRows rows={reviewerRows(view.events)} />
         <TerminalState status={current} />
-        {current.status === 'done' && !open ? <Button onClick={() => setOpen(true)}>Open report</Button> : null}
+        {current.status === 'done' ? (
+          <p>
+            {!open ? <Button onClick={() => setOpen(true)}>Open report</Button> : null}
+            {' '}
+            <a href={requestReportHref(id)}>Download PDF</a>
+          </p>
+        ) : null}
       </Panel>
       {current.status === 'done' && open ? <RequestReport id={id} attestTx={current.attestTx} /> : null}
     </>

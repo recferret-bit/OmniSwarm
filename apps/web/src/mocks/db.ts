@@ -1,6 +1,6 @@
 // Dev/e2e only. In-memory intake + chain state shared by the MSW handlers and the
 // mock wallet, mirrored to sessionStorage so a reload or a deep link to /r/<id>
-// keeps the same requests. Never imported by a production build.
+// keeps the same requests and local jobs. Never imported by a production build.
 import type { OnChainAttestation } from '@/lib/near/rpc';
 
 export const MOCK_ERRORS = [
@@ -48,6 +48,18 @@ export interface MockControls {
   tampered: boolean;
 }
 
+export interface LocalJob {
+  id: string;
+  kind: 'path' | 'github';
+  source: string;
+  ref: string | null;
+  commitSha: string | null;
+  status: string;
+  error: string | null;
+  createdAt: number;
+  pdfReady: boolean;
+}
+
 export interface MockState {
   nonces: Record<string, { expiresAt: number; used: boolean }>;
   requests: MockRequest[];
@@ -55,13 +67,14 @@ export interface MockState {
   attestations: Record<string, OnChainAttestation>;
   guardReports: MockGuardReport[];
   session: string | null;
+  localJobs: LocalJob[];
   controls: MockControls;
 }
 
 const KEY = 'omniswarm.mock.db';
 
 export function emptyState(): MockState {
-  return { nonces: {}, requests: [], txs: {}, attestations: {}, guardReports: [], session: null, controls: { error: null, walletReject: false, tampered: false } };
+  return { nonces: {}, requests: [], txs: {}, attestations: {}, guardReports: [], session: null, localJobs: [], controls: { error: null, walletReject: false, tampered: false } };
 }
 
 let memory: MockState | null = null;
@@ -76,8 +89,14 @@ function storage(): Storage | null {
 
 export function readState(): MockState {
   if (memory) return memory;
-  const saved = storage()?.getItem(KEY);
-  memory = saved ? { ...emptyState(), ...(JSON.parse(saved) as MockState) } : emptyState();
+  const raw = storage()?.getItem(KEY);
+  if (!raw) {
+    memory = emptyState();
+    return memory;
+  }
+  // A payload saved before local jobs has no array. Fill it so a reload still works.
+  const saved = JSON.parse(raw) as Partial<MockState>;
+  memory = { ...emptyState(), ...saved, localJobs: saved.localJobs ?? [] };
   return memory;
 }
 

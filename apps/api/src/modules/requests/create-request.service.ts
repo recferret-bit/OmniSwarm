@@ -5,7 +5,7 @@ import crypto from 'node:crypto';
 import { requestHash } from '@omniswarm/schemas/canonical-message';
 import type { ChainPort } from '../../chain/port.ts';
 import type { Config } from '../../config/load.ts';
-import { withTransaction, type Pool } from '../../db/pool.ts';
+import { withTransaction, type Db, type Pool } from '../../db/pool.ts';
 import { audit } from '../../db/repositories/audit.ts';
 import { consumeNonce, peekNonce, type NonceState } from '../../db/repositories/nonces.ts';
 import { accountUsage, insertRequest } from '../../db/repositories/requests.ts';
@@ -46,10 +46,15 @@ function checkSignature(config: Config, body: CreateBody): void {
   }
 }
 
-async function checkAccount(deps: CreateDeps, account: string, now: Date): Promise<void> {
-  const usage = await accountUsage(deps.pool, account, new Date(now.getTime() - DAY_MS));
+/** One review in progress and the daily cap. Shared with the password dashboard. */
+export async function assertAccountCapacity(db: Db, config: Config, account: string, now: Date): Promise<void> {
+  const usage = await accountUsage(db, account, new Date(now.getTime() - DAY_MS));
   if (usage.active > 0) fail('ACTIVE_REQUEST_EXISTS', 'This account already has a review in progress');
-  if (usage.recent >= deps.config.intake.requestsPerDay) fail('RATE_LIMITED', 'Daily request limit reached for this account');
+  if (usage.recent >= config.intake.requestsPerDay) fail('RATE_LIMITED', 'Daily request limit reached for this account');
+}
+
+async function checkAccount(deps: CreateDeps, account: string, now: Date): Promise<void> {
+  await assertAccountCapacity(deps.pool, deps.config, account, now);
 }
 
 async function verify(deps: CreateDeps, body: CreateBody, now: Date): Promise<SignedMessage> {
