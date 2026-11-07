@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { runReviewSession, permissionDecision, preflightBridge } from './agent-session.mjs';
+import { continuationText, modelMatches, runReviewSession, permissionDecision, preflightBridge } from './agent-session.mjs';
 import { openSessionStore } from './agent-session-store.mjs';
 import { buildSessionLaunch, sessionEnvironment } from './agent-session-launch.mjs';
 
@@ -332,6 +332,18 @@ test('repeated refusal-induced cancellation fails as a permission error, not a u
 test('subscription environments omit credential and routing overrides', () => {
   const env = sessionEnvironment({ HOME: '/home/inert', PATH: '/bin', OPENAI_API_KEY: 'secret', ANTHROPIC_API_KEY: 'secret', NODE_OPTIONS: '--require bad.js', HTTPS_PROXY: 'https://untrusted', MODEL_PROVIDER: 'unapproved' });
   assert.deepEqual(env, { HOME: '/home/inert', PATH: '/bin' });
+});
+
+test('a model alias matches its full id, and a new pass is told to submit', () => {
+  assert.equal(modelMatches('opus', 'claude-opus-5-5'), true);
+  assert.equal(modelMatches('opus', 'claude-sonnet-5-5'), false);
+  assert.equal(modelMatches('gpt-6.1-sol', 'gpt-6.1-sol'), true);
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'audit-continuation-'));
+  const options = { bridgeArgs: ['--report-dir', root], identity: { name: 'claude-s1-auth' } };
+  assert.match(continuationText(options), /no committed report yet/);
+  fs.mkdirSync(path.join(root, 'submissions'));
+  fs.writeFileSync(path.join(root, 'submissions', 'claude-s1-auth.json'), '{}\n');
+  assert.match(continuationText(options), /already committed/);
 });
 
 test('bridge preflight verifies real MCP inventory without inference or target execution', async t => {

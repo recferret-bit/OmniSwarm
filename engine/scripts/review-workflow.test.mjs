@@ -73,11 +73,12 @@ test('review reports require analysis and validation and reject exploit payload 
   const ctx = { reportDir: f.root, role: 'auditor', auditor: 'claude-s1-auth', surface: 'S1', submissionIdentity: { name: 'claude-s1-auth', agent: 'claude', role: 'auditor', workflow: REVIEW_WORKFLOW, surface: 'S1', model: 'fixture', sourceDigest: f.catalog.sourceDigest, assignmentDigest: 'a'.repeat(64) } };
   const finding = { title: 'Inert review evidence', surface: 'S1', severity: 'info', confidence: 'probable', location: ['package.json:1'], impact: 'Fixture only', preconditions: 'None', analysis: 'Source inspection only', validation: 'No execution evidence', fix: 'Document the boundary' };
   for (const patch of [{ attack: ['unapproved instructions'] }, { poc: 'unapproved code' }, { analysis: '' }, { validation: '' }]) await assert.rejects(callBridgeTool(ctx, 'submit_audit_report', { findings: [{ ...finding, ...patch }], verified_safe: [] }));
-  await callBridgeTool(ctx, 'submit_audit_report', { findings: [finding], verified_safe: [{ control: 'Inert fixture', evidence: 'Inspected package.json:1 only', holds: true }] });
+  await callBridgeTool(ctx, 'submit_audit_report', { findings: [finding], verified_safe: [{ control: 'Inert fixture', evidence: ['package.json:1', 'package.json:2'], holds: true }] });
   const payload = JSON.parse(fs.readFileSync(path.join(f.root, 'auditors/claude-s1-auth.json')));
   assert.deepEqual(payload[0].attack, []);
   assert.equal(payload[0].poc, '');
   assert.equal(payload[0].analysis, finding.analysis);
+  assert.equal(payload.at(-1).verified_safe[0].how_attacked, 'package.json:1; package.json:2');
 });
 
 test('legacy workflow sessions and deployed RPC requests are rejected before reviewer or Docker startup', async t => {
