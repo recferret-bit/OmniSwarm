@@ -77,6 +77,12 @@ export async function insertThemeRequest(db: Db, row: {
       row.requestHash, row.now, row.parent.scope, row.theme, row.parent.id, row.slicePath]);
 }
 
+export async function listRecent(db: Db, limit = 200): Promise<RequestRow[]> {
+  const result = await db.query<RequestRow>(
+    'SELECT * FROM request ORDER BY created_at DESC LIMIT $1', [limit]);
+  return result.rows;
+}
+
 export async function listThemes(db: Db, parentId: string): Promise<RequestRow[]> {
   const result = await db.query<RequestRow>('SELECT * FROM request WHERE parent_id = $1 ORDER BY created_at', [parentId]);
   return result.rows;

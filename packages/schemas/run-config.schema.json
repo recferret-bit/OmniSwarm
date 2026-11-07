@@ -36,7 +36,9 @@
       "properties": {
         "rounds": { "type": "integer", "minimum": 1, "maximum": 3 },
         "toolBudget": { "type": "integer", "minimum": 1, "maximum": 100 },
-        "maxClusters": { "type": "integer", "minimum": 1, "maximum": 500 }
+        "maxClusters": { "type": "integer", "minimum": 1, "maximum": 500 },
+        "turnMs": { "type": "integer", "minimum": 15000, "maximum": 600000, "description": "Wall clock for one debate turn, judgement, or general review. The harness aborts the session." },
+        "phaseMs": { "type": "integer", "minimum": 60000, "maximum": 3600000, "description": "Wall clock for the speaking phase. Clusters not started are a debate_time coverage gap." }
       }
     },
     "prices": {

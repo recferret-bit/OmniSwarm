@@ -6,9 +6,11 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { GRACE } from './bridge-budget.mjs';
 import { families } from './reviewer-families.mjs';
+import { grokMaxTurnsSupport } from './provider-cli.mjs';
 import { passRoles } from './review-briefs.mjs';
 import { formatReviewerSpec, parseReviewerSpec } from './reviewer-registry.mjs';
 import { assignJobs, selectSurfaces } from './reviewer-plan-assign.mjs';
+import { DEFAULTS } from './run-config.mjs';
 
 export { assignJobs, selectSurfaces };
 
@@ -71,11 +73,13 @@ export function renderPlan({ reviewers, assign, budgets, orchestrator, alternate
   lines.push('', `Assignment: ${assign} (${jobs.length} job${jobs.length === 1 ? '' : 's'})`, `  ${pad('reviewer', w)}${surfaces.map((s) => pad(s.code, 4)).join('')}`);
   for (const r of reviewers) lines.push(`  ${pad(r.id, w)}${surfaces.map((s) => pad(jobs.some((j) => j.reviewer.id === r.id && j.surface.id === s.id) ? 'x' : '.', 4)).join('')}`);
   const worst = budgets.passes * (budgets.toolBudget + GRACE);
-  lines.push('', `Budgets: passes ${budgets.passes}; tool budget ${budgets.toolBudget} per pass; debate rounds ${budgets.debate.rounds} (max 3); debate cluster cap ${budgets.debate.maxClusters}; debate tool budget ${budgets.debate.toolBudget} per turn; max cost ${budgets.maxCostUsd == null ? 'unset' : `$${budgets.maxCostUsd} per reviewer (run-wide)`}`);
+  const debate = { ...DEFAULTS.debate, ...(budgets.debate || {}) };
+  lines.push('', `Budgets: passes ${budgets.passes}; tool budget ${budgets.toolBudget} per pass; debate rounds ${debate.rounds} (max 3); debate cluster cap ${debate.maxClusters}; debate tool budget ${debate.toolBudget} per turn; debate turn limit ${Math.round(debate.turnMs / 1000)}s; debate phase limit ${Math.round(debate.phaseMs / 60000)}min; max cost ${budgets.maxCostUsd == null ? 'unset' : `$${budgets.maxCostUsd} per reviewer (run-wide)`}`);
   lines.push(`Pass roles: ${passRoles(budgets.passes).join(', ')}. Worst case ${worst} calls.`);
   for (const r of reviewers) {
     const roles = passRoles(Math.min(budgets.passes, 2)).join(', ');
-    const maxTurnsFlag = r.family === 'cli' && families.get('cli').providers[r.provider]?.maxTurnsFlag === true;
+    const declaresMaxTurns = r.family === 'cli' && families.get('cli').providers[r.provider]?.maxTurnsFlag === true;
+    const maxTurnsFlag = declaresMaxTurns && r.provider === 'grok' && grokMaxTurnsSupport(env);
     const gate = maxTurnsFlag ? 'bridge+acp+--max-turns' : r.family === 'cli' ? 'bridge+acp' : 'bridge+loop';
     lines.push(`${r.id}  ${budgets.passes} × ${budgets.toolBudget} (+${GRACE})  ${roles}  max ${worst} calls  gate: ${gate}`);
     if (maxTurnsFlag) lines.push(`--max-turns ${budgets.toolBudget + GRACE}`);

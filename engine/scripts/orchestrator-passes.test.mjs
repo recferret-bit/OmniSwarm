@@ -40,6 +40,7 @@ function setup(t, { target, failPass = null, reviewers = ['scripted:baseline'] }
     fs.mkdirSync(path.join(options.directory, 'workspace'), { recursive: true });
     fs.writeFileSync(path.join(options.directory, 'workspace', 'api-session.json'), JSON.stringify({ servedModel: 'served-baseline-0901', usage: [{ prompt_tokens: 7, completion_tokens: 3, cost: 0.01, costSource: 'estimated' }] }));
     if (pass && pass === failPass) return { code: 1, failureReason: 'turn_incomplete', sessionId: identity.name, directory: options.directory, elapsedMs: 1, observedExitCode: 0 };
+    if (failPass === 'silent' && pass > 1 && identity.role === 'auditor') return { code: 0, stopReason: 'end_turn', sessionId: identity.name, directory: options.directory, elapsedMs: 1, observedExitCode: 0 };
     const payload = identity.role === 'auditor' ? finding(identity, pass) : readReportJson(out, `crosscheck/${identity.agent}.json`).map((row) => ({ id: row.id, verdict: 'upheld', reason: 'Inert source', evidence: ['source.js:1'] }));
     commitSubmission(out, identity.name, identity, payload);
     return { code: 0, stop: 'submitted', sessionId: identity.name, directory: options.directory, elapsedMs: 1, observedExitCode: 0 };
@@ -104,6 +105,17 @@ test('a failed later pass keeps the earlier pass, counts only completed passes a
   assert.equal(after.state, 'collected');
   assert.match(readReportJson(resumed.out, 'auditors/scripted-baseline-s1-auth.json')[0].title, /^Pass 3 finding/);
   for (const k of [1, 2]) assert.ok(fs.existsSync(path.join(resumed.out, 'submissions', `scripted-baseline-s1-auth-pass-${k}.json`)));
+});
+
+test('a later pass that ends without a new report keeps the earlier report and the job is collected', async (t) => {
+  const f = setup(t, { failPass: 'silent' });
+  const req = f.request();
+  const result = await runOrchestratedAudit(req, { review: f.review, startSandbox: f.startSandbox });
+  assert.equal(result.stageFailures.some((row) => row.startsWith('auditor_error:')), false);
+  const job = readReportJson(req.out, 'workers.json').jobs[0];
+  assert.equal(job.state, 'collected');
+  assert.equal(job.passesCompleted, 1);
+  assert.match(readReportJson(req.out, 'auditors/scripted-baseline-s1-auth.json')[0].title, /^Pass 1 finding/);
 });
 
 test('a review of the bundled fixture on the Docker path is stamped as the demo', async (t) => {

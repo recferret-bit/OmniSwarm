@@ -118,6 +118,11 @@ async function crosscheckReviewer(run, agent, inbox, containerDir) {
   const res = await run.execute({ name, agent, role: 'crosscheck', prompt, assignment: inbox, logFile: path.join(run.output, hostLogRel(name)) });
   run.crosscheckExits[agent] = res.code || 1;
   if (res.code !== 0) { if (res.failure?.reason) run.providerFailures[agent] ||= res.failure.reason; throw new Error(res.failure.message); }
+  if (!fs.existsSync(path.join(run.output, 'submissions', `${name}.json`))) {
+    const missing = new Error(FAILURE_MESSAGES.missing_report);
+    missing.reason = 'missing_report';
+    throw missing;
+  }
   const submission = readCanonicalSubmission(run.output, name, res.identity);
   normalizeCrosscheckPayload(submission.report.payload, inbox);
   deriveSubmission(run.output, submission, renderMarkdownFromFindings);

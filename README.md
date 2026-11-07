@@ -141,7 +141,7 @@ cp engine/omniswarm.config.example.json omniswarm.config.json
 | `hosted` | Z.ai and five OpenRouter models, round-robin, 25 USD ceiling | `openrouter:anthropic/claude-opus-5.5`, alternate judge `openrouter:openai/gpt-6.1-sol` |
 | `demo` | the four scripted reviewers | `scripted:judge` (refused outside the bundled fixtures) |
 
-Useful flags (all in `./bin/audit --help`): `--reviewers <family>:<provider>:<model>,…`, `--assign matrix|round-robin`, `--surface s1..s6|all`, `--passes <1-5>` (default 2), `--tool-budget <5-200>` (default 40 inspection calls per pass, plus 3 to submit), `--max-cost-usd <usd>`, `--orchestrator <spec|recommended>` (without it there is no debate), `--alternate-judge <spec>`, `--debate-rounds <1-3>` (default 2), `--debate-max-clusters <n>` (default 25), `--debate-tool-budget <n>` (default 12), `--resume-from <report>` with `--restart-failed`.
+Useful flags (all in `./bin/audit --help`): `--reviewers <family>:<provider>:<model>,…`, `--assign matrix|round-robin`, `--surface s1..s6|all`, `--passes <1-5>` (default 2), `--tool-budget <5-200>` (default 40 inspection calls per pass, plus 3 to submit), `--max-cost-usd <usd>`, `--orchestrator <spec|recommended>` (without it there is no debate), `--alternate-judge <spec>`, `--debate-rounds <1-3>` (default 2), `--debate-max-clusters <n>` (default 25), `--debate-tool-budget <n>` (default 12), `--debate-turn-ms <n>` (default 180000), `--debate-phase-ms <n>` (default 900000), `--resume-from <report>` with `--restart-failed`.
 
 ### Provider keys
 

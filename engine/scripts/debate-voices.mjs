@@ -12,10 +12,10 @@ const publicTurn = ({ round, role, anonId, verdict, argument, citations }) => ({
 // flip without new evidence) is shown marked so it is not counted as an independent vote.
 const judgeTurns = (turns) => turns.filter((t) => !t.discarded).map((t) => ({ ...publicTurn(t), ...(t.conformitySuspect ? { conformitySuspect: true } : {}) }));
 
-async function session(ctx, { name, agent, role, prompt, assignment, kind }) {
+async function session(ctx, { name, agent, role, prompt, assignment, kind, signal }) {
   try {
     const logFile = path.join(ctx.output, 'harness', 'host', `agent-${name}.log`);
-    const result = await ctx.execute({ name, agent, role, prompt, assignment, logFile });
+    const result = await ctx.execute({ name, agent, role, prompt, assignment, logFile, signal });
     if (result?.code !== 0) return { body: null, reason: result?.failure?.reason || 'session_failed' };
     const body = readInbox(ctx.output, name, kind);
     return body ? { body } : { body: null, reason: 'nothing_committed' };
@@ -25,31 +25,31 @@ async function session(ctx, { name, agent, role, prompt, assignment, kind }) {
 }
 
 export function bridgeVoice(ctx, reviewer, budget = DEBATE_TOOL_BUDGET) {
-  return async ({ role, round, cluster, turns, anonId }) => {
+  return async ({ role, round, cluster, turns, anonId, signal }) => {
     const name = `${reviewer.id}-debate-${cluster.id.toLowerCase()}-r${round}`;
     const assignment = { kind: 'debate-turn', clusterId: cluster.id, round, role, anonId, budget };
     const prompt = renderDebateBrief(TEMPLATE[role], { cluster, turns: turns.filter((t) => !t.discarded).map(publicTurn), anonId, round, budget });
-    const { body, reason } = await session(ctx, { name, agent: reviewer.id, role: 'debater', prompt, assignment, kind: 'debate-turn' });
+    const { body, reason } = await session(ctx, { name, agent: reviewer.id, role: 'debater', prompt, assignment, kind: 'debate-turn', signal });
     return body ? { verdict: body.verdict, citations: body.citations, argument: body.argument } : { unavailable: reason };
   };
 }
 
 export function bridgeJudge(ctx, reviewer, budget = DEBATE_TOOL_BUDGET) {
-  return async ({ cluster, turns, judge, validArguments, discardedArguments }) => {
+  return async ({ cluster, turns, judge, validArguments, discardedArguments, signal }) => {
     const name = `${reviewer.id}-judge-${cluster.id.toLowerCase()}`;
     const assignment = { kind: 'judge', clusterId: cluster.id, judge, validArguments, discardedArguments, budget };
     const prompt = renderDebateBrief('judge', { cluster, turns: judgeTurns(turns), budget });
-    const { body, reason } = await session(ctx, { name, agent: reviewer.id, role: 'orchestrator', prompt, assignment, kind: 'judge' });
+    const { body, reason } = await session(ctx, { name, agent: reviewer.id, role: 'orchestrator', prompt, assignment, kind: 'judge', signal });
     return body || { unavailable: reason };
   };
 }
 
 export function bridgeSummary(ctx, reviewer, budget = DEBATE_TOOL_BUDGET) {
-  return async ({ clusters }) => {
+  return async ({ clusters, signal }) => {
     const name = `${reviewer.id}-general-review`;
     const assignment = { kind: 'general-review', clusterIds: clusters.map((row) => row.clusterId), budget };
     const prompt = renderDebateBrief('general-review', { clusters });
-    const { body, reason } = await session(ctx, { name, agent: reviewer.id, role: 'orchestrator', prompt, assignment, kind: 'general-review' });
+    const { body, reason } = await session(ctx, { name, agent: reviewer.id, role: 'orchestrator', prompt, assignment, kind: 'general-review', signal });
     return body || { unavailable: reason };
   };
 }

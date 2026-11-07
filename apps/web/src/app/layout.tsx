@@ -1,8 +1,14 @@
 import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
+import Script from 'next/script';
+import { IBM_Plex_Mono, Sora, Source_Sans_3 } from 'next/font/google';
 import { LiveRegion } from '@/components/ui/LiveRegion';
 import { Providers } from './providers';
 import './globals.css';
+
+const display = Sora({ subsets: ['latin'], weight: ['600', '700'], variable: '--font-display', display: 'swap' });
+const body = Source_Sans_3({ subsets: ['latin'], weight: ['400', '500', '600'], variable: '--font-body', display: 'swap' });
+const mono = IBM_Plex_Mono({ subsets: ['latin'], weight: ['400', '500', '600'], variable: '--font-mono', display: 'swap' });
 
 export const metadata: Metadata = {
   title: { default: 'OmniSwarm — AI code review attested on NEAR', template: '%s · OmniSwarm' },
@@ -15,13 +21,16 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  themeColor: [{ media: '(prefers-color-scheme: light)', color: '#ffffff' }, { media: '(prefers-color-scheme: dark)', color: '#111318' }],
+  themeColor: '#090B10',
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" className={`${display.variable} ${body.variable} ${mono.variable}`}>
       <body>
+        <Script id="os-theme" strategy="beforeInteractive">
+          {`try{var t=localStorage.getItem('os-theme');if(t==='day'||t==='night')document.documentElement.dataset.theme=t;}catch(e){}`}
+        </Script>
         <Providers>{children}</Providers>
         <LiveRegion />
       </body>

@@ -46,7 +46,28 @@ const toolsOf = role => ROLE_TOOLS[role] || ROLE_TOOLS.auditor;
 const submitTool = (role, name) => toolsOf(role).submit(name);
 // The one "hand in your report" turn a budgeted pass gets when the agent ends without submitting.
 export const submitNowText = (role, name) => `This pass ended without a report. Call ${submitTool(role, name)} now with what you can support from the source you read, and disclose what you did not cover.`;
-const CONTINUATION = '\n\nContinue the saved review for this exact source and assignment. Retain supported work and disclose remaining coverage. Use the current audit MCP bridge. If the report was already submitted successfully, finish without resubmitting it.';
+const SAME_PASS_CONTINUATION = '\n\nContinue the saved review for this exact source and assignment. Retain supported work and disclose remaining coverage. Use the current audit MCP bridge. The report for this pass is already committed. Finish without submitting a second report.';
+const NEW_PASS_CONTINUATION = '\n\nContinue the saved review for this exact source and assignment. Retain supported work and disclose remaining coverage. Use the current audit MCP bridge. This pass has no committed report yet. Call its submit tool with the updated report before you finish.';
+
+// A resumed session is either a transport recovery of the current pass (the submission is still there)
+// or the next pass (the previous submission was archived). The continuation must not tell a new pass to stop.
+export function continuationText(options) {
+  const args = options.bridgeArgs || [];
+  const dirAt = args.indexOf('--report-dir');
+  const dir = dirAt >= 0 ? args[dirAt + 1] : '';
+  const name = options.identity?.name;
+  const committed = Boolean(dir && name && fs.existsSync(path.join(dir, 'submissions', `${name}.json`)));
+  return committed ? SAME_PASS_CONTINUATION : NEW_PASS_CONTINUATION;
+}
+
+// The CLI reports a full id ("claude-opus-5-5") for a requested alias ("opus"). A different family does not match.
+export function modelMatches(requested, active) {
+  const live = String(active || '').split('[')[0];
+  const want = String(requested || '');
+  if (!live || !want) return false;
+  if (live === want) return true;
+  return live.startsWith(`${want}-`) || live.includes(`-${want}-`) || live.endsWith(`-${want}`);
+}
 const PROVIDER_REASONS = ['provider_policy', 'usage_limit', 'auth_required', 'mcp_unavailable'];
 
 function modelValue(options) { return options?.find(option => option.category === 'model' || option.id === 'model')?.currentValue; }
@@ -98,7 +119,8 @@ function onSessionUpdate(s, turn, params) {
     const value = modelValue(update.configOptions);
     if (value && s.activeModel && value !== s.activeModel) throw new SessionError('model_changed');
   }
-  if (update?.sessionUpdate === 'tool_call') {
+  // session/load replays history before the prompt. Those calls are not this pass.
+  if (update?.sessionUpdate === 'tool_call' && turn.live) {
     turn.toolCalls += 1;
     const title = String(update.title || '');
     const { identity } = s.options;
@@ -153,7 +175,7 @@ async function openSession(s, spec, turn) {
     s.sessionId = opened.sessionId;
   }
   s.activeModel = modelValue(opened.configOptions) || opened.models?.currentModelId;
-  if (families.modelPinned({ family: identity.family || 'cli', provider: identity.provider || identity.agent }) && s.activeModel && s.activeModel.split('[')[0] !== identity.model) throw new SessionError('model_changed');
+  if (families.modelPinned({ family: identity.family || 'cli', provider: identity.provider || identity.agent }) && s.activeModel && !modelMatches(identity.model, s.activeModel)) throw new SessionError('model_changed');
   s.store.save('running', { sessionId: s.sessionId, selectedModel: s.activeModel || identity.model });
   s.phase = 'running';
   return init;
@@ -224,7 +246,8 @@ async function runTurn(s, spec, maxRecoveries) {
   try {
     const init = await openSession(s, spec, turn);
     if (s.options.signal?.aborted) throw new SessionError('cancelled');
-    const result = await promptWithCorrections(s, turn, s.options.prompt + (attempt || s.options.resume ? CONTINUATION : ''));
+    turn.live = true;
+    const result = await promptWithCorrections(s, turn, s.options.prompt + (attempt || s.options.resume ? continuationText(s.options) : ''));
     return await settleTurn(s, spec, turn, init, result);
   } catch (error) {
     const reason = failureReason(error, s.options.signal);

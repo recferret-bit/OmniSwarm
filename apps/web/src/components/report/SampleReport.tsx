@@ -6,8 +6,9 @@ import { compareAttestation, fetchJson, loadReport } from '@/lib/report/verify';
 import { Panel } from '../ui/Panel';
 import { AttestationBadge } from './AttestationBadge';
 import { ReportContents } from './ReportContents';
-import { ReportFrame } from './ReportFrame';
+import { ReportStill } from './ReportStill';
 import { useVerification } from './useVerification';
+import './report-still.css';
 
 // The bundled sample (public/sample): a published engine report and a recorded
 // attestation fixture. The badge is labelled as a sample and never reads NEAR.
@@ -35,7 +36,7 @@ export function SampleReport() {
         {state.phase === 'done' ? <ReportContents findings={state.result.findings} general={state.result.general} /> : <p>Loading the report…</p>}
       </Panel>
       <Panel id="sample-frame" title="Published report">
-        <ReportFrame src={SAMPLE.report} title="Sample OmniSwarm report" />
+        <ReportStill linked={false} />
       </Panel>
     </>
   );

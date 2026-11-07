@@ -14,7 +14,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 // The repository root (engine/scripts/../..), where operators keep omniswarm.config.json.
 export const ROOT = path.resolve(HERE, '../..');
 export const CONFIG_NAME = 'omniswarm.config.json';
-export const DEFAULTS = Object.freeze({ passes: 2, toolBudget: 40, debate: Object.freeze({ rounds: 2, toolBudget: 12, maxClusters: 25 }) });
+export const DEFAULTS = Object.freeze({ passes: 2, toolBudget: 40, debate: Object.freeze({ rounds: 2, toolBudget: 12, maxClusters: 25, turnMs: 180000, phaseMs: 900000 }) });
 export const MATRIX_LIMIT = 8;
 const LEGACY_AGENTS = Object.keys(CLI_DEFAULT_MODELS);
 
@@ -57,12 +57,15 @@ function legacyModels(flags) {
 const hasLegacyModelFlags = (flags) => Boolean(flags.model || flags.models || Object.values(flags.modelByAgent || {}).some(Boolean));
 
 const integerFlag = (name, value) => { if (value === undefined || value === '') return undefined; const n = Number(value); if (!Number.isInteger(n)) throw new ConfigError(`${name} must be an integer`); return n; };
-const DEBATE_LIMITS = { rounds: ['--debate-rounds', 1, 3], maxClusters: ['--debate-max-clusters', 1, 500], toolBudget: ['--debate-tool-budget', 1, 100] };
+const DEBATE_LIMITS = {
+  rounds: ['--debate-rounds', 1, 3], maxClusters: ['--debate-max-clusters', 1, 500], toolBudget: ['--debate-tool-budget', 1, 100],
+  turnMs: ['--debate-turn-ms', 15000, 600000], phaseMs: ['--debate-phase-ms', 60000, 3600000],
+};
 
 // Debate settings: --debate-* flags over the preset or file `debate` object. Unset keys keep DEFAULTS.debate.
 function debateSettings(flags, fromConfig = {}) {
   const debate = { ...fromConfig };
-  for (const [key, flag] of Object.entries({ rounds: 'debateRounds', maxClusters: 'debateMaxClusters', toolBudget: 'debateToolBudget' })) {
+  for (const [key, flag] of Object.entries({ rounds: 'debateRounds', maxClusters: 'debateMaxClusters', toolBudget: 'debateToolBudget', turnMs: 'debateTurnMs', phaseMs: 'debatePhaseMs' })) {
     const value = integerFlag(DEBATE_LIMITS[key][0], flags[flag]);
     if (value !== undefined) debate[key] = value;
   }
@@ -86,7 +89,7 @@ function refuseScriptedJudge(target, specs) {
 
 // Resolve flags + config into the effective run configuration.
 // flags: {config, preset, reviewers, agents, model, models, modelByAgent, assign, orchestrator, alternateJudge, passes, toolBudget,
-//         debateRounds, debateMaxClusters, debateToolBudget, target}
+//         debateRounds, debateMaxClusters, debateToolBudget, debateTurnMs, debatePhaseMs, target}
 export function resolveRunConfig({ flags = {}, root = ROOT, explicitConfig = flags.config } = {}) {
   const fromEnv = !explicitConfig && process.env.OMNI_RUN_CONFIG ? process.env.OMNI_RUN_CONFIG : '';
   const file = explicitConfig ? path.resolve(explicitConfig) : fromEnv ? path.resolve(fromEnv) : path.join(root, CONFIG_NAME);
@@ -166,7 +169,7 @@ export function parseFlags(argv) {
   const take = (i) => { if (i + 1 >= argv.length) throw new ConfigError(`${argv[i]} needs a value`); return argv[i + 1]; };
   for (let i = 0; i < argv.length; i += 2) {
     const arg = argv[i];
-    const key = { '--config': 'config', '--preset': 'preset', '--reviewers': 'reviewers', '--agents': 'agents', '--model': 'model', '--models': 'models', '--assign': 'assign', '--orchestrator': 'orchestrator', '--alternate-judge': 'alternateJudge', '--passes': 'passes', '--tool-budget': 'toolBudget', '--max-cost-usd': 'maxCostUsd', '--debate-rounds': 'debateRounds', '--debate-max-clusters': 'debateMaxClusters', '--debate-tool-budget': 'debateToolBudget', '--target': 'target' }[arg];
+    const key = { '--config': 'config', '--preset': 'preset', '--reviewers': 'reviewers', '--agents': 'agents', '--model': 'model', '--models': 'models', '--assign': 'assign', '--orchestrator': 'orchestrator', '--alternate-judge': 'alternateJudge', '--passes': 'passes', '--tool-budget': 'toolBudget', '--max-cost-usd': 'maxCostUsd', '--debate-rounds': 'debateRounds', '--debate-max-clusters': 'debateMaxClusters', '--debate-tool-budget': 'debateToolBudget', '--debate-turn-ms': 'debateTurnMs', '--debate-phase-ms': 'debatePhaseMs', '--target': 'target' }[arg];
     if (key) { flags[key] = take(i); continue; }
     // --claude-model <slug> (the planned spelling) and --model-claude <slug> (alias) set one vendor's model.
     const perAgent = /^--([a-z]+)-model$/.exec(arg)?.[1] || /^--model-([a-z]+)$/.exec(arg)?.[1];
@@ -178,7 +181,7 @@ export function parseFlags(argv) {
 
 function main() {
   const [command, ...rest] = process.argv.slice(2);
-  if (command !== 'resolve') { process.stderr.write('usage: run-config.mjs resolve [--config f] [--preset p] [--reviewers a,b | --agents a,b] [--model* ...] [--assign m] [--orchestrator o] [--alternate-judge j] [--passes n] [--tool-budget n] [--debate-rounds n] [--debate-max-clusters n] [--debate-tool-budget n] [--target dir]\n'); process.exit(2); }
+  if (command !== 'resolve') { process.stderr.write('usage: run-config.mjs resolve [--config f] [--preset p] [--reviewers a,b | --agents a,b] [--model* ...] [--assign m] [--orchestrator o] [--alternate-judge j] [--passes n] [--tool-budget n] [--debate-rounds n] [--debate-max-clusters n] [--debate-tool-budget n] [--debate-turn-ms n] [--debate-phase-ms n] [--target dir]\n'); process.exit(2); }
   try {
     const result = resolveRunConfig({ flags: parseFlags(rest) });
     process.stdout.write(`${JSON.stringify(result)}\n`);

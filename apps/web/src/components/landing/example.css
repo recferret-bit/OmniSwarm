@@ -1,0 +1,16 @@
+.ex-grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr); gap: var(--os-s6); align-items: start; }
+.ex-path { margin: 0; }
+.ex-code {
+  margin: 0; padding: var(--os-s5); background: var(--os-deep); border: 1px solid var(--os-ember);
+  font-family: var(--os-font-mono); line-height: 1.6;
+}
+.ex-code .dim { font-size: 14px; }
+.ex-code .line { display: block; font-size: clamp(18px, 2vw, 26px); color: var(--os-ember-text); font-weight: 600; }
+.ex-note { margin: 0; max-width: 46ch; }
+.ex-tabs { display: flex; flex-wrap: wrap; gap: 8px; }
+.ex-tabs button { font-family: var(--os-font-display); }
+.ex-tabs button[aria-selected="true"] { background: var(--os-ember); color: var(--os-on-ember); border-color: transparent; }
+.ex-quote { margin: 0; font-family: var(--os-font-display); font-size: clamp(26px, 3vw, 40px); line-height: 1.05; letter-spacing: -0.03em; }
+.ex-judge { margin: 0; display: grid; gap: 8px; padding-top: var(--os-s3); border-top: 1px solid var(--os-seam); }
+.ex-judge p { margin: 0; color: var(--os-cite-text); font-size: 15px; }
+@media (max-width: 800px) { .ex-grid { grid-template-columns: 1fr; } }

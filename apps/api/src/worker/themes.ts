@@ -30,7 +30,51 @@ export function themeOf(name: string): ThemeName | null {
   return 'apps';
 }
 
-export interface ThemeSlice { theme: ThemeName; dirs: string[] }
+export interface ThemeSlice { theme: ThemeName; dirs: string[]; exclude?: string[] }
+
+const CHAIN_DIR = /^(programs?|contracts?|anchor)$/i;
+
+/** A chain project nested under an app, such as backend/programs, is its own web3 root. */
+export function web3Roots(files: readonly string[]): string[] {
+  const roots = new Set<string>();
+  for (const file of files) {
+    const parts = file.split('/');
+    const base = parts[parts.length - 1] ?? '';
+    if (base === 'Anchor.toml') roots.add(parts.slice(0, -1).join('/') || '.');
+    const at = parts.findIndex((part) => CHAIN_DIR.test(part));
+    if (at >= 0) roots.add(parts.slice(0, at + 1).join('/'));
+  }
+  return [...roots].filter((root) => root !== '.').sort();
+}
+
+/**
+ * Group a file list. Nested chain roots are web3 and are excluded from the
+ * surrounding app tree. `full` keeps every theme; web2 drops web3; web3 keeps only web3.
+ */
+export function partitionTree(files: readonly string[], scope: ReviewScope): ThemeSlice[] {
+  const roots = web3Roots(files);
+  const top = [...new Set(files.map((file) => file.split('/')[0] ?? '').filter(Boolean))];
+  const grouped = new Map<ThemeName, { dirs: string[]; exclude: string[] }>();
+  const add = (theme: ThemeName, dir: string, exclude: string[] = []) => {
+    const current = grouped.get(theme) ?? { dirs: [], exclude: [] };
+    if (!current.dirs.includes(dir)) current.dirs.push(dir);
+    for (const item of exclude) if (!current.exclude.includes(item)) current.exclude.push(item);
+    grouped.set(theme, current);
+  };
+  if (scope !== 'web2') for (const root of roots) add('web3', root);
+  for (const name of top) {
+    const theme = themeOf(name);
+    if (!theme || theme === 'web3') continue;
+    if (scope === 'web3') continue;
+    const nested = roots.filter((root) => root === name || root.startsWith(`${name}/`));
+    if (theme === 'apps' && nested.length && nested.some((root) => root !== name)) add('apps', name, nested);
+    else if (!nested.includes(name)) add(theme, name);
+  }
+  return THEME_ORDER.filter((theme) => grouped.has(theme)).map((theme) => {
+    const found = grouped.get(theme)!;
+    return found.exclude.length ? { theme, dirs: found.dirs, exclude: found.exclude } : { theme, dirs: found.dirs };
+  });
+}
 
 /** Group top-level directory names. `full` keeps every theme; web2 drops web3; web3 keeps only web3. */
 export function partition(names: readonly string[], scope: ReviewScope): ThemeSlice[] {

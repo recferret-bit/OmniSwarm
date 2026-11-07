@@ -29,6 +29,20 @@ function bridgeArguments(run, { role, agent, name, surface, identityFile, pass }
   return args;
 }
 
+// One signal that aborts when any input aborts. A single input is returned as itself.
+export function linkSignals(signals) {
+  const list = signals.filter(Boolean);
+  if (list.length === 0) return { signal: undefined, stop() {} };
+  if (list.length === 1) return { signal: list[0], stop() {} };
+  const controller = new AbortController();
+  const abort = () => { if (!controller.signal.aborted) controller.abort(); };
+  for (const signal of list) {
+    if (signal.aborted) abort();
+    else signal.addEventListener('abort', abort);
+  }
+  return { signal: controller.signal, stop() { for (const signal of list) signal.removeEventListener('abort', abort); } };
+}
+
 function recordExit(output, name, result) {
   writeReportFile(output, `harness/heartbeat-${name}.json`, `${JSON.stringify({ state: 'exited', at: new Date().toISOString(), elapsedMs: result.elapsedMs, turnCode: result.code, observedExitCode: result.observedExitCode ?? null, sessionId: result.sessionId, timeLimitMs: null })}\n`);
   if (result.code === 0) return result;
@@ -39,7 +53,7 @@ function recordExit(output, name, result) {
 // run: {request, output, reviewerById, sourceDigest, dockerBin, budgets, prices, review, signal, session, resume,
 //       sandboxFailure} (session and sandboxFailure are read when a turn starts).
 export function createExecute(run) {
-  return async ({ name, agent, role, surface, prompt, assignment, logFile, pass, passResume = false }) => {
+  return async ({ name, agent, role, surface, prompt, assignment, logFile, pass, passResume = false, signal }) => {
     if (run.sandboxFailure) throw run.sandboxFailure;
     // reviewerById holds the run's reviewers and its judges (orchestrator, alternate judge).
     const reviewer = run.reviewerById.get(agent);
@@ -56,10 +70,15 @@ export function createExecute(run) {
     const bridgeArgs = bridgeArguments(run, { role, agent, name, surface, identityFile, pass });
     const transport = families.has(reviewer.family) ? families.get(reviewer.family).transport : undefined;
     writeReportFile(run.output, `harness/session-${name}.json`, JSON.stringify({ directory: plan.directory, identity, ...(transport ? { transport } : {}) }));
-    const result = await run.review({
-      directory: plan.directory, identity, bridgeArgs, prompt: plan.prompt, logFile, resume: resuming,
-      budgets: run.budgets, prices: run.prices, signal: run.signal, onProgress: heartbeatReporter(run.output, name),
-    });
-    return { ...recordExit(run.output, name, result), identity, ...(plan.restartedFrom ? { restartedFrom: plan.restartedFrom } : {}) };
+    const linked = linkSignals([run.signal, signal]);
+    try {
+      const result = await run.review({
+        directory: plan.directory, identity, bridgeArgs, prompt: plan.prompt, logFile, resume: resuming,
+        budgets: run.budgets, prices: run.prices, signal: linked.signal, onProgress: heartbeatReporter(run.output, name),
+      });
+      return { ...recordExit(run.output, name, result), identity, ...(plan.restartedFrom ? { restartedFrom: plan.restartedFrom } : {}) };
+    } finally {
+      linked.stop();
+    }
   };
 }

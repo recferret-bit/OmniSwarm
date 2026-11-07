@@ -11,7 +11,7 @@ set -euo pipefail
 #   orchestrate.sh --target <dir> --out <dir> [--name <slug>] [--surface s1..s6|all]
 #                  [--reviewers <spec,spec>] [--config <file>] [--preset <name>] [--assign matrix|round-robin]
 #                  [--orchestrator <spec|recommended>] [--alternate-judge <spec>] [--passes N] [--tool-budget N]
-#                  [--debate-rounds N] [--debate-max-clusters N] [--debate-tool-budget N]
+#                  [--debate-rounds N] [--debate-max-clusters N] [--debate-tool-budget N] [--debate-turn-ms N] [--debate-phase-ms N]
 #                  [--agents a,b] [--model <slug>] [--models a=<slug>,b=<slug>] [--model-<agent> <slug>]   aliases for cli: reviewers
 #                  [--mode local|remote] [--source <path|url>] [--ref <ref>] [--commit <sha>] [--plan]
 #                  [--rpc <https URL>]   rejected: source review does not contact deployed RPCs
@@ -31,7 +31,7 @@ while [[ $# -gt 0 ]]; do
     --out) OUTPUT_DIR="$2"; shift 2 ;;
     --name) TARGET_NAME="$2"; shift 2 ;;
     --surface) SURFACE="$2"; shift 2 ;;
-    --agents|--reviewers|--config|--preset|--assign|--orchestrator|--alternate-judge|--passes|--tool-budget|--max-cost-usd|--debate-rounds|--debate-max-clusters|--debate-tool-budget|--model|--models|--model-claude|--model-grok|--model-agy|--model-codex)
+    --agents|--reviewers|--config|--preset|--assign|--orchestrator|--alternate-judge|--passes|--tool-budget|--max-cost-usd|--debate-rounds|--debate-max-clusters|--debate-tool-budget|--debate-turn-ms|--debate-phase-ms|--model|--models|--model-claude|--model-grok|--model-agy|--model-codex)
       [ $# -ge 2 ] || { echo "orchestrate: $1 needs a value" >&2; exit 1; }
       RC_ARGS+=("$1" "$2"); shift 2 ;;
     --mode) TARGET_MODE="$2"; shift 2 ;;
@@ -108,7 +108,12 @@ if [ "$PLAN" -eq 1 ]; then
   echo "Plan only. No harness, no agents."
 fi
 # Reviewer table, assignment, budgets and orchestrator. Exits 2 when a reviewer's family is not installed.
-node "$SCRIPT_DIR/reviewer-plan.mjs" plan "$RESOLVED_FILE" "$SURFACE" || exit 2
+# A blocked run prints the plan without probing host CLIs (worker-isolation).
+if [ "$BLOCKED" = 1 ]; then
+  OMNI_SKIP_CLI_PROBE=1 node "$SCRIPT_DIR/reviewer-plan.mjs" plan "$RESOLVED_FILE" "$SURFACE" || exit 2
+else
+  node "$SCRIPT_DIR/reviewer-plan.mjs" plan "$RESOLVED_FILE" "$SURFACE" || exit 2
+fi
 [ "$PLAN" -eq 0 ] || exit 0
 
 umask 077

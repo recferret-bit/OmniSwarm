@@ -21,6 +21,7 @@ test('plan prints the reviewer table, a 4 x 6 matrix and budgets', () => {
   assert.deepEqual(problems, []);
   assert.match(text, /cli-claude-opus\s+cli\s+anthropic\s+opus\s+yes/);
   assert.match(text, /Assignment: matrix \(24 jobs\)/);
+  assert.match(text, /debate turn limit 180s; debate phase limit 15min/);
   assert.equal(text.split('\n').filter((l) => /^  cli-.*x\s+x\s+x\s+x\s+x\s+x/.test(l)).length, 4);
 });
 

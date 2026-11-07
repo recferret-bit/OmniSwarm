@@ -100,8 +100,11 @@ export async function runReviewerPasses({ out, name, reviewerId, surface, budget
     const outcome = recordPass({ out, name, reviewerId, surface, pass, toolBudget, result, startedAt });
     servedModel = outcome.servedModel || servedModel;
     health.push({ reviewer: reviewerId, job: name, pass, stop: outcome.stop, submitted: outcome.submitted });
+    // A pass that ends without its own submission must not leave the previous report archived away.
+    if (!outcome.submitted) restoreLastPass(out, name, pass);
     if (outcome.stop === 'cost') ceilings.add(reviewerId);
-    if (result.code !== 0 && outcome.stop !== 'cost') { restoreLastPass(out, name, pass); break; }
+    if (result.code !== 0 && outcome.stop !== 'cost') break;
+    if (!outcome.submitted && outcome.stop !== 'cost') break;
     completed = pass;
   }
   return { passesCompleted: completed, result, health, servedModel };

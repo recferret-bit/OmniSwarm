@@ -14,15 +14,40 @@ import { writeReportFile } from './report-files.mjs';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const maxTurnsCache = new Map();
 
-// One local --help probe. A missing binary or a help text without the flag means the bridge gate is the limit.
+// One local help probe. A missing binary or help text without the flag means the bridge gate is the limit.
+function helpMentionsMaxTurns(cli, args, env) {
+  const key = `${cli}\0${args.join('\0')}`;
+  if (maxTurnsCache.has(key)) return maxTurnsCache.get(key);
+  const help = spawnSync(cli, args, { encoding: 'utf8', timeout: 4000, env: sessionEnvironment(env) });
+  const supported = /--max-turns\b/.test(`${help.stdout || ''}\n${help.stderr || ''}`);
+  maxTurnsCache.set(key, supported);
+  return supported;
+}
+
 export function claudeMaxTurnsSupport(env = process.env) {
   const cli = resolveExecutable('claude', env);
+  return cli ? helpMentionsMaxTurns(cli, ['--help'], env) : false;
+}
+
+// Current Claude builds reject `auth status --settings`. The adapter adds that flag only when we pass settings.
+export function claudeSettingsSupport(env = process.env) {
+  if (env.OMNI_SKIP_CLI_PROBE === '1') return false;
+  const cli = resolveExecutable('claude', env);
   if (!cli) return false;
-  if (maxTurnsCache.has(cli)) return maxTurnsCache.get(cli);
-  const help = spawnSync(cli, ['--help'], { encoding: 'utf8', timeout: 4000, env: sessionEnvironment(env) });
-  const supported = /--max-turns\b/.test(`${help.stdout || ''}\n${help.stderr || ''}`);
-  maxTurnsCache.set(cli, supported);
+  const key = `${cli}\0auth-status-settings`;
+  if (maxTurnsCache.has(key)) return maxTurnsCache.get(key);
+  const help = spawnSync(cli, ['auth', 'status', '--help'], { encoding: 'utf8', timeout: 4000, env: sessionEnvironment(env) });
+  const supported = /--settings\b/.test(`${help.stdout || ''}\n${help.stderr || ''}`);
+  maxTurnsCache.set(key, supported);
   return supported;
+}
+
+// `grok agent` dropped --max-turns in current builds. Probe that subcommand, not the top-level help.
+export function grokMaxTurnsSupport(env = process.env) {
+  // A blocked preflight must not start host CLIs. The bridge gate covers that plan line.
+  if (env.OMNI_SKIP_CLI_PROBE === '1') return false;
+  const cli = resolveExecutable('grok', env);
+  return cli ? helpMentionsMaxTurns(cli, ['agent', '--help'], env) : false;
 }
 const RUNTIME = path.resolve(HERE, '../runtime');
 export const ADAPTER_PINS = { codex: '2.2.2', claude: '0.92.0' };
@@ -54,10 +79,11 @@ const BRIDGE = path.join(HERE, 'docker-mcp-bridge.mjs');
 
 // Per-provider facts other modules read instead of naming adapters themselves.
 // presence: listed by plain `check-agents` (claude-zai only when --reviewers names it);
-// transport: how the session reaches the CLI; maxTurnsFlag: the CLI takes --max-turns N+3 itself;
+// transport: how the session reaches the CLI; maxTurnsFlag: this provider may take --max-turns N+3
+// when its own help text advertises the flag (grok); otherwise the bridge gate is the limit;
 // pinsModel: a model change reported by the agent mid-session aborts the turn.
 export const CLI_PROVIDERS = Object.freeze({
-  claude: Object.freeze({ installed: () => true, pinsModel: false, presence: true, transport: 'maintained_acp', maxTurnsFlag: false }),
+  claude: Object.freeze({ installed: () => true, pinsModel: true, presence: true, transport: 'maintained_acp', maxTurnsFlag: false }),
   codex: Object.freeze({ installed: () => true, pinsModel: true, presence: true, transport: 'maintained_acp', maxTurnsFlag: false }),
   grok: Object.freeze({ installed: () => true, pinsModel: true, presence: true, transport: 'native_acp', maxTurnsFlag: true }),
   agy: Object.freeze({ installed: () => true, pinsModel: false, presence: true, transport: 'native_cli_acp_adapter', maxTurnsFlag: false }),
@@ -77,18 +103,19 @@ const launchers = {
     });
     invocation.args = [adapterFor('codex')];
   },
-  claude({ model, cli, environment, invocation, adapterFor }) {
+  claude({ model, cli, environment, invocation, adapterFor, env }) {
     environment.CLAUDE_CODE_EXECUTABLE = cli;
     environment.CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION = 'false';
     invocation.args = [adapterFor('claude')];
     return { claudeCode: { options: {
       model, tools: [], allowedTools: ['mcp__audit_docker__*'], settingSources: [],
       allowDangerouslySkipPermissions: false, persistSession: true, promptSuggestions: false,
-      settings: { disableAllHooks: true, autoMemoryEnabled: false, forceLoginMethod: 'claudeai' },
+      // Omit settings when this Claude's auth status rejects --settings. The adapter would pass the flag and the probe would fail.
+      ...(claudeSettingsSupport(env) ? { settings: { disableAllHooks: true, autoMemoryEnabled: false, forceLoginMethod: 'claudeai' } } : {}),
       extraArgs: { 'strict-mcp-config': '', 'disable-slash-commands': '' },
     } } };
   },
-  grok({ model, cli, workDir, environment, invocation, toolBudget }) {
+  grok({ model, cli, workDir, environment, invocation, toolBudget, env }) {
     const profile = path.join(workDir, 'audit-agent.md');
     writeReportFile(workDir, path.basename(profile), '---\nname: audit\ndescription: Review only through the supplied audit MCP bridge\ntools: ["mcp__audit_docker__*"]\ndiscoverSkills: false\nagentsMd: false\n---\nUse only the assigned audit_docker MCP server.\n');
     // Keep the existing official login in place; isolate config, plugins, hooks,
@@ -100,7 +127,8 @@ const launchers = {
     fs.mkdirSync(environment.GROK_HOME, { recursive: true, mode: 0o700 });
     environment.GROK_SUBAGENTS = '0';
     invocation.executable = cli;
-    invocation.args = ['agent', '--no-leader', '--model', model, ...(toolBudget ? ['--max-turns', String(toolBudget + 3)] : []), '--agent-profile', profile, 'stdio'];
+    const maxTurns = toolBudget && grokMaxTurnsSupport(env);
+    invocation.args = ['agent', '--no-leader', '--model', model, ...(maxTurns ? ['--max-turns', String(toolBudget + 3)] : []), '--agent-profile', profile, 'stdio'];
   },
   agy({ model, cli, workDir, invocation, mcpServers, legacyConversationId, provider }) {
     const configFile = 'native-launch.json';
@@ -120,7 +148,7 @@ function launch(reviewer, { workDir, bridgeArgs, legacyConversationId, env = pro
   const environment = sessionEnvironment(env);
   const mcpServers = [{ name: 'audit_docker', command: process.execPath, args: [BRIDGE, ...bridgeArgs], env: [] }];
   const invocation = { executable: process.execPath, args: [], cwd: workDir, env: environment };
-  const sessionMeta = launchers[provider]({ model: reviewer.model, provider, cli, workDir, environment, invocation, mcpServers, legacyConversationId, adapterFor, toolBudget }) || {};
+  const sessionMeta = launchers[provider]({ model: reviewer.model, provider, cli, workDir, environment, invocation, mcpServers, legacyConversationId, adapterFor, toolBudget, env }) || {};
   if (requested === 'claude-zai') {
     if (typeof env.ZAI_API_KEY !== 'string' || !env.ZAI_API_KEY) throw new SessionError('setup_error', 'ZAI_API_KEY missing');
     delete sessionMeta.claudeCode?.options?.settings?.forceLoginMethod;

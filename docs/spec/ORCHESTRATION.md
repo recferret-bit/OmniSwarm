@@ -8,7 +8,7 @@
 | # | Principle | Source | What it means here |
 |---|---|---|---|
 | P1 | "finding the simplest solution possible, and only increasing complexity when needed" | BEA | The pipeline is a **workflow in code** (fixed phases). Model freedom exists only inside one reviewer's bounded loop |
-| P2 | "include stopping conditions (such as a maximum number of iterations)" | BEA | Every loop has a hard cap: tool calls per pass, passes per reviewer, debate rounds, judge calls |
+| P2 | "include stopping conditions (such as a maximum number of iterations)" | BEA | Every loop has a hard cap: tool calls per pass, passes per reviewer, debate rounds, a debate wall clock, judge calls |
 | P3 | "Each subagent needs an objective, an output format, guidance on the tools and sources to use, and clear task boundaries" | MARS | Every brief (review, challenge, defend, judge, general review) is a template with those four parts (§5) |
 | P4 | Subagents "store their work in external systems, then pass lightweight references back" | MARS, CTX | Phases exchange **files** (`reviewers/*/report.json`, `debate/round-*`), never transcripts |
 | P5 | "verify each claim by finding a supporting quote… If it can't find a quote, it must retract the claim" | HALL | Every finding and every debate argument cites `file:line` + quoted code, checked **mechanically**; "insufficient evidence" is a legal verdict |
@@ -80,13 +80,15 @@ Two fixed numbers, the same for every family:
 | Tool budget | `--tool-budget N` | **40** per pass | Max bridge `tools/call` per pass (submit calls excluded) |
 | Grace | — | 3 | After N calls the bridge flips that identity to **finalize-only** (`ctx.finalizeOnly`, today never set, R-15): inspection tools answer "budget exhausted: call submit_audit_report now"; 3 more calls are allowed, then the session is cancelled and the pass is recorded `stop: budget` |
 | Debate turn budget | `--debate-tool-budget` | 12 | Tool calls per debate turn (for citation lookups) |
+| Debate turn time | `--debate-turn-ms` | **180000** | Wall clock for one debate turn, one judgement, or the general review. The harness aborts that ACP session. A turn that already started and times out is a `debate_turn_timeout` gap, and the run is INCOMPLETE |
+| Debate phase time | `--debate-phase-ms` | **900000** | Wall clock for the speaking phase. Clusters not started in time stay out of the missing-answer list, are recorded as a `debate_time` coverage gap, and are adjudicated from citations only |
 | Debate rounds | `--debate-rounds R` | **2**, max 3 | Round 1 challenge (+ devil's advocate), round 2 defend; round 3 rebut only if any verdict changed in round 2 |
-| Judge calls | — | 1 per disputed cluster + 1 general review | No retries except one on transport failure |
+| Judge calls | — | 1 per cluster, plus one different-model retry when the verdict stays DISPUTED or the judge does not answer, plus 1 general review | The retry prefers another vendor that did not author the cluster. A second DISPUTED stays DISPUTED. A retry that also does not answer keeps the first gap and does not add another. A resumable session may still recover once from a lost transport |
 | Cost ceiling | `--max-cost-usd` | unset (hosted preset: 25) | Per reviewer, for the whole run: the sum of reported `usage.cost` (OpenRouter) or estimated cost over every API turn of all its passes and surfaces (including its cross-check), kept as `spentUsd` in `harness/budget-<reviewer>.json` under the bridge budget lock. Reaching it ends the current pass with `stop: cost`; the reviewer's remaining passes and surfaces are skipped (`skipped: cost_ceiling` usage rows) and `harness/budget-health.json` records the stop. Debate and judge sessions are not counted against a reviewer |
 
 **Where the cap is enforced** (one gate per family, all three tested):
 1. **Bridge counter** (plugged into W02's `beforeCall(ctx, name)` hook in the `docker-mcp-bridge.mjs` dispatcher, per identity + pass, stored in `harness/budget-<reviewer>.json`, not in the 200-entry log). This is the only gate every family passes through.
-2. **ACP session** (`agent-session.mjs`): counts `tool_call` notifications; after `end_turn` without a submit sends one "submit now" correction (reuses the 3-correction loop); past N + grace it sends `session/cancel`. Grok also gets `--max-turns`.
+2. **ACP session** (`agent-session.mjs`): counts `tool_call` notifications; after `end_turn` without a submit sends one "submit now" correction (reuses the 3-correction loop); past N + grace it sends `session/cancel`. Grok also gets `--max-turns` when `grok agent --help` advertises that flag; a build that does not is limited by the bridge counter and the ACP cancel.
 3. **API loop**: the loop bound is N model turns; on the last turn it sends `tool_choice` forcing `submit_audit_report`.
 
 Every pass writes raw usage to `harness/usage/<reviewer>/<surface>-pass-<k>.json` (W04); W05 derives `reviewers/<id>/usage.json` and `reviewers/<id>/passes/pass-<k>.json` from it, with `{calls, tokensIn, tokensOut, cost, stop: submitted|budget|cost|error, startedAt, endedAt}`.
@@ -103,13 +105,15 @@ Every pass writes raw usage to `harness/usage/<reviewer>/<surface>-pass-<k>.json
 - **Round 1 — challenge** (extends today's crosscheck): every non-author reviewer returns `upheld | partial | refuted | insufficient_evidence` with citations. One non-author is assigned **devil's advocate** per cluster and must argue the strongest false-positive case.
 - **Round 2 — defend:** authors see the challenges (anonymized) and either defend with **new** citations or concede.
 - **Round 3 — rebut** (only if a verdict changed in round 2).
-- **Early stop:** a round with zero verdict changes ends the debate for that cluster.
+- **Early stop:** a round with zero verdict changes ends the debate for that cluster. The speaking phase also stops at `--debate-phase-ms` (default 15 minutes). Clusters not started are a `debate_time` coverage gap and are not a missing-answer failure.
+- **Turn clock:** each debate turn stops at `--debate-turn-ms` (default 3 minutes). The harness aborts the session. A started turn that times out is a `debate_turn_timeout` gap.
 - **Citation checker** (code, no LLM): each argument's `{file, startLine, endLine, quote}` is checked against the read-only source (`/src`, W02); whitespace-normalized substring match. Arguments with no valid citation are **discarded** and logged.
 - **Conformity flag:** a verdict change without a new valid citation is kept but marked `conformity_suspect: true` and down-weighted to zero for the judge.
 
 ### 4.3 Adjudication
 - The judge sees per cluster: the claim, the verified quotes, the valid arguments (anonymized), never vendors, model names or vote tallies.
 - **Cross-family rule:** the judge's vendor must differ from every author's vendor of that cluster; if the orchestrator conflicts, the cluster goes to `--alternate-judge` (default: the strongest available reviewer of another vendor). Recorded per cluster.
+- **One replacement judge:** when the verdict stays `DISPUTED`, or the judge does not answer, the cluster is sent once to a different model. The replacement prefers another vendor that did not author the cluster, then a different model, then any other independent reviewer. A resolved second verdict replaces the first. A second `DISPUTED` stays `DISPUTED`, and both attempts are in `debate/trace.jsonl`. A replacement that also does not answer keeps the first gap. The scripted judge is the citation rules and is not replaced. The stored `judge` object stays `{reviewerId, vendor, alternate}`.
 - Final statuses (extend today's `MODEL_ASSERTION | MODEL_AGREEMENT | UPHELD_REVIEW | PARTIAL_REVIEW | REFUTED_REVIEW`, which stay for back-compat):
   `CONFIRMED` (evidence holds, ≥ 1 independent upheld) · `LIKELY` (evidence holds, single source, not refuted) · `DISPUTED` (valid evidence on both sides) · `REFUTED` (valid refutation evidence) · `INSUFFICIENT_EVIDENCE`.
 - **No silent drops:** a single-source finding is never removed without a valid refuting citation (BEA pitfall: unique findings are often the valuable ones).

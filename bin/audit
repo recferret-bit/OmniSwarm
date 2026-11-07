@@ -42,7 +42,7 @@ parse_flags() {
       --surface|-s) SURFACE="${2:?$1 needs a value}"; shift 2 ;;
       --out|-o) OUT_DIR="${2:?$1 needs a path}"; shift 2 ;;
       --agents|-a) REVIEWER_ARGS+=(--agents "${2:?$1 needs a list}"); shift 2 ;;
-      --reviewers|--config|--preset|--assign|--orchestrator|--alternate-judge|--passes|--tool-budget|--max-cost-usd|--debate-rounds|--debate-max-clusters|--debate-tool-budget|--model|--models|--model-claude|--model-grok|--model-agy|--model-codex)
+      --reviewers|--config|--preset|--assign|--orchestrator|--alternate-judge|--passes|--tool-budget|--max-cost-usd|--debate-rounds|--debate-max-clusters|--debate-tool-budget|--debate-turn-ms|--debate-phase-ms|--model|--models|--model-claude|--model-grok|--model-agy|--model-codex)
         REVIEWER_ARGS+=("$1" "${2:?$1 needs a value}"); shift 2 ;;
       --claude-model|--grok-model|--agy-model|--codex-model)
         agent="${1#--}"; REVIEWER_ARGS+=("--model-${agent%-model}" "${2:?$1 needs a value}"); shift 2 ;;
@@ -212,6 +212,8 @@ Options (run):
   --debate-rounds <n>      debate rounds, 1-3 (default 2, the golden-eval rule in engine/eval/RESULTS.md)
   --debate-max-clusters <n>  clusters debated, 1-500 (default 25); the rest are listed as coverage gaps
   --debate-tool-budget <n> read calls per debate turn or judgement, 1-100 (default 12), plus its submit
+  --debate-turn-ms <n>     wall clock per debate turn, judgement, or general review, 15000-600000 (default 180000). The session is aborted
+  --debate-phase-ms <n>    wall clock for the speaking phase, 60000-3600000 (default 900000). Clusters not started are a debate_time coverage gap
   --passes <n>             passes per reviewer, 1-5 (default 2)
   --tool-budget <n>        inspection calls per pass, 5-200 (default 40), plus 3 calls to submit; enforced by the bridge and each session
   --max-cost-usd <usd>     stop a reviewer's API spend at this ceiling; its later passes are skipped and recorded

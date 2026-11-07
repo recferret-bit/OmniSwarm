@@ -88,8 +88,9 @@ export async function submitAuditReport(ctx, args) {
     if (typeof finding.analysis !== 'string' || !finding.analysis.trim() || typeof finding.validation !== 'string' || !finding.validation.trim() || finding.attack?.length || finding.poc) throw new Error('Security review requires source analysis and validation, not exploit steps or PoCs');
     return { ...finding, attack: [], poc: '' };
   }), verified_safe: args.verified_safe.map(control => {
-    if (typeof control.evidence !== 'string' || !control.evidence.trim()) throw new Error('Security review control requires evidence');
-    return { ...control, how_attacked: control.evidence };
+    const evidence = Array.isArray(control.evidence) ? control.evidence.filter((item) => typeof item === 'string' && item.trim()).join('; ') : control.evidence;
+    if (typeof evidence !== 'string' || !evidence.trim()) throw new Error('Security review control requires evidence');
+    return { ...control, evidence, how_attacked: evidence };
   }) };
   const { payload, findings, verifiedSafe } = normalizeFindingsPayload(args, auditor, surface);
   const submission = commitSubmission(reportDir, auditor, ctx.submissionIdentity, payload, args.markdown_summary || '');

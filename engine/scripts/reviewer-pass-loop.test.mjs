@@ -49,6 +49,28 @@ test('spend on one surface counts against the same reviewer on its other surface
   assert.deepEqual(health.errors, [`${REVIEWER}: budget_exhausted_without_submission`], 'S2 has no report');
 });
 
+test('a later pass that submits nothing restores the archived report and does not count as completed', async () => {
+  const out = fs.mkdtempSync(path.join(os.tmpdir(), 'pass-restore-'));
+  const name = 'job';
+  const seen = [];
+  const loop = await runReviewerPasses({
+    out, name, reviewerId: REVIEWER, surface: 'S1', budgets: { ...BUDGETS, maxCostUsd: null },
+    runPass: async ({ pass }) => {
+      seen.push(pass);
+      if (pass === 1) {
+        fs.mkdirSync(path.join(out, 'submissions'), { recursive: true });
+        fs.writeFileSync(path.join(out, 'submissions', `${name}.json`), '{"pass":1}\n');
+      }
+      return { code: 0, stopReason: 'end_turn' };
+    },
+  });
+  assert.deepEqual(seen, [1, 2]);
+  assert.equal(loop.passesCompleted, 1);
+  assert.equal(fs.readFileSync(path.join(out, 'submissions', `${name}.json`), 'utf8'), '{"pass":1}\n');
+  assert.equal(fs.existsSync(path.join(out, 'submissions', `${name}-pass-1.json`)), true);
+  assert.equal(usage(out, 's1', 2).submitted, false);
+});
+
 test('without a ceiling every pass runs', async () => {
   const out = fs.mkdtempSync(path.join(os.tmpdir(), 'pass-no-ceiling-'));
   const seen = [];

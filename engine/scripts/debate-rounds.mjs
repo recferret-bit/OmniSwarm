@@ -2,10 +2,12 @@
 // devil's advocate. Round 2: authors defend when a challenge refuted. Round 3: challengers rebut only when a
 // round-2 verdict changed. Every turn is citation-checked and classified here, never by the voice.
 import { anonymize, stripIdentity } from './debate-anonymize.mjs';
+import { boundedCall } from './debate-clock.mjs';
 import { checkTurnCitations } from './debate-citations.mjs';
 import { citationKey, classifyArgument } from './debate-rules.mjs';
 import { validate } from '../../packages/schemas/index.mjs';
 import { writeJson } from './report-util-files.mjs';
+import { DEFAULTS } from './run-config.mjs';
 
 const TEMPLATE = { challenge: 'challenge', devil: 'devil-advocate', defend: 'defend', rebut: 'rebut' };
 const publicTurn = (turn) => ({
@@ -29,7 +31,8 @@ async function debateCluster(cluster, participants, ctx, seed) {
     ctx.record.trace.push({ phase: 'debate', template: TEMPLATE[role], clusterId: cluster.id, round, anonId: map[speaker], stop: 'missing', reason });
   };
   const speak = async (speaker, round, role) => {
-    const raw = await ctx.voices.get(speaker)({ role, round, cluster, turns, anonId: map[speaker] });
+    const raw = await boundedCall(ctx.turnMs, ctx.signal, (signal) => ctx.voices.get(speaker)({ role, round, cluster, turns, anonId: map[speaker], signal }));
+    if (raw?.unavailable === 'debate_turn_timeout') return missing(speaker, round, role, 'debate_turn_timeout');
     if (!raw || raw.unavailable || typeof raw.argument !== 'string') return missing(speaker, round, role, raw?.unavailable || 'invalid_turn');
     const citations = checkTurnCitations(ctx.reader, raw.citations, cluster.anchors);
     const turn = classifyArgument({ round, clusterId: cluster.id, role, anonId: map[speaker], verdict: raw.verdict, citations, argument: stripIdentity(raw.argument, ctx.names) }, { seen, previous: previous.get(speaker) ?? null });
@@ -52,16 +55,24 @@ async function debateCluster(cluster, participants, ctx, seed) {
 }
 
 // clusters: buildClusters output rows. voices: Map reviewerId -> speak(). vendors: Map reviewerId -> vendor.
-export async function runRounds({ out, clusters, voices, vendors, reader, rounds = 2, seed = 1, names = [] }) {
+// Clusters still QUEUED when the phase clock expires are returned as `skipped` and are not spoken.
+export async function runRounds({ out, clusters, voices, vendors, reader, rounds = 2, seed = 1, names = [], turnMs = DEFAULTS.debate.turnMs, phaseMs = DEFAULTS.debate.phaseMs, now = Date.now, signal } = {}) {
   const record = { citations: [], trace: [], gaps: [] };
   const participants = [...voices.keys()];
-  const ctx = { out, reader, voices, vendors, rounds, names, record };
+  const ctx = { out, reader, voices, vendors, rounds, names, record, turnMs, signal };
+  const started = now();
+  const skipped = [];
   const debated = new Map();
   const anonymization = { seed, clusters: {} };
   for (const cluster of clusters.filter((row) => row.status === 'QUEUED')) {
+    if (now() - started >= phaseMs) {
+      skipped.push(cluster.id);
+      record.trace.push({ phase: 'debate', template: 'skip', clusterId: cluster.id, stop: 'debate_time' });
+      continue;
+    }
     const result = await debateCluster(cluster, participants, ctx, seed);
     debated.set(cluster.id, result);
     anonymization.clusters[cluster.id] = result.map;
   }
-  return { debated, anonymization, ...record };
+  return { debated, anonymization, skipped, ...record };
 }

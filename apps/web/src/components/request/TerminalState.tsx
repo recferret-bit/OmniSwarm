@@ -4,6 +4,7 @@ import { Alert } from '../ui/Alert';
 
 export function TerminalState({ status }: { status: RequestStatusResponse }) {
   if (status.status === 'failed') {
+    if (status.failureCause) return <Alert>{status.failureCause}</Alert>;
     return <Alert>The review could not finish{status.progress?.phase ? ` (during ${status.progress.phase})` : ''}. The deposit is being refunded.</Alert>;
   }
   if (status.status === 'refunded') {

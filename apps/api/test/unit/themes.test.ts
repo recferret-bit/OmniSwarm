@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { normalizeScopes, partition, shouldSplit, themeOf } from '../../src/worker/themes.ts';
+import { normalizeScopes, partition, partitionTree, shouldSplit, themeOf } from '../../src/worker/themes.ts';
 
 test('top-level names land in one theme, and deps and docs are skipped', () => {
   assert.equal(themeOf('contracts'), 'web3');
@@ -22,6 +22,15 @@ test('web3 keeps chain trees, web2 drops them, and full keeps every theme', () =
   assert.deepEqual(partition(names, 'web2').map((slice) => slice.theme), ['apps', 'infra', 'scripts']);
   assert.equal(partition(names, 'full').length, 4);
   assert.deepEqual(partition(['contracts', 'apps'], 'web3')[0]?.dirs, ['contracts']);
+});
+
+test('a chain project nested under backend is web3, and the app slice leaves it out', () => {
+  const files = ['backend/programs/Anchor.toml', 'backend/src/index.ts', 'frontend/package.json', 'infra/nginx.conf', 'scripts/build.sh', 'docs/readme.md'];
+  const web3 = partitionTree(files, 'web3');
+  assert.deepEqual(web3, [{ theme: 'web3', dirs: ['backend/programs'] }]);
+  const full = partitionTree(files, 'full');
+  assert.deepEqual(full.find((slice) => slice.theme === 'apps'), { theme: 'apps', dirs: ['backend', 'frontend'], exclude: ['backend/programs'] });
+  assert.deepEqual(partitionTree(files, 'web2').map((slice) => slice.theme), ['apps', 'infra', 'scripts']);
 });
 
 test('a small full review stays one job; a large or scoped review is queued per theme', () => {

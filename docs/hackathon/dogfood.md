@@ -26,7 +26,7 @@ npm run check:w10         # adds cargo clippy -D warnings and deploy-testnet.sh 
    ./bin/audit run --repo contracts/review-registry --preset mixed --plan
    ```
 
-   Expected: 6 reviewers, `Assignment: matrix (36 jobs)`, `Budgets: passes 2; tool budget 40 per pass; debate rounds 2 (max 3); debate cluster cap 25; debate tool budget 12 per turn`, `Orchestrator: recommended -> cli:claude:opus`, `Alternate judge: cli:codex:gpt-6.1-sol`. To avoid API cost, use `--preset local-subscriptions` instead (4 CLI reviewers, 24 jobs).
+   Expected: 6 reviewers, `Assignment: matrix (36 jobs)`, `Budgets: passes 2; tool budget 40 per pass; debate rounds 2 (max 3); debate cluster cap 25; debate tool budget 12 per turn; debate turn limit 180s; debate phase limit 15min`, `Orchestrator: recommended -> cli:claude:opus`, `Alternate judge: cli:codex:gpt-6.1-sol`. To avoid API cost, use `--preset local-subscriptions` instead (4 CLI reviewers, 24 jobs).
 
 3. Run it. `mixed` sends the contract source to OpenRouter (and its upstream provider) and to Z.ai, and is billed per token.
 

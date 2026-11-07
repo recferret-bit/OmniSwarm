@@ -131,6 +131,7 @@ export interface QuoteResponse {
   etaMinutes: number;
   sizeKb?: number;
   large?: boolean;
+  freeChecks?: boolean;
 }
 export interface CreateRequestBody {
   accountId: AccountId;
@@ -176,6 +177,7 @@ export interface RequestStatusResponse {
   incomplete?: boolean;
   attestTx?: string;
   refundTx?: string;
+  failureCause?: string;
   /**
    * @maxItems 50
    */

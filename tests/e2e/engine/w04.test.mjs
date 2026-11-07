@@ -10,6 +10,7 @@ import { runOrchestratedAudit } from '../../../engine/scripts/docker-agent-orche
 import { commitSubmission } from '../../../engine/scripts/audit-submission.mjs';
 import { keyFingerprint } from '../../../engine/scripts/reviewer-env.mjs';
 import { parseReviewerList } from '../../../engine/scripts/reviewer-registry.mjs';
+import { grokMaxTurnsSupport } from '../../../engine/scripts/provider-cli.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const run = (args, env = {}) => spawnSync(path.join(ROOT, 'bin', 'audit'), args, { cwd: ROOT, encoding: 'utf8', env: { ...process.env, ...env }, timeout: 180_000 });
@@ -97,8 +98,14 @@ test('Docker path: budgets and prices reach every session, each pass is recorded
   fs.rmSync(root, { recursive: true, force: true });
 });
 
-test('grok plan shows max-turns derived from the budget', () => {
+test('grok plan shows max-turns derived from the budget when the CLI advertises the flag', () => {
   const result = run(['run', '--repo', 'engine/scripts/demo-fixture', '--reviewers', 'cli:grok:grok-4.7', '--tool-budget', '10', '--passes', '1', '--plan']);
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /--max-turns 13/);
+  if (grokMaxTurnsSupport()) {
+    assert.match(result.stdout, /gate: bridge\+acp\+--max-turns/);
+    assert.match(result.stdout, /--max-turns 13/);
+  } else {
+    assert.doesNotMatch(result.stdout, /--max-turns/);
+    assert.match(result.stdout, /cli-grok-grok-4-7\s+1 × 10 \(\+3\)\s+discover\s+max 13 calls\s+gate: bridge\+acp/);
+  }
 });

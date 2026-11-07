@@ -45,9 +45,9 @@ async function workReviews(boss: PgBoss, deps: WorkerDeps, shutdown: AbortSignal
         }
         if (split === 'empty') {
           await transition(deps.pool, existing.id, {
-            to: 'failed', patch: { failureCause: 'no directory matched the selected scope' }, actor: 'worker', event: 'review_empty', now: deps.clock.now(),
+            to: 'failed', patch: { failureCause: `No ${existing.scope} code found in this repository.` }, actor: 'worker', event: 'review_empty', now: deps.clock.now(),
           });
-          return { status: 'failed', reason: 'no directory matched the selected scope' };
+          return { status: 'failed', reason: `no ${existing.scope} code` };
         }
       }
       const result = await handleReview({ ...deps, log }, data, {

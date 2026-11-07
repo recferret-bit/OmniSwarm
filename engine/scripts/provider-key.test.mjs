@@ -46,9 +46,13 @@ test('claude-zai maps the Z.ai key and leaves cli:claude unchanged', () => {
   assert.equal(zai.invocation.env.ANTHROPIC_DEFAULT_HAIKU_MODEL, 'glm-5.3-flash');
   assert.equal(zai.invocation.env.API_TIMEOUT_MS, '3000000');
   assert.equal(zai.invocation.env.ZAI_API_KEY, undefined);
-  assert.equal(zai.sessionMeta.claudeCode.options.settings.forceLoginMethod, undefined);
+  assert.equal(zai.sessionMeta.claudeCode.options.settings, undefined, 'a Claude that does not advertise auth status --settings gets no settings object');
   const plain = families.launch(parseReviewerSpec('cli:claude:opus'), { ...ctx, workDir: fs.mkdtempSync(path.join(os.tmpdir(), 'claude-plain-')) });
-  assert.equal(plain.sessionMeta.claudeCode.options.settings.forceLoginMethod, 'claudeai');
+  assert.equal(plain.sessionMeta.claudeCode.options.settings, undefined);
+  const flaggedBin = fs.mkdtempSync(path.join(os.tmpdir(), 'claude-flag-bin-'));
+  fs.writeFileSync(path.join(flaggedBin, 'claude'), '#!/bin/sh\nif [ "$1" = auth ]; then echo "--settings"; fi\nexit 0\n', { mode: 0o755 });
+  const flagged = families.launch(parseReviewerSpec('cli:claude:opus'), { ...ctx, env: { ...env, PATH: flaggedBin }, workDir: fs.mkdtempSync(path.join(os.tmpdir(), 'claude-flagged-')) });
+  assert.equal(flagged.sessionMeta.claudeCode.options.settings.forceLoginMethod, 'claudeai');
   assert.equal(plain.invocation.env.ANTHROPIC_AUTH_TOKEN, undefined);
   assert.equal(plain.invocation.env.ANTHROPIC_BASE_URL, undefined);
 });

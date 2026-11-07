@@ -14,7 +14,7 @@ import type { Clock } from '../shared/clock.ts';
 import type { Pool } from '../db/pool.ts';
 import type { Config } from '../config/load.ts';
 import { publishReport } from './publish.ts';
-import { partition, shouldSplit, type ReviewScope, type ThemeSlice } from './themes.ts';
+import { partitionTree, shouldSplit, type ReviewScope, type ThemeSlice } from './themes.ts';
 
 function git(args: string[], cwd?: string): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -49,11 +49,21 @@ export async function shallowClone(repo: string, sha: string, dest: string): Pro
 export function materialize(source: string, slice: ThemeSlice, dest: string): void {
   fs.rmSync(dest, { recursive: true, force: true });
   fs.mkdirSync(dest, { recursive: true, mode: 0o700 });
+  const excluded = (slice.exclude ?? []).map((item) => item.split('/').join(path.sep));
+  const skip = (from: string) => {
+    const rel = path.relative(source, from);
+    return excluded.some((item) => rel === item || rel.startsWith(`${item}${path.sep}`));
+  };
   for (const name of fs.readdirSync(source)) {
     const from = path.join(source, name);
     if (fs.statSync(from).isFile()) fs.copyFileSync(from, path.join(dest, name));
   }
-  for (const dir of slice.dirs) fs.cpSync(path.join(source, dir), path.join(dest, dir), { recursive: true });
+  for (const dir of slice.dirs) {
+    const from = path.join(source, dir);
+    const to = path.join(dest, dir);
+    fs.mkdirSync(path.dirname(to), { recursive: true });
+    fs.cpSync(from, to, { recursive: true, filter: (candidate) => !skip(candidate) });
+  }
 }
 
 function indexHtml(repo: string, themes: { theme: string; id: string; status: string }[]): string {
@@ -68,8 +78,17 @@ export async function splitLargeReview(input: {
   if ((await listThemes(input.pool, input.row.id)).length > 0) return 'split';
   const root = path.join(input.config.storage.runsRoot, input.row.id, 'source');
   await shallowClone(input.row.repo, input.row.commit_sha, root);
-  const top = fs.readdirSync(root).filter((name) => fs.statSync(path.join(root, name)).isDirectory());
-  const slices = partition(top, scope as ReviewScope);
+  const files: string[] = [];
+  const collect = (dir: string, rel = '') => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (entry.name === '.git' || entry.name === 'node_modules') continue;
+      const child = rel ? `${rel}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) collect(path.join(dir, entry.name), child);
+      else files.push(child);
+    }
+  };
+  collect(root);
+  const slices = partitionTree(files, scope as ReviewScope);
   const tally = { files: 0, bytes: 0 };
   walk(root, tally);
   if (!shouldSplit({ scope: scope as ReviewScope, themes: slices.length, files: tally.files, bytes: tally.bytes })) {

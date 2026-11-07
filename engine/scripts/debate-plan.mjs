@@ -60,7 +60,8 @@ export function offlinePlan({ out, sourceRoot, claims, controls, reviewers, roun
   const orchestrator = { id: 'scripted-judge', family: 'scripted', provider: 'judge', vendor: 'scripted', model: 'judge' };
   const reader = sourceReader(sourceRoot, manifest);
   return {
-    out, reader, claims, reviewers, orchestrator, alternate: null, rounds, maxClusters: DEBATE_DEFAULTS.maxClusters, seed: 1,
+    out, reader, claims, reviewers, orchestrator, alternate: null, rounds, maxClusters: DEBATE_DEFAULTS.maxClusters,
+    turnMs: DEBATE_DEFAULTS.turnMs, phaseMs: DEBATE_DEFAULTS.phaseMs, seed: 1,
     vendors: new Map(reviewers.map((r) => [r.id, r.vendor])),
     voices: voicesFor(reviewers, { claims, controls, reader, bridge: null }),
     judgeVoice: () => async () => ({ unavailable: 'no_bridge_offline' }),
@@ -81,7 +82,8 @@ export function debatePlan(ctx, env = process.env) {
   const reviewers = ctx.reviewers?.length ? ctx.reviewers : metaReviewers;
   return {
     out: ctx.output, reader, claims, reviewers, orchestrator, alternate: ctx.request.alternateJudge || null,
-    rounds: debate.rounds, maxClusters: debate.maxClusters, seed: 1,
+    rounds: debate.rounds, maxClusters: debate.maxClusters, turnMs: debate.turnMs, phaseMs: debate.phaseMs,
+    signal: ctx.cancellation?.signal, seed: 1,
     vendors: new Map(reviewers.map((r) => [r.id, r.vendor])),
     voices: voicesFor(reviewers, { claims, controls, reader, bridge: ctx, budget: debate.toolBudget }),
     judgeVoice: (choice) => bridgeJudge(ctx, choice.reviewer, debate.toolBudget),

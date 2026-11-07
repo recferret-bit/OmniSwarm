@@ -89,8 +89,12 @@ test('--debate-rounds, --debate-max-clusters and --debate-tool-budget are valida
   const d = tmp(t);
   const file = write(d, 'c.json', { reviewers: ['cli:claude:opus'], debate: { rounds: 1, maxClusters: 10 } });
   const r = resolveRunConfig({ flags: parseFlags(['--config', file, '--debate-rounds', '3', '--debate-tool-budget', '6']) });
-  assert.deepEqual(r.budgets.debate, { rounds: 3, toolBudget: 6, maxClusters: 10 });
-  assert.deepEqual(resolveRunConfig({ flags: { config: file } }).budgets.debate, { rounds: 1, toolBudget: 12, maxClusters: 10 });
+  assert.deepEqual(r.budgets.debate, { rounds: 3, toolBudget: 6, maxClusters: 10, turnMs: 180000, phaseMs: 900000 });
+  assert.deepEqual(resolveRunConfig({ flags: { config: file } }).budgets.debate, { rounds: 1, toolBudget: 12, maxClusters: 10, turnMs: 180000, phaseMs: 900000 });
+  const timed = resolveRunConfig({ flags: parseFlags(['--config', file, '--debate-turn-ms', '20000', '--debate-phase-ms', '120000']) });
+  assert.deepEqual([timed.budgets.debate.turnMs, timed.budgets.debate.phaseMs], [20000, 120000]);
+  assert.throws(() => resolveRunConfig({ flags: parseFlags(['--debate-turn-ms', '1000']), root: tmp(t) }), /--debate-turn-ms must be 15000–600000/);
+  assert.throws(() => resolveRunConfig({ flags: parseFlags(['--debate-phase-ms', '10']), root: tmp(t) }), /--debate-phase-ms must be 60000–3600000/);
   const bad = [[['--debate-rounds', '4'], /debate_rounds_max_3/], [['--debate-rounds', '0'], /--debate-rounds must be 1–3/], [['--debate-rounds', 'two'], /--debate-rounds must be an integer/],
     [['--debate-max-clusters', '501'], /--debate-max-clusters must be 1–500/], [['--debate-tool-budget', '0'], /--debate-tool-budget must be 1–100/]];
   for (const [argv, message] of bad) assert.throws(() => resolveRunConfig({ flags: parseFlags(argv), root: tmp(t) }), message, argv.join(' '));
@@ -103,7 +107,7 @@ test('--debate-rounds, --debate-max-clusters and --debate-tool-budget are valida
 test('the default debate rounds are the golden-eval OD-14 decision recorded in eval/RESULTS.md', (t) => {
   const results = fs.readFileSync(path.join(here, '..', 'eval', 'RESULTS.md'), 'utf8');
   const recorded = Number(/^Default debate rounds: (\d)\./m.exec(results)?.[1]);
-  assert.deepEqual(resolveRunConfig({ flags: {}, root: tmp(t) }).budgets.debate, { rounds: recorded, toolBudget: 12, maxClusters: 25 });
+  assert.deepEqual(resolveRunConfig({ flags: {}, root: tmp(t) }).budgets.debate, { rounds: recorded, toolBudget: 12, maxClusters: 25, turnMs: 180000, phaseMs: 900000 });
 });
 
 test('scripted_judge_demo_only: the scripted judge is refused at plan time on anything but a bundled fixture', (t) => {

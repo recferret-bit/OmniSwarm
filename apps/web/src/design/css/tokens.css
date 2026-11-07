@@ -1,0 +1,188 @@
+/* Source Mark — OmniSwarm design system
+   Same discipline as TerraAgent's Faction Plate:
+   1. Raw color lives only in this file. Everything else uses --os-* variables.
+   2. Corners are chamfered. Never border-radius, except the live status dot.
+   3. Field ~60%, paper ~25%, ember (action) ~10%, cite blue (reference) ~5%.
+   4. Text on ember is field ink. Never paper or white on ember.
+   5. Eyebrows, labels, hashes, paths and statuses are mono and tracked.
+   6. Motion uses the duration and easing tokens. Reduced motion stops it.
+   7. A number beats an adjective. A finding without file:line is not shown.
+   Contrast pairs below were measured against WCAG AA (4.5:1 body, 3:1 large). */
+
+:root {
+  /* core */
+  --os-field: #090B10;
+  --os-paper: #F4F0E6;
+  --os-ember: #FF5A1F;
+  --os-cite: #1E5BFF;
+
+  /* surfaces */
+  --os-deep: #07080C;
+  --os-plate: #141820;
+  --os-plate-2: #10131A;
+  --os-plate-3: #1A1F2A;
+  --os-seam: #2A3140;
+  --os-seam-2: #3A4254;
+  --os-seam-3: #515A6E;
+  --os-ink: #12141A;
+  --os-ink-2: #3E4656;
+  --os-paper-line: #D9D3C6;
+
+  /* text on field (steel 7.8:1, text-3 10.7:1, text-2 14.1:1 on #090B10) */
+  --os-text: #F4F0E6;
+  --os-text-2: #D5DBE4;
+  --os-text-3: #B7C0CE;
+  --os-steel: #9AA3B5;
+  --os-dim: #7E8798;
+
+  /* accents. ember-hi 8.4:1 on field. cite-hi 9.4:1 on field.
+     ember-ink 6.4:1 on paper (#9A3412 / #F4F0E6). white on cite 5.3:1.
+     white on ember is 3.1:1 — do not use it. */
+  --os-ember-hi: #FF8A4C;
+  --os-ember-ink: #9A3412;
+  --os-cite-hi: #8FB2FF;
+  --os-on-cite: #FFFFFF;
+  /* Ink on a bright fill. Stays dark in both themes. */
+  --os-on-ember: #090B10;
+  --os-core-field: #090B10;
+  --os-core-deep: #07080C;
+  --os-core-plate: #141820;
+  --os-core-seam: #2A3140;
+  --os-core-steel: #9AA3B5;
+  --os-core-paper: #F4F0E6;
+  /* Text accents. Night uses the bright forms; day overrides these. */
+  --os-ember-text: var(--os-ember-hi);
+  --os-cite-text: var(--os-cite-hi);
+  --os-ok-text: var(--os-attested);
+  --os-warn-text: var(--os-warn);
+  --os-inverse: var(--os-paper);
+  --os-inverse-ink: var(--os-ink);
+  --os-attested: #3DDC97;
+  --os-fault: #FF4D4D;
+  --os-fault-text: #FF9B9B;
+  --os-warn: #F2C16B;
+
+  /* translucent washes on field */
+  --os-ember-glow: rgba(255, 90, 31, 0.55);
+  --os-ember-glow-0: rgba(255, 90, 31, 0);
+  --os-ember-dim: rgba(255, 90, 31, 0.14);
+  --os-cite-dim: rgba(30, 91, 255, 0.18);
+  --os-attested-dim: rgba(61, 220, 151, 0.14);
+  --os-fault-dim: rgba(255, 77, 77, 0.14);
+  --os-warn-dim: rgba(242, 193, 107, 0.14);
+
+  /* type. Families are set by next/font on <html>. */
+  --os-font-display: var(--font-display), "Sora", system-ui, sans-serif;
+  --os-font-body: var(--font-body), "Source Sans 3", "Source Sans Pro", system-ui, sans-serif;
+  --os-font-mono: var(--font-mono), "IBM Plex Mono", ui-monospace, monospace;
+
+  --os-fs-display: clamp(40px, 5.2vw, 76px);
+  --os-fs-h1: clamp(32px, 3.6vw, 52px);
+  --os-fs-h2: clamp(28px, 3vw, 40px);
+  --os-fs-h3: 22px;
+  --os-fs-body-l: 19px;
+  --os-fs-body: 17px;
+  --os-fs-small: 15px;
+  --os-fs-eyebrow: 12px;
+  --os-fs-label: 11px;
+
+  --os-track-eyebrow: 0.16em;
+  --os-track-label: 0.14em;
+  --os-track-button: 0.08em;
+
+  /* spacing, 4px base */
+  --os-s1: 4px; --os-s2: 8px; --os-s3: 12px; --os-s4: 16px; --os-s5: 24px;
+  --os-s6: 32px; --os-s7: 48px; --os-s8: 64px; --os-s9: 96px;
+
+  --os-chamfer-s: 8px;
+  --os-chamfer-m: 14px;
+  --os-chamfer-l: 24px;
+
+  --os-glow-1: 0 0 14px rgba(255, 90, 31, 0.35);
+  --os-glow-2: 0 0 28px rgba(143, 178, 255, 0.45);
+  --os-glow-3: 0 0 44px rgba(255, 90, 31, 0.7);
+
+  --os-dur-instant: 80ms;
+  --os-dur-quick: 150ms;
+  --os-dur-base: 240ms;
+  --os-dur-plate: 420ms;
+  --os-dur-cinematic: 900ms;
+  --os-ease-latch: cubic-bezier(.2, .9, .3, 1.15);
+  --os-ease-sweep: cubic-bezier(.7, 0, .2, 1);
+
+  --os-container: 1120px;
+  --os-container-wide: 1280px;
+  --os-header: 72px;
+
+  color-scheme: dark;
+
+  /* Legacy app aliases. Older components keep their variable names. */
+  --paper: var(--os-plate);
+  --ground: var(--os-field);
+  --ink: var(--os-text);
+  --muted: var(--os-steel);
+  --rule: var(--os-seam);
+  --accent: var(--os-ember);
+  --accent-pale: var(--os-ember-dim);
+  --red: var(--os-fault-text);
+  --red-pale: var(--os-fault-dim);
+  --green: var(--os-attested);
+  --green-pale: var(--os-attested-dim);
+  --blue: var(--os-cite-hi);
+  --blue-pale: var(--os-cite-dim);
+  --amber: var(--os-warn);
+  --amber-pale: var(--os-warn-dim);
+  --focus: var(--os-cite-text);
+  --mono: var(--os-font-mono);
+  --sans: var(--os-font-body);
+  --radius: 0px;
+  --space: var(--os-s4);
+}
+
+/* Reading surface. Remap semantic text so ink sits on paper. */
+.os-on-paper {
+  color-scheme: light;
+  --os-text: var(--os-ink);
+  --os-text-2: #2C3340;
+  --os-text-3: #3E4656;
+  --os-steel: #3E4656;
+  --os-dim: #5C6574;
+  --os-plate: #FFFCF7;
+  --os-plate-2: var(--os-paper);
+  --os-plate-3: #E7E1D4;
+  --os-seam: var(--os-paper-line);
+  --os-seam-2: #C9C2B3;
+  --os-bg: var(--os-paper);
+  --os-ember-text: var(--os-ember-ink);
+  --os-cite-text: #1E4FD6;
+  --os-ok-text: #0B6B3A;
+  --os-fault-text: #9F1239;
+  --os-warn-text: #8A5300;
+  background: var(--os-paper);
+  color: var(--os-ink);
+}
+
+/* Day. Every element that reads these tokens flips with the switch. */
+html[data-theme="day"] {
+  color-scheme: light;
+  --os-field: var(--os-core-paper);
+  --os-deep: #E7E1D4;
+  --os-plate: #FFFCF7;
+  --os-plate-2: #F7F3EA;
+  --os-plate-3: #E4DDD0;
+  --os-seam: #D2CBBC;
+  --os-seam-2: #B7AFA0;
+  --os-seam-3: #6E675C;
+  --os-text: var(--os-ink);
+  --os-text-2: #2C3340;
+  --os-text-3: #3E4656;
+  --os-steel: #3E4656;
+  --os-dim: #5C6574;
+  --os-ember-text: var(--os-ember-ink);
+  --os-cite-text: #1E4FD6;
+  --os-ok-text: #0B6B3A;
+  --os-fault-text: #9F1239;
+  --os-warn-text: #8A5300;
+  --os-inverse: var(--os-ink);
+  --os-inverse-ink: var(--os-core-paper);
+}

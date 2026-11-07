@@ -8,6 +8,7 @@ import { Button } from '../ui/Button';
 import { Panel } from '../ui/Panel';
 import { FlowError } from './FlowError';
 import { PayStep } from './PayStep';
+import { FreeQueue } from './FreeQueue';
 import { QuoteCard } from './QuoteCard';
 import { QuoteForm } from './QuoteForm';
 import { SignedSummary } from './SignedSummary';
@@ -41,9 +42,10 @@ export function RequestFlow() {
       <QuoteForm />
       <FlowError />
       {quote ? <QuoteCard quote={quote} /> : null}
-      <SignStep />
-      {signed ? <SignedSummary signed={signed} /> : null}
-      <PayStep />
+      {quote?.freeChecks ? <FreeQueue repo={quote.normalizedRepo} /> : null}
+      {quote?.freeChecks ? null : <SignStep />}
+      {quote?.freeChecks ? null : signed ? <SignedSummary signed={signed} /> : null}
+      {quote?.freeChecks ? null : <PayStep />}
       {step !== 'idle' ? <Button variant="ghost" onClick={reset}>Start over</Button> : null}
     </Panel>
   );

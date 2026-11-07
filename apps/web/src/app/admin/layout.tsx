@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
+import { ThemeSwitch } from '@/components/ui/ThemeSwitch';
 
 export const metadata: Metadata = {
   title: 'Admin',
@@ -10,6 +11,12 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   return (
     <>
       <a className="skip-link" href="#main">Skip to content</a>
+      <header className="site-header">
+        <div className="site-header__bar">
+          <span className="site-header__brand">Admin</span>
+          <ThemeSwitch />
+        </div>
+      </header>
       <main id="main" className="main admin">{children}</main>
     </>
   );

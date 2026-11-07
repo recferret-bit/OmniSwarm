@@ -21,7 +21,7 @@ export const challengeResponse = z.strictObject({ nonce, expiresAt: timestamp })
 export const quoteRequest = z.strictObject({ repoUrl: z.string().min(1).max(300), network, ref: z.string().min(1).max(200).optional() });
 export const quoteResponse = z.strictObject({
   normalizedRepo: repo, commitSha, priceYocto: yocto, contractId: accountId, queueDepth: z.int().min(0), preset, etaMinutes: z.int().min(0),
-  sizeKb: z.int().min(0).optional(), large: z.boolean().optional(),
+  sizeKb: z.int().min(0).optional(), large: z.boolean().optional(), freeChecks: z.boolean().optional(),
 });
 
 export const createRequestBody = z.strictObject({
@@ -40,6 +40,7 @@ export const progress = z.strictObject({
 export const requestStatusResponse = z.strictObject({
   status, progress: progress.optional(), position: z.int().min(1).optional(), reportUrl: https.optional(), reportSha256: sha256Hex.optional(),
   incomplete: z.boolean().optional(), attestTx: z.string().min(1).optional(), refundTx: z.string().min(1).optional(),
+  failureCause: z.string().min(1).optional(),
   timeline: z.array(z.strictObject({ event: z.string().min(1), at: timestamp })).optional(), createdAt: timestamp,
 });
 
