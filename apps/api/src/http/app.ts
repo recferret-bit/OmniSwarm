@@ -2,7 +2,7 @@
 import crypto from 'node:crypto';
 import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
-import helmet from '@fastify/helmet';
+import helmet, { type FastifyHelmetOptions } from '@fastify/helmet';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import Fastify, { type FastifyBaseLogger, type FastifyInstance } from 'fastify';
@@ -13,6 +13,7 @@ import { authRoutes } from '../modules/auth/auth.routes.ts';
 import { dashboardRoutes } from '../modules/dashboard/dashboard.routes.ts';
 import { guardRoutes } from '../modules/guard/guard.routes.ts';
 import { localRoutes } from '../modules/operator/local.routes.ts';
+import { providerRoutes } from '../modules/providers/routes.ts';
 import { healthRoutes } from '../modules/health/health.routes.ts';
 import { ledgerRoutes } from '../modules/ledger/ledger.routes.ts';
 import { reportRoutes } from '../modules/report-index/reports.routes.ts';
@@ -52,17 +53,29 @@ async function registerDocs(app: FastifyInstance): Promise<void> {
   await app.register(swaggerUi, { routePrefix: '/api/docs' });
 }
 
+// Production (secure cookies) keeps Helmet's HSTS and upgrade-insecure-requests.
+// The local HTTP stack sets COOKIE_SECURE=0. Those two directives would pin the
+// browser to https, so they stay off whenever the cookie is not Secure.
+export function helmetOptions(cookieSecure: boolean): FastifyHelmetOptions {
+  const directives: Record<string, null | string[]> = {
+    defaultSrc: ["'self'"], imgSrc: ["'self'", 'data:'], styleSrc: ["'self'", "'unsafe-inline'"],
+  };
+  if (!cookieSecure) directives.upgradeInsecureRequests = null;
+  return {
+    ...(cookieSecure ? {} : { hsts: false }),
+    contentSecurityPolicy: { directives },
+  };
+}
+
 export async function buildApp(deps: ApiDeps, options: { sseKeepAliveMs?: number } = {}): Promise<FastifyInstance> {
   const { http } = deps.config;
   const app = base(deps.log, http.trustProxy);
-  await app.register(helmet, {
-    contentSecurityPolicy: { directives: { defaultSrc: ["'self'"], imgSrc: ["'self'", 'data:'], styleSrc: ["'self'", "'unsafe-inline'"] } },
-  });
+  await app.register(helmet, helmetOptions(http.cookieSecure));
   if (http.landingOrigin) await app.register(cors, { origin: http.landingOrigin, credentials: true });
   await app.register(cookie, { secret: http.sessionSecret });
   await registerRateLimit(app, deps.pool);
   await registerDocs(app);
-  for (const routes of [healthRoutes, authRoutes, quoteRoutes, requestRoutes, paymentRoutes, guardRoutes, ledgerRoutes, reportRoutes, dashboardRoutes, localRoutes]) {
+  for (const routes of [healthRoutes, authRoutes, quoteRoutes, requestRoutes, paymentRoutes, guardRoutes, ledgerRoutes, reportRoutes, dashboardRoutes, localRoutes, providerRoutes]) {
     await app.register(routes, { deps });
   }
   await app.register(eventRoutes, { deps, ...(options.sseKeepAliveMs ? { keepAliveMs: options.sseKeepAliveMs } : {}) });

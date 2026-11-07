@@ -63,7 +63,9 @@
         "contractId": {"$ref": "#/$defs/account-id"},
         "queueDepth": {"type": "integer", "minimum": 0},
         "preset": {"type": "string", "pattern": "^[a-z0-9-]{1,40}$"},
-        "etaMinutes": {"type": "integer", "minimum": 0}
+        "etaMinutes": {"type": "integer", "minimum": 0},
+        "sizeKb": {"type": "integer", "minimum": 0},
+        "large": {"type": "boolean"}
       }
     },
     "create-request-body": {

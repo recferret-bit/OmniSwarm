@@ -88,7 +88,8 @@ function refuseScriptedJudge(target, specs) {
 // flags: {config, preset, reviewers, agents, model, models, modelByAgent, assign, orchestrator, alternateJudge, passes, toolBudget,
 //         debateRounds, debateMaxClusters, debateToolBudget, target}
 export function resolveRunConfig({ flags = {}, root = ROOT, explicitConfig = flags.config } = {}) {
-  const file = explicitConfig ? path.resolve(explicitConfig) : path.join(root, CONFIG_NAME);
+  const fromEnv = !explicitConfig && process.env.OMNI_RUN_CONFIG ? process.env.OMNI_RUN_CONFIG : '';
+  const file = explicitConfig ? path.resolve(explicitConfig) : fromEnv ? path.resolve(fromEnv) : path.join(root, CONFIG_NAME);
   let config = null;
   if (explicitConfig || fs.existsSync(file)) config = loadConfigFile(file);
   let layer = {};

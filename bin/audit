@@ -107,6 +107,9 @@ case "$COMMAND" in
   review-local)
     node "$AUDIT_ROOT/scripts/terminal-local-review.mjs" "$@"
     ;;
+  local)
+    node "$AUDIT_ROOT/scripts/local-cli.mjs" "$@"
+    ;;
   run)
     parse_flags "$@"
     [ -z "$RPC" ] || die "source security review does not contact deployed RPCs"
@@ -161,6 +164,8 @@ Pick exactly ONE target:
                      accepts https://github.com/<owner>/<repo>[.git], git@github.com:<owner>/<repo>.git, <owner>/<repo>
 
 Usage:
+  audit local [--repo <directory> | --github <owner/repo or url>]
+      One command. Uses every installed CLI (claude, codex, grok, agy). Opus is the orchestrator when Claude is installed. With only one CLI, that model is both orchestrator and reviewer. Defaults to the current directory.
   audit run   (--repo <path> | --github <url>) [options]
       Review supplied source/configuration/dependencies through restricted MCP tools and persistent ACP sessions. Only catalogued existing tests run in the offline Docker sandbox; no arbitrary commands, PoCs or deployed probes. Save validated peer-reviewed reports and remove owned resources.
   audit setup-agents

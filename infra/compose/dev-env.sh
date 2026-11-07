@@ -52,6 +52,37 @@ if [ ! -s "$ENV_FILE" ]; then
   umask 022
 fi
 
+# Keys added after a stack.env already existed. Empty secrets and the local
+# path overrides are filled here; an existing non-empty value is kept.
+fill_key() {
+  local key="$1" value="$2" tmp
+  tmp="$(mktemp)"
+  if grep -qE "^${key}=" "$ENV_FILE"; then
+    awk -F= -v k="$key" -v v="$value" '$1 == k && substr($0, length(k) + 2) == "" { print k "=" v; next } { print }' "$ENV_FILE" > "$tmp"
+    mv "$tmp" "$ENV_FILE"
+  else
+    rm -f "$tmp"
+    printf '%s=%s\n' "$key" "$value" >> "$ENV_FILE"
+  fi
+}
+mkdir -p "$STATE/secrets" "$STATE/runs"
+# The API container (uid 1000) and the host workers both write and read this directory.
+chmod 0777 "$STATE/secrets" "$STATE/runs"
+fill_key ADMIN_BASIC_USER admin
+fill_key ADMIN_BASIC_PASSWORD "$(openssl rand -hex 24)"
+fill_key OMNI_SECRETS_DIR "$STATE/secrets"
+mkdir -p "$STATE/nginx"
+admin_user="$(grep -E '^ADMIN_BASIC_USER=' "$ENV_FILE" | tail -n 1 | cut -d= -f2-)"
+admin_pass="$(grep -E '^ADMIN_BASIC_PASSWORD=' "$ENV_FILE" | tail -n 1 | cut -d= -f2-)"
+python3 - "$STATE/nginx/admin.htpasswd" "$admin_user" "$admin_pass" <<'PY'
+import base64, hashlib, pathlib, sys
+path, user, password = sys.argv[1:]
+digest = base64.b64encode(hashlib.sha1(password.encode()).digest()).decode()
+pathlib.Path(path).write_text(f"{user}:{{SHA}}{digest}\n")
+PY
+chmod 0644 "$STATE/nginx/admin.htpasswd"
+fill_key OMNI_ADMIN_HTPASSWD "$STATE/nginx/admin.htpasswd"
+
 env_value() { grep -E "^$1=" "$ENV_FILE" | tail -n 1 | cut -d= -f2-; }
 DOMAIN="$(env_value OMNI_DOMAIN)"
 REPORTS_DOMAIN="$(env_value OMNI_REPORTS_DOMAIN)"

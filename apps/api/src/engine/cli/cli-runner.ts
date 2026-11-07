@@ -42,8 +42,13 @@ export class CliEngineRunner implements EngineRunner {
       let killTimer: NodeJS.Timeout | undefined;
       // An absolute $ENGINE_ROOT/bin/audit: the worker's own cwd (apps/api) never decides what runs.
       const bin = path.join(this.#options.root, AUDIT_BIN);
+      const env = { ...this.#options.env };
+      if (input.configFile) env.OMNI_RUN_CONFIG = input.configFile;
+      for (const [name, value] of Object.entries(input.providerEnv ?? {})) {
+        if ((name === 'ZAI_API_KEY' || name === 'OPENROUTER_API_KEY' || name === 'ZAI_BASE_URL') && value) env[name] = value;
+      }
       const child = spawn(bin, argv, {
-        cwd: this.#options.root, shell: false, env: this.#options.env, detached: true, stdio: ['ignore', 'pipe', 'pipe'],
+        cwd: this.#options.root, shell: false, env, detached: true, stdio: ['ignore', 'pipe', 'pipe'],
       });
       log.note(`spawned pid ${child.pid ?? '-'}: ${bin} ${argv.join(' ')}`);
       log.drain(child.stdout);

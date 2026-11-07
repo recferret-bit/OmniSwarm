@@ -49,6 +49,10 @@ Keep the requested models and existing official subscription logins. Never chang
 4. For each finding, cite relative `file:line` evidence, explain the incorrect or missing control, assess impact and preconditions, describe validation limits, and recommend a fix. Do not supply exploitation instructions or payloads.
 5. Submit the report once through MCP. If the surface is absent, submit empty findings and explain why it is absent. Finish with a short acknowledgement; do not duplicate the report in terminal JSON.
 
+## Large repositories
+
+A large tree is not one review. Before any model starts, the job is split by top-level directory into themes: web3 (contracts, programs, chain clients), apps (front and back), infra, and scripts. Docs, fixtures, vendored dependencies and build output are not themes. The operator chooses the scope before the job is queued: full (every theme), web2 (apps, infra, scripts) or web3 (chain trees only). Each theme is its own queued review of only that slice, so workers run the slices in parallel. Review only the files in your sealed snapshot. Say which theme you reviewed in `markdown_summary`. Do not treat a missing sibling directory as a finding; it was left for another theme. A final report links the theme reports. It does not restate every finding as if the whole monorepo were one pass.
+
 ## Six review surfaces
 
 | Surface | Source checks |

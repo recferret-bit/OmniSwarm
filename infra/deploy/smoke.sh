@@ -2,9 +2,12 @@
 # Smoke test of a running stack, from outside it.
 #   smoke.sh [options] <domain[:https-port]> [reports-domain]
 #     --dry-run            print the requests, send nothing
-#     --cacert FILE        trust this CA (local self-signed stack)
+#     --scheme http|https  https (default) checks TLS, the redirect and HSTS.
+#                          http checks the local stack: the app is served on
+#                          --http-port with no redirect and no HSTS.
+#     --cacert FILE        trust this CA (https only)
 #     --resolve IP         send both hostnames to IP (curl --resolve)
-#     --http-port N        port of the http->https redirect (default 80)
+#     --http-port N        redirect port for https (default 80); the app port for http
 #     --network NAME       /api/health must report this network
 #     --report PATH        reports-origin path to check (default /sample/report.html)
 #     --min-cert-days N    certificates must be valid for N more days (default 14)
@@ -13,11 +16,12 @@
 # if any check failed. reports-domain defaults to reports.<domain>.
 set -euo pipefail
 
-dry=0; cacert=""; resolve_ip=""; http_port=80; network=""; report_path=/sample/report.html
+dry=0; scheme=https; cacert=""; resolve_ip=""; http_port=80; network=""; report_path=/sample/report.html
 min_days=14; burst=1; target=""; reports=""
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --dry-run) dry=1; shift ;;
+    --scheme) scheme="$2"; shift 2 ;;
     --cacert) cacert="$2"; shift 2 ;;
     --resolve) resolve_ip="$2"; shift 2 ;;
     --http-port) http_port="$2"; shift 2 ;;
@@ -25,25 +29,38 @@ while [ "$#" -gt 0 ]; do
     --report) report_path="$2"; shift 2 ;;
     --min-cert-days) min_days="$2"; shift 2 ;;
     --no-burst) burst=0; shift ;;
-    -h | --help) sed -n '2,14p' "$0"; exit 0 ;;
+    -h | --help) sed -n '2,16p' "$0"; exit 0 ;;
     -*) echo "smoke.sh: unknown option $1" >&2; exit 64 ;;
     *) if [ -z "$target" ]; then target="$1"; else reports="$1"; fi; shift ;;
   esac
 done
 [ -n "$target" ] || { echo "usage: smoke.sh [options] <domain[:https-port]> [reports-domain]" >&2; exit 64; }
+case "$scheme" in
+  http | https) ;;
+  *) echo "smoke.sh: --scheme must be http or https" >&2; exit 64 ;;
+esac
 
 domain="${target%%:*}"
-port=443
-[ "$target" != "$domain" ] && port="${target#*:}"
 reports="${reports:-reports.$domain}"
-suffix=""; [ "$port" != 443 ] && suffix=":$port"
-APP="https://$domain$suffix"
-REPORTS="https://$reports$suffix"
+if [ "$scheme" = http ]; then
+  port="$http_port"
+  APP="http://$domain"; REPORTS="http://$reports"
+  if [ "$port" != 80 ]; then APP="$APP:$port"; REPORTS="$REPORTS:$port"; fi
+else
+  port=443
+  [ "$target" != "$domain" ] && port="${target#*:}"
+  suffix=""; [ "$port" != 443 ] && suffix=":$port"
+  APP="https://$domain$suffix"
+  REPORTS="https://$reports$suffix"
+fi
 
 curl_opts=(--silent --show-error --max-time 10 --proto '=https,http')
 [ -n "$cacert" ] && curl_opts+=(--cacert "$cacert")
 if [ -n "$resolve_ip" ]; then
-  for h in "$domain" "$reports"; do curl_opts+=(--resolve "$h:$port:$resolve_ip" --resolve "$h:$http_port:$resolve_ip"); done
+  for h in "$domain" "$reports"; do
+    curl_opts+=(--resolve "$h:$port:$resolve_ip")
+    [ "$scheme" = https ] && curl_opts+=(--resolve "$h:$http_port:$resolve_ip")
+  done
 fi
 
 failures=0
@@ -75,15 +92,20 @@ check_cert() {
   fi
 }
 
-check_cert tls-app "$domain"
-check_cert tls-reports "$reports"
-
-if req http-redirect "http://$domain:$http_port/api/health"; then
-  loc="$(header location)"
-  case "$(status)" in
-    301 | 308) verdict http-redirect "$( [ "$loc" = "$APP/api/health" ] || echo "Location is '$loc', want $APP/api/health")" ;;
-    *) fail http-redirect "status $(status), want 301" ;;
-  esac
+if [ "$scheme" = https ]; then
+  check_cert tls-app "$domain"
+  check_cert tls-reports "$reports"
+  if req http-redirect "http://$domain:$http_port/api/health"; then
+    loc="$(header location)"
+    case "$(status)" in
+      301 | 308) verdict http-redirect "$( [ "$loc" = "$APP/api/health" ] || echo "Location is '$loc', want $APP/api/health")" ;;
+      *) fail http-redirect "status $(status), want 301" ;;
+    esac
+  fi
+elif req plain-http "$APP/api/health"; then
+  if [ "$(status)" != 200 ]; then fail plain-http "status $(status), want 200"
+  elif [ -n "$(header location)" ]; then fail plain-http "redirected to $(header location)"
+  else ok plain-http; fi
 fi
 
 if req health "$APP/api/health"; then
@@ -105,10 +127,18 @@ fi
 
 if req app-headers "$APP/api/health"; then
   missing=""
-  for h in strict-transport-security x-content-type-options content-security-policy; do
+  for h in x-content-type-options content-security-policy; do
     [ -n "$(header "$h")" ] || missing="$missing $h"
   done
-  verdict app-headers "${missing:+missing:$missing}"
+  hsts="$(header strict-transport-security)"
+  if [ "$scheme" = https ]; then
+    [ -n "$hsts" ] || missing="$missing strict-transport-security"
+    verdict app-headers "${missing:+missing:$missing}"
+  elif [ -n "$hsts" ]; then
+    fail app-headers "Strict-Transport-Security is set; the browser would pin this host to https"
+  else
+    verdict app-headers "${missing:+missing:$missing}"
+  fi
 fi
 
 if req admin-blocked -X POST "$APP/api/admin/requests/00000000-0000-4000-8000-000000000000/refund"; then

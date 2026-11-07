@@ -52,6 +52,8 @@ test('production refuses test adapters, a missing admin token and insecure cooki
   assert.match(issue('api', { ...PROD, GITHUB_ADAPTER: 'recorded' }), /GITHUB_ADAPTER/);
   assert.match(issue('worker', { ...PROD, ENGINE_RUNNER: 'mock' }), /ENGINE_RUNNER/);
   assert.match(issue('worker', { ...PROD, REPORTS_BASE_URL: undefined }), /REPORTS_BASE_URL/);
+  assert.match(issue('api', { ...PROD, REPORTS_BASE_URL: 'http://reports.example' }), /REPORTS_BASE_URL must be https in production/);
+  assert.equal(loadConfig('worker', { ...BASE, REPORTS_BASE_URL: 'http://reports.localhost:18480' }).storage.reportsBaseUrl, 'http://reports.localhost:18480');
   assert.match(issue('api', { ...PROD, COOKIE_SECURE: '0' }), /COOKIE_SECURE/);
   assert.equal(loadConfig('api', PROD).http.cookieSecure, true);
   for (const role of ['api', 'worker'] as const) assert.match(issue(role, { ...PROD, HOSTED_PRESET: undefined }), /HOSTED_PRESET must be set in production/);

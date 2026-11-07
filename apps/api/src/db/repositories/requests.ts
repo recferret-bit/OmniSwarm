@@ -22,6 +22,10 @@ export interface RequestRow {
   report_sha256: string | null;
   report_url: string | null;
   max_severity: string | null;
+  scope: 'full' | 'web2' | 'web3';
+  theme: string | null;
+  parent_id: string | null;
+  slice_path: string | null;
   incomplete: boolean | null;
   attest_tx: string | null;
   refund_tx: string | null;
@@ -33,6 +37,7 @@ export interface RequestRow {
 export interface NewRequest {
   id: string; account: string; repo: string; commitSha: string; network: string; preset: string;
   deployed: string | null; requestHash: string; priceYocto: string; now: Date;
+  scope?: 'full' | 'web2' | 'web3';
 }
 
 const PATCHABLE = {
@@ -55,11 +60,26 @@ export interface Transition {
 export async function insertRequest(db: Db, row: NewRequest): Promise<void> {
   await db.query(
     `WITH created AS (
-       INSERT INTO request (id, account, repo, commit_sha, network, preset, deployed, request_hash, price_yocto, status, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'awaiting_payment',$10,$10) RETURNING id)
+       INSERT INTO request (id, account, repo, commit_sha, network, preset, deployed, request_hash, price_yocto, status, created_at, updated_at, scope)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'awaiting_payment',$10,$10,$12) RETURNING id)
      INSERT INTO audit_log (ts, actor, request_id, event, data) SELECT $10, 'api', id, 'request_created', $11 FROM created`,
     [row.id, row.account, row.repo, row.commitSha, row.network, row.preset, row.deployed, row.requestHash, row.priceYocto, row.now,
-      JSON.stringify({ repo: row.repo, commit: row.commitSha })]);
+      JSON.stringify({ repo: row.repo, commit: row.commitSha }), row.scope ?? 'full']);
+}
+
+export async function insertThemeRequest(db: Db, row: {
+  id: string; parent: RequestRow; theme: string; slicePath: string; now: Date; requestHash: string;
+}): Promise<void> {
+  await db.query(
+    `INSERT INTO request (id, account, repo, commit_sha, network, preset, deployed, request_hash, price_yocto, status, created_at, updated_at, queued_at, scope, theme, parent_id, slice_path)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,0,'queued',$9,$9,$9,$10,$11,$12,$13)`,
+    [row.id, row.parent.account, row.parent.repo, row.parent.commit_sha, row.parent.network, row.parent.preset, row.parent.deployed,
+      row.requestHash, row.now, row.parent.scope, row.theme, row.parent.id, row.slicePath]);
+}
+
+export async function listThemes(db: Db, parentId: string): Promise<RequestRow[]> {
+  const result = await db.query<RequestRow>('SELECT * FROM request WHERE parent_id = $1 ORDER BY created_at', [parentId]);
+  return result.rows;
 }
 
 export async function findRequest(db: Db, id: string, lock = false): Promise<RequestRow | null> {

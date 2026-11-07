@@ -17,13 +17,23 @@ export class ArgvError extends Error {
   override name = 'ArgvError';
 }
 
-export function auditArgv(input: Pick<EngineRunInput, 'repo' | 'commitSha' | 'preset' | 'outDir'>): string[] {
-  if (!REPO.test(input.repo) || input.repo.startsWith('-')) throw new ArgvError('repo is not owner/name');
-  if (!SHA.test(input.commitSha)) throw new ArgvError('ref is not a 40-hex commit');
+function assertOut(outDir: string): void {
+  if (!OUT.test(outDir) || path.normalize(outDir) !== outDir) throw new ArgvError('out dir is not a normalized absolute path');
+}
+
+export function auditArgv(input: Pick<EngineRunInput, 'repo' | 'commitSha' | 'preset' | 'outDir' | 'sourceDir'>): string[] {
   if (!PRESET.test(input.preset)) throw new ArgvError('preset is not an allow-listed name');
-  if (!OUT.test(input.outDir) || path.normalize(input.outDir) !== input.outDir) throw new ArgvError('out dir is not a normalized absolute path');
-  const argv = ['run', '--github', input.repo, '--ref', input.commitSha, '--preset', input.preset, '--out', input.outDir];
+  assertOut(input.outDir);
+  const argv = input.sourceDir
+    ? ['run', '--repo', input.sourceDir, '--preset', input.preset, '--out', input.outDir]
+    : ['run', '--github', input.repo, '--ref', input.commitSha, '--preset', input.preset, '--out', input.outDir];
+  if (input.sourceDir) assertOut(input.sourceDir);
+  else {
+    if (!REPO.test(input.repo) || input.repo.startsWith('-')) throw new ArgvError('repo is not owner/name');
+    if (!SHA.test(input.commitSha)) throw new ArgvError('ref is not a 40-hex commit');
+  }
+  const allowed = input.sourceDir ? '--repo --preset --out' : AUDIT_FLAGS.join(' ');
   const flags = argv.filter((arg) => arg.startsWith('-'));
-  if (flags.join(' ') !== AUDIT_FLAGS.join(' ')) throw new ArgvError('argv carries a flag outside the allow-list');
+  if (flags.join(' ') !== allowed) throw new ArgvError('argv carries a flag outside the allow-list');
   return argv;
 }

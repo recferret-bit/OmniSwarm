@@ -8,8 +8,8 @@
 #   CHECK_APPS=real            builds apps/api/Dockerfile and apps/web/Dockerfile
 #
 # Proves: compose up with healthchecks and migrate-before-api ordering;
-# infra/deploy/smoke.sh against it (TLS, redirect, health, ready, web root,
-# headers, admin 403, reports CSP, 429 burst); Postgres on loopback only;
+# infra/deploy/smoke.sh against it (plain HTTP, health, ready, web root,
+# headers without HSTS, admin 403, reports CSP, 429 burst); Postgres on loopback only;
 # and, with the stub: real client IP despite a forged X-Forwarded-For, SSE
 # delivered unbuffered, requests spread over every replica, `--scale api=3`
 # picked up without an nginx reload, a rolling restart with zero failed
@@ -34,7 +34,7 @@ env_get() { grep -E "^$1=" "$env_file" | tail -n 1 | cut -d= -f2-; }
 port_busy() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
 # The dev ports (dev.env.example) may be held by another stack or another gate
 # run: move each busy one to the next free port in this run's own env file.
-for name in OMNI_HTTP_PORT OMNI_HTTPS_PORT OMNI_PG_PORT; do
+for name in OMNI_HTTP_PORT OMNI_PG_PORT; do
   want="$(env_get "$name")"; port="$want"
   while port_busy "$port"; do
     port=$((port + 1))
@@ -45,12 +45,10 @@ for name in OMNI_HTTP_PORT OMNI_HTTPS_PORT OMNI_PG_PORT; do
     sed -i.bak "s/^$name=.*/$name=$port/" "$env_file" && rm -f "$env_file.bak"
   fi
 done
-HTTP="$(env_get OMNI_HTTP_PORT)"; HTTPS="$(env_get OMNI_HTTPS_PORT)"; PG="$(env_get OMNI_PG_PORT)"
+HTTP="$(env_get OMNI_HTTP_PORT)"; PG="$(env_get OMNI_PG_PORT)"
 DOMAIN="$(env_get OMNI_DOMAIN)"; REPORTS="$(env_get OMNI_REPORTS_DOMAIN)"
-APP="https://$DOMAIN:$HTTPS"
-CACERT="$state/tls/live/$DOMAIN/fullchain.pem"
-curl_opts=(--silent --show-error --max-time 10 --cacert "$CACERT"
-  --resolve "$DOMAIN:$HTTPS:127.0.0.1" --resolve "$REPORTS:$HTTPS:127.0.0.1"
+APP="http://$DOMAIN:$HTTP"
+curl_opts=(--silent --show-error --max-time 10
   --resolve "$DOMAIN:$HTTP:127.0.0.1" --resolve "$REPORTS:$HTTP:127.0.0.1")
 get() { curl "${curl_opts[@]}" "$@"; }
 
@@ -69,28 +67,27 @@ check_log "stack healthy: $(omni_compose ps --format '{{.Service}}' | sort | uni
 [ "$(omni_compose ps -a --format '{{.Service}} {{.State}} {{.ExitCode}}' | grep -c '^migrate exited 0$')" = 1 ] \
   || check_fail "migrate did not run to completion before api"
 
-bash "$INFRA/deploy/smoke.sh" --cacert "$CACERT" --resolve 127.0.0.1 --http-port "$HTTP" \
-  --network testnet --min-cert-days 7 "$DOMAIN:$HTTPS" "$REPORTS" | sed 's/^/    /'
+bash "$INFRA/deploy/smoke.sh" --scheme http --resolve 127.0.0.1 --http-port "$HTTP" \
+  --network testnet "$DOMAIN" "$REPORTS" | sed 's/^/    /'
 
 case "$(omni_compose port postgres 5432)" in
   "127.0.0.1:$PG") check_log "postgres published on 127.0.0.1:$PG only" ;;
   *) check_fail "postgres is published as $(omni_compose port postgres 5432)" ;;
 esac
-[ "$(get -o /dev/null -w '%{redirect_url}' "http://$REPORTS:$HTTP/sample/report.html")" = "https://$REPORTS:$HTTPS/sample/report.html" ] \
-  || check_fail "reports http -> https redirect"
-[ "$(get -o /dev/null -w '%{http_code}' -X POST "https://$REPORTS:$HTTPS/sample/report.html")" = 403 ] \
+[ "$(get -o /dev/null -w '%{http_code}' "http://$REPORTS:$HTTP/sample/report.html")" = 200 ] \
+  || check_fail "reports origin did not serve the sample over http"
+[ "$(get -o /dev/null -w '%{http_code}' -X POST "http://$REPORTS:$HTTP/sample/report.html")" = 403 ] \
   || check_fail "reports origin accepted a POST"
-if curl --silent --max-time 5 -k --resolve "unknown.localhost:$HTTPS:127.0.0.1" -o /dev/null "https://unknown.localhost:$HTTPS/"; then
-  check_fail "nginx completed a TLS handshake for an unknown hostname"
-fi
-check_log "reports origin: redirect, GET only; unknown hostnames rejected at the handshake"
+unknown="$(curl --silent --show-error --max-time 5 --resolve "unknown.localhost:$HTTP:127.0.0.1" -o /dev/null -w '%{http_code}' "http://unknown.localhost:$HTTP/" || true)"
+[ "$unknown" = 404 ] || check_fail "unknown hostname on the local http port answered ${unknown:-nothing}"
+check_log "reports origin: HTTP GET only; unknown hostnames get 404"
 
 [ "$APPS" = stub ] || { check_log "real apps: proxy behaviour checks need the stub's /api/whoami; skipped"; exit 0; }
 
 who="$(get -H 'X-Forwarded-For: 6.6.6.6' -H 'X-Real-IP: 6.6.6.6' "$APP/api/whoami")"
 case "$who" in
   *6.6.6.6*) check_fail "a forged X-Forwarded-For reached the api: $who" ;;
-  *'"proto":"https"'*) check_log "api sees nginx's client address, not the forged header ($who)" ;;
+  *'"proto":"http"'*) check_log "api sees nginx's client address, not the forged header ($who)" ;;
   *) check_fail "unexpected forwarding headers: $who" ;;
 esac
 

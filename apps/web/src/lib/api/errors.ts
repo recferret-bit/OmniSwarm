@@ -14,7 +14,7 @@ export const ERROR_COPY: Record<AppErrorCode, string> = {
   REPO_NOT_FOUND: 'That repository was not found on GitHub.',
   REPO_PRIVATE: 'This repository is private. Only public repositories can be reviewed.',
   REPO_ARCHIVED: 'This repository is archived and cannot be reviewed.',
-  REPO_TOO_LARGE: 'This repository is too large for a hosted review.',
+  REPO_TOO_LARGE: 'This repository is too large to clone. It is above the hard size cap.',
   REPO_DENIED: 'This repository is not accepted for hosted reviews.',
   QUEUE_FULL: 'Queue is full, try later. Nothing was charged.',
   NONCE_EXPIRED: 'The sign-in challenge expired. Sign the request again.',

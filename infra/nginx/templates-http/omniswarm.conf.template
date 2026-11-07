@@ -1,0 +1,62 @@
+# Local edge. The compose dev profile mounts this directory instead of
+# templates/, so the stack is plain HTTP on :80 and sends no HSTS.
+# Only ${OMNI_*} names are substituted (NGINX_ENVSUBST_FILTER=^OMNI_):
+#   OMNI_DOMAIN          app hostname
+#   OMNI_REPORTS_DOMAIN  reports hostname
+#   OMNI_APP_ORIGIN      http origin of the app, including the loopback port
+#   OMNI_REPORTS_ORIGIN  http origin of reports
+# Production keeps templates/omniswarm.conf.template (TLS, redirect, HSTS).
+
+# Upstreams are resolved per request. See templates/omniswarm.conf.template.
+
+# Unknown names get no content. /nginx-health stays on this default server
+# because the container healthcheck calls 127.0.0.1.
+server {
+  listen 80 default_server;
+  server_name _;
+
+  include /etc/nginx/snippets/nginx-health.conf;
+
+  location / {
+    default_type text/plain;
+    return 404 "not found\n";
+  }
+}
+
+# App origin: Next.js web app at /, intake API at /api/.
+server {
+  listen 80;
+  server_name ${OMNI_DOMAIN};
+
+  include /etc/nginx/snippets/headers-common.conf;
+  # Framing and base-uri only; the web app may send its own script policy,
+  # and the browser enforces both.
+  add_header Content-Security-Policy "frame-ancestors 'none'; base-uri 'self'; object-src 'none'" always;
+  add_header X-Frame-Options "DENY" always;
+
+  include /etc/nginx/snippets/app-locations.conf;
+  # After app-locations so $omni_web and $omni_api are set. Longer match than /.
+  include /etc/nginx/snippets/admin-basic.conf;
+}
+
+# Reports origin: published report folders, read-only, separate origin.
+server {
+  listen 80;
+  server_name ${OMNI_REPORTS_DOMAIN};
+
+  root /srv/reports;
+  autoindex off;
+  client_max_body_size 1k;
+
+  include /etc/nginx/snippets/headers-common.conf;
+  # Reports quote untrusted target text. Each report page also carries its own
+  # <meta> CSP that pins scripts to a per-page nonce
+  # (engine/scripts/generate-html-report.mjs); browsers enforce both policies, so the
+  # inline allowances here only admit what that nonce admits. frame-ancestors
+  # and sandbox work only as a header, which is why they are set here.
+  add_header Content-Security-Policy "default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors ${OMNI_APP_ORIGIN}; sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox" always;
+  add_header Access-Control-Allow-Origin "${OMNI_APP_ORIGIN}" always;
+  add_header Vary "Origin" always;
+
+  include /etc/nginx/snippets/reports-locations.conf;
+}

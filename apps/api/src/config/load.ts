@@ -41,6 +41,8 @@ export interface Config {
   localMode: boolean;
   /** Both null unless the operator set them. The login module owns any non-production fallback. */
   dashboard: { login: string | null; password: string | null };
+  adminBasic: { user: string | null; password: string | null };
+  providerSecretsFile: string | null;
 }
 
 export class ConfigError extends Error {
@@ -74,6 +76,7 @@ function productionIssues(raw: RawEnv, role: Role): Issue[] {
   need('CHAIN_ADAPTER', chosen.chain === 'near', 'must be "near" in production (mock is test-only)');
   need('GITHUB_ADAPTER', chosen.github === 'live', 'must be "live" in production (recorded is test-only)');
   need('COOKIE_SECURE', raw.COOKIE_SECURE !== false, 'cannot be disabled in production');
+  need('REPORTS_BASE_URL', raw.REPORTS_BASE_URL.startsWith('https://'), 'must be https in production');
   // The API cannot read the engine config, so the preset it accepts must be named, not defaulted.
   if (role !== 'migrate') need('HOSTED_PRESET', raw.HOSTED_PRESET !== undefined, 'must be set in production (a preset defined in omniswarm.config.json)');
   if (role === 'api') need('ADMIN_TOKEN', Boolean(raw.ADMIN_TOKEN), 'is required in production');
@@ -157,6 +160,8 @@ function build(raw: RawEnv): Config {
     progressPollMs: raw.PROGRESS_POLL_MS,
     localMode: raw.LOCAL_MODE ?? (raw.NODE_ENV !== 'production'),
     dashboard: { login: raw.DASHBOARD_LOGIN ?? null, password: raw.DASHBOARD_PASSWORD ?? null },
+    adminBasic: { user: raw.ADMIN_BASIC_USER ?? null, password: raw.ADMIN_BASIC_PASSWORD ?? null },
+    providerSecretsFile: raw.PROVIDER_SECRETS_FILE ?? null,
   };
 }
 

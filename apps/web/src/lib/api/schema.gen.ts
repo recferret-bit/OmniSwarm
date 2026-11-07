@@ -129,6 +129,8 @@ export interface QuoteResponse {
   queueDepth: number;
   preset: string;
   etaMinutes: number;
+  sizeKb?: number;
+  large?: boolean;
 }
 export interface CreateRequestBody {
   accountId: AccountId;
@@ -194,6 +196,7 @@ export interface RequestListResponse {
     repo: Repo;
     status: Status;
     createdAt: Timestamp;
+    theme?: string;
   }[];
 }
 export interface ReportIndexResponse {

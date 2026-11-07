@@ -21,6 +21,7 @@ export const challengeResponse = z.strictObject({ nonce, expiresAt: timestamp })
 export const quoteRequest = z.strictObject({ repoUrl: z.string().min(1).max(300), network, ref: z.string().min(1).max(200).optional() });
 export const quoteResponse = z.strictObject({
   normalizedRepo: repo, commitSha, priceYocto: yocto, contractId: accountId, queueDepth: z.int().min(0), preset, etaMinutes: z.int().min(0),
+  sizeKb: z.int().min(0).optional(), large: z.boolean().optional(),
 });
 
 export const createRequestBody = z.strictObject({
@@ -46,13 +47,17 @@ export const progressEvent = z.strictObject({ status, progress: progress.optiona
 
 export const listQuery = z.strictObject({ mine: z.literal('1') });
 export const requestListResponse = z.strictObject({
-  requests: z.array(z.strictObject({ requestId: uuid, repo, status, createdAt: timestamp })),
+  requests: z.array(z.strictObject({ requestId: uuid, repo, status, createdAt: timestamp, theme: z.string().min(1).optional() })),
 });
 
 export const loginBody = z.strictObject({ login: z.string().min(1).max(256), password: z.string().min(1).max(256) });
 export const sessionResponse = z.strictObject({ account: accountId });
 
-export const dashboardJobBody = z.strictObject({ repo: z.string().min(1).max(300) });
+export const dashboardJobBody = z.strictObject({
+  repo: z.string().min(1).max(300),
+  models: z.array(z.enum(['opus', 'sol', 'argon', 'grok'])).max(4).optional(),
+  scopes: z.array(z.enum(['full', 'web2', 'web3'])).max(3).optional(),
+});
 export const dashboardJobResponse = z.strictObject({ requestId: uuid, repo, commitSha, status: z.literal('queued') });
 
 const operatorKind = z.enum(['path', 'github']);

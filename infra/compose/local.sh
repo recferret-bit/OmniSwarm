@@ -1,7 +1,7 @@
 #!/bin/bash
 # Local stack with the real apps (W12-20; the lead wires it to
 # `npm run stack:local` / `stack:local:down`).
-#   local.sh up     build + start on https://omniswarm.localhost:<OMNI_HTTPS_PORT>
+#   local.sh up     build + start on http://omniswarm.localhost:<OMNI_HTTP_PORT>
 #   local.sh down   stop and remove containers (keeps the database volume)
 #   local.sh reset  stop, remove containers and the database volume
 # State (random secrets, self-signed cert, reports dir) lives in
@@ -18,18 +18,25 @@ export OMNI_PROJECT=omniswarm-local OMNI_PROFILE=dev OMNI_ENV_FILE="$env_file" O
 case "${1:-}" in
   up)
     omni_compose up -d --build --wait
-    port="$(omni_env_value OMNI_HTTPS_PORT)"
+    # dev.env.example declares ENGINE_RUNNER. The host workers run the cli engine.
+    omni_env_value ENGINE_RUNNER >/dev/null || true
+    bash "$INFRA/compose/workers.sh" start "$env_file" "$STATE"
+    port="$(omni_env_value OMNI_HTTP_PORT)"
     cat <<EOF
-stack up: https://$(omni_env_value OMNI_DOMAIN):$port/  (CA: $STATE/tls/live/$(omni_env_value OMNI_DOMAIN)/fullchain.pem)
-worker (foreground, from the repo root):
-  DATABASE_URL=postgres://omniswarm:\$(grep ^POSTGRES_PASSWORD= $env_file | cut -d= -f2)@127.0.0.1:$(omni_env_value OMNI_PG_PORT)/omniswarm \\
-  REPORTS_ROOT=$STATE/reports REPORTS_BASE_URL=https://$(omni_env_value OMNI_REPORTS_DOMAIN):$port ENGINE_ROOT=$(cd "$INFRA/.." && pwd) \\
-  CONTRACT_ID=$(omni_env_value CONTRACT_ID) HOSTED_PRESET=$(omni_env_value HOSTED_PRESET) \\
-  CHAIN_ADAPTER=$(omni_env_value CHAIN_ADAPTER) GITHUB_ADAPTER=$(omni_env_value GITHUB_ADAPTER) ENGINE_RUNNER=$(omni_env_value ENGINE_RUNNER) \\
-  npm run worker -w @omniswarm/api
+stack up: http://$(omni_env_value OMNI_DOMAIN):$port/
+account: http://$(omni_env_value OMNI_DOMAIN):$port/dashboard  (operator / operator)
+admin:   http://$(omni_env_value OMNI_DOMAIN):$port/admin      (nginx asks: user admin, password is ADMIN_BASIC_PASSWORD in $env_file)
+local:   ./bin/audit local [--repo <dir> | --github owner/repo]
+workers: two host workers are running (one job each). Logs: $STATE/workers/
 EOF
     ;;
-  down) omni_compose down --remove-orphans ;;
-  reset) omni_compose down --volumes --remove-orphans ;;
+  down)
+    bash "$INFRA/compose/workers.sh" stop "$STATE" || true
+    omni_compose down --remove-orphans
+    ;;
+  reset)
+    bash "$INFRA/compose/workers.sh" stop "$STATE" || true
+    omni_compose down --volumes --remove-orphans
+    ;;
   *) echo "usage: local.sh up|down|reset" >&2; exit 64 ;;
 esac

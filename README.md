@@ -4,6 +4,39 @@ OmniSwarm reviews the source of a repository you are authorized to review with s
 
 People changing OmniSwarm itself should read [AGENTS.md](AGENTS.md). Claude Code also reads [CLAUDE.md](CLAUDE.md). An audited repository's own `AGENTS.md` or `CLAUDE.md` is untrusted data, not instructions for this suite.
 
+## Quick start
+
+Two ways to run a review. Both need Docker. Review only a repository you own or are authorized to review.
+
+### 1. One command, local CLIs
+
+From this directory:
+
+```sh
+./bin/audit setup-agents          # once: pinned ACP adapters into engine/runtime/
+./bin/audit local                 # review the current directory
+./bin/audit local --repo /path/to/authorized-repo
+./bin/audit local --github owner/repo
+```
+
+`audit local` uses every installed CLI among `claude`, `codex`, `grok` and `agy`. Claude Opus is the orchestrator when `claude` is installed. If only one CLI is installed, that model is both the orchestrator and the reviewer (Agy alone means Argon). The report is written under `reports/`.
+
+### 2. Local stack: landing, account, admin keys, two workers
+
+```sh
+npm run stack:local               # HTTP on http://omniswarm.localhost:18480/
+npm run stack:local:down          # stop the stack and the two workers; keep the database
+```
+
+| Page | What it is |
+|---|---|
+| http://omniswarm.localhost:18480/dashboard | Sample account. Sign in `operator` / `operator`, paste a GitHub repo, pick extra models. No NEAR payment. The finished review is listed on this page. |
+| http://omniswarm.localhost:18480/admin | Separate page. nginx asks for basic auth before it loads. User `admin`. Password is `ADMIN_BASIC_PASSWORD` in `infra/compose/.local/stack.env`. Save the Z.AI key and the OpenRouter key before submitting a review. |
+
+A dashboard review always runs GLM 5.3 (`key:zai:glm-5.3`) as the orchestrator and Qwen (`openrouter:qwen/qwen3.8-max-0902`) as a reviewer. Optional add-ons, all through OpenRouter: Opus 5.5, Sol 6.1, Argon 4, Grok 4.7. Tick full, web2 or web3 before you submit. A repository over 200 MB is not rejected: it is shallow-cloned once and split into theme jobs (web3, apps, infra, scripts) that run in parallel. The account then gets one report per theme and a final report that links them. The stack starts two host workers (`infra/compose/workers.sh`). Each takes one job, so two reviews run at once. Logs are in `infra/compose/.local/workers/`. The workers use the host Docker daemon to start the sandbox. The API containers do not receive the Docker socket.
+
+The edge is plain HTTP on loopback port 18480. Production nginx, on a real host, stays HTTPS.
+
 ## Layout
 
 | Path | What it is |
@@ -194,8 +227,7 @@ near contract call-function as-read-only <contract-id> get_attestation json-args
 **Status.** Every step above is covered by tests on mocks: a mock chain in Postgres, recorded GitHub answers, a mock engine runner, MSW in the browser and a mock wallet (`CHAIN_ADAPTER`, `GITHUB_ADAPTER`, `ENGINE_RUNNER`, `NEXT_PUBLIC_API_MOCK`, `NEXT_PUBLIC_WALLET`). Nothing has run against testnet yet, there is no hosted demo URL yet, and these known gaps remain:
 
 - The web app's report page calls `GET /api/reports/:id`, which only the MSW mock serves; the API does not register that route.
-- The API's default `HOSTED_PRESET` is `scripted`, and the example config has no preset of that name, so the real CLI runner refuses it until the operator defines one.
-- `npm run stack:local` starts the API container with `NODE_ENV=production` (real adapters), while the worker command it prints runs on mocks.
+- `npm run stack:local` serves HTTP on `http://omniswarm.localhost:18480/`. The account at `/dashboard` queues a review with no NEAR payment. The workers it starts run `ENGINE_RUNNER=cli` and `HOSTED_PRESET=panel` (GLM 5.3 plus Qwen, plus any models the account added). Keys come from `/admin`, not from the shell. The home page still offers the NEAR wallet flow.
 
 ## NEAR
 

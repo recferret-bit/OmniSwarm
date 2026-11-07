@@ -1,6 +1,8 @@
 // One `review` job (W09-12..16): running -> engine -> classify -> publish -> attest, or failed ->
 // refund. Re-entrant: pg-boss re-delivers a job whose worker died (missed heartbeat) and the handler
 // resumes from what the database, the attempt dirs and the contract already show.
+import fs from 'node:fs';
+import path from 'node:path';
 import type { ChainPort, Severity } from '../chain/port.ts';
 import type { Config } from '../config/load.ts';
 import type { Pool } from '../db/pool.ts';
@@ -21,6 +23,8 @@ import { ProgressTailer } from './progress-tailer.ts';
 import { publishReport, readPublished } from './publish.ts';
 import { maxSeverity } from './report.ts';
 import { ensureReportPdf } from '../shared/report-pdf.ts';
+import { readProviderEnv } from '../modules/providers/secrets.ts';
+import { isPanelPreset, panelConfigDocument } from './panel.ts';
 
 export interface HandlerDeps { config: Config; pool: Pool; clock: Clock; chain: ChainPort; engine: EngineRunner; log: Logger }
 /** `lastAttempt`: this delivery has no retry left. `signal`: the worker is stopping (or lost the claim). */
@@ -90,7 +94,16 @@ async function runEngine(deps: HandlerDeps, row: RequestRow, attempt: number, si
   const tailer = new ProgressTailer(deps, row.id, dirs.out, onStop);
   tailer.start(deps.config.progressPollMs);
   try {
-    const result = await deps.engine.run({ repo: row.repo, commitSha: row.commit_sha, preset: row.preset, outDir: dirs.out, logPath: dirs.log }, abort.signal);
+    let configFile: string | undefined;
+    if (isPanelPreset(row.preset)) {
+      configFile = path.join(dirs.root, 'panel.config.json');
+      fs.writeFileSync(configFile, `${JSON.stringify(panelConfigDocument(row.preset))}\n`, { mode: 0o600 });
+    }
+    const providerEnv = readProviderEnv(deps.config.providerSecretsFile ?? '', deps.config.http.sessionSecret);
+    const result = await deps.engine.run({
+      repo: row.repo, commitSha: row.commit_sha, preset: row.preset, outDir: dirs.out, logPath: dirs.log, configFile, providerEnv,
+      ...(row.slice_path ? { sourceDir: row.slice_path } : {}),
+    }, abort.signal);
     recordResult(dirs, result);
     return { outcome: classify(result, dirs.out), out: dirs.out };
   } finally {

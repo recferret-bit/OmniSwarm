@@ -14,6 +14,11 @@ import type { PaymentDeps } from '../modules/payments/payment.service.ts';
 import { refundRequest } from '../modules/payments/settlement.service.ts';
 import { isAppError } from '../shared/errors.ts';
 import { runMaintenance } from './maintenance.ts';
+import { findRequest, transition } from '../db/repositories/requests.ts';
+import { isPanelPreset } from './panel.ts';
+import { finalReportDir, splitLargeReview } from './theme-split.ts';
+import { beginPublishing, attestRequest } from '../modules/payments/settlement.service.ts';
+import { publishReport } from './publish.ts';
 import { handleDeadReview, handleReview, RunInterruptedError, type HandlerDeps } from './review-handler.ts';
 
 type WorkerDeps = HandlerDeps & PaymentDeps;
@@ -31,9 +36,40 @@ async function workReviews(boss: PgBoss, deps: WorkerDeps, shutdown: AbortSignal
     const log = deps.log.child({ requestId: data.requestId, jobId: job.id, delivery: job.retryCount + 1 });
     log.info('review job started');
     try {
+      const existing = await findRequest(deps.pool, data.requestId);
+      if (existing && !existing.theme && !existing.parent_id && deps.engine.kind === 'cli' && isPanelPreset(existing.preset)) {
+        const split = await splitLargeReview({ pool: deps.pool, boss, clock: deps.clock, config: deps.config, row: existing });
+        if (split === 'split') {
+          log.info('large review queued as one job per theme');
+          return { status: 'split' };
+        }
+        if (split === 'empty') {
+          await transition(deps.pool, existing.id, {
+            to: 'failed', patch: { failureCause: 'no directory matched the selected scope' }, actor: 'worker', event: 'review_empty', now: deps.clock.now(),
+          });
+          return { status: 'failed', reason: 'no directory matched the selected scope' };
+        }
+      }
       const result = await handleReview({ ...deps, log }, data, {
         lastAttempt: job.retryCount >= job.retryLimit, signal: AbortSignal.any([job.signal, shutdown]),
       });
+      if (existing?.parent_id) {
+        const final = await finalReportDir(deps.pool, deps.config, existing.parent_id);
+        if (final) {
+          const published = publishReport({
+            reportsRoot: deps.config.storage.reportsRoot, requestId: final.parent.id, sourceDir: final.dir,
+            repo: final.parent.repo, commitSha: final.parent.commit_sha, preset: final.parent.preset,
+          });
+          const reportUri = `${deps.config.storage.reportsBaseUrl}/${final.parent.id}/report.html`;
+          try {
+            await beginPublishing(deps, final.parent.id, { reportSha256: published.reportSha256, reportUri, maxSeverity: 'none', incomplete: false });
+            await attestRequest(deps, final.parent.id, { reportUri, maxSeverity: 'none' });
+            log.info({ parentId: final.parent.id }, 'final report published');
+          } catch (error) {
+            if (!isAppError(error, 'INVALID_TRANSITION')) throw error;
+          }
+        }
+      }
       log.info({ result: result.status }, 'review job finished');
       return result;
     } catch (error) {

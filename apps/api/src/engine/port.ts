@@ -10,6 +10,12 @@ export interface EngineRunInput {
   outDir: string;
   /** Host-only log of the engine's stdout and stderr (never published). */
   logPath: string;
+  /** Already-checked-out slice. When set, the engine reviews this directory instead of cloning `repo`. */
+  sourceDir?: string;
+  /** Panel config the engine reads instead of the repo omniswarm.config.json. */
+  configFile?: string;
+  /** ZAI_API_KEY / OPENROUTER_API_KEY for this spawn only. */
+  providerEnv?: Record<string, string>;
 }
 
 export interface EngineRunResult {

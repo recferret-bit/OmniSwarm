@@ -38,7 +38,7 @@ export const dashboardRoutes: FastifyPluginAsyncZod<{ deps: ApiDeps }> = async (
     },
   }, async (request, reply) => {
     const account = requireAccount(request, deps.clock.now());
-    return reply.code(201).send(await createDashboardJob(deps, account, request.body.repo));
+    return reply.code(201).send(await createDashboardJob(deps, account, request.body.repo, request.body.models ?? [], request.body.scopes ?? []));
   });
 
   app.get('/api/requests/:id/report.pdf', {

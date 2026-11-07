@@ -3,6 +3,7 @@
 // preset that would run a personal CLI subscription (`cli:*`) or an orchestrator it cannot vet.
 import fs from 'node:fs';
 import { AppError } from '../shared/errors.ts';
+import { isPanelPreset, panelSpecs } from './panel.ts';
 
 /**
  * Provider variables per reviewer family (scripts/provider-openai-compat.mjs envAllowlist). `scripted`
@@ -38,6 +39,10 @@ export function presetEnv(name: string, specs: string[]): ResolvedPreset {
 }
 
 export function resolvePreset(configPath: string, name: string): ResolvedPreset {
+  if (isPanelPreset(name)) {
+    const panel = panelSpecs(name);
+    return presetEnv(name, [panel.orchestrator, panel.alternateJudge, ...panel.reviewers]);
+  }
   if (!fs.existsSync(configPath)) refuse(`engine config ${configPath} is missing; preset ${name} cannot be resolved`);
   const config = JSON.parse(fs.readFileSync(configPath, 'utf8')) as { presets?: Record<string, Record<string, unknown>> };
   const preset = config.presets?.[name];

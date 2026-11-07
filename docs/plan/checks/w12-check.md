@@ -8,7 +8,7 @@ Wave file: [`../waves/W12-remote-host.md`](../waves/W12-remote-host.md).
 
 - Docker running (compose v2), Node 24, `openssl`, `curl`. Nothing in step 1 contacts a host or a provider.
 - Step 1 uses:
-  - loopback ports `18480`, `18443` and `55873` (`infra/env/dev.env.example`)
+  - loopback ports `18480` and `55873` (`infra/env/dev.env.example`)
   - compose project `omniswarm-infra-check-<pid>`; a port held by another stack is moved to the next free one for that run
   - two cached check images, `omniswarm-infra-check/{systemd,hosts}`, built once from Debian trixie
 

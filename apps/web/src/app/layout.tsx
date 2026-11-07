@@ -1,8 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 import { LiveRegion } from '@/components/ui/LiveRegion';
-import { SiteFooter } from '@/components/ui/SiteFooter';
-import { SiteHeader } from '@/components/ui/SiteHeader';
 import { Providers } from './providers';
 import './globals.css';
 
@@ -24,12 +22,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <body>
-        <a className="skip-link" href="#main">Skip to content</a>
-        <SiteHeader />
-        <Providers>
-          <main id="main" className="main">{children}</main>
-        </Providers>
-        <SiteFooter />
+        <Providers>{children}</Providers>
         <LiveRegion />
       </body>
     </html>

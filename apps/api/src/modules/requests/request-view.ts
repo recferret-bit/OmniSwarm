@@ -35,5 +35,5 @@ export async function viewRequest(db: Db, id: string) {
 
 export async function listMine(db: Db, account: string) {
   const rows = await listByAccount(db, account);
-  return { requests: rows.map((row) => ({ requestId: row.id, repo: row.repo, status: row.status, createdAt: iso(row.created_at) })) };
+  return { requests: rows.map((row) => ({ requestId: row.id, repo: row.repo, status: row.status, createdAt: iso(row.created_at), ...(row.theme ? { theme: row.theme } : {}) })) };
 }

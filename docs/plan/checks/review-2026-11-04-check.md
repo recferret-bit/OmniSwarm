@@ -133,12 +133,12 @@ npm run stack:local
 ```
 
 1. [ ] It builds the api and web images and starts postgres, migrate, api ×2, web and nginx, then prints the worker command. Leave the worker off for now.
-2. [ ] `curl -k https://omniswarm.localhost:18443/api/health` returns `{"ok":true,…}`, and `curl -k https://omniswarm.localhost:18443/api/ready` returns 200. If 18443 was busy, use the port `local.sh` printed.
-3. [ ] `curl -k -o /dev/null -w '%{http_code}\n' https://omniswarm.localhost:18443/api/admin/requests` prints `403`: nginx never proxies the admin routes.
+2. [ ] `curl -s http://omniswarm.localhost:18480/api/health` returns `{"ok":true,…}`, and `curl -s -o /dev/null -w '%{http_code}\n' http://omniswarm.localhost:18480/api/ready` prints `200`. If 18480 was busy, use the port `local.sh` printed.
+3. [ ] `curl -s -o /dev/null -w '%{http_code}\n' http://omniswarm.localhost:18480/api/admin/requests` prints `403`: nginx never proxies the admin routes.
 4. [ ] `docker ps --filter name=api` shows two api containers. *Proves:* the API runs as several replicas behind nginx.
 5. [ ] Optional: in a second terminal, run the worker command `local.sh` printed (mock chain, mock engine) and watch it start and wait for jobs. The web image is a production build with the real wallet, so the click-through of Part 6 stays on `npm run dev`.
 6. [ ] `npm run stack:local:down` stops everything and keeps the database volume. `bash infra/compose/local.sh reset` removes the volume too.
-7. [ ] `bash infra/check.sh --apps=real` ends with `smoke: all checks passed` and `infra check ok`. It brings the same stack up on its own project and ports, checks TLS, the redirect, health, ready, the web root, headers, admin blocked, the reports CSP and rate limiting, then tears it down.
+7. [ ] `bash infra/check.sh --apps=real` ends with `smoke: all checks passed` and `infra check ok`. It brings the same stack up on its own project and ports, checks plain HTTP, health, ready, the web root, headers, admin blocked, the reports CSP and rate limiting, then tears it down.
 
 ## Part 8: deploy scripts in dry-run only
 

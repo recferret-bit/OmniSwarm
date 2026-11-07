@@ -34,9 +34,9 @@ The worker spawns `./bin/audit`, which builds and runs the review sandbox on the
 |---|---|
 | `compose/compose.yml` | the stack, shared by every profile |
 | `compose/compose.prod.yml` | prod: `80/443` public, Postgres `127.0.0.1:5432`, certbot (run-only profile) |
-| `compose/compose.dev.yml` | dev: loopback ports from `env/dev.env.example` |
+| `compose/compose.dev.yml` | dev: loopback HTTP port from `env/dev.env.example` |
 | `compose/compose.stub.yml` | check only: stub api/web (`test/stub/`) |
-| `compose/dev-env.sh`, `compose/local.sh` | local state (random secrets, self-signed cert) and `up`/`down`/`reset` |
+| `compose/dev-env.sh`, `compose/local.sh` | local state (random secrets) and `up`/`down`/`reset`. The local edge is HTTP |
 | `nginx/nginx.conf`, `nginx/templates/`, `nginx/snippets/` | edge config. The template is rendered by the nginx image (`OMNI_*` names only) |
 | `systemd/` | worker template + target; backup, renewal, health, prune and log-hygiene timers |
 | `hosts/` | host config `provision.sh` installs: `daemon.json`, `omniswarm.nft` + its unit, sshd, fail2ban, journald, unattended-upgrades |
@@ -157,7 +157,7 @@ Static checks:
 
 Full mode adds:
 - the api image build: under 300 MB, uid 1000, no `engine/`, `bin/` or `.env`, and `/app` read-only
-- a bring-up on `127.0.0.1:18480/18443` (Postgres on `55873`) of postgres, migrate, api×2, web and nginx, which runs `smoke.sh` against it
+- a bring-up on `127.0.0.1:18480` (Postgres on `55873`) of postgres, migrate, api×2, web and nginx, which runs `smoke.sh --scheme http` against it
 - with the stub: a forged `X-Forwarded-For` does not reach the api, SSE events arrive unbuffered, requests reach every replica, and `--scale api=3` gets traffic without a reload
 - a rolling restart to a new image with 0 failed requests, then a backup and a restore drill
 - teardown with `down --volumes`

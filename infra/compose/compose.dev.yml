@@ -1,5 +1,5 @@
-# Local overlay: the same stack on loopback ports with a self-signed
-# certificate for omniswarm.localhost and reports.omniswarm.localhost.
+# Local overlay: the same stack on one loopback HTTP port.
+# No TLS and no HSTS. Production stays on compose.prod.yml.
 # Env comes from infra/compose/dev-env.sh (stack.env.example + dev.env.example,
 # random secrets). Used by infra/compose/local.sh and the infra/check.sh bring-up.
 services:
@@ -10,12 +10,29 @@ services:
 
   api:
     environment:
-      REPORTS_BASE_URL: https://${OMNI_REPORTS_DOMAIN:?set OMNI_REPORTS_DOMAIN}:${OMNI_HTTPS_PORT:?set OMNI_HTTPS_PORT (dev.env.example)}
+      REPORTS_BASE_URL: http://${OMNI_REPORTS_DOMAIN:?set OMNI_REPORTS_DOMAIN}:${OMNI_HTTP_PORT:?set OMNI_HTTP_PORT (dev.env.example)}
+      # The session cookie must be stored on http://. Production refuses 0.
+      COOKIE_SECURE: "0"
+      ADMIN_BASIC_USER: ${ADMIN_BASIC_USER:?set ADMIN_BASIC_USER (dev.env.example)}
+      ADMIN_BASIC_PASSWORD: ${ADMIN_BASIC_PASSWORD:?set ADMIN_BASIC_PASSWORD}
+      PROVIDER_SECRETS_FILE: /secrets/providers.json
+    volumes:
+      - ${OMNI_SECRETS_DIR:?set OMNI_SECRETS_DIR}:/secrets
 
   nginx:
     ports:
       - "127.0.0.1:${OMNI_HTTP_PORT:?set OMNI_HTTP_PORT (dev.env.example)}:80"
-      - "127.0.0.1:${OMNI_HTTPS_PORT:?set OMNI_HTTPS_PORT (dev.env.example)}:443"
     environment:
-      OMNI_APP_ORIGIN: https://${OMNI_DOMAIN:?set OMNI_DOMAIN}:${OMNI_HTTPS_PORT:?set OMNI_HTTPS_PORT (dev.env.example)}
-      OMNI_REPORTS_ORIGIN: https://${OMNI_REPORTS_DOMAIN:?set OMNI_REPORTS_DOMAIN}:${OMNI_HTTPS_PORT:?set OMNI_HTTPS_PORT (dev.env.example)}
+      OMNI_APP_ORIGIN: http://${OMNI_DOMAIN:?set OMNI_DOMAIN}:${OMNI_HTTP_PORT:?set OMNI_HTTP_PORT (dev.env.example)}
+      OMNI_REPORTS_ORIGIN: http://${OMNI_REPORTS_DOMAIN:?set OMNI_REPORTS_DOMAIN}:${OMNI_HTTP_PORT:?set OMNI_HTTP_PORT (dev.env.example)}
+    # Replace the TLS template with the plain-HTTP one. The certificate
+    # volume stays mounted and unused so the shared service definition
+    # still has a directory to bind.
+    volumes: !override
+      - ${OMNI_NGINX_DIR:?set OMNI_NGINX_DIR in the stack env file}/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ${OMNI_NGINX_DIR:?set OMNI_NGINX_DIR in the stack env file}/templates-http:/etc/nginx/templates:ro
+      - ${OMNI_NGINX_DIR:?set OMNI_NGINX_DIR in the stack env file}/snippets:/etc/nginx/snippets:ro
+      - ${OMNI_TLS_DIR:?set OMNI_TLS_DIR in the stack env file}:/etc/letsencrypt:ro
+      - ${OMNI_ACME_DIR:?set OMNI_ACME_DIR in the stack env file}:/var/www/certbot:ro
+      - ${OMNI_REPORTS_DIR:?set OMNI_REPORTS_DIR in the stack env file}:/srv/reports:ro
+      - ${OMNI_ADMIN_HTPASSWD:?set OMNI_ADMIN_HTPASSWD}:/etc/nginx/admin.htpasswd:ro

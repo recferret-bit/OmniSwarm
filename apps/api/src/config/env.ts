@@ -43,6 +43,10 @@ export const envSchema = z.object({
   LOCAL_MODE: flag.optional(),
   DASHBOARD_LOGIN: z.string().min(1).optional(),
   DASHBOARD_PASSWORD: z.string().min(1).optional(),
+  // Admin page (HTTP basic). Separate from the sample-account session.
+  ADMIN_BASIC_USER: z.string().min(1).optional(),
+  ADMIN_BASIC_PASSWORD: z.string().min(8).optional(),
+  PROVIDER_SECRETS_FILE: absPath.optional(),
 
   NETWORK: z.enum(['testnet', 'mainnet']).default('testnet'),
   // Price on NETWORK. Testnet defaults to 1 NEAR (OD-08); mainnet has no default, so it stays off unless priced.
@@ -93,7 +97,8 @@ export const envSchema = z.object({
   // Disk hygiene (W09-19): finished requests whose run dirs are kept; how long an orphaned report stays.
   KEEP_RUNS: int(1, 100_000).default(20),
   ORPHAN_REPORT_RETENTION_H: int(1, 87_600).default(168),
-  REPORTS_BASE_URL: z.url().refine((url) => url.startsWith('https://'), 'must be https').default('https://reports.localhost'),
+  // http is the local stack only. productionIssues refuses it when NODE_ENV=production.
+  REPORTS_BASE_URL: z.url().refine((url) => url.startsWith('https://') || url.startsWith('http://'), 'must be http or https').default('https://reports.localhost'),
 
   WORKER_ID: z.string().regex(/^[A-Za-z0-9._@-]{1,64}$/).optional(),
   WORKER_CONCURRENCY: int(1, 8).default(1),

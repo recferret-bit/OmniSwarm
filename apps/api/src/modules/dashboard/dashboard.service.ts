@@ -15,6 +15,9 @@ import { assertAccountCapacity } from '../requests/create-request.service.ts';
 import { markPaid } from '../payments/payment.service.ts';
 import { checkRepo } from '../quote/quote.service.ts';
 import { parseGitHubInput } from '../quote/repo-url.ts';
+import { panelPresetName } from '../../worker/panel.ts';
+import { normalizeScopes, type ReviewScope } from '../../worker/themes.ts';
+import { providerStatus } from '../providers/secrets.ts';
 
 export interface DashboardDeps { config: Config; pool: Pool; clock: Clock; chain: ChainPort; github: GitHubPort; boss: PgBoss }
 
@@ -29,8 +32,12 @@ function reportFile(config: Config, id: string): string {
   return file;
 }
 
-export async function createDashboardJob(deps: DashboardDeps, account: string, repoInput: string) {
+export async function createDashboardJob(deps: DashboardDeps, account: string, repoInput: string, models: readonly string[] = [], scopes: readonly string[] = []) {
   assertDashboardChain(deps.config);
+  const keys = providerStatus(deps.config.providerSecretsFile ?? '');
+  if (!keys.zai.set || !keys.openrouter.set) fail('PRESET_NOT_ALLOWED', 'Set the Z.AI and OpenRouter keys on the admin page before queueing a review');
+  const preset = panelPresetName(models);
+  const scope: ReviewScope = normalizeScopes(scopes);
   const parsed = parseGitHubInput(repoInput);
   const depth = await queueDepth(deps.pool);
   if (depth >= deps.config.intake.maxQueue) fail('QUEUE_FULL', 'The review queue is full; try again later');
@@ -41,7 +48,7 @@ export async function createDashboardJob(deps: DashboardDeps, account: string, r
   const requestHash = crypto.createHash('sha256').update(`dashboard:${account}:${checked.repo}:${checked.commitSha}:${id}`).digest('hex');
   await insertRequest(deps.pool, {
     id, account, repo: checked.repo, commitSha: checked.commitSha, network: deps.config.intake.network,
-    preset: deps.config.intake.hostedPreset, deployed: null, requestHash, priceYocto: '0', now,
+    preset, deployed: null, requestHash, priceYocto: '0', now, scope,
   });
   const { payRequestReview } = await import('../../chain/mock/mock-ledger.ts');
   const txHash = await payRequestReview(deps.pool, {

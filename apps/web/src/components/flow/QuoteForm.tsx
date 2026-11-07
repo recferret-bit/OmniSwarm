@@ -6,10 +6,12 @@ import { isAccountId } from '@/lib/repo';
 import { selectBusy, useRequestFlow } from '@/stores/request-flow';
 import { Button } from '../ui/Button';
 import { Field } from '../ui/Field';
+import { ScopeChecks } from './ScopeChecks';
 
 export function QuoteForm() {
   const [repo, setRepo] = useState('');
   const [deployed, setDeployed] = useState('');
+  const [scopes, setScopes] = useState<string[]>(['full']);
   const requestQuote = useRequestFlow((state) => state.requestQuote);
   const busy = useRequestFlow(selectBusy);
   const quoting = useRequestFlow((state) => state.step === 'quoting');
@@ -18,7 +20,9 @@ export function QuoteForm() {
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (deployedError) return;
+    if (deployedError || scopes.length === 0) return;
+    sessionStorage.setItem('omniswarm-scope', JSON.stringify(scopes));
+    sessionStorage.setItem('omniswarm-repo', repo.trim());
     void requestQuote(repo, deployed);
   };
 
@@ -45,7 +49,8 @@ export function QuoteForm() {
         onChange={(event) => setDeployed(event.target.value)}
         error={deployedError}
       />
-      <Button type="submit" busy={quoting} disabled={busy}>Get quote</Button>
+      <ScopeChecks selected={scopes} onChange={setScopes} />
+      <Button type="submit" busy={quoting} disabled={busy || scopes.length === 0}>Get quote</Button>
     </form>
   );
 }
