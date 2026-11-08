@@ -23,6 +23,12 @@
   clip-path: none;
 }
 .flip-flow__face { transform: rotateY(0deg); }
+.flip-flow button:hover .flip-flow__face,
+.flip-flow button:hover .flip-flow__back,
+.flip-flow button:focus-visible .flip-flow__face,
+.flip-flow button:focus-visible .flip-flow__back {
+  border-color: var(--os-ember); background: var(--os-ember-dim);
+}
 .flip-flow__top { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; }
 .flip-flow__back { transform: rotateY(180deg); background: var(--os-plate); }
 .flip-flow .badge { clip-path: none; }

@@ -16,7 +16,10 @@ function txHashOf(outcome: unknown): string {
 export function createNearConnector(): WalletConnector {
   const connector = new NearConnector({
     network: env.network,
-    features: { signMessage: true, signAndSendTransaction: true, [env.network]: true },
+    // NEAR Mobile's executor throws unless the network is mainnet, and its
+    // manifest sets testnet: false. near-connect then omits it on testnet.
+    // Do not force that flag; a listed wallet that cannot sign is a dead end.
+    features: { signMessage: true, signAndSendTransaction: true },
   });
 
   async function wallet() {

@@ -40,11 +40,10 @@ export function drawOrchestrator(ctx: CanvasRenderingContext2D, x: number, y: nu
   ctx.translate(x, y);
   ctx.strokeStyle = ink.ember;
   ctx.lineWidth = 2;
-  ctx.globalAlpha = 0.9;
+  ctx.globalAlpha = 1;
   ctx.beginPath();
   ctx.arc(0, 0, 36, 0, Math.PI * 2);
   ctx.stroke();
-  ctx.globalAlpha = 0.55;
   ctx.beginPath();
   ctx.arc(0, 0, 28, time / 800, time / 800 + Math.PI * 1.35);
   ctx.stroke();

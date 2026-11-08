@@ -131,7 +131,7 @@ export function drawSwarm(ctx: CanvasRenderingContext2D, box: Box, width: number
   ctx.save();
   ctx.translate(cx, cy);
   ctx.strokeStyle = ink.cite;
-  ctx.globalAlpha = 0.28;
+  ctx.globalAlpha = 1;
   ctx.beginPath();
   ctx.ellipse(0, box.h * 0.08, box.w * 0.34, box.h * 0.12, 0, 0, Math.PI * 2);
   ctx.stroke();
@@ -140,13 +140,13 @@ export function drawSwarm(ctx: CanvasRenderingContext2D, box: Box, width: number
     const mark = MODELS[node.i % MODELS.length];
     if (!mark) continue;
     ctx.save();
-    ctx.globalAlpha = 0.2 + hover * 0.8;
+    ctx.globalAlpha = 1;
     ctx.strokeStyle = hover > 0.2 ? ink.ember : ink.cite;
     ctx.beginPath();
     ctx.moveTo(cx, cy);
     ctx.lineTo(sx, sy);
     ctx.stroke();
-    ctx.globalAlpha = 0.55 + node.s * 0.2;
+    ctx.globalAlpha = 1;
     ctx.translate(sx, sy);
     ctx.scale(node.s * (1 + hover * 0.45), node.s * (1 + hover * 0.45));
     drawModel(ctx, 0, 0, mark, ink);

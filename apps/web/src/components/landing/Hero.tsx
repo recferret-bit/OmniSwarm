@@ -28,7 +28,7 @@ export function Hero() {
         </div>
         <ol className="hero-stats" aria-label="Review facts">
           {STATS.map((stat, index) => (
-            <li key={stat.label}>
+            <li className="card plate" key={stat.label}>
               <span className="hero-stats__i">0{index + 1}</span>
               <strong>{stat.value}</strong>
               <span>{stat.label}</span>

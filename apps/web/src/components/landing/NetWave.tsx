@@ -26,7 +26,8 @@ export function NetWave() {
     const onDown = (event: PointerEvent) => {
       if (event.button !== 0) return;
       const node = event.target;
-      if (node instanceof Element && node.closest('a, button, input, textarea, select, label, summary, [role="tab"], [role="button"], form')) return;
+      const ui = 'a, button, input, textarea, select, label, summary, h1, h2, h3, h4, p, li, ol, ul, article, pre, code, figure, figcaption, dl, dt, dd, nav, form, [role="tab"], [role="button"], .card, .plate, .stat, .hero-actions, .report-stage, .report-still, .flip-flow, .pipeline, .how-detail, .example';
+      if (node instanceof Element && node.closest(ui)) return;
       const rect = land.getBoundingClientRect();
       localX = event.clientX - rect.left;
       localY = event.clientY - rect.top;
@@ -34,14 +35,14 @@ export function NetWave() {
       if (frame) cancelAnimationFrame(frame);
       frame = requestAnimationFrame(tick);
     };
-    land.addEventListener('pointerdown', onDown);
+    document.addEventListener('pointerdown', onDown);
     const theme = new MutationObserver(() => { if (burst) paint(performance.now()); });
     theme.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
     return () => {
       live = false;
       cancelAnimationFrame(frame);
       theme.disconnect();
-      land.removeEventListener('pointerdown', onDown);
+      document.removeEventListener('pointerdown', onDown);
     };
   }, []);
   return (
