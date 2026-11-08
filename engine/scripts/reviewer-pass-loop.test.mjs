@@ -68,7 +68,7 @@ test('a later pass that submits nothing restores the archived report and does no
   assert.equal(loop.passesCompleted, 1);
   assert.equal(fs.readFileSync(path.join(out, 'submissions', `${name}.json`), 'utf8'), '{"pass":1}\n');
   assert.equal(fs.existsSync(path.join(out, 'submissions', `${name}-pass-1.json`)), true);
-  assert.equal(usage(out, 's1', 2).submitted, false);
+  assert.equal(loop.health[1].submitted, false);
 });
 
 test('without a ceiling every pass runs', async () => {

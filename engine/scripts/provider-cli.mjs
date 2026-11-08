@@ -86,7 +86,7 @@ export const CLI_PROVIDERS = Object.freeze({
   claude: Object.freeze({ installed: () => true, pinsModel: true, presence: true, transport: 'maintained_acp', maxTurnsFlag: false }),
   codex: Object.freeze({ installed: () => true, pinsModel: true, presence: true, transport: 'maintained_acp', maxTurnsFlag: false }),
   grok: Object.freeze({ installed: () => true, pinsModel: true, presence: true, transport: 'native_acp', maxTurnsFlag: true }),
-  agy: Object.freeze({ installed: () => true, pinsModel: false, presence: true, transport: 'native_cli_acp_adapter', maxTurnsFlag: false }),
+  agy: Object.freeze({ installed: () => true, pinsModel: true, presence: true, transport: 'native_cli_acp_adapter', maxTurnsFlag: false }),
   'claude-zai': Object.freeze({ installed: () => true, pinsModel: false, presence: false, transport: 'maintained_acp', maxTurnsFlag: false }),
 });
 

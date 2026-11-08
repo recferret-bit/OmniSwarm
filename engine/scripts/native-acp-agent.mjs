@@ -11,6 +11,18 @@ import { SessionError } from './agent-rpc.mjs';
 
 const UUID = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i;
 
+// AGY's model list uses the full id (gemini-4-argon-high). A longer served id that still names that id matches.
+function sameModel(requested, reported) {
+  const live = String(reported || '').split('[')[0];
+  if (!live || live === requested) return true;
+  return live.startsWith(`${requested}-`) || live.includes(`-${requested}-`) || live.endsWith(`-${requested}`);
+}
+
+function servedModel(value) {
+  const candidates = [value?.model, value?.result?.model, value?.result?.model_id];
+  return candidates.find((item) => typeof item === 'string' && item.trim()) || '';
+}
+
 // AGY exposes a structured stream. This adapter supplies ACP v1 lifecycle
 // around its native saved conversations.
 export class NativeAcpAgent {
@@ -22,6 +34,14 @@ export class NativeAcpAgent {
     this.active = null;
   }
   update(update) { this.output({ method: 'session/update', params: { sessionId: this.state.sessionId, update } }); }
+  // The coordinator pins this model. session/new and session/load both report it.
+  modelReport() {
+    const model = this.config.model;
+    return {
+      models: { currentModelId: model },
+      configOptions: [{ id: 'model', name: 'Model', category: 'model', type: 'select', currentValue: model, options: [{ value: model, name: model }] }],
+    };
+  }
   save() { writeReportFile(this.config.cwd, 'native-session.json', JSON.stringify(this.state)); }
   validateSetup(params) {
     if (params.cwd !== this.config.cwd || JSON.stringify(params.mcpServers) !== JSON.stringify(this.config.mcpServers)) throw new SessionError('session_identity_rejected');
@@ -37,14 +57,14 @@ export class NativeAcpAgent {
       const sessionId = crypto.randomUUID();
       this.state = { version: 1, sessionId, agent: this.config.agent, model: this.config.model, nativeId: this.config.legacyConversationId || null, turns: 0 };
       this.save();
-      return { sessionId };
+      return { sessionId, ...this.modelReport() };
     }
     if (method === 'session/load') {
       this.validateSetup(params);
       const state = readReportJson(this.config.cwd, 'native-session.json');
       if (state.sessionId !== params.sessionId || state.agent !== this.config.agent || state.model !== this.config.model || !UUID.test(state.nativeId || '')) throw new SessionError('session_identity_rejected');
       this.state = state;
-      return {};
+      return this.modelReport();
     }
     if (method === 'session/cancel') {
       if (this.state?.sessionId !== params.sessionId) throw new SessionError('session_identity_rejected');
@@ -94,6 +114,10 @@ export class NativeAcpAgent {
         try {
           const value = JSON.parse(line);
           if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error();
+          const reported = servedModel(value);
+          if (reported && !sameModel(this.config.model, reported)) {
+            this.update({ sessionUpdate: 'config_option_update', configOptions: [{ id: 'model', category: 'model', currentValue: reported.split('[')[0] }] });
+          }
           if (value.event === 'init' && UUID.test(value.conversation_id || '')) {
             if (this.state.nativeId && this.state.nativeId !== value.conversation_id) { parseFailure = 'session_mismatch'; throw new Error(); }
             this.state.nativeId = value.conversation_id; this.save();

@@ -33,12 +33,12 @@ test('check() accepts installed W03 providers and rejects an unknown key provide
   assert.deepEqual(parseReviewerSpec('cli:claude-zai:glm-5.3'), { id: 'cli-claude-zai-glm-5-3', family: 'cli', provider: 'claude-zai', vendor: 'zai', model: 'glm-5.3' });
 });
 
-test('cli reviewers receive no extra environment variables and codex/grok pin their model', () => {
+test('cli reviewers receive no extra environment variables and claude, codex, grok and agy pin their model', () => {
   for (const spec of ['cli:claude:opus', 'cli:codex:gpt-6.1-sol']) assert.deepEqual(families.envAllowlist(parseReviewerSpec(spec)), []);
   assert.equal(families.modelPinned(parseReviewerSpec('cli:codex:gpt-6.1-sol')), true);
   assert.equal(families.modelPinned(parseReviewerSpec('cli:grok:grok-4.7')), true);
-  assert.equal(families.modelPinned(parseReviewerSpec('cli:claude:opus')), false);
-  assert.equal(families.modelPinned(parseReviewerSpec('cli:agy:gemini-4-argon-high')), false);
+  assert.equal(families.modelPinned(parseReviewerSpec('cli:claude:opus')), true);
+  assert.equal(families.modelPinned(parseReviewerSpec('cli:agy:gemini-4-argon-high')), true);
 });
 
 test('a family file dropped next to the others is loaded without editing the registry', async () => {

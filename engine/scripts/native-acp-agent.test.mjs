@@ -10,7 +10,7 @@ function fixture(t, mode = 'success') {
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'audit-agy-acp-'));
   t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
   const cli = path.join(cwd, 'agy-fixture');
-  fs.writeFileSync(cli, `#!${process.execPath}\nimport fs from 'node:fs';\nfs.appendFileSync('invocations.jsonl',JSON.stringify(process.argv.slice(2))+'\\n');\nconst emit = value=>process.stdout.write(JSON.stringify(value)+'\\n');\nemit({event:'init',conversation_id:${JSON.stringify(mode === 'wrong-session' ? 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee' : nativeId)}});\n${mode === 'provider-error' ? "emit({event:'step_update',step_update:{step_index:1,tool_name:'call_mcp_tool',state:'STEP_STATE_ERROR'}});emit({event:'usage',tokens:1});\n" : ''}${mode === 'silent' ? 'setInterval(()=>{},1000);' : `const result={event:'result',result:{status:${JSON.stringify(mode === 'provider-error' ? 'ERROR' : 'SUCCESS')},response:'Inert acknowledgement'}};${mode === 'unterminated' ? 'process.stdout.write(JSON.stringify(result));' : mode === 'truncated' ? 'process.stdout.write(JSON.stringify(result).slice(0,-1));' : mode === 'duplicate' ? 'emit(result);emit(result);' : 'emit(result);'}process.exitCode=${mode === 'exit-error' ? 7 : 0};`}\n`, { mode: 0o700 });
+  fs.writeFileSync(cli, `#!${process.execPath}\nimport fs from 'node:fs';\nfs.appendFileSync('invocations.jsonl',JSON.stringify(process.argv.slice(2))+'\\n');\nconst emit = value=>process.stdout.write(JSON.stringify(value)+'\\n');\nemit({event:'init',conversation_id:${JSON.stringify(mode === 'wrong-session' ? 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee' : nativeId)}});\n${mode === 'provider-error' ? "emit({event:'step_update',step_update:{step_index:1,tool_name:'call_mcp_tool',state:'STEP_STATE_ERROR'}});emit({event:'usage',tokens:1});\n" : ''}${mode === 'silent' ? 'setInterval(()=>{},1000);' : `const result={event:'result',result:{status:${JSON.stringify(mode === 'provider-error' ? 'ERROR' : 'SUCCESS')},response:'Inert acknowledgement'}};${mode === 'other-model' ? "result.result.model='gemini-4-argon-low';" : ''}${mode === 'unterminated' ? 'process.stdout.write(JSON.stringify(result));' : mode === 'truncated' ? 'process.stdout.write(JSON.stringify(result).slice(0,-1));' : mode === 'duplicate' ? 'emit(result);emit(result);' : 'emit(result);'}process.exitCode=${mode === 'exit-error' ? 7 : 0};`}\n`, { mode: 0o700 });
   // The extensionless fixture is ESM through a private package marker.
   fs.writeFileSync(path.join(cwd, 'package.json'), '{"type":"module"}');
   const mcpServers = [{ name: 'audit_docker', command: process.execPath, args: ['/inert/bridge.mjs'] }];
@@ -22,7 +22,10 @@ function fixture(t, mode = 'success') {
 
 test('AGY ACP resumes its exact native conversation and preserves the requested model', async t => {
   const f = fixture(t);
-  const { sessionId } = await f.agent.request('session/new', f.setup);
+  const opened = await f.agent.request('session/new', f.setup);
+  assert.equal(opened.models.currentModelId, 'fixture-model');
+  assert.equal(opened.configOptions.find((option) => option.id === 'model').currentValue, 'fixture-model');
+  const { sessionId } = opened;
   assert.deepEqual(await f.agent.request('session/prompt', { sessionId, prompt: [{ type: 'text', text: 'inert first turn' }] }), { stopReason: 'end_turn' });
   const resumed = new NativeAcpAgent(f.config, event => f.events.push(event));
   await resumed.request('session/load', { ...f.setup, sessionId });
@@ -34,6 +37,14 @@ test('AGY ACP resumes its exact native conversation and preserves the requested 
   assert.equal(f.events.filter(event => event.params.update.sessionUpdate === 'agent_message_chunk').length, 2);
   await assert.rejects(new NativeAcpAgent({ ...f.config, model: 'different' }).request('session/load', { ...f.setup, sessionId }), /session_identity_rejected/);
   await assert.rejects(resumed.request('session/load', { ...f.setup, cwd: '/different', sessionId }), /session_identity_rejected/);
+});
+
+test('AGY reports a served model that is not the requested Argon id', async t => {
+  const f = fixture(t, 'other-model');
+  const { sessionId } = await f.agent.request('session/new', f.setup);
+  await f.agent.request('session/prompt', { sessionId, prompt: [{ type: 'text', text: 'inert' }] });
+  const update = f.events.map((event) => event.params.update).find((row) => row.sessionUpdate === 'config_option_update');
+  assert.equal(update.configOptions[0].currentValue, 'gemini-4-argon-low');
 });
 
 test('AGY structured errors, nonzero exits and conversation substitution stay incomplete', async t => {
