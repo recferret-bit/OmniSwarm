@@ -30,9 +30,10 @@ The first printed line is `cargo near build reproducible-wasm`. The next two lin
 
 ```sh
 npm run near:local -- verify registry
+npm run near:local -- verify registry --wasm infra/near-local/fixtures/good-dex.wasm
 ```
 
-Expect a line ending in `→ match` when `res/review_registry.wasm` is the wasm that was seeded. Then redeploy another fixture wasm onto that account and run verify again. Expect `→ drift` and a second line `wasm <base58>`.
+The first line ends in `→ match` when `res/review_registry.wasm` is the wasm that was seeded. The second compares a different wasm with that account and ends in `→ drift`, with a second line `wasm <base58>`. `near:local redeploy` only replaces `good-dex` and `drained-vault`, not the registry account.
 
 **3. Guard scenario.** No sandbox and no key:
 
@@ -55,7 +56,7 @@ bash contracts/review-registry/scripts/deploy-testnet.sh --execute
 near contract call-function as-read-only review-registry.<owner>.testnet contract_source_metadata json-args '{}' network-config testnet now
 ```
 
-Expect `link` `https://github.com/recferret-bit/OmniSwarm` and `build_info.source_code_snapshot` `git+https://github.com/recferret-bit/OmniSwarm?rev=<the commit>`.
+Expect `link` `https://github.com/recferret-bit/OmniSwarm/tree/<the commit>` and `build_info.source_code_snapshot` `git+https://github.com/recferret-bit/OmniSwarm?rev=<the commit>`.
 
 **5. NearBlocks (O3).** Open `https://testnet.nearblocks.io/address/review-registry.<owner>.testnet`. Use **Verify and Publish**. When it shows **Verified**, paste that URL here:
 

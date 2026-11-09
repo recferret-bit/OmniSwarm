@@ -26,15 +26,22 @@ export function parseSnapshot(snapshot) {
 }
 
 /**
- * `https://github.com/owner/repo` (optional `git+` and `.git`) → `owner/repo`.
+ * A GitHub repository URL → `owner/repo`.
+ * Accepts `git+`, a trailing `.git`, and the NEP-330 `link` form
+ * `https://github.com/owner/repo/tree/<rev>` that cargo-near writes.
  * @param {unknown} link
  * @returns {string | null}
  */
 export function repoOfLink(link) {
   if (typeof link !== 'string' || link.length === 0) return null;
-  let url = link.replace(/^git\+/, '').replace(/\.git$/, '').replace(/\/$/, '');
+  let url = link.replace(/^git\+/, '');
   const query = url.indexOf('?');
   if (query !== -1) url = url.slice(0, query);
+  const hash = url.indexOf('#');
+  if (hash !== -1) url = url.slice(0, hash);
+  url = url.replace(/\/$/, '').replace(/\.git(?=\/tree\/|$)/, '');
+  const tree = /^https:\/\/github\.com\/([^/]+)\/([^/]+)\/tree\/.+$/.exec(url);
+  if (tree) return `${tree[1]}/${tree[2]}`;
   const match = /^https:\/\/github\.com\/([^/]+\/[^/]+)$/.exec(url);
   return match ? match[1] : null;
 }

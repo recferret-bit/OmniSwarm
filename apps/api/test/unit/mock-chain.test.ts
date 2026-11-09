@@ -146,6 +146,7 @@ test('mock chain matches the contract on deposits, attest, bounced refunds, repo
   await adapter.reportAddress({ accountId: reported, evidenceUri: 'https://example.com/evidence', reason: 'parity report' });
   const view = await adapter.viewRegistry('get_report', { account_id: reported }) as { reporter?: string };
   assert.equal(view.reporter, 'operator.mock');
+  assert.equal(await adapter.viewAccountMethod(reported, 'contract_source_metadata', {}), null);
   assert.equal(await adapter.isReported(reported), true);
   await retractReport(db(), reported);
   assert.equal(await adapter.isReported(reported), false);

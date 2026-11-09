@@ -1,7 +1,7 @@
 // The API's only touch point with @omniswarm/guard (track S). The guard evaluates chain evidence through
 // a ChainReader over the API's ChainPort: the NEAR registry in production, the mock registry tables in
 // mock-chain mode (container.ts). Swapping either is a change to this file and container.ts only.
-import { createGuard, registryReader, type AccountAgeSource, type ChainReader, type Verdict } from '@omniswarm/guard';
+import { createGuard, registryReader, viewSourceMetadata, type AccountAgeSource, type ChainReader, type Verdict } from '@omniswarm/guard';
 import type { ChainPort } from '../../chain/port.ts';
 
 export interface GuardPort {
@@ -11,11 +11,16 @@ export interface GuardPort {
 /**
  * ChainReader over the registry (INTERFACE.md v0.3.0: get_attestation_for_account, is_reported,
  * get_report, each checked by the guard's registryReader) and RPC. A registry without is_reported
- * makes the signal unavailable rather than "not reported".
+ * makes the signal unavailable rather than "not reported". `contract_source_metadata` is read on
+ * the receiver, not the registry.
  */
 export function chainReader(chain: ChainPort): ChainReader {
   return {
     ...registryReader((method, args) => chain.viewRegistry(method, args)),
+    getSourceMetadata: (accountId) => viewSourceMetadata(
+      (id, method, args) => chain.viewAccountMethod(id, method, args),
+      accountId,
+    ),
     getAccount: (accountId) => chain.viewAccount(accountId),
     getBlockTimestampMs: (height) => chain.blockTimestampMs(height),
   };

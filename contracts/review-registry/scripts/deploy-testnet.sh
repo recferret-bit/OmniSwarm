@@ -81,7 +81,7 @@ publish_wasm() {
     return
   fi
   printf '%s\n' "cp $(quote "$WASM") $(quote "$RES_WASM")"
-  printf '%s\n' "shasum -a 256 $(quote "$RES_WASM")"
+  printf '%s\n' "shasum -a 256 $(quote "$RES_WASM") > $(quote "$RES_SHA")"
 }
 
 # 1. Reproducible wasm (NEP-330 metadata). Host only; never inside the review sandbox.

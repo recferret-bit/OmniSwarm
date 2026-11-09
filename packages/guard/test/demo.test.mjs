@@ -94,6 +94,9 @@ test('the sandbox reader asks the local RPC for view_account and the registry', 
     if (params.method_name === 'contract_source_metadata' && params.account_id === 'good-dex.test.near') {
       return { ok: true, json: async () => encoded({ link: 'https://github.com/near/example', build_info: { source_code_snapshot: 'git+https://github.com/near/example?rev=cccccccccccccccccccccccccccccccccccccccc' } }) };
     }
+    if (params.method_name === 'contract_source_metadata' && params.account_id === 'plain.test.near') {
+      return { ok: true, json: async () => ({ result: { error: 'wasm execution failed with error: MethodResolveError(MethodNotFound)', logs: [], block_height: 1, block_hash: 'hash' } }) };
+    }
     if (params.method_name === 'contract_source_metadata') {
       return { ok: true, json: async () => ({ error: { cause: { name: 'MethodResolveError' }, message: 'method not found' } }) };
     }

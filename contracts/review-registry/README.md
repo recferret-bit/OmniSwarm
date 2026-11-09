@@ -35,7 +35,7 @@ Spike, from that cargo-near release: the build uses the git commit and ignores u
 cargo near build reproducible-wasm --manifest-path contracts/review-registry/Cargo.toml
 ```
 
-The wasm at `target/near/review_registry.wasm` then answers `contract_source_metadata` with `link` `https://github.com/recferret-bit/OmniSwarm` and `build_info.source_code_snapshot` `git+https://github.com/recferret-bit/OmniSwarm?rev=<that commit>`.
+The wasm at `target/near/review_registry.wasm` then answers `contract_source_metadata` with `link` `https://github.com/recferret-bit/OmniSwarm/tree/<that commit>` (NEP-330) and `build_info.source_code_snapshot` `git+https://github.com/recferret-bit/OmniSwarm?rev=<that commit>`.
 
 What that metadata proves: the contract says which commit it was built from. What it does not prove: that these bytes were rebuilt from that commit. Rebuilding is the verification step below.
 
@@ -49,7 +49,7 @@ From a clean clone of the commit named in `contract_source_metadata`:
 
 1. Install cargo-near 0.23.0 and Docker. The build runs in the image recorded in `Cargo.toml`.
 2. `cargo near build reproducible-wasm --manifest-path contracts/review-registry/Cargo.toml`.
-3. Compare the base58 sha256 of `target/near/review_registry.wasm` with the deployed account's `code_hash` (`view_account`). Locally, after `npm run near:local -- seed`: `npm run near:local -- verify registry` prints `match`. After redeploying a different wasm it prints `drift` and both hashes.
+3. Compare the base58 sha256 of `target/near/review_registry.wasm` with the deployed account's `code_hash` (`view_account`). Locally, after `npm run near:local -- seed`: `npm run near:local -- verify registry` prints `match`. `npm run near:local -- verify registry --wasm infra/near-local/fixtures/good-dex.wasm` prints `drift` and both hashes.
 4. On testnet, open the contract on [NearBlocks](https://testnet.nearblocks.io) and use **Verify and Publish**, or the same flow on [SourceScan](https://sourcescan.dev). Both clone the commit and rebuild in the recorded image. **Verified** means the rebuilt bytes match the deployed bytes. The NEP-330 view by itself does not.
 
 `npm run near:local -- view registry contract_source_metadata` shows the embedded link and revision once a reproducible wasm is deployed. The current `res/review_registry.wasm` stays the previous build until `--execute` copies a reproducible one.
@@ -72,7 +72,7 @@ bash contracts/review-registry/scripts/deploy-testnet.sh --dry-run   # prints th
 bash contracts/review-registry/scripts/deploy-testnet.sh --execute   # the owner runs them (near-cli-rs 0.31.1 + cargo-near 0.23.0)
 ```
 
-The commands build with `reproducible-wasm`, copy the wasm to `res/review_registry.wasm` with its sha256, create `review-registry.<owner>` and `operator.<owner>` funded by the owner, deploy with `new(owner, operator.<owner>, treasury, 1 NEAR)`, add the operator function-call key, and read `get_price`. `--dry-run` prints the copy and the hash line and does not write them. `--execute` keeps the existing account and state when the account already exists; creating it again fails, so a redeploy is the deploy step alone after the build. New keys go to the near-cli keychain. The operator key goes to the legacy keychain (`~/.near-credentials/testnet/`) so the owner can move it into the host env file. No command prints a secret key. `OWNER`, `CONTRACT`, `OPERATOR`, `TREASURY`, `PRICE_YOCTO` and `OPERATOR_ALLOWANCE` override the defaults. A unit test checks that the key lands on the operator named in `new`, and that the key's method list equals `OPERATOR_METHODS`.
+The commands build with `reproducible-wasm`, copy the wasm to `res/review_registry.wasm` with its sha256, create `review-registry.<owner>` and `operator.<owner>` funded by the owner, deploy with `new(owner, operator.<owner>, treasury, 1 NEAR)`, add the operator function-call key, and read `get_price`. `--dry-run` prints the copy and the hash line and does not write them. A second `--execute` copies the wasm, then stops at `create-account` because the account already exists, so the account and its state stay. A redeploy is only the `near contract deploy` line from the dry run. New keys go to the near-cli keychain. The operator key goes to the legacy keychain (`~/.near-credentials/testnet/`) so the owner can move it into the host env file. No command prints a secret key. `OWNER`, `CONTRACT`, `OPERATOR`, `TREASURY`, `PRICE_YOCTO` and `OPERATOR_ALLOWANCE` override the defaults. A unit test checks that the key lands on the operator named in `new`, and that the key's method list equals `OPERATOR_METHODS`.
 
 The owner runs near-cli-rs 0.31.1. The script's subcommands were checked against the 0.30.0 source from crates.io (`fund-myself`, `save-to-keychain`, `save-to-legacy-keychain`, `with-init-call`, `grant-function-call-access`) and are unchanged in 0.31.1. `near` itself was not run from this host.
 

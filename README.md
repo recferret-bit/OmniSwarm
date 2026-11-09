@@ -234,14 +234,14 @@ near contract call-function as-read-only <contract-id> get_attestation json-args
 | Item | Value |
 |---|---|
 | Network | testnet. The deploy script and every env example target testnet; mainnet requests are refused because no mainnet price is configured |
-| Contract | `review-registry` v0.2.0, `near-sdk` 5.30.0. Not deployed yet; `bash contracts/review-registry/scripts/deploy-testnet.sh --dry-run` prints the six deploy commands and touches nothing |
+| Contract | `review-registry` v0.3.0, `near-sdk` 5.30.1. Not deployed yet. `bash contracts/review-registry/scripts/deploy-testnet.sh --dry-run` prints `cargo near build reproducible-wasm`, the copy into `res/`, and the account commands, and touches nothing |
 | Change methods | `request_review` (payable, anyone), `mark_running`, `attest` (operator), `refund` (operator or owner), `confirm_binding` (the `deployed` account), `withdraw`, `set_price`, `set_operator`, `set_treasury`, `propose_owner` (owner), `accept_owner` (the proposed owner) |
 | Views | `get_request`, `get_attestation`, `get_attestation_for_account`, `get_attestations_for_repo`, `get_repo_attestation_count`, `get_price`, `get_earned`, `get_withdrawable`, `get_config` |
 | What is attested | `request_hash`, `repo`, `commit`, `report_sha256`, `report_uri`, optional `deployed` account and its `code_hash`, `max_severity` (highest CONFIRMED or LIKELY finding), block height and time, `binding_confirmed` |
 | Binding proof | `get_attestation_for_account`, the view the guard uses, returns an attestation only if the `deployed` account paid for the request itself or later called `confirm_binding`. This shows that whoever controls the account agreed the review describes it, so a third party cannot bind a report to someone else's contract |
-| Binding limit | It does not prove the deployed code was built from `repo@commit`. A later redeploy shows up as `code_hash` drift, but a reproducible-build check is not implemented |
-| Operator key | A function-call key limited to `mark_running`, `attest` and `refund` with a 1 NEAR gas allowance. It cannot transfer NEAR, add or delete keys, deploy code, or call `withdraw` or the admin methods. When the allowance runs out the key stops working until the owner adds a new one |
-| Not built | the on-chain blocklist (`report_address`, `is_reported`), per-reviewer sub-accounts, NEAR Intents payments, a near-workspaces sandbox suite |
+| Binding limit | `cargo near build reproducible-wasm` (cargo-near 0.23.0) embeds NEP-330 `contract_source_metadata`. The guard warns with `SOURCE_METADATA_MISMATCH` when that self-reported repo and commit differ from the attestation, and lists `SOURCE_METADATA_ABSENT` when the method is missing. Absence does not decide the verdict. The metadata does not prove the bytes were rebuilt; NearBlocks **Verify and Publish** or SourceScan does, by rebuilding the named commit. A later redeploy still shows up as `code_hash` drift. `res/review_registry.wasm` is replaced when the owner runs the deploy script `--execute` after that commit is public |
+| Operator key | A function-call key limited to `mark_running`, `attest`, `refund` and `report_address` with a 1 NEAR gas allowance. It cannot transfer NEAR, add or delete keys, deploy code, or call `withdraw` or the admin methods. When the allowance runs out the key stops working until the owner adds a new one |
+| Not built | per-reviewer sub-accounts, NEAR Intents payments |
 
 Full interface: [contracts/review-registry/INTERFACE.md](contracts/review-registry/INTERFACE.md). Key custody and deploy: [contracts/review-registry/README.md](contracts/review-registry/README.md).
 

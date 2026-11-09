@@ -29,6 +29,25 @@ test('NEP-330 JSON becomes link, rev, and the fetch time', () => {
   assert.equal(interpretSourceMetadata({ standards: [] }, () => NOW), null);
 });
 
+test('a NEP-330 /tree/ link agrees when the snapshot names the attested repo and commit', async () => {
+  const raw = {
+    link: `https://github.com/near/example/tree/${REV}`,
+    build_info: { source_code_snapshot: `git+https://github.com/near/example?rev=${REV}` },
+  };
+  const meta = interpretSourceMetadata(raw, () => NOW);
+  assert.equal(meta?.rev, REV);
+  assert.equal(sourceAgrees(meta, { repo: 'near/example', commit: REV }), true);
+  const matched = await createGuard({ reader: withMetadata({ 'clean.testnet': raw }), now: () => NOW }).check('clean.testnet');
+  assert.equal(matched.verdict, 'allow');
+  assert.equal(matched.reasons.includes('SOURCE_METADATA_MISMATCH'), false);
+  const elsewhere = interpretSourceMetadata({
+    link: `https://github.com/other/elsewhere/tree/${REV}`,
+    build_info: { source_code_snapshot: `git+https://github.com/near/example?rev=${REV}` },
+  }, () => NOW);
+  assert.equal(elsewhere?.rev, null);
+  assert.equal(sourceAgrees(elsewhere, { repo: 'near/example', commit: REV }), false);
+});
+
 test('a snapshot that names a different repo than link does not count as a match', () => {
   const meta = interpretSourceMetadata({
     link: LINK,
@@ -90,6 +109,12 @@ test('a reader with no metadata table leaves the signal unset', async () => {
 test('viewSourceMetadata turns a missing method into null and rethrows transport errors', async () => {
   const missing = await viewSourceMetadata(async () => { throw new Error('MethodResolveError: method not found'); }, 'dex.testnet');
   assert.equal(missing, null);
+  const wrapped = new Error('The NEAR chain could not be reached');
+  wrapped.cause = new Error('wasm execution failed with error: MethodResolveError(MethodNotFound)');
+  assert.equal(await viewSourceMetadata(async () => { throw wrapped; }, 'dex.testnet'), null);
+  const transport = new Error('The NEAR chain could not be reached');
+  transport.cause = new Error('connection refused');
+  await assert.rejects(viewSourceMetadata(async () => { throw transport; }, 'dex.testnet'));
   await assert.rejects(viewSourceMetadata(async () => { throw new Error('connection refused'); }, 'dex.testnet'));
   const raw = { link: LINK, build_info: { source_code_snapshot: `git+${LINK}?rev=${REV}` } };
   /** @type {[string, string, Record<string, unknown>][]} */

@@ -188,6 +188,12 @@ export class MockChainAdapter implements ChainPort {
     return (await this.#report(accountId)) !== null;
   }
 
+  /** The mock chain has no wasm, so a counterparty has no NEP-330 method. Other methods reject. */
+  async viewAccountMethod(_accountId: string, method: string, _args: Record<string, unknown>): Promise<unknown> {
+    if (method === 'contract_source_metadata') return null;
+    throw chainUnavailable(new Error(`the mock chain has no view ${method}`));
+  }
+
   /** The registry views the guard reads (INTERFACE.md v0.3.0), answered from the mock tables. */
   async viewRegistry(method: string, args: Record<string, unknown>): Promise<unknown> {
     const accountId = String(args.account_id ?? args.account ?? '');

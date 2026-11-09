@@ -106,6 +106,12 @@ export function createSandboxReader({ rpcUrl, contractId = DEFAULT_CONTRACT, fet
       if (isUnknownAccount(body.error) || isMissingMethod(body.error)) return null;
       throw new Error(`sandbox ${method} failed for ${accountId}`);
     }
+    // A missing method is a successful query whose result.error is MethodResolveError, not a JSON-RPC error.
+    const execution = body.result && typeof body.result === 'object' ? /** @type {{ error?: unknown }} */ (body.result).error : undefined;
+    if (typeof execution === 'string') {
+      if (isMissingMethod({ message: execution })) return null;
+      throw new Error(`sandbox ${method} failed for ${accountId}`);
+    }
     return decodeCall(body.result);
   }
 

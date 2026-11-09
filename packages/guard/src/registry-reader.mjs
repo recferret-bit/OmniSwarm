@@ -32,17 +32,19 @@ function asAttestation(v) {
 }
 
 /**
- * @param {RegistryView} view  view call on the registry contract at finality `final`
- * @returns {Pick<Required<ChainReader>, 'getAttestationForAccount' | 'isReported' | 'getReport'>}
- */
-/**
  * True when a view failed because the account has no such method (NEP-330 not embedded).
- * Transport and malformed-JSON failures are not this.
+ * Transport and malformed-JSON failures are not this. Wrapped errors are read through `cause`.
  * @param {unknown} error
+ * @param {number} [depth]
  */
-export function isMissingContractMethod(error) {
-  const text = error instanceof Error ? `${error.name} ${error.message}` : String(error ?? '');
-  return /MethodResolveError|MethodNotFound|method not found|MethodNotFound/i.test(text);
+export function isMissingContractMethod(error, depth = 0) {
+  if (error == null || depth > 5) return false;
+  const text = error instanceof Error ? `${error.name} ${error.message}` : String(error);
+  if (/MethodResolveError|MethodNotFound|method not found/i.test(text)) return true;
+  if (typeof error === 'object' && error !== null && 'cause' in error) {
+    return isMissingContractMethod(/** @type {{ cause?: unknown }} */ (error).cause, depth + 1);
+  }
+  return false;
 }
 
 /**

@@ -73,6 +73,7 @@ fn dry_run_prints_build_accounts_deploy_key_and_check() {
     assert_eq!(commands[1][0], "cp");
     assert!(commands[1].iter().any(|word| word.ends_with("res/review_registry.wasm")));
     assert_eq!(commands[2][..2], ["shasum", "-a"]);
+    assert!(commands[2].iter().any(|word| word.ends_with("review_registry.wasm.sha256")));
     let text = commands.concat().join(" ");
     for forbidden in ["print-to-terminal", "sponsor-by", "reviewer_attest", "withdraw", "retract_report"] {
         assert!(!text.contains(forbidden), "{forbidden}");
