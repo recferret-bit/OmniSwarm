@@ -6,7 +6,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { Account, KeyPair, KeyPairSigner, actions } from 'near-api-js';
 import { ACCOUNTS_FILE, KEYS_DIR, ROOT } from './lib/paths.mjs';
-import { CONTRACT_ID, callView, provider, txHash } from './lib/rpc.mjs';
+import { CONTRACT_ID, callView, provider, resolveAccount, txHash } from './lib/rpc.mjs';
 
 // refund and withdraw schedule a 10 Tgas callback, so the call attaches more than that.
 const CALL_GAS = 100_000_000_000_000n;
@@ -34,7 +34,7 @@ function isDirectRun() {
 }
 
 function usage() {
-  return 'usage: near:local view|call <method> [args-json]';
+  return 'usage: near:local view <method> [args-json] | near:local view <account> <method> [args-json] | near:local call <method> [args-json]';
 }
 
 function redact(message) {
@@ -231,11 +231,21 @@ async function prepareArgs(method, args) {
   return { ...args, amount: yoctoArg(amount, 'get_withdrawable') };
 }
 
+/** `view get_config` and `view registry get_config [json]`. `registry` is registry.test.near. */
+export function parseViewArgs(argv) {
+  if (argv.length < 1 || argv.length > 3) throw new UsageError(usage());
+  const second = argv[1];
+  const secondIsJson = typeof second === 'string' && second.trimStart().startsWith('{');
+  if (second !== undefined && !secondIsJson) {
+    return { account: resolveAccount(argv[0]), method: requireMethod(argv[1]), args: parseArgs(argv[2]) };
+  }
+  if (argv.length > 2) throw new UsageError(usage());
+  return { account: CONTRACT_ID, method: requireMethod(argv[0]), args: parseArgs(argv[1]) };
+}
+
 export async function viewCommand(argv) {
-  if (argv.length < 1 || argv.length > 2) throw new UsageError('usage: near:local view <method> [args-json]');
-  const method = requireMethod(argv[0]);
-  const args = parseArgs(argv[1]);
-  printJson(await callView(CONTRACT_ID, method, args));
+  const { account, method, args } = parseViewArgs(argv);
+  printJson(await callView(account, method, args));
 }
 
 export async function callCommand(argv) {

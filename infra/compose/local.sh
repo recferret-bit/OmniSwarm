@@ -61,8 +61,26 @@ port_answers() {
 # Shell exports override the env file for compose interpolation. The overlay
 # passes NEXT_PUBLIC_WALLET, which compose.yml does not interpolate (it is not
 # in stack.env.example). Containers get the host gateway RPC; workers do not.
+# The API image runs as uid 1000 and cannot read a mode-600 host key.
+# Copy bob's key into the secrets dir and run the API as the user who owns it.
+install_sandbox_payer() {
+  local src dest
+  src="$ROOT/infra/compose/.local/near/keys/bob.json"
+  dest="$STATE/secrets/bob.json"
+  if [ ! -f "$src" ]; then
+    printf 'sandbox payer key is missing\n' >&2
+    return 1
+  fi
+  mkdir -p "$STATE/secrets"
+  install -m 600 "$src" "$dest"
+}
+
 apply_near_env() {
   near_on || return 0
+  local uid gid
+  uid="$(id -u)"
+  gid="$(id -g)"
+  install_sandbox_payer
   export NETWORK=sandbox NEAR_NETWORK=sandbox CHAIN_ADAPTER=near
   export CONTRACT_ID=registry.test.near INTAKE_RECIPIENT=treasury.test.near
   export RPC_URLS=http://host.docker.internal:3030
@@ -71,7 +89,7 @@ apply_near_env() {
   export NEXT_PUBLIC_INTAKE_RECIPIENT=treasury.test.near
   export NEXT_PUBLIC_RPC_URL=http://127.0.0.1:3030
   export NEXT_PUBLIC_EXPLORER_URL=http://127.0.0.1:3031
-  cat > "$NEAR_OVERLAY" <<'EOF'
+  cat > "$NEAR_OVERLAY" <<EOF
 services:
   web:
     build:
@@ -83,6 +101,7 @@ services:
         NEXT_PUBLIC_RPC_URL: http://127.0.0.1:3030
         NEXT_PUBLIC_EXPLORER_URL: http://127.0.0.1:3031
   api:
+    user: "${uid}:${gid}"
     environment:
       NEAR_NETWORK: sandbox
       NETWORK: sandbox
@@ -90,6 +109,8 @@ services:
       INTAKE_RECIPIENT: treasury.test.near
       RPC_URLS: http://host.docker.internal:3030
       CHAIN_ADAPTER: near
+      GUARD_ACCOUNT_AGE_URL: http://host.docker.internal:3031
+      SANDBOX_PAYER_KEY_FILE: /secrets/bob.json
 EOF
   if [ -n "${OMNI_COMPOSE_EXTRA:-}" ]; then
     OMNI_COMPOSE_EXTRA="$OMNI_COMPOSE_EXTRA $NEAR_OVERLAY"
@@ -121,7 +142,7 @@ start_indexer() {
   i=0
   while [ "$i" -lt 50 ]; do
     if port_answers "http://127.0.0.1:3031/"; then
-      printf 'indexer: listening on http://127.0.0.1:3031\n'
+      printf 'indexer: listening on 0.0.0.0:3031 (account age: http://host.docker.internal:3031)\n'
       return 0
     fi
     if ! kill -0 "$pid" 2>/dev/null; then

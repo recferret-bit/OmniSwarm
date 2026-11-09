@@ -5,8 +5,8 @@ import { loadWaves, openCheck, openCommands, landCommands } from './wave.mjs';
 const waves = loadWaves();
 const w = (n) => waves.find((x) => x.id === n);
 
-test('reads all 15 wave headers and their hard dependencies', () => {
-  assert.equal(waves.length, 15);
+test('reads all 20 wave headers and their hard dependencies', () => {
+  assert.equal(waves.length, 20);
   assert.deepEqual(w('00').deps, []);
   assert.deepEqual(w('03').deps, ['01']);
   assert.deepEqual(w('06').deps, ['02', '03', '05']);

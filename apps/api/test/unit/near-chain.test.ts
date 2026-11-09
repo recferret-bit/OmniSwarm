@@ -85,7 +85,7 @@ test('reads: tx with wait_until FINAL, views with finality final, key permission
   assert.deepEqual(await chain.viewAccount('plain.testnet'), { codeHash: '11111111111111111111111111111111' });
   assert.equal(await chain.blockTimestampMs(220000100), 1793700000000);
   for (const call of server.calls.filter((c) => c.method === 'query')) assert.equal(call.params.finality, 'final', JSON.stringify(call.params));
-  assert.deepEqual(await chain.health(), { rpc: true, contract: true });
+  assert.deepEqual(await chain.health(), { rpc: true, contract: true, blockHeight: 220000100 });
 });
 
 test('a bounced refund is SuccessValue false, not a panic, even when the transfer receipt failed', () => {

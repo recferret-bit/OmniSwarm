@@ -104,7 +104,7 @@ async function withServer(options, fn) {
   try {
     const address = server.address();
     assert.ok(address && typeof address === 'object');
-    assert.equal(address.address, '127.0.0.1');
+    assert.equal(address.address, '0.0.0.0');
     await fn(address.port);
   } finally {
     await closeServer(server);
@@ -151,6 +151,7 @@ test('CREATED_ACCOUNTS_FILE overrides the default creation file', () => {
   process.env.CREATED_ACCOUNTS_FILE = '/tmp/omniswarm-created.json';
   try {
     assert.equal(resolveOptions({ port: 0 }).createdFile, '/tmp/omniswarm-created.json');
+    assert.equal(resolveOptions({ port: 0 }).host, '0.0.0.0');
   } finally {
     if (previous === undefined) delete process.env.CREATED_ACCOUNTS_FILE;
     else process.env.CREATED_ACCOUNTS_FILE = previous;
@@ -384,9 +385,13 @@ test('/wallet/accounts returns dev keys to loopback and 403s otherwise', async (
     assert.equal(denied.body.includes(secret), false);
     assert.equal(fetched, false);
 
-    const accountDenied = await call(ctx, { url: '/v1/account/alice.test.near', remoteAddress: '10.1.2.3' });
-    assert.equal(accountDenied.status, 403);
-    assert.equal(accountDenied.headers['access-control-allow-origin'], ORIGIN);
+    const accountOpen = await call(ctx, { url: '/v1/account/alice.test.near', remoteAddress: '10.1.2.3' });
+    assert.equal(accountOpen.status, 200);
+    assert.equal(accountOpen.headers['access-control-allow-origin'], ORIGIN);
+    assert.deepEqual(JSON.parse(accountOpen.body), { account: [] });
+
+    const txOpen = await call(ctx, { url: '/txns/not-a-hash', remoteAddress: '10.1.2.3' });
+    assert.notEqual(txOpen.status, 403);
 
     const allowed = await call(ctx, { url: '/v1/account/carol.test.near', remoteAddress: '::1' });
     assert.equal(allowed.status, 200);

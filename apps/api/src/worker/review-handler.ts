@@ -25,6 +25,7 @@ import { maxSeverity } from './report.ts';
 import { ensureReportPdf } from '../shared/report-pdf.ts';
 import { readProviderEnv } from '../modules/providers/secrets.ts';
 import { isPanelPreset, panelConfigDocument } from './panel.ts';
+import { chainReportUri } from './report-uri.ts';
 
 export interface HandlerDeps { config: Config; pool: Pool; clock: Clock; chain: ChainPort; engine: EngineRunner; log: Logger }
 /** `lastAttempt`: this delivery has no retry left. `signal`: the worker is stopping (or lost the claim). */
@@ -68,7 +69,10 @@ async function attest(deps: HandlerDeps, row: RequestRow, sourceDir: string | nu
       reportSha256: published.reportSha256, reportUri: reportUrl(deps.config, row.id), maxSeverity: maxSeverity(published.dir), incomplete,
     });
   }
-  await attestRequest(deps, row.id, { reportUri: row.report_url ?? reportUrl(deps.config, row.id), maxSeverity: (row.max_severity ?? 'none') as Severity });
+  await attestRequest(deps, row.id, {
+    reportUri: chainReportUri(row.report_url ?? reportUrl(deps.config, row.id)),
+    maxSeverity: (row.max_severity ?? 'none') as Severity,
+  });
   const dir = readPublished(deps.config.storage.reportsRoot, row.id)?.dir ?? '';
   return {
     status: row.incomplete ? 'incomplete' : 'done', reportSha256: row.report_sha256 ?? '', maxSeverityConfirmed: row.max_severity ?? 'none',

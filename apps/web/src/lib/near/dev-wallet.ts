@@ -134,10 +134,11 @@ export function createDevWallet(options: DevWalletOptions = {}): DevWallet {
     return pending;
   }
 
-  async function selected(): Promise<DevAccount> {
+  async function selected(explicit?: string): Promise<DevAccount> {
     const accounts = await load();
-    const wanted = options.accountId ?? current?.accountId ?? session()?.getItem(SESSION_KEY) ?? null;
-    const account = accounts.find((item) => item.accountId === wanted) ?? (wanted && options.accountId ? null : accounts[0]);
+    const wanted = explicit ?? options.accountId ?? current?.accountId ?? session()?.getItem(SESSION_KEY) ?? null;
+    const pinned = Boolean(explicit || options.accountId);
+    const account = accounts.find((item) => item.accountId === wanted) ?? (wanted && pinned ? null : accounts[0]);
     if (!account) throw new AppError('WALLET_UNAVAILABLE', wanted ? `dev wallet has no account ${wanted}` : 'The dev wallet returned no account');
     current = account;
     return account;
@@ -165,9 +166,9 @@ export function createDevWallet(options: DevWalletOptions = {}): DevWallet {
         return null;
       }
     },
-    async connect() {
+    async connect(accountId?: string) {
       try {
-        const account = await selected();
+        const account = await selected(accountId);
         session()?.setItem(SESSION_KEY, account.accountId);
         return account.accountId;
       } catch (error) {

@@ -455,6 +455,20 @@ function accountIdsFromFile() {
   return ids;
 }
 
+// A fresh sandbox account is minutes old, so the guard's 30-day rule would
+// always warn. The NearBlocks stub is the age source. The clean fixture is
+// recorded as 40 days old so the local demo can return allow. The block
+// height stays the real creation height.
+function ageCleanFixture(records) {
+  const id = accountId('good-dex');
+  const row = records[id];
+  if (!row) return;
+  const dayNs = 86_400n * 1_000_000_000n;
+  const nowNs = BigInt(Date.now()) * 1_000_000n;
+  if (nowNs - BigInt(row.blockTimestampNs) >= 30n * dayNs) return;
+  row.blockTimestampNs = (nowNs - 40n * dayNs).toString();
+}
+
 function writeCreated(records) {
   const ordered = {};
   for (const id of Object.keys(records).sort()) {
@@ -491,7 +505,11 @@ async function fillCreation(rpc, records) {
     try {
       const found = await findCreation(rpc, id, head.blockHeight, floor);
       if (found) records[id] = found;
-      else console.error(`created.json: creation of ${id} is older than kept state`);
+      else if (await accountAt(rpc, id, head.blockHeight)) {
+        // The account exists, but its birth block was pruned. The oldest
+        // readable block is still a creation time the indexer can serve.
+        records[id] = await blockHeader(rpc, { blockId: floor });
+      } else console.error(`created.json: ${id} is not on the chain`);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       console.error(`created.json: could not read creation of ${id}: ${message}`);
@@ -520,6 +538,7 @@ export async function seedGuard() {
   }
   await ensureReport(operator);
   await fillCreation(rpc, records);
+  ageCleanFixture(records);
   writeCreated(records);
   const critical = await callView(CONTRACT_ID, 'get_attestation_for_account', { account: accountId('drained-vault') });
   if (!critical || critical.max_severity !== 'critical') throw new Error('drained-vault attestation is not critical');

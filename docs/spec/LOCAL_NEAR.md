@@ -111,7 +111,7 @@ curl -sD - -o /dev/null -X OPTIONS \
   http://127.0.0.1:3030/
 ```
 
-The indexer does **not** proxy RPC. The browser calls `http://127.0.0.1:3030` directly. The indexer on `127.0.0.1:3031` still serves the NearBlocks-shaped account route, `/txns/<hash>`, `/address/<id>`, and `/wallet/accounts` (loopback only).
+The indexer does **not** proxy RPC. The browser calls `http://127.0.0.1:3030` directly. The indexer binds `0.0.0.0:3031` and serves the NearBlocks-shaped account route, `/txns/<hash>`, and `/address/<id>` to the host and to containers (`http://host.docker.internal:3031`). `/wallet/accounts` answers only on loopback.
 
 ### Wasm without Rust
 
@@ -124,7 +124,7 @@ The indexer does **not** proxy RPC. The browser calls `http://127.0.0.1:3030` di
 | Chain id / `network` | `sandbox` |
 | RPC, host | `http://127.0.0.1:3030` |
 | RPC, containers | `http://host.docker.internal:3030` |
-| Indexer, dev wallet, account age, explorer | `http://127.0.0.1:3031` |
+| Indexer | `0.0.0.0:3031`. The browser uses `http://127.0.0.1:3031`. Containers read account age at `http://host.docker.internal:3031`. `/wallet/accounts` is loopback only |
 | Contract | `registry.test.near` |
 | Price | 1 NEAR (`1000000000000000000000000` yocto) |
 | Accounts | `owner.test.near`, `operator.test.near`, `treasury.test.near`, `alice.test.near`, `bob.test.near` |
@@ -143,14 +143,14 @@ The indexer does **not** proxy RPC. The browser calls `http://127.0.0.1:3030` di
 | Wallet | local | dev wallet lists indexer accounts and signs with ed25519 | `dev-wallet.test.ts`; browser file `tests/e2e/landing/near-local.test.mjs` |
 | NEP-413 | local | canonical message, real signature | dev-wallet test; `tests/e2e/near-local/flow.test.mjs` |
 | Payment | local | `request_review` for 1 NEAR on `registry.test.near` | headless flow; dashboard sandbox payer |
-| Function-call key | local | operator key limited to `mark_running`, `attest`, `refund`, `report_address` | seed; attack demo signer calls 0 |
+| Function-call key | local | operator key limited to `mark_running`, `attest`, `refund`, `report_address`. Seed grants 1 NEAR; later calls spend that allowance | headless flow reads the access key; attack demo signer calls 0 |
 | Tx finality | local | near adapter waits for FINAL | `near-chain.test.ts`; headless payment |
-| Operator calls | local | `mark_running`, `attest`, `refund`, `report_address` | headless flow; `ops.mjs` |
+| Operator calls | local | `mark_running`, `attest`, `refund`, `report_address` | headless flow |
 | Blocklist | local | `report_address` / `is_reported` / `retract_report` | seed-guard; parity report/retract |
-| Guard signals | local | critical, reported, code drift, account age | `run.mjs --sandbox`. A fresh sandbox account is under 30 days, so `good-dex` is `warn ACCOUNT_TOO_NEW` until `created.json` records an older timestamp. `allow` on testnet is lane O2 |
-| Verify | local | RPC `get_attestation`, API fallback labelled "via API, not independent" | `verify.test.ts`; headless hash match |
-| Explorer | local-stub | indexer HTML for `/txns` and `/address`, not NearBlocks | `indexer.test.mjs`. Live NearBlocks pages are lane O3 |
-| Owner methods | local | `withdraw`, `set_*`, `propose_owner` / `accept_owner`, `refund`, `confirm_binding`, `retract_report` | `ops.mjs` withdraw and refund bounce |
+| Guard signals | local | critical, reported, code drift, account age | headless flow, including `redeploy good-dex --alt` then restore. The NearBlocks stub records `good-dex` as 40 days old (the chain block height stays the real creation height) so the 30-day rule can return `allow`. `ACCOUNT_TOO_NEW` applies only when that timestamp is under 30 days. Live NearBlocks age is lane O2 |
+| Verify | local | RPC `get_attestation`, API fallback labelled "via API, not independent" | `verify.test.ts`; `AttestationBadge.test.tsx`; headless hash match |
+| Explorer | local-stub | indexer HTML for `/txns` and `/address`, not NearBlocks | `indexer.test.mjs`. A testnet explorer page is lane O7 |
+| Owner methods | local | `withdraw` and `refund` on the sandbox; `confirm_binding` and `retract_report` in the parity table; `set_price`, `set_operator`, `set_treasury`, `propose_owner`, `accept_owner` in the contract tests | headless `withdraw`; parity refund bounce, binding, and retract; `contracts/review-registry/src/tests/admin.rs` |
 | Events | local | NEP-297 `EVENT_JSON`, including `refund_failed` and `binding_confirmed` | parity table, every row `same` |
 | near-connect extension | testnet-only | the dev wallet replaces it on sandbox | lane O2 |
 | Testnet finality timing | testnet-only | local finality is the sandbox | lane O2 |

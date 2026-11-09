@@ -9,7 +9,7 @@
   "properties": {
     "network": {"const": "sandbox"},
     "chainId": {"const": "sandbox"},
-    "rpcUrl": {"type": "string", "pattern": "^http://127\\.0\\.0\\.1:3030$"},
+    "rpcUrl": {"type": "string", "pattern": "^http://127\\.0\\.0\\.1:[0-9]{1,5}$"},
     "contractId": {"const": "registry.test.near"},
     "priceYocto": {"type": "string", "pattern": "^(0|[1-9][0-9]{0,38})$"},
     "accounts": {

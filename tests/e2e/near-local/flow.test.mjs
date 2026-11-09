@@ -10,8 +10,9 @@ import { hashReportDir } from '../../../apps/api/src/worker/report.ts';
 import { ADMIN_TOKEN, migratedDb, startAdmin, startApi, startWorkerInProcess, until } from '../../../apps/api/test/helpers/stack.ts';
 import {
   COMMIT, CONTRACT_ID, PRESET, PRICE_YOCTO, RECIPIENT, REPO, RPC_URL, callView,
-  keyFile, loadSigningKey, redact, requestReview, sandboxSkipReason, signRequest, startIndexer, stopChild, withdrawEarned,
+  keyFile, loadSigningKey, operatorCallPermission, redact, requestReview, sandboxSkipReason, signRequest, startIndexer, stopChild, withdrawEarned,
 } from './sandbox.mjs';
+import { redeploy } from '../../../infra/near-local/redeploy.mjs';
 
 const TX = /^[1-9A-HJ-NP-Za-km-z]{43,44}$/;
 const ONE_NEAR = '1000000000000000000000000';
@@ -124,8 +125,16 @@ test('alice pays, the mock worker attests, then refund, guard, report_address an
   let admin;
   let worker;
   let refundWorker;
+  let restoreGoodDex = false;
   const previousAge = process.env.GUARD_ACCOUNT_AGE_URL;
   try {
+    const operatorKey = await operatorCallPermission();
+    assert.deepEqual([...operatorKey.methods].sort(), ['attest', 'mark_running', 'refund', 'report_address']);
+    assert.equal(operatorKey.receiver, CONTRACT_ID);
+    // Seed grants 1 NEAR. Later operator calls spend it, so a reused sandbox
+    // shows a smaller remaining allowance, never a full-access key.
+    assert.match(operatorKey.allowance, /^[1-9][0-9]*$/);
+    assert.ok(BigInt(operatorKey.allowance) <= BigInt(ONE_NEAR), operatorKey.allowance);
     indexer = await startIndexer();
     process.env.GUARD_ACCOUNT_AGE_URL = indexer.url;
     opened = await migratedDb('w1515', {
@@ -138,6 +147,7 @@ test('alice pays, the mock worker attests, then refund, guard, report_address an
       PRICE_YOCTO: ONE_NEAR,
       OPERATOR_KEY_FILE: keyFile('operator'),
       HOSTED_PRESET: PRESET,
+      REPORTS_BASE_URL: 'http://reports.test',
       ENGINE_RUNNER: 'mock',
       GITHUB_ADAPTER: 'recorded',
       MOCK_ENGINE_STEP_MS: '15',
@@ -149,9 +159,11 @@ test('alice pays, the mock worker attests, then refund, guard, report_address an
     const paid = await createPaid(api.base, alice);
     const done = await waitStatus(api.base, paid.requestId, ['done']);
     assert.match(done.attestTx, TX);
+    assert.equal(done.reportUrl, `http://reports.test/${paid.requestId}/report.html`);
     assert.equal(done.reportSha256, hashReportDir(`${opened.env.REPORTS_ROOT}/${paid.requestId}`));
     const attestation = await callView(CONTRACT_ID, 'get_attestation', { request_hash: paid.requestHash });
     assert.equal(attestation?.report_sha256, done.reportSha256, 'get_attestation report hash does not match the recomputed report');
+    assert.equal(attestation?.report_uri, `https://reports.test/${paid.requestId}/report.html`);
     assert.equal(attestation?.repo, REPO);
     assert.equal(attestation?.commit, COMMIT);
     const onChain = await callView(CONTRACT_ID, 'get_request', { request_hash: paid.requestHash });
@@ -222,6 +234,15 @@ test('alice pays, the mock worker attests, then refund, guard, report_address an
     assert.match(withdrawn.txHash, TX);
     assert.ok(withdrawn.treasuryAfter > withdrawn.treasuryBefore, 'treasury balance did not rise');
 
+    await redeploy({ name: 'good-dex', alt: true });
+    restoreGoodDex = true;
+    const drifted = await call(api.base, '/api/guard/verdict?account=good-dex.test.near&network=sandbox');
+    assert.equal(drifted.status, 200, JSON.stringify(drifted.body));
+    assert.equal(drifted.body.verdict, 'warn', JSON.stringify(drifted.body));
+    assert.ok(drifted.body.reasons.includes('CODE_CHANGED_SINCE_REVIEW'), drifted.body.reasons.join(','));
+    await redeploy({ name: 'good-dex', alt: false });
+    restoreGoodDex = false;
+
     const lines = [
       `request_review=${paid.txHash}`,
       `attest=${done.attestTx}`,
@@ -233,6 +254,11 @@ test('alice pays, the mock worker attests, then refund, guard, report_address an
     console.log(`W15-15 tx ${lines.join(' ')}`);
     console.log(`W15-15 guard good-dex=${good.verdict}:${good.reasons.join('+')} drained-vault=${drained.verdict}:${drained.reasons.join('+')} phish=${phish.verdict}:${phish.reasons.join('+')}`);
   } finally {
+    if (restoreGoodDex) {
+      await redeploy({ name: 'good-dex', alt: false }).catch((error) => {
+        console.error(redact(error instanceof Error ? error.message : error));
+      });
+    }
     if (previousAge === undefined) delete process.env.GUARD_ACCOUNT_AGE_URL;
     else process.env.GUARD_ACCOUNT_AGE_URL = previousAge;
     await worker?.close().catch((error) => console.error(redact(error instanceof Error ? error.message : error)));

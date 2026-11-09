@@ -309,6 +309,10 @@ export interface HealthResponse {
   chain: {
     rpc: boolean;
     contract: boolean;
+    /**
+     * Latest block when the near adapter can read one
+     */
+    blockHeight?: number;
   };
 }
 export interface ReadyResponse {

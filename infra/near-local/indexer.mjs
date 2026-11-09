@@ -120,7 +120,9 @@ export function resolveOptions(options = {}) {
   if (!isAccountId(contractId)) throw new Error('NEAR_CONTRACT_ID is not an account id');
   return {
     port,
-    host: '127.0.0.1',
+    // 0.0.0.0 so a container can read account age at host.docker.internal.
+    // /wallet/accounts stays loopback-only inside route().
+    host: '0.0.0.0',
     createdFile: options.createdFile ?? process.env.CREATED_ACCOUNTS_FILE ?? DEFAULT_CREATED_FILE,
     keysDir: options.keysDir ?? process.env.NEAR_KEYS_DIR ?? DEFAULT_KEYS_DIR,
     rpcUrl,
@@ -299,10 +301,6 @@ function sendHtml(res, status, html) {
  * @param {Awaited<ReturnType<typeof resolveOptions>>} ctx
  */
 async function route(req, res, ctx) {
-  if (!isLoopback(req.socket?.remoteAddress)) {
-    sendText(res, 403, 'forbidden');
-    return;
-  }
   if (req.method === 'OPTIONS') {
     send(res, 204, '', headers('text/plain; charset=utf-8', {
       'access-control-allow-methods': 'GET, OPTIONS',
@@ -382,6 +380,12 @@ async function route(req, res, ctx) {
   }
 
   if (pathname === '/wallet/accounts') {
+    // Dev keys never leave the host. Docker bridge clients are not loopback,
+    // including IPv4-mapped ::ffff:127.0.0.1.
+    if (!isLoopback(req.socket?.remoteAddress)) {
+      sendText(res, 403, 'forbidden');
+      return;
+    }
     const accounts = await readDevKeys(ctx.keysDir);
     sendJson(res, 200, { accounts });
     return;

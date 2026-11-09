@@ -16,6 +16,8 @@ const REQUEST_HASH = /^[0-9a-f]{64}$/;
 export const SANDBOX_PAYER_ACCOUNT = 'bob.test.near';
 
 export function sandboxPayerKeyPath(): string {
+  const fromEnv = process.env.SANDBOX_PAYER_KEY_FILE?.trim();
+  if (fromEnv) return fromEnv;
   return path.join(REPO_ROOT, 'infra/compose/.local/near/keys/bob.json');
 }
 

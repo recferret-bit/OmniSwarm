@@ -63,7 +63,7 @@ export interface ReportAddressArgs {
   reason: string;
 }
 
-export interface ChainHealth { rpc: boolean; contract: boolean }
+export interface ChainHealth { rpc: boolean; contract: boolean; blockHeight?: number }
 
 export interface ChainPort {
   readonly kind: 'mock' | 'near';

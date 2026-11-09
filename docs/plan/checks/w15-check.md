@@ -12,9 +12,9 @@ The first run downloads the nearcore 2.14.0 `near-sandbox` binary into `infra/co
 npm run check:w15
 ```
 
-This starts the sandbox on `127.0.0.1:3030`, seeds `registry.test.near`, starts the indexer on `3031`, and runs the parity test, the headless flow, the snapshot attack demo, and `run.mjs --sandbox`. It stops the node on the way out. Set `DATABASE_URL` to a Postgres server the flow may create a throwaway database on. Without it the headless flow does not run and the check fails.
+This starts the sandbox on `127.0.0.1:3030`, seeds `registry.test.near`, starts the indexer on `3031`, and runs the parity test, the headless flow, the snapshot attack demo, and `run.mjs --sandbox`. It stops the node on the way out. When `DATABASE_URL` is unset, the check starts a throwaway Postgres on `127.0.0.1` and removes it afterwards. The clean fixture's NearBlocks stub timestamp is 40 days old, so `good-dex` can be `allow`.
 
-Expect every parity row `same`. The headless flow prints tx hashes and a report-hash match. `good-dex.test.near` on a fresh sandbox is `warn` with `ACCOUNT_TOO_NEW` (the account is younger than 30 days). `drained-vault` is `block`. `phish` is `block` with `REPORTED`. The sandbox attack demo prints `refused_before_signing` and signer calls 0.
+Expect every parity row `same`. The headless flow prints tx hashes and a report-hash match. `good-dex.test.near` is `allow` with `ATTESTED_CLEAN` because the NearBlocks stub records it as 40 days old. `ACCOUNT_TOO_NEW` is the verdict only when that timestamp is under 30 days. `drained-vault` is `block`. `phish` is `block` with `REPORTED`. The sandbox attack demo prints `refused_before_signing` and signer calls 0.
 
 **2. Browser stack.**
 

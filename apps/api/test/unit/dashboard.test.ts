@@ -6,7 +6,7 @@ import path from 'node:path';
 import { mock, test } from 'node:test';
 import { KeyPair } from 'near-api-js';
 import { assertDashboardChain } from '../../src/modules/dashboard/dashboard.service.ts';
-import { loadFundedDevKey, requestReviewOnSandbox } from '../../src/modules/dashboard/sandbox-payer.ts';
+import { loadFundedDevKey, requestReviewOnSandbox, sandboxPayerKeyPath } from '../../src/modules/dashboard/sandbox-payer.ts';
 import { AppError } from '../../src/shared/errors.ts';
 
 const ONE_NEAR = '1000000000000000000000000';
@@ -21,6 +21,17 @@ function appError(fn: () => unknown): AppError {
   }
   assert.fail('expected AppError');
 }
+
+test('SANDBOX_PAYER_KEY_FILE is the key path when it is set', () => {
+  const previous = process.env.SANDBOX_PAYER_KEY_FILE;
+  process.env.SANDBOX_PAYER_KEY_FILE = '/secrets/bob.json';
+  try {
+    assert.equal(sandboxPayerKeyPath(), '/secrets/bob.json');
+  } finally {
+    if (previous === undefined) delete process.env.SANDBOX_PAYER_KEY_FILE;
+    else process.env.SANDBOX_PAYER_KEY_FILE = previous;
+  }
+});
 
 test('assertDashboardChain allows mock and sandbox near, and refuses near on testnet and mainnet', () => {
   assert.doesNotThrow(() => assertDashboardChain({ chain: { adapter: 'mock' } }));

@@ -57,7 +57,6 @@ export function ReportStill({ linked = true }: { linked?: boolean }) {
         role="button"
         tabIndex={0}
         aria-expanded={page === 1}
-        aria-label={page === 0 ? 'Turn the report to the finding' : 'Turn the report back to the overview'}
         onClick={(event) => {
           if (event.target instanceof Element && event.target.closest('a')) return;
           turn();

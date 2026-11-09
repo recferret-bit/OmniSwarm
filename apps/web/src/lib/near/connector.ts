@@ -22,7 +22,9 @@ export interface SignedMessage {
 
 export interface WalletConnector {
   restore(): Promise<string | null>;
-  connect(): Promise<string>;
+  /** Dev wallet only. The home page uses this to list seeded accounts. */
+  listAccounts?(): Promise<Array<{ accountId: string; publicKey: string }>>;
+  connect(accountId?: string): Promise<string>;
   signOut(): Promise<void>;
   signMessage(input: SignMessageInput): Promise<SignedMessage>;
   signAndSendTransaction(tx: PaymentTransaction): Promise<{ txHash: string }>;

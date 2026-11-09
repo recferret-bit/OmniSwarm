@@ -9,7 +9,8 @@ import { env } from '@/lib/env';
 function chainLabel(health: HealthResponse | null): string {
   if (env.apiMock) return 'Chain: mock (dev)';
   const network = health?.network ?? env.network;
-  return `Chain: NEAR ${network}${health && !health.chain.rpc ? ' (RPC unavailable)' : ''}`;
+  const height = typeof health?.chain.blockHeight === 'number' ? ` · height ${health.chain.blockHeight}` : '';
+  return `Chain: NEAR ${network}${health && !health.chain.rpc ? ' (RPC unavailable)' : ''}${height}`;
 }
 
 export function Trust() {

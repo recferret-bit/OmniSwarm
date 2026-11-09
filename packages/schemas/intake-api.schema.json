@@ -124,7 +124,7 @@
         "status": {"$ref": "#/$defs/status"},
         "progress": {"$ref": "#/$defs/progress"},
         "position": {"type": "integer", "minimum": 1, "description": "Rank among queued requests; only while queued"},
-        "reportUrl": {"type": "string", "pattern": "^https://[^\\s]+$"},
+        "reportUrl": {"type": "string", "pattern": "^https?://[^\\s]+$"},
         "reportSha256": {"$ref": "#/$defs/sha256-hex"},
         "incomplete": {"type": "boolean", "description": "The report was published with report-health state incomplete"},
         "attestTx": {"type": "string", "minLength": 1},
@@ -177,10 +177,10 @@
       "additionalProperties": false,
       "properties": {
         "requestId": {"$ref": "#/$defs/uuid"},
-        "reportUrl": {"type": "string", "pattern": "^https://[^\\s]+$"},
+        "reportUrl": {"type": "string", "pattern": "^https?://[^\\s]+$"},
         "reportSha256": {"$ref": "#/$defs/sha256-hex"},
         "reviewers": {"type": "array", "items": {"type": "string"}},
-        "generalReviewUrl": {"type": "string", "pattern": "^https://[^\\s]+$"},
+        "generalReviewUrl": {"type": "string", "pattern": "^https?://[^\\s]+$"},
         "attestation": {"$ref": "attestation.schema.json"}
       }
     },
@@ -297,7 +297,11 @@
           "type": "object",
           "required": ["rpc", "contract"],
           "additionalProperties": false,
-          "properties": {"rpc": {"type": "boolean"}, "contract": {"type": "boolean"}}
+          "properties": {
+            "rpc": {"type": "boolean"},
+            "contract": {"type": "boolean"},
+            "blockHeight": {"type": "integer", "minimum": 0, "description": "Latest block when the near adapter can read one"}
+          }
         }
       },
       "description": "GET /api/health: liveness plus status. chain.rpc/contract come from ChainPort.health (cached 30 s); workers counts live pg-boss worker instances."

@@ -20,6 +20,10 @@
   clip-path: none;
 }
 .report-page--back { transform: rotateY(180deg); }
+/* The card is paper in both themes. Global eyebrow and label colors are for the dark field. */
+.report-page .eyebrow { color: var(--os-ember-ink); }
+.report-doc__body .label,
+.report-doc__split .label { color: var(--os-ink-2); }
 .report-doc__sum { margin: 12px 0 0; max-width: 46ch; font-size: 18px; line-height: 1.45; }
 .report-doc__body { display: grid; gap: 10px; }
 .report-doc__surface { margin: 0; font-size: 16px; line-height: 1.45; }

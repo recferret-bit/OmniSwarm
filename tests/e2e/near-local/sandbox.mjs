@@ -114,6 +114,25 @@ export async function withdrawEarned() {
   return { txHash, amount, treasuryBefore: BigInt(before.amount), treasuryAfter: BigInt(after.amount) };
 }
 
+/** The seeded operator function-call key, as the chain currently records it. */
+export async function operatorCallPermission() {
+  const parsed = JSON.parse(fs.readFileSync(keyFile('operator'), 'utf8'));
+  const access = await provider().viewAccessKey({
+    accountId: parsed.account_id,
+    publicKey: parsed.public_key,
+    finalityQuery: { finality: 'final' },
+  });
+  const permission = access?.permission;
+  const call = permission && typeof permission === 'object'
+    ? (permission.FunctionCall ?? permission.functionCall ?? null)
+    : null;
+  return {
+    methods: call ? [...(call.method_names ?? call.methodNames ?? [])] : [],
+    allowance: call ? String(call.allowance ?? '') : '',
+    receiver: call ? String(call.receiver_id ?? call.receiverId ?? '') : '',
+  };
+}
+
 export async function sandboxSkipReason() {
   try {
     const response = await fetch(`${RPC_URL}/status`, { signal: AbortSignal.timeout(2000) });

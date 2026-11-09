@@ -19,6 +19,7 @@ import { isPanelPreset } from './panel.ts';
 import { finalReportDir, splitLargeReview } from './theme-split.ts';
 import { beginPublishing, attestRequest } from '../modules/payments/settlement.service.ts';
 import { publishReport } from './publish.ts';
+import { chainReportUri } from './report-uri.ts';
 import { handleDeadReview, handleReview, RunInterruptedError, type HandlerDeps } from './review-handler.ts';
 
 type WorkerDeps = HandlerDeps & PaymentDeps;
@@ -63,7 +64,7 @@ async function workReviews(boss: PgBoss, deps: WorkerDeps, shutdown: AbortSignal
           const reportUri = `${deps.config.storage.reportsBaseUrl}/${final.parent.id}/report.html`;
           try {
             await beginPublishing(deps, final.parent.id, { reportSha256: published.reportSha256, reportUri, maxSeverity: 'none', incomplete: false });
-            await attestRequest(deps, final.parent.id, { reportUri, maxSeverity: 'none' });
+            await attestRequest(deps, final.parent.id, { reportUri: chainReportUri(reportUri), maxSeverity: 'none' });
             log.info({ parentId: final.parent.id }, 'final report published');
           } catch (error) {
             if (!isAppError(error, 'INVALID_TRANSITION')) throw error;

@@ -9,6 +9,8 @@ import { accountId, commitSha, network, nonce, preset, publicKey, repo, sha256He
 
 const timestamp = z.string().regex(/^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:.]+Z$/);
 const https = z.string().regex(/^https:\/\/[^\s]+$/);
+// Stored report links on the local stack are http. The registry still requires https.
+const reportLink = z.string().regex(/^https?:\/\/[^\s]+$/);
 const status = z.enum(STATUSES);
 
 export const errorResponse = z.strictObject({
@@ -38,7 +40,7 @@ export const progress = z.strictObject({
 });
 
 export const requestStatusResponse = z.strictObject({
-  status, progress: progress.optional(), position: z.int().min(1).optional(), reportUrl: https.optional(), reportSha256: sha256Hex.optional(),
+  status, progress: progress.optional(), position: z.int().min(1).optional(), reportUrl: reportLink.optional(), reportSha256: sha256Hex.optional(),
   incomplete: z.boolean().optional(), attestTx: z.string().min(1).optional(), refundTx: z.string().min(1).optional(),
   failureCause: z.string().min(1).optional(),
   timeline: z.array(z.strictObject({ event: z.string().min(1), at: timestamp })).optional(), createdAt: timestamp,
@@ -114,7 +116,7 @@ export const attestation = z.strictObject({
 });
 
 export const reportIndexResponse = z.strictObject({
-  requestId: uuid, reportUrl: https, reportSha256: sha256Hex, reviewers: z.array(z.string()).optional(), generalReviewUrl: https.optional(),
+  requestId: uuid, reportUrl: reportLink, reportSha256: sha256Hex, reviewers: z.array(z.string()).optional(), generalReviewUrl: reportLink.optional(),
   attestation: attestation.optional(),
 });
 
@@ -128,7 +130,7 @@ export const ledgerResponse = z.strictObject({
 
 export const healthResponse = z.strictObject({
   ok: z.boolean(), network, queueDepth: z.int().min(0), workers: z.int().min(0),
-  chain: z.strictObject({ rpc: z.boolean(), contract: z.boolean() }),
+  chain: z.strictObject({ rpc: z.boolean(), contract: z.boolean(), blockHeight: z.int().min(0).optional() }),
 });
 export const readyResponse = z.strictObject({ ok: z.boolean(), db: z.boolean(), queue: z.boolean(), migrations: z.boolean() });
 
