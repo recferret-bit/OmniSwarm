@@ -11,7 +11,7 @@ export interface RequestRow {
   account: string;
   repo: string;
   commit_sha: string;
-  network: 'testnet' | 'mainnet';
+  network: 'testnet' | 'mainnet' | 'sandbox';
   preset: string;
   deployed: string | null;
   request_hash: string;

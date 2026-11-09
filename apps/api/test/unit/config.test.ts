@@ -45,6 +45,8 @@ test('production refuses test adapters, a missing admin token and insecure cooki
   assert.equal(issue('worker', PROD), '');
   assert.match(issue('api', { ...PROD, ADMIN_TOKEN: undefined }), /ADMIN_TOKEN is required in production/);
   assert.match(issue('api', { ...PROD, CHAIN_ADAPTER: 'mock' }), /CHAIN_ADAPTER must be "near"/);
+  assert.match(issue('api', { ...PROD, NETWORK: 'sandbox' }), /NETWORK sandbox is the local near-sandbox/);
+  assert.equal(issue('api', { ...BASE, NETWORK: 'sandbox' }), '', 'sandbox is allowed outside production');
   assert.equal(loadConfig('api', PROD).chain.adapter, 'near', 'production defaults to the real adapters');
   assert.equal(loadConfig('worker', PROD).engine.runner, 'cli');
   assert.match(issue('worker', { ...PROD, OPERATOR_KEY_FILE: undefined }), /OPERATOR_KEY_FILE is required/);

@@ -16,7 +16,7 @@ describe('parseEnv', () => {
 
   it.each<[Partial<RawEnv>, RegExp]>([
     [{ network: undefined }, /NEXT_PUBLIC_NETWORK is not set/],
-    [{ network: 'devnet' }, /testnet or mainnet/],
+    [{ network: 'devnet' }, /testnet, mainnet or sandbox/],
     [{ contractId: 'Not An Account' }, /NEXT_PUBLIC_CONTRACT_ID/],
     [{ rpcUrl: 'http://rpc.example' }, /https URL/],
     [{ wallet: 'injected' }, /real or mock/],

@@ -4,7 +4,7 @@ import { APP_ROOT } from '../shared/paths.ts';
 import { envSchema, type RawEnv } from './env.ts';
 
 export type Role = 'api' | 'worker' | 'migrate' | 'script';
-export type Network = 'testnet' | 'mainnet';
+export type Network = 'testnet' | 'mainnet' | 'sandbox';
 
 export interface Config {
   env: RawEnv['NODE_ENV'];
@@ -73,6 +73,7 @@ function productionIssues(raw: RawEnv, role: Role): Issue[] {
   const issues: Issue[] = [];
   const need = (key: keyof RawEnv, ok: boolean, message: string) => { if (!ok) issues.push({ key, message }); };
   const chosen = adapters(raw);
+  need('NETWORK', raw.NETWORK !== 'sandbox', 'sandbox is the local near-sandbox and is refused in production');
   need('CHAIN_ADAPTER', chosen.chain === 'near', 'must be "near" in production (mock is test-only)');
   need('GITHUB_ADAPTER', chosen.github === 'live', 'must be "live" in production (recorded is test-only)');
   need('COOKIE_SECURE', raw.COOKIE_SECURE !== false, 'cannot be disabled in production');

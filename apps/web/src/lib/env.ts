@@ -36,7 +36,9 @@ function account(name: string, value: string | undefined): string {
 
 export function parseEnv(raw: RawEnv): Env {
   const network = required('NEXT_PUBLIC_NETWORK', raw.network);
-  if (network !== 'testnet' && network !== 'mainnet') throw new Error('NEXT_PUBLIC_NETWORK must be testnet or mainnet');
+  if (network !== 'testnet' && network !== 'mainnet' && network !== 'sandbox') {
+    throw new Error('NEXT_PUBLIC_NETWORK must be testnet, mainnet or sandbox');
+  }
   const wallet = raw.wallet || 'real';
   if (wallet !== 'real' && wallet !== 'mock') throw new Error('NEXT_PUBLIC_WALLET must be real or mock');
   return {
