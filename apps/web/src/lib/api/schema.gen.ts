@@ -91,6 +91,7 @@ export interface IntakeApi {
   'request-status-response'?: RequestStatusResponse;
   'progress-event'?: ProgressEvent;
   'request-list-response'?: RequestListResponse;
+  receipt?: Receipt;
   'report-index-response'?: ReportIndexResponse;
   'guard-verdict-response'?: GuardVerdictResponse;
   'guard-report-request'?: GuardReportRequest;
@@ -201,13 +202,56 @@ export interface RequestListResponse {
     theme?: string;
   }[];
 }
+/**
+ * What was bought for one request, from the payment row, each reviewers/<id>/usage.json, findings-and-scores.json and the chain tx ids. A refunded request has refund and no attestation.
+ */
+export interface Receipt {
+  paid: {
+    yocto: Yocto;
+    tx: string;
+  };
+  reviewers: {
+    id: string;
+    vendor: string;
+    model: string;
+    calls: number;
+    tokens: number;
+    usd: number;
+  }[];
+  check: {
+    /**
+     * Findings whose status is CONFIRMED, LIKELY, REFUTED, or AGREED, or the legacy UPHELD_REVIEW, MODEL_AGREEMENT, or REFUTED_REVIEW
+     */
+    passed: number;
+    total: number;
+    byStatus: {
+      [k: string]: number;
+    };
+  };
+  attestation?: {
+    tx: string;
+    hash: Sha256Hex;
+    /**
+     * Stored report hash equals the chain attestation hash
+     */
+    match?: boolean;
+  };
+  refund?: {
+    tx: string;
+    yocto?: Yocto;
+  };
+}
+/**
+ * GET /api/reports/:id. A published request includes reportUrl and reportSha256. A refunded request includes requestId and receipt (with refund, without attestation) and omits the report links. Other statuses are 404.
+ */
 export interface ReportIndexResponse {
   requestId: Uuid;
-  reportUrl: string;
-  reportSha256: Sha256Hex;
+  reportUrl?: string;
+  reportSha256?: Sha256Hex;
   reviewers?: string[];
   generalReviewUrl?: string;
   attestation?: Attestation;
+  receipt?: Receipt;
 }
 /**
  * What the backend attests on chain after a review (registry attest call). INTAKE sections 3 (step 9) and 6. Chain-side fields (bindingConfirmed, blockHeight, blockTimestampMs) appear when the attestation is read back from the contract.

@@ -122,9 +122,25 @@ export const attestation = z.strictObject({
   bindingConfirmed: z.boolean().optional(), blockHeight: z.int().min(0).optional(), blockTimestampMs: z.int().min(0).optional(),
 });
 
+const receiptReviewer = z.strictObject({
+  id: z.string().min(1), vendor: z.string().min(1), model: z.string().min(1),
+  calls: z.int().min(0), tokens: z.int().min(0), usd: z.number().min(0),
+});
+const receiptCheck = z.strictObject({
+  passed: z.int().min(0), total: z.int().min(0), byStatus: z.record(z.string(), z.int().min(0)),
+});
+/** packages/schemas/intake-api.schema.json#/$defs/receipt */
+export const receipt = z.strictObject({
+  paid: z.strictObject({ yocto, tx: z.string().min(1) }),
+  reviewers: z.array(receiptReviewer),
+  check: receiptCheck,
+  attestation: z.strictObject({ tx: z.string().min(1), hash: sha256Hex, match: z.boolean().optional() }).optional(),
+  refund: z.strictObject({ tx: z.string().min(1), yocto: yocto.optional() }).optional(),
+});
+
 export const reportIndexResponse = z.strictObject({
-  requestId: uuid, reportUrl: reportLink, reportSha256: sha256Hex, reviewers: z.array(z.string()).optional(), generalReviewUrl: reportLink.optional(),
-  attestation: attestation.optional(),
+  requestId: uuid, reportUrl: reportLink.optional(), reportSha256: sha256Hex.optional(), reviewers: z.array(z.string()).optional(),
+  generalReviewUrl: reportLink.optional(), attestation: attestation.optional(), receipt: receipt.optional(),
 });
 
 export const ledgerResponse = z.strictObject({

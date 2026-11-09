@@ -123,6 +123,7 @@ progress { width: 100%; accent-color: var(--os-ember); }
 .tabs__tab[aria-selected="true"] { border-bottom-color: var(--os-ember); font-weight: 700; color: var(--os-ember-text); }
 .tabs__panel { padding-top: 12px; }
 .table-scroll { overflow-x: auto; }
+.table-scroll:focus-visible { outline: 2px solid var(--os-ember); outline-offset: 2px; }
 table { border-collapse: collapse; width: 100%; }
 th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--os-seam); }
 .findings { padding-left: 1rem; display: grid; gap: 6px; }
