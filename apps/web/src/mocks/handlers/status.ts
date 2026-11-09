@@ -73,10 +73,21 @@ const mine = http.get('/api/requests', async ({ request }) => {
   return HttpResponse.json({ requests });
 });
 
+function paidReceipt(row: MockRequest, tx: string) {
+  return { paid: { yocto: row.priceYocto, tx }, reviewers: [], check: { passed: 0, total: 0, byStatus: {} } };
+}
+
 const report = http.get<{ id: string }>('/api/reports/:id', async ({ params }) => {
-  const row = find(params.id);
-  if (!row) return apiError('REQUEST_NOT_FOUND', 404, 'Request not found');
-  const status = await statusOf(row);
+  const stored = find(params.id);
+  if (!stored) return apiError('REQUEST_NOT_FOUND', 404, 'Request not found');
+  const status = await statusOf(stored);
+  const row = find(params.id) ?? stored;
+  if (status.status === 'refunded' && row.txHash && row.refundTx) {
+    return HttpResponse.json({
+      requestId: row.id,
+      receipt: { ...paidReceipt(row, row.txHash), refund: { tx: row.refundTx, yocto: row.priceYocto } },
+    });
+  }
   const attestation = readState().attestations[row.requestHash];
   if (status.status !== 'done' || !attestation) return apiError('NOT_FOUND', 404, 'Report not published yet');
   const base = reportBase(row.id);
@@ -89,6 +100,12 @@ const report = http.get<{ id: string }>('/api/reports/:id', async ({ params }) =
       repo: attestation.repo, commit: attestation.commit, bindingConfirmed: attestation.binding_confirmed,
       blockHeight: attestation.block_height, blockTimestampMs: attestation.block_timestamp_ms,
     },
+    ...(row.txHash && row.attestTx ? {
+      receipt: {
+        ...paidReceipt(row, row.txHash),
+        attestation: { tx: row.attestTx, hash: attestation.report_sha256 },
+      },
+    } : {}),
   });
 });
 
