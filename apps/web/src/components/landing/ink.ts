@@ -13,6 +13,9 @@ export interface Ink {
   attested: string;
   seam: string;
   onEmber: string;
+  ok: string;
+  fault: string;
+  warn: string;
   mono: string;
 }
 
@@ -32,6 +35,9 @@ export function readInk(el: Element): Ink {
     attested: pick('--os-attested'),
     seam: pick('--os-seam'),
     onEmber: pick('--os-on-ember'),
+    ok: pick('--os-ok-text') || pick('--os-attested'),
+    fault: pick('--os-fault-text'),
+    warn: pick('--os-warn-text'),
     mono: pick('--os-font-mono') || 'IBM Plex Mono, ui-monospace, monospace',
   };
 }

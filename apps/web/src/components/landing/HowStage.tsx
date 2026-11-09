@@ -5,30 +5,44 @@ import { paintHow } from './how-paint';
 
 export function HowStage({ active }: { active: number }) {
   const ref = useRef<HTMLCanvasElement>(null);
-  const aim = useRef(0.2);
+  const aim = useRef(0.5);
   useEffect(() => {
     const canvas = ref.current;
     if (!canvas) return undefined;
     const media = typeof window.matchMedia === 'function' ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
     const reduce = media?.matches ?? false;
+    const started = performance.now();
     let frame = 0;
     let live = true;
+    const paint = (time: number) => {
+      paintHow(canvas, reduce ? 0 : time - started, aim.current, active, reduce);
+    };
     const onMove = (event: PointerEvent) => {
       const rect = canvas.getBoundingClientRect();
       if (rect.width) aim.current = (event.clientX - rect.left) / rect.width;
+      if (reduce) paint(performance.now());
     };
     canvas.addEventListener('pointermove', onMove);
     const tick = (time: number) => {
       if (!live) return;
-      paintHow(canvas, reduce ? 400 : time, aim.current, active);
+      paint(time);
       if (!reduce && !document.hidden) frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
+    const onVis = () => {
+      if (!document.hidden && live && !reduce) frame = requestAnimationFrame(tick);
+    };
+    document.addEventListener('visibilitychange', onVis);
+    const theme = new MutationObserver(() => paint(performance.now()));
+    theme.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
     return () => {
       live = false;
       cancelAnimationFrame(frame);
+      theme.disconnect();
       canvas.removeEventListener('pointermove', onMove);
+      document.removeEventListener('visibilitychange', onVis);
     };
   }, [active]);
-  return <canvas ref={ref} className="how-stage" aria-hidden="true" />;
+  const picture = ['independent review', 'anonymized debate', 'judgement', 'NEAR attestation'][active] ?? 'review stage';
+  return <canvas ref={ref} className="how-stage" role="img" aria-label={`Animated picture of ${picture}`} />;
 }

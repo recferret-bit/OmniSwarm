@@ -23,11 +23,19 @@ function disc(ctx: CanvasRenderingContext2D, radius: number, fill: string, strok
   ctx.stroke();
 }
 
-export function drawModel(ctx: CanvasRenderingContext2D, x: number, y: number, mark: Mark, ink: Ink) {
+export function drawMark(ctx: CanvasRenderingContext2D, x: number, y: number, mark: Mark, ink: Ink, scale = 1) {
   ctx.save();
   ctx.translate(x, y);
+  ctx.scale(scale, scale);
   disc(ctx, GLYPH * 0.78, ink.plate, ink.cite);
   strokeGlyph(ctx, mark, GLYPH, ink.emberText);
+  ctx.restore();
+}
+
+export function drawModel(ctx: CanvasRenderingContext2D, x: number, y: number, mark: Mark, ink: Ink) {
+  drawMark(ctx, x, y, mark, ink, 1);
+  ctx.save();
+  ctx.translate(x, y);
   ctx.fillStyle = ink.text;
   ctx.font = `600 9px ${ink.mono}`;
   ctx.textAlign = 'center';

@@ -47,6 +47,7 @@
 .hero-stats em { font-style: normal; color: var(--os-steel); font-size: 12px; }
 
 .land .band, .land-section { background: transparent; }
+.land .band { border-top: 0; border-bottom: 0; }
 .land-section { padding: var(--os-s9) 0; }
 .land-head { display: grid; gap: 10px; margin-bottom: var(--os-s6); max-width: 46rem; }
 .land-kicker { display: flex; gap: 12px; align-items: baseline; }

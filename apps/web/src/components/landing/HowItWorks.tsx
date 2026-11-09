@@ -6,10 +6,10 @@ import { HowStage } from './HowStage';
 import './how.css';
 
 const STEPS = [
-  { title: 'Independent reviewers', body: 'Several model families review the code in an offline sandbox, each with fixed passes and a tool budget.', anchor: 'reviewers' },
-  { title: 'Anonymized debate', body: 'Reviewers challenge each other’s findings with cited source evidence; unsupported claims are refuted.', anchor: 'debate' },
-  { title: 'Judge and general review', body: 'A cross-family judge adjudicates each disputed finding and writes the general review.', anchor: 'adjudication' },
-  { title: 'Attested on NEAR', body: 'The report hash is written to the review-registry contract; this site recomputes it in your browser.', anchor: 'attestation' },
+  { title: 'Independent reviewers', body: 'Four families read one sealed snapshot, two passes of 40 calls each. The picture walks the contract, the edge config, and the app. A hit stays a lead until a reviewer cites the line.', anchor: 'reviewers' },
+  { title: 'Anonymized debate', body: 'The orchestrator assigns the floor. Names become Reviewer A, B, and C, duplicate reports fold into one cluster, and a challenge with no citation is dropped.', anchor: 'debate' },
+  { title: 'Judge and general review', body: 'When the orchestrator shares a vendor with an author, an alternate judge takes that cluster. The status cannot rise above the cited evidence. The orchestrator then writes the general review.', anchor: 'adjudication' },
+  { title: 'Attested on NEAR', body: 'findings-and-scores.json and general-review.json are canonicalized and hashed. attest() writes that report_sha256, plus repo, commit, and max severity, to the review-registry contract. This page recomputes the same digest in your browser. The chain stores the hash, not the report.', anchor: 'attestation' },
 ] as const;
 
 export function HowItWorks() {
@@ -21,7 +21,7 @@ export function HowItWorks() {
         <header className="land-head">
           <p className="land-kicker"><i>02</i><span className="eyebrow">How it works</span></p>
           <h2 id="how-title" className="h2">Four stages, then a hash</h2>
-          <p className="lede">Pick a stage. The picture is that stage of one review: a cited line, a challenge, a ruling, then the hash.</p>
+          <p className="lede">Pick a stage. The picture moves through it: four families on one sealed snapshot, the orchestrator running debate and the write-up, then the report hash locking on NEAR.</p>
         </header>
         <HowStage active={active} />
         <div className="pipeline" role="tablist" aria-label="Review stages">

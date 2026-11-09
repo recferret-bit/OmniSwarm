@@ -132,10 +132,14 @@ export function ReportStill({ linked = true }: { linked?: boolean }) {
         </div>
       </div>
       <figcaption>
-        <span className="label">legacy-fixture · two pages</span>
-        <strong>8 assertions, 1 disputed claim, priority 5.1.</strong>
-        <a href={open}>Open the sample</a>
-        <a href={`${REPORT}#findings`}>Open the finding</a>
+        <div className="report-still__meta">
+          <span className="label">legacy-fixture · two pages</span>
+          <strong>8 assertions, 1 disputed claim, priority 5.1.</strong>
+        </div>
+        <div className="report-still__actions">
+          <a className="btn btn-primary btn-lg" href={open}>Open the sample</a>
+          <a className="btn btn-system btn-lg" href={`${REPORT}#findings`}>Open the finding</a>
+        </div>
       </figcaption>
     </figure>
   );

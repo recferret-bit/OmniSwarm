@@ -1,1 +1,11 @@
-.how-stage { width: 100%; height: 220px; display: block; background: var(--os-deep); border: 1px solid var(--os-ember); }
+.how-stage {
+  width: 100%;
+  height: 400px;
+  display: block;
+  margin-bottom: var(--os-s6);
+  background: var(--os-deep);
+  border: 1px solid var(--os-ember);
+}
+@media (max-width: 800px) {
+  .how-stage { height: 520px; }
+}

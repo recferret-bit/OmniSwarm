@@ -51,8 +51,10 @@
 .report-doc__surfaces { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .report-doc__surfaces li { border: 1px solid var(--os-paper-line); padding: 12px; display: flex; justify-content: space-between; align-items: center; }
 .report-doc__surfaces strong { font-family: var(--os-font-display); font-size: 28px; }
-.report-still figcaption { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: baseline; }
+.report-still figcaption { display: flex; flex-wrap: wrap; gap: 16px 28px; align-items: center; justify-content: space-between; }
+.report-still__meta { display: grid; gap: 4px; min-width: min(100%, 18rem); }
 .report-still figcaption strong { font-family: var(--os-font-display); font-size: clamp(20px, 2vw, 28px); }
+.report-still__actions { display: flex; flex-wrap: wrap; gap: 12px; }
 @media (prefers-reduced-motion: reduce) {
   .report-stage__card { transition: none; }
 }
