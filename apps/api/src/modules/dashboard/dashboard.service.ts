@@ -1,5 +1,6 @@
 // Password-dashboard reviews. They become ordinary request rows and reach the worker only through
-// markPaid, and only while the chain adapter is mock. The NEAR payment path is unchanged.
+// markPaid. The mock ledger is paid 0 yocto. On the sandbox network a real request_review is signed
+// by the seeded bob key for the configured price. Other NEAR networks stay refused.
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -13,16 +14,19 @@ import type { Clock } from '../../shared/clock.ts';
 import { fail } from '../../shared/errors.ts';
 import { assertAccountCapacity } from '../requests/create-request.service.ts';
 import { markPaid } from '../payments/payment.service.ts';
-import { checkRepo } from '../quote/quote.service.ts';
+import { checkRepo, priceFor } from '../quote/quote.service.ts';
 import { parseGitHubInput } from '../quote/repo-url.ts';
 import { panelPresetName } from '../../worker/panel.ts';
 import { normalizeScopes, type ReviewScope } from '../../worker/themes.ts';
 import { providerStatus } from '../providers/secrets.ts';
+import { requestReviewOnSandbox } from './sandbox-payer.ts';
 
 export interface DashboardDeps { config: Config; pool: Pool; clock: Clock; chain: ChainPort; github: GitHubPort; boss: PgBoss }
 
-export function assertDashboardChain(config: { chain: { adapter: string } }): void {
-  if (config.chain.adapter !== 'mock') fail('FORBIDDEN', 'Dashboard jobs use the mock chain until NEAR sign-in is connected');
+export function assertDashboardChain(config: { chain: { adapter: string }; intake?: { network?: string } }): void {
+  if (config.chain.adapter === 'mock') return;
+  if (config.chain.adapter === 'near' && config.intake?.network === 'sandbox') return;
+  fail('FORBIDDEN', 'Dashboard jobs use the mock chain until NEAR sign-in is connected');
 }
 
 function reportFile(config: Config, id: string): string {
@@ -46,17 +50,31 @@ export async function createDashboardJob(deps: DashboardDeps, account: string, r
   await assertAccountCapacity(deps.pool, deps.config, account, now);
   const id = crypto.randomUUID();
   const requestHash = crypto.createHash('sha256').update(`dashboard:${account}:${checked.repo}:${checked.commitSha}:${id}`).digest('hex');
+  const onSandbox = deps.config.chain.adapter === 'near' && deps.config.intake.network === 'sandbox';
+  const priceYocto = onSandbox ? priceFor(deps.config, 'sandbox') : '0';
   await insertRequest(deps.pool, {
     id, account, repo: checked.repo, commitSha: checked.commitSha, network: deps.config.intake.network,
-    preset, deployed: null, requestHash, priceYocto: '0', now, scope,
+    preset, deployed: null, requestHash, priceYocto, now, scope,
   });
-  const { payRequestReview } = await import('../../chain/mock/mock-ledger.ts');
-  const txHash = await payRequestReview(deps.pool, {
-    signer: account, receiver: deps.config.intake.contractId, requestHash, depositYocto: '0',
-  });
+  let txHash: string;
+  if (onSandbox) {
+    const paid = await requestReviewOnSandbox({
+      network: deps.config.intake.network,
+      rpcUrls: deps.config.chain.rpcUrls,
+      contractId: deps.config.intake.contractId,
+      requestHash,
+      depositYocto: priceYocto,
+    });
+    txHash = paid.txHash;
+  } else {
+    const { payRequestReview } = await import('../../chain/mock/mock-ledger.ts');
+    txHash = await payRequestReview(deps.pool, {
+      signer: account, receiver: deps.config.intake.contractId, requestHash, depositYocto: '0',
+    });
+  }
   const row = await findRequest(deps.pool, id);
   if (!row) fail('INTERNAL', 'Request was not stored');
-  await markPaid(deps, row, { txHash, amountYocto: 0n, actor: 'api', event: 'payment_verified' });
+  await markPaid(deps, row, { txHash, amountYocto: BigInt(priceYocto), actor: 'api', event: 'payment_verified' });
   return { requestId: id, repo: checked.repo, commitSha: checked.commitSha, status: 'queued' as const };
 }
 
