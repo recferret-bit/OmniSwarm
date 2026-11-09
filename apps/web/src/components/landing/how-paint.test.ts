@@ -3,12 +3,13 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { paintHow } from './how-paint';
+import { SAMPLE_HASH } from './how-sample-hash';
 
 if (typeof globalThis.Path2D !== 'function') {
   globalThis.Path2D = class { constructor(public d = '') {} } as unknown as typeof Path2D;
 }
 
-function paint(stage: number, time: number, still = false) {
+function paint(stage: number, time: number, still = false, reportHash = 'a'.repeat(64)) {
   const text: string[] = [];
   const ctx = {
     setTransform() {},
@@ -45,7 +46,7 @@ function paint(stage: number, time: number, still = false) {
   Object.defineProperty(canvas, 'clientHeight', { configurable: true, value: 400 });
   canvas.getBoundingClientRect = () => ({ width: 1100, height: 400, left: 0, top: 0, right: 1100, bottom: 400, x: 0, y: 0, toJSON() { return {}; } }) as DOMRect;
   canvas.getContext = (() => ctx) as unknown as typeof canvas.getContext;
-  paintHow(canvas, time, 0.25, stage, still);
+  paintHow(canvas, time, 0.25, stage, still, reportHash);
   return text.join('\n');
 }
 
@@ -93,5 +94,20 @@ describe('how stage pictures', () => {
     expect(attested).toContain('attest');
     expect(attested).toContain('review_attested');
     expect(attested).toContain('The chain stores the hash, not the report.');
+  });
+
+  it('draws the sample attestation hash across the lock-in', () => {
+    const drawn = paint(3, 2800 * 1.9, false, SAMPLE_HASH).replaceAll('\n', '');
+    expect(drawn).toContain(SAMPLE_HASH);
+  });
+
+  it('does not present an empty fetch as a locked digest', () => {
+    expect(paint(3, 2800 * 1.2, false, '')).not.toMatch(/(^|\n)LOCKED(\n|$)/);
+    expect(paint(3, 2800 * 2.2, false, '')).not.toMatch(/(^|\n)MATCH(\n|$)/);
+    expect(paint(3, 2800 * 1.2, false, '')).toContain('Reading the sample attestation.');
+    const attested = paint(3, 0, true, '');
+    expect(attested).toContain('reading sample');
+    expect(attested).not.toContain('…');
+    expect(paint(3, 2800 * 1.2, false, 'zz'.repeat(32))).toContain('Reading the sample attestation.');
   });
 });

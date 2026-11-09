@@ -14,6 +14,7 @@ export function paintHow(
   pointerX: number,
   active: number,
   still = false,
+  reportHash = '',
 ) {
   const ctx = fitCanvas(canvas);
   if (!ctx) return;
@@ -37,6 +38,7 @@ export function paintHow(
     y: 74,
     w: Math.max(10, width - 36),
     h: Math.max(10, height - 88),
+    reportHash,
   };
   ctx.save();
   PAINTERS[stage]?.(scene);

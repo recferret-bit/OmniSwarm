@@ -1,3 +1,4 @@
+import { isReportHash } from '@/components/report/sample-hash';
 import {
   BEAT_MS,
   beat,
@@ -8,7 +9,6 @@ import {
   lerp,
   mono,
   panel,
-  SAMPLE_HASH,
   type HowScene,
 } from './how-scene';
 import type { Ink } from './ink';
@@ -174,10 +174,23 @@ function drawKeyOrder(
   ctx.textAlign = 'left';
 }
 
+function drawWaiting(scene: HowScene, x: number, y: number) {
+  const { ctx, ink } = scene;
+  ctx.font = mono(ink, 14, 600);
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = ink.steel;
+  ctx.fillText('Reading the sample attestation.', x, y + 24);
+}
+
 function drawLock(scene: HowScene, x: number, y: number, w: number, h: number, u: number) {
   const { ctx, ink } = scene;
-  const locked = easeOut(u) * SAMPLE_HASH.length;
-  const metrics = hashMetrics(w, 16, SAMPLE_HASH.length);
+  if (!isReportHash(scene.reportHash)) {
+    drawWaiting(scene, x, y);
+    return;
+  }
+  const locked = easeOut(u) * scene.reportHash.length;
+  const metrics = hashMetrics(w, 16, scene.reportHash.length);
   const gridH = metrics.pitch * metrics.rows;
   const group = 24 + gridH + 62;
   const top = y + Math.max(0, (h - group) / 2);
@@ -189,7 +202,7 @@ function drawLock(scene: HowScene, x: number, y: number, w: number, h: number, u
   drawHashGrid(
     ctx,
     ink,
-    scramble(SAMPLE_HASH, locked, scene.time),
+    scramble(scene.reportHash, locked, scene.time),
     x,
     top + 22,
     w,
@@ -211,8 +224,12 @@ function drawLock(scene: HowScene, x: number, y: number, w: number, h: number, u
 
 function drawMatch(scene: HowScene, x: number, y: number, w: number, h: number, u: number) {
   const { ctx, ink } = scene;
-  const browser = easeOut(u) * SAMPLE_HASH.length;
-  const inspect = Math.floor(scene.pointerX * (SAMPLE_HASH.length - 1));
+  if (!isReportHash(scene.reportHash)) {
+    drawWaiting(scene, x, y);
+    return;
+  }
+  const browser = easeOut(u) * scene.reportHash.length;
+  const inspect = Math.floor(scene.pointerX * (scene.reportHash.length - 1));
   const matched = u > 0.78;
   const columns = w < 860 ? 16 : 32;
   ctx.textAlign = 'left';
@@ -222,7 +239,7 @@ function drawMatch(scene: HowScene, x: number, y: number, w: number, h: number, 
   ctx.fillStyle = ink.steel;
   ctx.fillText('ENGINE', x, cursor + 8);
   cursor += 18;
-  cursor += drawHashGrid(ctx, ink, SAMPLE_HASH, x, cursor, w, ink.text, ink.steel, SAMPLE_HASH.length, inspect, columns);
+  cursor += drawHashGrid(ctx, ink, scene.reportHash, x, cursor, w, ink.text, ink.steel, scene.reportHash.length, inspect, columns);
   cursor += 12;
   ctx.font = mono(ink, 11, 700);
   ctx.fillStyle = ink.steel;
@@ -231,7 +248,7 @@ function drawMatch(scene: HowScene, x: number, y: number, w: number, h: number, 
   cursor += drawHashGrid(
     ctx,
     ink,
-    scramble(SAMPLE_HASH, browser, scene.time + 40),
+    scramble(scene.reportHash, browser, scene.time + 40),
     x,
     cursor,
     w,
@@ -255,7 +272,7 @@ function drawAttest(scene: HowScene, x: number, y: number, w: number, h: number,
   const narrow = w < 680;
   const facts: Array<[string, string]> = [
     ['method', 'attest'],
-    ['report_sha256', `${SAMPLE_HASH.slice(0, 16)}…`],
+    ['report_sha256', isReportHash(scene.reportHash) ? `${scene.reportHash.slice(0, 16)}…` : 'reading sample'],
     ['repo', 'sample/vault'],
     ['commit', 'a1c4e9b'],
     ['max_severity', 'high'],
@@ -290,7 +307,7 @@ function drawAttest(scene: HowScene, x: number, y: number, w: number, h: number,
   const chainY = narrow ? y + factH + 8 : y;
   const chainW = narrow ? w : w - factW - 14;
   const chainH = narrow ? Math.max(36, h - foot - factH - 8) : h - foot;
-  drawChain(ctx, ink, chainX, chainY, chainW, chainH, land);
+  drawChain(ctx, ink, chainX, chainY, chainW, chainH, land, isReportHash(scene.reportHash) ? scene.reportHash : '');
   ctx.font = mono(ink, 12, 600);
   ctx.fillStyle = ink.steel;
   ctx.textAlign = 'left';
@@ -305,13 +322,14 @@ function drawChain(
   w: number,
   h: number,
   landed: number,
+  reportHash: string,
 ) {
   const count = 4;
   const gap = 8;
   const blockW = (w - gap * (count - 1)) / count;
   const blockH = Math.max(64, Math.min(h, 168));
   const top = y + Math.max(0, (h - blockH) / 2);
-  const slices = [0, 8, 16, 24].map((start) => SAMPLE_HASH.slice(start, start + 8));
+  const slices = [0, 8, 16, 24].map((start) => reportHash.slice(start, start + 8));
   for (let i = 0; i < count; i += 1) {
     const bx = x + i * (blockW + gap);
     const drop = i === count - 1 ? (1 - landed) * 22 : 0;
