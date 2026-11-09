@@ -97,7 +97,11 @@ describe('review worker (mock engine, mock chain)', NEEDS_DB, () => {
     conforms('request-status-response', view.body);
     assert.ok(view.body.refundTx);
     const noReport = await call(api.base, `/api/reports/${failed.requestId}`);
-    assert.deepEqual([noReport.status, noReport.body.error.code], [404, 'NOT_FOUND'], 'a refunded request has no report index');
+    assert.equal(noReport.status, 200, JSON.stringify(noReport.body));
+    conforms('report-index-response', noReport.body);
+    assert.equal(noReport.body.receipt.refund.tx, view.body.refundTx, 'a refunded request has its refund tx');
+    assert.equal(noReport.body.receipt.attestation, undefined, 'a refund has no attestation');
+    assert.equal(noReport.body.reportUrl, undefined);
     const unknown = await call(api.base, `/api/reports/${crypto.randomUUID()}`);
     assert.equal(unknown.body.error.code, 'REQUEST_NOT_FOUND');
 
