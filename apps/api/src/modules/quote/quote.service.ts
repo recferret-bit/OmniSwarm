@@ -18,7 +18,8 @@ export interface Quote {
   queueDepth: number; preset: string; etaMinutes: number; sizeKb: number; large: boolean; freeChecks: boolean;
 }
 
-/** The price for the deployment's network, or NETWORK_DISABLED (OD-08: mainnet is off unless priced). */
+/** The price for the deployment's network, or NETWORK_DISABLED (OD-08: mainnet is off unless priced).
+ *  Sandbox is not special here: it matches only when the deployment network is sandbox and a price is set. */
 export function priceFor(config: Config, network: string): string {
   if (network !== config.intake.network || config.intake.priceYocto === null) {
     fail('NETWORK_DISABLED', `This service takes ${config.intake.network} requests only`);
