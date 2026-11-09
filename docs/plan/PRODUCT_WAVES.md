@@ -51,6 +51,13 @@
 | **W12** | Remote Host & Deploy | Infra | One remote box: nginx + TLS, Postgres, API in compose, worker as a systemd service next to Docker, provider keys from a root-only env file, backups, one-command SSH deploy, smoke test | W00 |
 | **W13** | Agent Guard (track `security`) | Security | `GET /api/guard/verdict?account=…` returns allow/warn/block with reasons from attestations, code-hash drift and the shared blocklist; `@omniswarm/guard` refuses to sign on block and asks a human on warn; a prompt-injected agent tries to pay a known-bad contract and is stopped, with the log | W08, W10 |
 | **W14** | Submission Pack | Ops | README in "do X → see Y" form that a screener runs without paid keys (`./bin/audit demo`), RULES.md finalized (v0 lands in W00-19, before debate code), baseline diff section, golden-eval table, video script, X post and form drafts for the owner, hosted demo checked | all `H` waves |
+| **W15** | Local NEAR | Chain | `npm run stack:local` runs the real registry wasm on near-sandbox: dev wallet → NEP-413 → `request_review` → `attest` → `/r` match; guard on live local state; ops script for owner methods; mock ↔ contract parity | W08–W10, W13 |
+| **W16** | Green gates & landing | Front | `check:all` and `screener-check.sh` green; landing hash = sample attestation | W11, W14 |
+| **W17** | Code provenance | Chain | `reproducible-wasm` with NEP-330 metadata, `near-local verify`, guard `SOURCE_METADATA_MISMATCH`, NearBlocks verified | W10, W13 (soft W15) |
+| **W18** | Agent economy (`H+`) | Security | Per-request receipt on `/r/<id>`; guard MCP server | W16 (soft W15) |
+| **W19** | Submission pack v2 | Ops | README passes `tools/readme-claims.mjs` and the screener; live links; submitted | W16 (soft W15, W17, W18) |
+
+W15–W19 are the final sprint (2026-11-09 → 11-14). Their cut, calendar, DoR/DoD and owner lane are in [`FINAL_SPRINT.md`](./FINAL_SPRINT.md).
 
 ```mermaid
 flowchart LR
@@ -114,6 +121,13 @@ Issue id `WNN-XX`. One row per issue in the wave file:
 | **Spec** | Section of a spec or a review finding (`R-01`…) |
 
 Every wave file has: header (track, tag, check command, depends on, owned paths, specs), goal, demo story (the check in words), hackathon slice, features covered, issue table, wave DoD.
+
+From W15 on, every wave file also has:
+- a **Wave DoR** checklist: dependencies tagged, the lead's `-01` landed, spikes answered, `check:wNN` reserved
+- an **Owned paths** column in the issue table
+- a **Parallel groups** line under the table
+
+The issue-level DoR and DoD are in [`FINAL_SPRINT.md`](./FINAL_SPRINT.md) §5.
 
 ## 6. Hackathon
 
