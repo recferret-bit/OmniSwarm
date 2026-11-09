@@ -44,8 +44,19 @@ for n in 1 2; do
     export WORKER_ID="worker-$n" ENGINE_ROOT="$ROOT" DATABASE_URL="$database_url"
     export SESSION_SECRET="$session_secret" PROVIDER_SECRETS_FILE="$state/secrets/providers.json"
     export REPORTS_ROOT="$state/reports" REPORTS_BASE_URL="$reports_base_url" RUNS_ROOT="$state/runs"
-    export CHAIN_ADAPTER=mock GITHUB_ADAPTER=live CONTRACT_ID="$contract_id" NETWORK="$network"
-    export INTAKE_RECIPIENT="$recipient"
+    export GITHUB_ADAPTER=live
+    # NEAR_LOCAL=1: load.ts maps NEAR_NETWORK=sandbox to the near adapter, the
+    # host RPC (127.0.0.1:3030) and the operator key. Do not pass the container
+    # URL (host.docker.internal); that name is for the API container only.
+    if [ "${NEAR_LOCAL:-0}" = 1 ]; then
+      export NEAR_NETWORK=sandbox NETWORK=sandbox CHAIN_ADAPTER=near
+      export CONTRACT_ID=registry.test.near INTAKE_RECIPIENT=treasury.test.near
+      unset RPC_URLS
+    else
+      unset NEAR_NETWORK RPC_URLS
+      export CHAIN_ADAPTER=mock CONTRACT_ID="$contract_id" NETWORK="$network"
+      export INTAKE_RECIPIENT="$recipient"
+    fi
     cd "$ROOT"
     exec npm run worker -w @omniswarm/api
   ) > "$state/workers/worker-$n.log" 2>&1 &
