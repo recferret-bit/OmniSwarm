@@ -220,7 +220,7 @@ export interface Receipt {
   }[];
   check: {
     /**
-     * Findings whose status is CONFIRMED, LIKELY or REFUTED
+     * Findings whose status is CONFIRMED, LIKELY, REFUTED, or AGREED, or the legacy UPHELD_REVIEW, MODEL_AGREEMENT, or REFUTED_REVIEW
      */
     passed: number;
     total: number;

@@ -8,14 +8,16 @@ import path from 'node:path';
 import type { ChainAttestation, ChainPort } from '../../chain/port.ts';
 import type { Config } from '../../config/load.ts';
 import type { Db } from '../../db/pool.ts';
-import { findRequest, type RequestRow } from '../../db/repositories/requests.ts';
+import { findRequest, listThemes, type RequestRow } from '../../db/repositories/requests.ts';
 import { fail } from '../../shared/errors.ts';
 import { readJson } from '../../worker/classify.ts';
 import { readPublished } from '../../worker/publish.ts';
 
 export interface ReportIndexDeps { config: Config; pool: Db; chain: ChainPort }
 
-const PASSED = new Set(['CONFIRMED', 'LIKELY', 'REFUTED']);
+// v2 adjudication plus AGREED, and the legacy statuses the engine still writes when
+// finalStatus is absent. DISPUTED and INSUFFICIENT_EVIDENCE stay in byStatus only.
+const PASSED = new Set(['CONFIRMED', 'LIKELY', 'REFUTED', 'AGREED', 'UPHELD_REVIEW', 'MODEL_AGREEMENT', 'REFUTED_REVIEW']);
 
 export interface ReceiptReviewer {
   id: string; vendor: string; model: string; calls: number; tokens: number; usd: number;
@@ -157,8 +159,10 @@ function artifactDir(reportsRoot: string, runsRoot: string, requestId: string): 
   if (published && fs.existsSync(published.dir)) return published.dir;
   const base = path.join(runsRoot, requestId);
   if (!fs.existsSync(base)) return null;
-  const attempts = fs.readdirSync(base).filter((name) => fs.existsSync(path.join(base, name, 'report'))).sort();
-  const latest = attempts.at(-1);
+  const attempts = fs.readdirSync(base)
+    .filter((name) => /^\d+(?:\.\d+)?$/.test(name) && fs.existsSync(path.join(base, name, 'report')))
+    .sort((a, b) => Number.parseFloat(b) - Number.parseFloat(a));
+  const latest = attempts[0];
   return latest ? path.join(base, latest, 'report') : null;
 }
 
@@ -192,6 +196,34 @@ export function buildReceipt(input: {
   if (input.refund) receipt.refund = input.refund;
   else if (input.attestation) receipt.attestation = input.attestation;
   return receipt;
+}
+
+function mergeChecks(parts: Receipt['check'][]): Receipt['check'] {
+  const byStatus: Record<string, number> = {};
+  let passed = 0;
+  let total = 0;
+  for (const part of parts) {
+    passed += part.passed;
+    total += part.total;
+    for (const [status, count] of Object.entries(part.byStatus)) byStatus[status] = (byStatus[status] ?? 0) + count;
+  }
+  return { passed, total, byStatus };
+}
+
+/** A split parent publishes an empty index. The paid receipt is the sum of its done slices. */
+async function withSlices(deps: ReportIndexDeps, row: RequestRow, receipt: Receipt): Promise<Receipt> {
+  if (receipt.reviewers.length > 0 || receipt.check.total > 0) return receipt;
+  const children = (await listThemes(deps.pool, row.id)).filter((child) => child.id !== row.id && child.status === 'done');
+  if (!children.length) return receipt;
+  const reviewers: ReceiptReviewer[] = [];
+  const checks: Receipt['check'][] = [];
+  for (const child of children) {
+    const published = readPublished(deps.config.storage.reportsRoot, child.id);
+    const dir = published && fs.existsSync(published.dir) ? published.dir : null;
+    reviewers.push(...reviewersFromDir(dir));
+    checks.push(checkFromFindings(dir ? readJson(path.join(dir, 'findings-and-scores.json')) : null));
+  }
+  return { ...receipt, reviewers, check: mergeChecks(checks) };
 }
 
 function receiptFor(row: RequestRow, paid: PaymentRow, dir: string | null, chainAttestation: ChainAttestation | null): Receipt {
@@ -232,7 +264,7 @@ export async function reportIndex(deps: ReportIndexDeps, requestId: string): Pro
   if (row.status === 'refunded') {
     if (!paid) fail('NOT_FOUND', 'Refunded request has no payment');
     const dir = artifactDir(deps.config.storage.reportsRoot, deps.config.storage.runsRoot, row.id);
-    return { requestId: row.id, receipt: receiptFor(row, paid, dir, null) };
+    return { requestId: row.id, receipt: await withSlices(deps, row, receiptFor(row, paid, dir, null)) };
   }
   if (row.status !== 'done' || !row.report_sha256 || !row.report_url) fail('NOT_FOUND', 'Report not published yet');
   const base = `${deps.config.storage.reportsBaseUrl}/${row.id}`;
@@ -246,6 +278,6 @@ export async function reportIndex(deps: ReportIndexDeps, requestId: string): Pro
     ...(reviewers.length ? { reviewers } : {}),
     ...(hasGeneral ? { generalReviewUrl: `${base}/general-review.json` } : {}),
     ...(attestation ? { attestation: attestationDto(attestation) } : {}),
-    ...(paid ? { receipt: receiptFor(row, paid, dir, attestation) } : {}),
+    ...(paid ? { receipt: await withSlices(deps, row, receiptFor(row, paid, dir, attestation)) } : {}),
   };
 }

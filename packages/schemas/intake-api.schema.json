@@ -207,7 +207,7 @@
           "required": ["passed", "total", "byStatus"],
           "additionalProperties": false,
           "properties": {
-            "passed": {"type": "integer", "minimum": 0, "description": "Findings whose status is CONFIRMED, LIKELY or REFUTED"},
+            "passed": {"type": "integer", "minimum": 0, "description": "Findings whose status is CONFIRMED, LIKELY, REFUTED, or AGREED, or the legacy UPHELD_REVIEW, MODEL_AGREEMENT, or REFUTED_REVIEW"},
             "total": {"type": "integer", "minimum": 0},
             "byStatus": {
               "type": "object",

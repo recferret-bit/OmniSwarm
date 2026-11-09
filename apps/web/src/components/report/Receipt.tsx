@@ -55,7 +55,7 @@ export function Receipt({ receipt, match }: { receipt: ReceiptBody; match?: bool
         <dt>Refund</dt>
         <dd>{receipt.refund ? <TxLink hash={receipt.refund.tx}>refund transaction</TxLink> : 'none'}</dd>
       </dl>
-      <div className="table-scroll">
+      <div className="table-scroll" tabIndex={0} aria-label="Reviewers hired for this request">
         <table>
           <caption>Reviewers hired for this request</caption>
           <thead>
