@@ -59,9 +59,11 @@ export class NearChainAdapter implements ChainPort {
   }
 
   async health() {
-    const rpc = (await this.#read(() => this.#provider.viewBlock(FINAL)).catch(() => null)) !== null;
+    const block = await this.#read(() => this.#provider.viewBlock(FINAL)).catch(() => null);
+    const rpc = block !== null;
     const contract = rpc && (await this.getPrice().then(() => true, () => false));
-    return { rpc, contract };
+    const height = block && typeof block.header?.height === 'number' ? block.header.height : undefined;
+    return height === undefined ? { rpc, contract } : { rpc, contract, blockHeight: height };
   }
 
   async keyPermission(accountId: string, publicKey: string): Promise<KeyPermission | null> {

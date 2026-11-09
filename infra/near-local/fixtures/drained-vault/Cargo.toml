@@ -1,0 +1,13 @@
+[package]
+name = "drained-vault"
+version = "0.1.0"
+edition = "2021"
+publish = false
+license = "MIT"
+description = "Tiny NEAR contract for the local drained-vault guard fixture"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+near-sdk = "=5.30.0"

@@ -32,7 +32,9 @@ export function RequestReport({ id, attestTx }: { id: string; attestTx?: string 
   }, [id]);
 
   const run = useCallback(
-    () => (index && requestHash ? verifyReport(reportFiles(index), requestHash) : Promise.reject(new Error('the report index has no request hash'))),
+    () => (index && requestHash
+      ? verifyReport(reportFiles(index), requestHash, { apiAttestation: index.attestation ?? null })
+      : Promise.reject(new Error('the report index has no request hash'))),
     [index, requestHash],
   );
   const { state, recheck } = useVerification(index ? run : null);

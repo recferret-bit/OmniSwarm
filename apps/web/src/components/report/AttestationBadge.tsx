@@ -17,6 +17,7 @@ function verdict(state: VerificationState, sample: boolean): { tone: 'good' | 'b
   if (state.phase === 'error') return { tone: 'warn', label: `Could not verify the report: ${state.message}` };
   if (state.result.state === 'unattested') return { tone: 'warn', label: 'No attestation found on chain for this request' };
   if (state.result.state === 'mismatch') return { tone: 'bad', label: 'hash does not match the attestation' };
+  if (state.result.label) return { tone: 'warn', label: state.result.label };
   return { tone: 'good', label: sample ? 'Attested (sample)' : 'hash matches on-chain attestation' };
 }
 

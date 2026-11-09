@@ -9,7 +9,7 @@ export interface Env {
   intakeRecipient: string;
   rpcUrl: string;
   explorerUrl: string;
-  wallet: 'real' | 'mock';
+  wallet: 'real' | 'mock' | 'local';
   apiMock: boolean;
 }
 
@@ -22,10 +22,12 @@ function required(name: string, value: string | undefined): string {
   return value;
 }
 
-function httpsUrl(name: string, value: string | undefined): string {
+// https on every network. Plain http is the local sandbox only (RPC :3030, indexer :3031).
+function endpointUrl(name: string, value: string | undefined, network: string): string {
   const text = required(name, value).replace(/\/$/, '');
-  if (!/^https:\/\/[^\s]+$/.test(text)) throw new Error(`${name} must be an https URL`);
-  return text;
+  if (/^https:\/\/[^\s]+$/.test(text)) return text;
+  if (network === 'sandbox' && /^http:\/\/[^\s]+$/.test(text)) return text;
+  throw new Error(`${name} must be an https URL`);
 }
 
 function account(name: string, value: string | undefined): string {
@@ -36,15 +38,19 @@ function account(name: string, value: string | undefined): string {
 
 export function parseEnv(raw: RawEnv): Env {
   const network = required('NEXT_PUBLIC_NETWORK', raw.network);
-  if (network !== 'testnet' && network !== 'mainnet') throw new Error('NEXT_PUBLIC_NETWORK must be testnet or mainnet');
+  if (network !== 'testnet' && network !== 'mainnet' && network !== 'sandbox') {
+    throw new Error('NEXT_PUBLIC_NETWORK must be testnet, mainnet or sandbox');
+  }
   const wallet = raw.wallet || 'real';
-  if (wallet !== 'real' && wallet !== 'mock') throw new Error('NEXT_PUBLIC_WALLET must be real or mock');
+  if (wallet !== 'real' && wallet !== 'mock' && wallet !== 'local') {
+    throw new Error('NEXT_PUBLIC_WALLET must be real, mock or local');
+  }
   return {
     network,
     contractId: account('NEXT_PUBLIC_CONTRACT_ID', raw.contractId),
     intakeRecipient: account('NEXT_PUBLIC_INTAKE_RECIPIENT', raw.intakeRecipient),
-    rpcUrl: httpsUrl('NEXT_PUBLIC_RPC_URL', raw.rpcUrl),
-    explorerUrl: httpsUrl('NEXT_PUBLIC_EXPLORER_URL', raw.explorerUrl),
+    rpcUrl: endpointUrl('NEXT_PUBLIC_RPC_URL', raw.rpcUrl, network),
+    explorerUrl: endpointUrl('NEXT_PUBLIC_EXPLORER_URL', raw.explorerUrl, network),
     wallet,
     apiMock: raw.apiMock === '1',
   };

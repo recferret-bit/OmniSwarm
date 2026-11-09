@@ -40,12 +40,27 @@ for n in 1 2; do
     contract_id="$(value CONTRACT_ID)"
     network="$(value NETWORK)"
     recipient="$(value INTAKE_RECIPIENT)"
-    export NODE_ENV=development ENGINE_RUNNER=cli HOSTED_PRESET=panel WORKER_CONCURRENCY=1
+    export NODE_ENV=development HOSTED_PRESET=panel WORKER_CONCURRENCY=1
     export WORKER_ID="worker-$n" ENGINE_ROOT="$ROOT" DATABASE_URL="$database_url"
     export SESSION_SECRET="$session_secret" PROVIDER_SECRETS_FILE="$state/secrets/providers.json"
     export REPORTS_ROOT="$state/reports" REPORTS_BASE_URL="$reports_base_url" RUNS_ROOT="$state/runs"
-    export CHAIN_ADAPTER=mock GITHUB_ADAPTER=live CONTRACT_ID="$contract_id" NETWORK="$network"
-    export INTAKE_RECIPIENT="$recipient"
+    export GITHUB_ADAPTER=live
+    # NEAR_LOCAL=1: the home-page quote is the scripted preset. The cli runner
+    # refuses that preset, so the local sandbox demo uses the mock engine and
+    # still attests on the sandbox registry. The host worker uses 127.0.0.1:3030
+    # and the operator key. Do not pass host.docker.internal; that name is for
+    # the API container only.
+    if [ "${NEAR_LOCAL:-0}" = 1 ]; then
+      export ENGINE_RUNNER=mock
+      export NEAR_NETWORK=sandbox NETWORK=sandbox CHAIN_ADAPTER=near
+      export CONTRACT_ID=registry.test.near INTAKE_RECIPIENT=treasury.test.near
+      unset RPC_URLS
+    else
+      export ENGINE_RUNNER=cli
+      unset NEAR_NETWORK RPC_URLS
+      export CHAIN_ADAPTER=mock CONTRACT_ID="$contract_id" NETWORK="$network"
+      export INTAKE_RECIPIENT="$recipient"
+    fi
     cd "$ROOT"
     exec npm run worker -w @omniswarm/api
   ) > "$state/workers/worker-$n.log" 2>&1 &

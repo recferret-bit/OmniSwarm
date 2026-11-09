@@ -227,7 +227,7 @@ near contract call-function as-read-only <contract-id> get_attestation json-args
 **Status.** Every step above is covered by tests on mocks: a mock chain in Postgres, recorded GitHub answers, a mock engine runner, MSW in the browser and a mock wallet (`CHAIN_ADAPTER`, `GITHUB_ADAPTER`, `ENGINE_RUNNER`, `NEXT_PUBLIC_API_MOCK`, `NEXT_PUBLIC_WALLET`). Nothing has run against testnet yet, there is no hosted demo URL yet, and these known gaps remain:
 
 - The web app's report page calls `GET /api/reports/:id`, which only the MSW mock serves; the API does not register that route.
-- `npm run stack:local` serves HTTP on `http://omniswarm.localhost:18480/`. The account at `/dashboard` queues a review with no NEAR payment. The workers it starts run `ENGINE_RUNNER=cli` and `HOSTED_PRESET=panel` (GLM 5.3 plus Qwen, plus any models the account added). Keys come from `/admin`, not from the shell. The home page still offers the NEAR wallet flow.
+- `npm run stack:local` serves HTTP on `http://omniswarm.localhost:18480/`. It defaults to the local NEAR sandbox: the home page pays `request_review` with the dev wallet, and the two host workers use `ENGINE_RUNNER=mock` so that scripted review can finish. `NEAR_LOCAL=0` keeps the mock chain, `ENGINE_RUNNER=cli`, and `HOSTED_PRESET=panel`. Dashboard jobs still ask for the Z.AI and OpenRouter keys on `/admin` before they queue. On the sandbox, the dashboard pays with the seeded `bob.test.near` key and the worker writes the recorded report.
 
 ## NEAR
 

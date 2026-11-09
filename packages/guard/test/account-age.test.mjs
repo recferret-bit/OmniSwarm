@@ -23,7 +23,7 @@ const check = (accountAge, account = 'clean.testnet', base = readerWithoutAge())
 function fakeNearBlocks(bodies) {
   const calls = [];
   const fetch = async (url, init) => {
-    calls.push({ url: String(url), auth: init.headers.authorization, signal: init.signal });
+    calls.push({ url: String(url), auth: init.headers.authorization, signal: init.signal, redirect: init.redirect });
     const id = decodeURIComponent(String(url).split('/').pop());
     const body = bodies[id];
     if (typeof body === 'number') return { ok: false, status: body, json: async () => ({}) };
@@ -76,6 +76,23 @@ test('the flag is off by default and refuses unknown providers', () => {
   assert.equal(accountAgeFromConfig({ provider: 'off', network: 'testnet' }), undefined);
   assert.throws(() => accountAgeFromConfig({ provider: 'fastnear', network: 'testnet' }), /unknown account age provider/);
   assert.throws(() => accountAgeFromConfig({ provider: 'nearblocks' }), /network/);
+});
+
+test('nearblocks sandbox uses an explicit base URL and never the public host', async () => {
+  assert.throws(() => nearblocksAgeSource({ network: 'sandbox' }), /baseUrl/);
+  assert.throws(() => accountAgeFromConfig({ provider: 'nearblocks', network: 'sandbox' }), /baseUrl/);
+  const { fetch, calls } = fakeNearBlocks({});
+  assert.throws(() => nearblocksAgeSource({ network: 'sandbox', baseUrl: 'https://api.nearblocks.io', fetch }), /public NearBlocks/);
+  assert.throws(() => nearblocksAgeSource({ network: 'sandbox', baseUrl: 'https://api-testnet.nearblocks.io/v1', fetch }), /public NearBlocks/);
+  assert.equal(calls.length, 0);
+  const local = fakeNearBlocks({ 'good-dex.test.near': createdBody(NOW - 400 * DAY), 'clean.testnet': createdBody(NOW - 400 * DAY) });
+  const source = accountAgeFromConfig({ provider: 'nearblocks', network: 'sandbox', baseUrl: 'http://127.0.0.1:3181', fetch: local.fetch });
+  assert.equal(await source.getCreatedAtMs('good-dex.test.near'), NOW - 400 * DAY);
+  assert.equal(local.calls[0].url, 'http://127.0.0.1:3181/v1/account/good-dex.test.near');
+  assert.equal(local.calls[0].auth, undefined);
+  assert.equal(local.calls[0].redirect, 'error');
+  const result = await check(nearblocksAgeSource({ network: 'sandbox', baseUrl: 'http://127.0.0.1:3181', fetch: local.fetch }));
+  assert.deepEqual([result.verdict, result.reasons], ['allow', ['ATTESTED_CLEAN']]);
 });
 
 test('nearblocks: network base URL, optional bearer key, timeout signal', async () => {

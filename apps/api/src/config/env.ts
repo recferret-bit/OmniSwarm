@@ -48,8 +48,13 @@ export const envSchema = z.object({
   ADMIN_BASIC_PASSWORD: z.string().min(8).optional(),
   PROVIDER_SECRETS_FILE: absPath.optional(),
 
-  NETWORK: z.enum(['testnet', 'mainnet']).default('testnet'),
+  NETWORK: z.enum(['testnet', 'mainnet', 'sandbox']).default('testnet'),
+  // Local near-sandbox switch. `sandbox` outside production is applied in load.ts.
+  // productionIssues refuses it. Any other value leaves NETWORK alone.
+  NEAR_NETWORK: z.enum(['testnet', 'mainnet', 'sandbox']).optional(),
   // Price on NETWORK. Testnet defaults to 1 NEAR (OD-08); mainnet has no default, so it stays off unless priced.
+  // `sandbox` is the local near-sandbox only. productionIssues refuses it. The 1 NEAR sandbox
+  // default is applied with NEAR_NETWORK=sandbox, not for a bare NETWORK=sandbox.
   PRICE_YOCTO: z.string().regex(YOCTO).optional(),
   INTAKE_RECIPIENT: z.string().regex(ACCOUNT_ID).optional(),
   CONTRACT_ID: z.string().regex(ACCOUNT_ID).optional(),

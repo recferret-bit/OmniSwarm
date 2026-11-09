@@ -131,6 +131,10 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+    # The API calls NEAR RPC. host-gateway makes host.docker.internal resolve
+    # on Linux; Docker Desktop already does. The sandbox binds 0.0.0.0:3030.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks: [db, edge]
 
   web:

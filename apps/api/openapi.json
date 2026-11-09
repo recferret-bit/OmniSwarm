@@ -27,7 +27,8 @@
                       "type": "string",
                       "enum": [
                         "testnet",
-                        "mainnet"
+                        "mainnet",
+                        "sandbox"
                       ]
                     },
                     "queueDepth": {
@@ -48,6 +49,11 @@
                         },
                         "contract": {
                           "type": "boolean"
+                        },
+                        "blockHeight": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
                         }
                       },
                       "required": [
@@ -280,7 +286,8 @@
                     "type": "string",
                     "enum": [
                       "testnet",
-                      "mainnet"
+                      "mainnet",
+                      "sandbox"
                     ]
                   },
                   "ref": {
@@ -335,6 +342,17 @@
                       "type": "integer",
                       "minimum": 0,
                       "maximum": 9007199254740991
+                    },
+                    "sizeKb": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "large": {
+                      "type": "boolean"
+                    },
+                    "freeChecks": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
@@ -939,6 +957,10 @@
                           "createdAt": {
                             "type": "string",
                             "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:.]+Z$"
+                          },
+                          "theme": {
+                            "type": "string",
+                            "minLength": 1
                           }
                         },
                         "required": [
@@ -1105,7 +1127,7 @@
                     },
                     "reportUrl": {
                       "type": "string",
-                      "pattern": "^https:\\/\\/[^\\s]+$"
+                      "pattern": "^https?:\\/\\/[^\\s]+$"
                     },
                     "reportSha256": {
                       "type": "string",
@@ -1119,6 +1141,10 @@
                       "minLength": 1
                     },
                     "refundTx": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "failureCause": {
                       "type": "string",
                       "minLength": 1
                     },
@@ -1702,7 +1728,8 @@
               "type": "string",
               "enum": [
                 "testnet",
-                "mainnet"
+                "mainnet",
+                "sandbox"
               ]
             },
             "in": "query",
@@ -2305,7 +2332,7 @@
                     },
                     "reportUrl": {
                       "type": "string",
-                      "pattern": "^https:\\/\\/[^\\s]+$"
+                      "pattern": "^https?:\\/\\/[^\\s]+$"
                     },
                     "reportSha256": {
                       "type": "string",
@@ -2319,7 +2346,7 @@
                     },
                     "generalReviewUrl": {
                       "type": "string",
-                      "pattern": "^https:\\/\\/[^\\s]+$"
+                      "pattern": "^https?:\\/\\/[^\\s]+$"
                     },
                     "attestation": {
                       "type": "object",
@@ -2869,6 +2896,471 @@
         }
       }
     },
+    "/api/free/jobs": {
+      "post": {
+        "summary": "Queue a review with no payment while free checks are on",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "repo": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 300
+                  },
+                  "models": {
+                    "maxItems": 4,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "opus",
+                        "sol",
+                        "argon",
+                        "grok"
+                      ]
+                    }
+                  },
+                  "scopes": {
+                    "maxItems": 3,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "full",
+                        "web2",
+                        "web3"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "repo"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "requestId": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+                    },
+                    "repo": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9-]{1,39}\\/[A-Za-z0-9._-]{1,100}$"
+                    },
+                    "commitSha": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{40}$"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "queued"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "requestId",
+                    "repo",
+                    "commitSha",
+                    "status"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "VALIDATION_ERROR",
+                            "MESSAGE_INVALID",
+                            "REPO_INVALID",
+                            "REPO_PRIVATE",
+                            "REPO_ARCHIVED",
+                            "REPO_TOO_LARGE",
+                            "REPO_DENIED",
+                            "REPO_NOT_FOUND",
+                            "REF_NOT_FOUND",
+                            "REF_CHANGED",
+                            "NETWORK_DISABLED",
+                            "PRESET_NOT_ALLOWED",
+                            "PAYLOAD_TOO_LARGE",
+                            "QUEUE_FULL",
+                            "NONCE_EXPIRED",
+                            "NONCE_USED",
+                            "NONCE_UNKNOWN",
+                            "SIG_INVALID",
+                            "KEY_NOT_FULL_ACCESS",
+                            "ACCOUNT_MISMATCH",
+                            "UNAUTHORIZED",
+                            "FORBIDDEN",
+                            "PAYMENT_NOT_FOUND",
+                            "PAYMENT_MISMATCH",
+                            "PAYMENT_SIGNER_MISMATCH",
+                            "TX_ALREADY_USED",
+                            "ACTIVE_REQUEST_EXISTS",
+                            "INVALID_TRANSITION",
+                            "REFUND_NOT_ALLOWED",
+                            "RATE_LIMITED",
+                            "NOT_FOUND",
+                            "REQUEST_NOT_FOUND",
+                            "CHAIN_UNAVAILABLE",
+                            "GITHUB_UNAVAILABLE",
+                            "INTERNAL"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 2000
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "retryable"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "VALIDATION_ERROR",
+                            "MESSAGE_INVALID",
+                            "REPO_INVALID",
+                            "REPO_PRIVATE",
+                            "REPO_ARCHIVED",
+                            "REPO_TOO_LARGE",
+                            "REPO_DENIED",
+                            "REPO_NOT_FOUND",
+                            "REF_NOT_FOUND",
+                            "REF_CHANGED",
+                            "NETWORK_DISABLED",
+                            "PRESET_NOT_ALLOWED",
+                            "PAYLOAD_TOO_LARGE",
+                            "QUEUE_FULL",
+                            "NONCE_EXPIRED",
+                            "NONCE_USED",
+                            "NONCE_UNKNOWN",
+                            "SIG_INVALID",
+                            "KEY_NOT_FULL_ACCESS",
+                            "ACCOUNT_MISMATCH",
+                            "UNAUTHORIZED",
+                            "FORBIDDEN",
+                            "PAYMENT_NOT_FOUND",
+                            "PAYMENT_MISMATCH",
+                            "PAYMENT_SIGNER_MISMATCH",
+                            "TX_ALREADY_USED",
+                            "ACTIVE_REQUEST_EXISTS",
+                            "INVALID_TRANSITION",
+                            "REFUND_NOT_ALLOWED",
+                            "RATE_LIMITED",
+                            "NOT_FOUND",
+                            "REQUEST_NOT_FOUND",
+                            "CHAIN_UNAVAILABLE",
+                            "GITHUB_UNAVAILABLE",
+                            "INTERNAL"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 2000
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "retryable"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "VALIDATION_ERROR",
+                            "MESSAGE_INVALID",
+                            "REPO_INVALID",
+                            "REPO_PRIVATE",
+                            "REPO_ARCHIVED",
+                            "REPO_TOO_LARGE",
+                            "REPO_DENIED",
+                            "REPO_NOT_FOUND",
+                            "REF_NOT_FOUND",
+                            "REF_CHANGED",
+                            "NETWORK_DISABLED",
+                            "PRESET_NOT_ALLOWED",
+                            "PAYLOAD_TOO_LARGE",
+                            "QUEUE_FULL",
+                            "NONCE_EXPIRED",
+                            "NONCE_USED",
+                            "NONCE_UNKNOWN",
+                            "SIG_INVALID",
+                            "KEY_NOT_FULL_ACCESS",
+                            "ACCOUNT_MISMATCH",
+                            "UNAUTHORIZED",
+                            "FORBIDDEN",
+                            "PAYMENT_NOT_FOUND",
+                            "PAYMENT_MISMATCH",
+                            "PAYMENT_SIGNER_MISMATCH",
+                            "TX_ALREADY_USED",
+                            "ACTIVE_REQUEST_EXISTS",
+                            "INVALID_TRANSITION",
+                            "REFUND_NOT_ALLOWED",
+                            "RATE_LIMITED",
+                            "NOT_FOUND",
+                            "REQUEST_NOT_FOUND",
+                            "CHAIN_UNAVAILABLE",
+                            "GITHUB_UNAVAILABLE",
+                            "INTERNAL"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 2000
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "retryable"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "VALIDATION_ERROR",
+                            "MESSAGE_INVALID",
+                            "REPO_INVALID",
+                            "REPO_PRIVATE",
+                            "REPO_ARCHIVED",
+                            "REPO_TOO_LARGE",
+                            "REPO_DENIED",
+                            "REPO_NOT_FOUND",
+                            "REF_NOT_FOUND",
+                            "REF_CHANGED",
+                            "NETWORK_DISABLED",
+                            "PRESET_NOT_ALLOWED",
+                            "PAYLOAD_TOO_LARGE",
+                            "QUEUE_FULL",
+                            "NONCE_EXPIRED",
+                            "NONCE_USED",
+                            "NONCE_UNKNOWN",
+                            "SIG_INVALID",
+                            "KEY_NOT_FULL_ACCESS",
+                            "ACCOUNT_MISMATCH",
+                            "UNAUTHORIZED",
+                            "FORBIDDEN",
+                            "PAYMENT_NOT_FOUND",
+                            "PAYMENT_MISMATCH",
+                            "PAYMENT_SIGNER_MISMATCH",
+                            "TX_ALREADY_USED",
+                            "ACTIVE_REQUEST_EXISTS",
+                            "INVALID_TRANSITION",
+                            "REFUND_NOT_ALLOWED",
+                            "RATE_LIMITED",
+                            "NOT_FOUND",
+                            "REQUEST_NOT_FOUND",
+                            "CHAIN_UNAVAILABLE",
+                            "GITHUB_UNAVAILABLE",
+                            "INTERNAL"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 2000
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "retryable"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "VALIDATION_ERROR",
+                            "MESSAGE_INVALID",
+                            "REPO_INVALID",
+                            "REPO_PRIVATE",
+                            "REPO_ARCHIVED",
+                            "REPO_TOO_LARGE",
+                            "REPO_DENIED",
+                            "REPO_NOT_FOUND",
+                            "REF_NOT_FOUND",
+                            "REF_CHANGED",
+                            "NETWORK_DISABLED",
+                            "PRESET_NOT_ALLOWED",
+                            "PAYLOAD_TOO_LARGE",
+                            "QUEUE_FULL",
+                            "NONCE_EXPIRED",
+                            "NONCE_USED",
+                            "NONCE_UNKNOWN",
+                            "SIG_INVALID",
+                            "KEY_NOT_FULL_ACCESS",
+                            "ACCOUNT_MISMATCH",
+                            "UNAUTHORIZED",
+                            "FORBIDDEN",
+                            "PAYMENT_NOT_FOUND",
+                            "PAYMENT_MISMATCH",
+                            "PAYMENT_SIGNER_MISMATCH",
+                            "TX_ALREADY_USED",
+                            "ACTIVE_REQUEST_EXISTS",
+                            "INVALID_TRANSITION",
+                            "REFUND_NOT_ALLOWED",
+                            "RATE_LIMITED",
+                            "NOT_FOUND",
+                            "REQUEST_NOT_FOUND",
+                            "CHAIN_UNAVAILABLE",
+                            "GITHUB_UNAVAILABLE",
+                            "INTERNAL"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 2000
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "retryable"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/dashboard/jobs": {
       "post": {
         "summary": "Queue a GitHub review for the signed-in operator (mock chain only)",
@@ -2883,6 +3375,31 @@
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 300
+                  },
+                  "models": {
+                    "maxItems": 4,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "opus",
+                        "sol",
+                        "argon",
+                        "grok"
+                      ]
+                    }
+                  },
+                  "scopes": {
+                    "maxItems": 3,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "full",
+                        "web2",
+                        "web3"
+                      ]
+                    }
                   }
                 },
                 "required": [
@@ -4332,6 +4849,668 @@
             }
           },
           "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "VALIDATION_ERROR",
+                            "MESSAGE_INVALID",
+                            "REPO_INVALID",
+                            "REPO_PRIVATE",
+                            "REPO_ARCHIVED",
+                            "REPO_TOO_LARGE",
+                            "REPO_DENIED",
+                            "REPO_NOT_FOUND",
+                            "REF_NOT_FOUND",
+                            "REF_CHANGED",
+                            "NETWORK_DISABLED",
+                            "PRESET_NOT_ALLOWED",
+                            "PAYLOAD_TOO_LARGE",
+                            "QUEUE_FULL",
+                            "NONCE_EXPIRED",
+                            "NONCE_USED",
+                            "NONCE_UNKNOWN",
+                            "SIG_INVALID",
+                            "KEY_NOT_FULL_ACCESS",
+                            "ACCOUNT_MISMATCH",
+                            "UNAUTHORIZED",
+                            "FORBIDDEN",
+                            "PAYMENT_NOT_FOUND",
+                            "PAYMENT_MISMATCH",
+                            "PAYMENT_SIGNER_MISMATCH",
+                            "TX_ALREADY_USED",
+                            "ACTIVE_REQUEST_EXISTS",
+                            "INVALID_TRANSITION",
+                            "REFUND_NOT_ALLOWED",
+                            "RATE_LIMITED",
+                            "NOT_FOUND",
+                            "REQUEST_NOT_FOUND",
+                            "CHAIN_UNAVAILABLE",
+                            "GITHUB_UNAVAILABLE",
+                            "INTERNAL"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 2000
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "retryable"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/review-settings": {
+      "get": {
+        "summary": "Whether free reviews are on",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "freeChecks": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "freeChecks"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/operator/activity": {
+      "get": {
+        "summary": "Every account and its review jobs",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "freeChecks": {
+                      "type": "boolean"
+                    },
+                    "jobs": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "account": {
+                            "type": "string"
+                          },
+                          "repo": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "scope": {
+                            "type": "string"
+                          },
+                          "theme": {
+                            "nullable": true,
+                            "type": "string"
+                          },
+                          "parentId": {
+                            "nullable": true,
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "failureCause": {
+                            "nullable": true,
+                            "type": "string"
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "account",
+                          "repo",
+                          "status",
+                          "scope",
+                          "theme",
+                          "parentId",
+                          "failureCause",
+                          "createdAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "freeChecks",
+                    "jobs"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "VALIDATION_ERROR",
+                            "MESSAGE_INVALID",
+                            "REPO_INVALID",
+                            "REPO_PRIVATE",
+                            "REPO_ARCHIVED",
+                            "REPO_TOO_LARGE",
+                            "REPO_DENIED",
+                            "REPO_NOT_FOUND",
+                            "REF_NOT_FOUND",
+                            "REF_CHANGED",
+                            "NETWORK_DISABLED",
+                            "PRESET_NOT_ALLOWED",
+                            "PAYLOAD_TOO_LARGE",
+                            "QUEUE_FULL",
+                            "NONCE_EXPIRED",
+                            "NONCE_USED",
+                            "NONCE_UNKNOWN",
+                            "SIG_INVALID",
+                            "KEY_NOT_FULL_ACCESS",
+                            "ACCOUNT_MISMATCH",
+                            "UNAUTHORIZED",
+                            "FORBIDDEN",
+                            "PAYMENT_NOT_FOUND",
+                            "PAYMENT_MISMATCH",
+                            "PAYMENT_SIGNER_MISMATCH",
+                            "TX_ALREADY_USED",
+                            "ACTIVE_REQUEST_EXISTS",
+                            "INVALID_TRANSITION",
+                            "REFUND_NOT_ALLOWED",
+                            "RATE_LIMITED",
+                            "NOT_FOUND",
+                            "REQUEST_NOT_FOUND",
+                            "CHAIN_UNAVAILABLE",
+                            "GITHUB_UNAVAILABLE",
+                            "INTERNAL"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 2000
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "retryable"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/operator/settings": {
+      "put": {
+        "summary": "Turn free reviews on or off",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "freeChecks": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "freeChecks"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "freeChecks": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "freeChecks"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "VALIDATION_ERROR",
+                            "MESSAGE_INVALID",
+                            "REPO_INVALID",
+                            "REPO_PRIVATE",
+                            "REPO_ARCHIVED",
+                            "REPO_TOO_LARGE",
+                            "REPO_DENIED",
+                            "REPO_NOT_FOUND",
+                            "REF_NOT_FOUND",
+                            "REF_CHANGED",
+                            "NETWORK_DISABLED",
+                            "PRESET_NOT_ALLOWED",
+                            "PAYLOAD_TOO_LARGE",
+                            "QUEUE_FULL",
+                            "NONCE_EXPIRED",
+                            "NONCE_USED",
+                            "NONCE_UNKNOWN",
+                            "SIG_INVALID",
+                            "KEY_NOT_FULL_ACCESS",
+                            "ACCOUNT_MISMATCH",
+                            "UNAUTHORIZED",
+                            "FORBIDDEN",
+                            "PAYMENT_NOT_FOUND",
+                            "PAYMENT_MISMATCH",
+                            "PAYMENT_SIGNER_MISMATCH",
+                            "TX_ALREADY_USED",
+                            "ACTIVE_REQUEST_EXISTS",
+                            "INVALID_TRANSITION",
+                            "REFUND_NOT_ALLOWED",
+                            "RATE_LIMITED",
+                            "NOT_FOUND",
+                            "REQUEST_NOT_FOUND",
+                            "CHAIN_UNAVAILABLE",
+                            "GITHUB_UNAVAILABLE",
+                            "INTERNAL"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 2000
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "retryable"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "VALIDATION_ERROR",
+                            "MESSAGE_INVALID",
+                            "REPO_INVALID",
+                            "REPO_PRIVATE",
+                            "REPO_ARCHIVED",
+                            "REPO_TOO_LARGE",
+                            "REPO_DENIED",
+                            "REPO_NOT_FOUND",
+                            "REF_NOT_FOUND",
+                            "REF_CHANGED",
+                            "NETWORK_DISABLED",
+                            "PRESET_NOT_ALLOWED",
+                            "PAYLOAD_TOO_LARGE",
+                            "QUEUE_FULL",
+                            "NONCE_EXPIRED",
+                            "NONCE_USED",
+                            "NONCE_UNKNOWN",
+                            "SIG_INVALID",
+                            "KEY_NOT_FULL_ACCESS",
+                            "ACCOUNT_MISMATCH",
+                            "UNAUTHORIZED",
+                            "FORBIDDEN",
+                            "PAYMENT_NOT_FOUND",
+                            "PAYMENT_MISMATCH",
+                            "PAYMENT_SIGNER_MISMATCH",
+                            "TX_ALREADY_USED",
+                            "ACTIVE_REQUEST_EXISTS",
+                            "INVALID_TRANSITION",
+                            "REFUND_NOT_ALLOWED",
+                            "RATE_LIMITED",
+                            "NOT_FOUND",
+                            "REQUEST_NOT_FOUND",
+                            "CHAIN_UNAVAILABLE",
+                            "GITHUB_UNAVAILABLE",
+                            "INTERNAL"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 2000
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "retryable"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/operator/providers": {
+      "get": {
+        "summary": "Whether the Z.AI and OpenRouter keys are set",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "zai": {
+                      "type": "object",
+                      "properties": {
+                        "set": {
+                          "type": "boolean"
+                        },
+                        "fingerprint": {
+                          "nullable": true,
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "set",
+                        "fingerprint"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "openrouter": {
+                      "type": "object",
+                      "properties": {
+                        "set": {
+                          "type": "boolean"
+                        },
+                        "fingerprint": {
+                          "nullable": true,
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "set",
+                        "fingerprint"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "zai",
+                    "openrouter"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "VALIDATION_ERROR",
+                            "MESSAGE_INVALID",
+                            "REPO_INVALID",
+                            "REPO_PRIVATE",
+                            "REPO_ARCHIVED",
+                            "REPO_TOO_LARGE",
+                            "REPO_DENIED",
+                            "REPO_NOT_FOUND",
+                            "REF_NOT_FOUND",
+                            "REF_CHANGED",
+                            "NETWORK_DISABLED",
+                            "PRESET_NOT_ALLOWED",
+                            "PAYLOAD_TOO_LARGE",
+                            "QUEUE_FULL",
+                            "NONCE_EXPIRED",
+                            "NONCE_USED",
+                            "NONCE_UNKNOWN",
+                            "SIG_INVALID",
+                            "KEY_NOT_FULL_ACCESS",
+                            "ACCOUNT_MISMATCH",
+                            "UNAUTHORIZED",
+                            "FORBIDDEN",
+                            "PAYMENT_NOT_FOUND",
+                            "PAYMENT_MISMATCH",
+                            "PAYMENT_SIGNER_MISMATCH",
+                            "TX_ALREADY_USED",
+                            "ACTIVE_REQUEST_EXISTS",
+                            "INVALID_TRANSITION",
+                            "REFUND_NOT_ALLOWED",
+                            "RATE_LIMITED",
+                            "NOT_FOUND",
+                            "REQUEST_NOT_FOUND",
+                            "CHAIN_UNAVAILABLE",
+                            "GITHUB_UNAVAILABLE",
+                            "INTERNAL"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 2000
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "retryable"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Set or clear the Z.AI and OpenRouter keys. Empty string clears. The key is not returned.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "zai": {
+                    "type": "string",
+                    "maxLength": 400
+                  },
+                  "openrouter": {
+                    "type": "string",
+                    "maxLength": 400
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "zai": {
+                      "type": "object",
+                      "properties": {
+                        "set": {
+                          "type": "boolean"
+                        },
+                        "fingerprint": {
+                          "nullable": true,
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "set",
+                        "fingerprint"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "openrouter": {
+                      "type": "object",
+                      "properties": {
+                        "set": {
+                          "type": "boolean"
+                        },
+                        "fingerprint": {
+                          "nullable": true,
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "set",
+                        "fingerprint"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "zai",
+                    "openrouter"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
             "description": "Default Response",
             "content": {
               "application/json": {

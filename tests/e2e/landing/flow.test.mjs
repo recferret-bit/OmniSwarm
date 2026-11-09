@@ -120,7 +120,7 @@ describe('landing on mocks', { concurrency: false }, () => {
     assert.equal(await read('report-hash'), recomputed);
     assert.equal(await read('attested-hash'), recomputed);
     assert.ok(await page.getByRole('link', { name: 'View the attest transaction' }).count());
-    assert.match(await page.getByTestId('binding-status').innerText(), /Binding not confirmed[\s\S]*guest-book\.testnet/);
+    assert.match(await page.getByTestId('binding-status').innerText(), /binding not confirmed[\s\S]*guest-book\.testnet/i);
     assert.equal(JSON.parse(signed.message).deployed, 'guest-book.testnet');
     assert.deepEqual(await axeViolations(page), []);
 
@@ -131,7 +131,7 @@ describe('landing on mocks', { concurrency: false }, () => {
 
     await page.getByRole('link', { name: 'My requests' }).click();
     await page.getByRole('list', { name: 'Your requests' }).waitFor();
-    assert.match(await page.getByRole('list', { name: 'Your requests' }).innerText(), /near-examples\/guest-book-examples[\s\S]*Done/);
+    assert.match(await page.getByRole('list', { name: 'Your requests' }).innerText(), /near-examples\/guest-book-examples[\s\S]*done/i);
   });
 
   test('failure paths: queue full, private repo, wallet reject + retry, payment lag, refund, SSE drop', { timeout: 120_000 }, async () => {

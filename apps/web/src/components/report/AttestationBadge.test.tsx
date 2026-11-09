@@ -32,6 +32,12 @@ describe('<AttestationBadge>', () => {
     expect(screen.queryByRole('link')).not.toBeInTheDocument();
   });
 
+  it('shows the API fallback label when the chain was not read', () => {
+    const state = done('match', 'b'.repeat(64));
+    render(<AttestationBadge state={{ phase: 'done', result: { ...state.result, label: 'via API, not independent' } }} />);
+    expect(screen.getByRole('status')).toHaveTextContent('via API, not independent');
+  });
+
   it('shows whether the deployed-account binding is confirmed (contract v0.2)', () => {
     const { rerender } = render(<AttestationBadge state={done('match', 'b'.repeat(64))} />);
     expect(screen.getByTestId('binding-status')).toHaveTextContent('No deployed contract account is bound');

@@ -11,7 +11,7 @@ export interface WalletState {
   accountId: string | null;
   error: AppErrorCode | null;
   restore(): Promise<void>;
-  connect(): Promise<void>;
+  connect(accountId?: string): Promise<void>;
   signOut(): Promise<void>;
 }
 
@@ -34,12 +34,12 @@ export function createWalletStore(connector: () => Promise<WalletConnector> = ge
         const accountId = await wallet.restore();
         set(accountId ? { status: 'connected', accountId, error: null } : { status: 'idle', accountId: null });
       },
-      async connect() {
+      async connect(chosen?: string) {
         set({ status: 'connecting', error: null });
         try {
           const wallet = await connector();
           listen(wallet);
-          const accountId = await wallet.connect();
+          const accountId = await wallet.connect(chosen);
           set({ status: 'connected', accountId, error: null });
         } catch (error) {
           set({ status: 'error', accountId: null, error: normalizeWalletError(error).code });

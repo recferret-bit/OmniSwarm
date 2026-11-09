@@ -5,7 +5,7 @@
   "description": "Request and response DTOs of every intake endpoint (INTAKE section 4). Validate one with validate('intake-api#<def>', value). Examples are named valid-<def>--<label>.json.",
   "$defs": {
     "account-id": {"type": "string", "pattern": "^[a-z0-9._-]{2,64}$"},
-    "network": {"enum": ["testnet", "mainnet"]},
+    "network": {"enum": ["testnet", "mainnet", "sandbox"]},
     "sha256-hex": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "commit-sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
     "repo": {"type": "string", "pattern": "^[A-Za-z0-9-]{1,39}/[A-Za-z0-9._-]{1,100}$"},
@@ -65,7 +65,8 @@
         "preset": {"type": "string", "pattern": "^[a-z0-9-]{1,40}$"},
         "etaMinutes": {"type": "integer", "minimum": 0},
         "sizeKb": {"type": "integer", "minimum": 0},
-        "large": {"type": "boolean"}
+        "large": {"type": "boolean"},
+        "freeChecks": {"type": "boolean"}
       }
     },
     "create-request-body": {
@@ -123,11 +124,12 @@
         "status": {"$ref": "#/$defs/status"},
         "progress": {"$ref": "#/$defs/progress"},
         "position": {"type": "integer", "minimum": 1, "description": "Rank among queued requests; only while queued"},
-        "reportUrl": {"type": "string", "pattern": "^https://[^\\s]+$"},
+        "reportUrl": {"type": "string", "pattern": "^https?://[^\\s]+$"},
         "reportSha256": {"$ref": "#/$defs/sha256-hex"},
         "incomplete": {"type": "boolean", "description": "The report was published with report-health state incomplete"},
         "attestTx": {"type": "string", "minLength": 1},
         "refundTx": {"type": "string", "minLength": 1},
+        "failureCause": {"type": "string", "minLength": 1},
         "timeline": {
           "type": "array",
           "maxItems": 50,
@@ -162,7 +164,8 @@
               "requestId": {"$ref": "#/$defs/uuid"},
               "repo": {"$ref": "#/$defs/repo"},
               "status": {"$ref": "#/$defs/status"},
-              "createdAt": {"$ref": "#/$defs/timestamp"}
+              "createdAt": {"$ref": "#/$defs/timestamp"},
+              "theme": {"type": "string", "minLength": 1}
             }
           }
         }
@@ -174,10 +177,10 @@
       "additionalProperties": false,
       "properties": {
         "requestId": {"$ref": "#/$defs/uuid"},
-        "reportUrl": {"type": "string", "pattern": "^https://[^\\s]+$"},
+        "reportUrl": {"type": "string", "pattern": "^https?://[^\\s]+$"},
         "reportSha256": {"$ref": "#/$defs/sha256-hex"},
         "reviewers": {"type": "array", "items": {"type": "string"}},
-        "generalReviewUrl": {"type": "string", "pattern": "^https://[^\\s]+$"},
+        "generalReviewUrl": {"type": "string", "pattern": "^https?://[^\\s]+$"},
         "attestation": {"$ref": "attestation.schema.json"}
       }
     },
@@ -294,7 +297,11 @@
           "type": "object",
           "required": ["rpc", "contract"],
           "additionalProperties": false,
-          "properties": {"rpc": {"type": "boolean"}, "contract": {"type": "boolean"}}
+          "properties": {
+            "rpc": {"type": "boolean"},
+            "contract": {"type": "boolean"},
+            "blockHeight": {"type": "integer", "minimum": 0, "description": "Latest block when the near adapter can read one"}
+          }
         }
       },
       "description": "GET /api/health: liveness plus status. chain.rpc/contract come from ChainPort.health (cached 30 s); workers counts live pg-boss worker instances."

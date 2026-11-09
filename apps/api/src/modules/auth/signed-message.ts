@@ -10,7 +10,7 @@ const messageSchema = z.strictObject({
   account: accountId,
   commit: commitSha,
   deployed: accountId.nullable(),
-  network: z.enum(['testnet', 'mainnet']),
+  network: z.enum(['testnet', 'mainnet', 'sandbox']),
   nonce,
   preset,
   repo,

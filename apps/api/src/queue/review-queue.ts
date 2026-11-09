@@ -19,7 +19,7 @@ export interface ReviewJob {
   repo: string;
   commitSha: string;
   preset: string;
-  network: 'testnet' | 'mainnet';
+  network: 'testnet' | 'mainnet' | 'sandbox';
 }
 
 export class JobContractError extends Error {

@@ -13,9 +13,16 @@ function txHashOf(outcome: unknown): string {
   return hash;
 }
 
+// near-connect only accepts mainnet and testnet. sandbox is the local dev wallet (W15-07).
+function walletNetwork(network: typeof env.network): 'mainnet' | 'testnet' {
+  if (network === 'mainnet' || network === 'testnet') return network;
+  throw new AppError('WALLET_UNAVAILABLE', 'sandbox uses the local dev wallet, not near-connect');
+}
+
 export function createNearConnector(): WalletConnector {
+  const network = walletNetwork(env.network);
   const connector = new NearConnector({
-    network: env.network,
+    network,
     // NEAR Mobile's executor throws unless the network is mainnet, and its
     // manifest sets testnet: false. near-connect then omits it on testnet.
     // Do not force that flag; a listed wallet that cannot sign is a dead end.
@@ -42,7 +49,7 @@ export function createNearConnector(): WalletConnector {
     async connect() {
       try {
         const connected = await connector.connect();
-        const accounts = await connected.getAccounts({ network: env.network });
+        const accounts = await connected.getAccounts({ network });
         const accountId = accounts[0]?.accountId;
         if (!accountId) throw new AppError('WALLET_UNAVAILABLE', 'The wallet returned no account');
         return accountId;
@@ -56,7 +63,7 @@ export function createNearConnector(): WalletConnector {
     async signMessage(input: SignMessageInput) {
       const active = await wallet();
       try {
-        const signed = await active.signMessage({ ...input, network: env.network });
+        const signed = await active.signMessage({ ...input, network });
         return { accountId: signed.accountId, publicKey: signed.publicKey, signature: signed.signature };
       } catch (error) {
         throw normalizeWalletError(error);
@@ -65,7 +72,7 @@ export function createNearConnector(): WalletConnector {
     async signAndSendTransaction(tx: PaymentTransaction) {
       const active = await wallet();
       try {
-        const outcome = await active.signAndSendTransaction({ network: env.network, receiverId: tx.receiverId, actions: tx.actions });
+        const outcome = await active.signAndSendTransaction({ network, receiverId: tx.receiverId, actions: tx.actions });
         return { txHash: txHashOf(outcome) };
       } catch (error) {
         throw normalizeWalletError(error);
