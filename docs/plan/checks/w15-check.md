@@ -12,7 +12,7 @@ The first run downloads the nearcore 2.14.0 `near-sandbox` binary into `infra/co
 npm run check:w15
 ```
 
-This starts the sandbox on `127.0.0.1:3030`, seeds `registry.test.near`, starts the indexer on `3031`, and runs the parity test, the headless flow, the snapshot attack demo, and `run.mjs --sandbox`. It stops the node on the way out.
+This starts the sandbox on `127.0.0.1:3030`, seeds `registry.test.near`, starts the indexer on `3031`, and runs the parity test, the headless flow, the snapshot attack demo, and `run.mjs --sandbox`. It stops the node on the way out. Set `DATABASE_URL` to a Postgres server the flow may create a throwaway database on. Without it the headless flow does not run and the check fails.
 
 Expect every parity row `same`. The headless flow prints tx hashes and a report-hash match. `good-dex.test.near` on a fresh sandbox is `warn` with `ACCOUNT_TOO_NEW` (the account is younger than 30 days). `drained-vault` is `block`. `phish` is `block` with `REPORTED`. The sandbox attack demo prints `refused_before_signing` and signer calls 0.
 

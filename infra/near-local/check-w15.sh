@@ -37,6 +37,20 @@ done
 [ "$ready" = 1 ] || { echo "indexer did not answer on 3031" >&2; exit 1; }
 
 npm run test:intake -- parity
-node --test tests/e2e/near-local/flow.test.mjs
+flow_log="$(mktemp)"
+set +e
+node --test tests/e2e/near-local/flow.test.mjs | tee "$flow_log"
+flow_status=${PIPESTATUS[0]}
+set -e
+if [ "$flow_status" -ne 0 ]; then
+  rm -f "$flow_log"
+  exit "$flow_status"
+fi
+if grep -q 'skipped' "$flow_log" && grep -q 'pass 0' "$flow_log"; then
+  echo "headless flow did not run. Set DATABASE_URL to a Postgres you can create a database on." >&2
+  rm -f "$flow_log"
+  exit 1
+fi
+rm -f "$flow_log"
 node packages/guard/demo/attack/run.mjs
 node packages/guard/demo/attack/run.mjs --sandbox
