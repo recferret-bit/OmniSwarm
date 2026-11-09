@@ -15,10 +15,11 @@ NEAR_PID="$NEAR_ROOT/near-sandbox.pid"
 NEAR_LOG="$NEAR_ROOT/near-sandbox.log"
 
 NEAR_SANDBOX_VERSION=2.14.0
-RPC_ADDR="0.0.0.0:3030"
-RPC_PORT=3030
-NETWORK_ADDR="127.0.0.1:24567"
-NETWORK_PORT=24567
+# NEAR_LOCAL_RPC_PORT / NEAR_LOCAL_NET_PORT let two local nodes run at once.
+RPC_PORT="${NEAR_LOCAL_RPC_PORT:-3030}"
+NETWORK_PORT="${NEAR_LOCAL_NET_PORT:-24567}"
+RPC_ADDR="0.0.0.0:${RPC_PORT}"
+NETWORK_ADDR="127.0.0.1:${NETWORK_PORT}"
 RPC_URL="http://127.0.0.1:${RPC_PORT}/status"
 
 subs=(up down status reset seed view call redeploy)

@@ -265,9 +265,21 @@ async function main() {
   nearLocal('up');
   if (!reset && await isAlreadySeeded()) {
     console.log('already seeded');
+    await seedGuardIfPresent();
     return;
   }
   await seed();
+  await seedGuardIfPresent();
+}
+
+async function seedGuardIfPresent() {
+  try {
+    const guard = await import('./seed-guard.mjs');
+    if (typeof guard.seedGuard === 'function') await guard.seedGuard();
+  } catch (error) {
+    if (error && error.code === 'ERR_MODULE_NOT_FOUND') return;
+    throw error;
+  }
 }
 
 main().catch((error) => {

@@ -1,7 +1,8 @@
 // Sandbox RPC. Views take no signer and never read a key file.
 import { JsonRpcProvider } from 'near-api-js';
 
-export const RPC_URL = 'http://127.0.0.1:3030';
+export const RPC_PORT = process.env.NEAR_LOCAL_RPC_PORT || '3030';
+export const RPC_URL = `http://127.0.0.1:${RPC_PORT}`;
 export const NETWORK = 'sandbox';
 export const CONTRACT_ID = 'registry.test.near';
 export const MASTER_ID = 'test.near';
