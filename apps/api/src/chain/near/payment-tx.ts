@@ -44,9 +44,12 @@ export function parsePaymentTx(txHash: string, raw: unknown): PaymentTx {
   };
 }
 
-/** The contract panic code (ERR_*) of a failed outcome; null when the tx succeeded. */
+/** The contract panic code (ERR_*) of a failed outcome; null when the final status is a success value.
+ * A bounced refund still finishes as SuccessValue false: the transfer receipt fails and the callback
+ * returns false. That is not a panic (`parsePaymentTx` still rejects any failed receipt). */
 export function panicReason(raw: unknown): string | null {
   const response = (raw ?? {}) as TxResponse;
+  if (response.status && 'SuccessValue' in response.status) return null;
   if (!failed(response)) return null;
   return /ERR_[A-Z_]+/.exec(JSON.stringify(response))?.[0] ?? 'ERR_TX_FAILED';
 }

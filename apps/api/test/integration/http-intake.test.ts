@@ -165,9 +165,10 @@ describe('intake HTTP API', NEEDS_DB, () => {
     const pending = await call(api.base, `/api/requests/${created.requestId}/payment`, { method: 'POST', body: { txHash: '1'.repeat(44) }, cookie: created.cookie });
     assert.equal(pending.body.error.code, 'PAYMENT_NOT_FOUND');
     const stranger = await payRequestReview(api.deps.pool, { signer: 'mallory.mock', receiver: CONTRACT, requestHash: '9'.repeat(64), depositYocto: PRICE });
+    // The mock looks the tx up by the request account, as the tx RPC does, so another signer's tx is not found.
     const signer = await call(api.base, `/api/requests/${created.requestId}/payment`, { method: 'POST', body: { txHash: stranger }, cookie: created.cookie });
-    assert.equal(signer.status, 403);
-    assert.equal(signer.body.error.code, 'PAYMENT_SIGNER_MISMATCH');
+    assert.equal(signer.status, 402);
+    assert.equal(signer.body.error.code, 'PAYMENT_NOT_FOUND');
     const noCookie = await call(api.base, `/api/requests/${created.requestId}/payment`, { method: 'POST', body: { txHash: stranger } });
     assert.equal(noCookie.status, 401);
     const txHash = await pay(api.deps.pool, created, dev.accountId);

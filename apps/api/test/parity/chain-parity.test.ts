@@ -1,6 +1,5 @@
 // One scenario table through MockChainAdapter and NearChainAdapter.
-// Diffs ok, the error code, status and event names. The mock is left as it is:
-// a row that is not `same` names the field W15-14 still has to close.
+// Diffs ok, the error code, status and event names. Every row is `same`.
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
@@ -116,6 +115,8 @@ test('chain parity', sandboxUp ? { timeout: 300_000 } : { skip: SKIP, timeout: 3
   assert.equal(happy?.near.status, 'Done');
   assert.equal(happy?.mock.ok, true, JSON.stringify(happy?.mock));
   assert.equal(happy?.mock.status, 'Done');
+  const drifted = rows.filter((row) => (['ok', 'error', 'status', 'events'] as const).some((field) => !sameField(row, field)));
+  assert.deepEqual(drifted.map((row) => row.scenario), [], table);
   await near.close();
 });
 
@@ -344,8 +345,8 @@ class NearLane implements Lane {
   }
 
   async deleteAccount(accountId: string): Promise<void> {
-    // The delete succeeds, then the gas refund receipt fails because the account is already gone.
-    // That receipt is not a failed delete. panicReason would treat it as one.
+    // The delete's final status is SuccessValue. A later gas-refund receipt fails because the
+    // account is already gone. That receipt is not a failed delete.
     const response = await this.#signers.get(accountId).signAndSendTransaction({
       receiverId: accountId,
       actions: [actions.deleteAccount(TREASURY)],
@@ -426,12 +427,10 @@ class MockLane implements Lane {
     }).then(() => {});
   }
 
-  // mock-ledger may later export retractReport(db, accountId). Until then the report stays.
   async retract(accountId: string): Promise<void> {
     await ledgerCall('retractReport', [this.#pool, accountId]);
   }
 
-  // mock-ledger may later export confirmBinding(db, requestHash, accountId).
   async confirmBinding(accountId: string, requestHashValue: string): Promise<void> {
     await ledgerCall('confirmBinding', [this.#pool, requestHashValue, accountId]);
   }
@@ -514,8 +513,6 @@ async function runScenarios(deps: ScenarioDeps): Promise<Row[]> {
   }, requestStatus);
 
   let bouncePayer = '';
-  // NearChainAdapter throws ERR_TX_FAILED: panicReason sees the failed transfer receipt
-  // before it reads the refund bool, so the call never becomes ERR_TRANSFER_FAILED.
   const bounce = await both('refund bounce', async (lane, request) => {
     await lane.pay(bouncePayer, request, price);
     await lane.deleteAccount(bouncePayer);
