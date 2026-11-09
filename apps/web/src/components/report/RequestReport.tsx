@@ -41,6 +41,7 @@ export function RequestReport({ id, attestTx }: { id: string; attestTx?: string 
 
   if (error) return <Alert>{error}</Alert>;
   if (!index) return <p role="status">Loading the report…</p>;
+  if (!index.reportUrl) return <Alert>This request has no published report.</Alert>;
   return (
     <>
       <Panel id="attestation" title="Attestation">

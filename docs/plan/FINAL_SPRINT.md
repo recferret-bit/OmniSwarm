@@ -151,7 +151,7 @@ W15, W16 and W17 open **in parallel on D9**. Their owned paths are disjoint; eac
 |---|---|---|---|
 | **D9 (11-09)** | W15-00 spike, W15-01 and W15-01b; reserve `check:w15..w19`; W17-01; open the W15, W16 and W17 worktrees | W16-01/04/05 → W16-02/03/06/07; W17-02, W17-05 | Approve this plan; decide on a public repo on D10; **O1a**: testnet accounts and deploy with the current script |
 | **D10** | Land W16 (`wave-16`); W19-01; open W19 | W15 group 2 (02, 03, 05, 07, 08, 10), then W15-04 the moment 02/03 land; W17-03, W17-06; W19-02, W19-08 | **O1b** (redeploy reproducible after W17-03), **O2** round trip, **O2b** repo public, **O3** NearBlocks verify |
-| **D11** | Go/no-go for W18 at noon | W15 groups 4–5 (04b, 06, 12, 13 → 09, 11, 14); W17-04, W17-08, W17-09; W19-03/04/06/07 | **O4** dogfood, **O5** hosted demo, (O6 live golden eval) |
+| **D11** | Go/no-go for W18 at noon. Owner go recorded 2026-11-09: W18 is open (`wave-15` and `wave-16` were already on main) | W15 groups 4–5 (04b, 06, 12, 13 → 09, 11, 14); W17-04, W17-08, W17-09; W19-03/04/06/07 | **O4** dogfood, **O5** hosted demo, (O6 live golden eval) |
 | **D12** | Land W15 (`wave-15`), W17 (`wave-17`, then `wave-17.2` with W17-07) | W15-15, W15-16, W15-17; W17-07; W18 if go; W19-05 | **O7** video (includes the local NEAR flow and testnet), **O8** nearbuilders and market.near.ai |
 | **D13** | Freeze: only doc and test fixes. Land W18 if green | W19-09 live links | **O9** mainnet payout account, X post |
 | **D14** | W19-10 | — | **O10** tag `hackathon-submission`, submit by 20:00 UTC |
