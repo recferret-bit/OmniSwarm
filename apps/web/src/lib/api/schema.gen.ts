@@ -227,8 +227,20 @@ export interface Attestation {
 }
 export interface GuardVerdictResponse {
   verdict: 'allow' | 'warn' | 'block';
+  /**
+   * Reason strings. Guard codes include SOURCE_METADATA_MISMATCH (warn: NEP-330 metadata names a different repo or commit than the attestation; the metadata is self-reported) and SOURCE_METADATA_ABSENT (info: no contract_source_metadata; it never decides the verdict).
+   */
   reasons: string[];
-  signals: {};
+  signals: {
+    /**
+     * NEP-330 contract_source_metadata read from the counterparty. Self-reported: it does not prove the deployed bytes were rebuilt from that commit. Null when the method is absent.
+     */
+    sourceMetadata?: {
+      link: string | null;
+      rev: string | null;
+      fetchedAt: string;
+    } | null;
+  };
   attestation?: Attestation;
 }
 export interface GuardReportRequest {

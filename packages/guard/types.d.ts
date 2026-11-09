@@ -2,6 +2,9 @@
 
 export type Level = 'allow' | 'warn' | 'block';
 
+/** `info` is listed on a verdict and never changes allow, warn, or block. */
+export type ReasonLevel = Level | 'info';
+
 export type ReasonCode =
   | 'REPORTED'
   | 'ATTESTED_CRITICAL_STILL_DEPLOYED'
@@ -9,7 +12,9 @@ export type ReasonCode =
   | 'CONTRACT_NOT_REVIEWED'
   | 'ATTESTATION_STALE'
   | 'ACCOUNT_TOO_NEW'
+  | 'SOURCE_METADATA_MISMATCH'
   | 'SIGNAL_UNAVAILABLE'
+  | 'SOURCE_METADATA_ABSENT'
   | 'ATTESTED_CLEAN'
   | 'NOT_A_CONTRACT';
 
@@ -52,6 +57,20 @@ export interface ChainReader {
   getAccountAgeDays?(accountId: string): Promise<number>;
   /** Block timestamp in milliseconds. Used for freshness only when the attestation has no `block_timestamp_ms`. */
   getBlockTimestampMs(height: number): Promise<number>;
+  /**
+   * Optional. NEP-330 `contract_source_metadata` on this account.
+   * `null` means the method is absent. `undefined` means this reader has no metadata table
+   * (older snapshots). A rejection is an RPC failure (`SIGNAL_UNAVAILABLE`).
+   */
+  /** Raw NEP-330 JSON, a normalized `{link, rev, fetchedAt}`, `null` when the method is absent, or `undefined` when this reader has no metadata table. */
+  getSourceMetadata?(accountId: string): Promise<unknown>;
+}
+
+/** NEP-330 metadata the guard compared with the attestation. Self-reported. */
+export interface SourceMetadata {
+  link: string | null;
+  rev: string | null;
+  fetchedAt: string;
 }
 
 /** Optional port for the account-age signal (an indexer). Without one, the age is unavailable. */
@@ -83,6 +102,12 @@ export type Signals = {
   codeHashMatches: boolean | null;
   attestationAgeDays: number | null;
   review: { repo: string; commit: string; blockHeight: number } | null;
+  /**
+   * NEP-330 metadata from the account. Present only when the reader was asked.
+   * `null` means the contract has no `contract_source_metadata`. Omitted when the reader has no table.
+   * Self-reported: a match does not prove the bytes were rebuilt from `rev`.
+   */
+  sourceMetadata?: SourceMetadata | null;
   /** The registry's evidence for a reported account. Present only when the reader has `getReport` and found one. */
   report?: { evidenceUri: string; reason: string; reportedAtMs: number; reporter: string };
   /** Names of the signals that could not be read. */
@@ -176,4 +201,10 @@ export interface RecordedChain {
   /** Evidence for `getReport`, by account. An account here counts as reported too. */
   reports?: Record<string, ChainReport>;
   blockTimestampsMs?: Record<string, number>;
+  /**
+   * NEP-330 answers by account. Omit the table on older snapshots (the signal stays unset).
+   * A missing account, or an explicit null, means the method is absent.
+   * A value is either normalized `{link, rev, fetchedAt}` or the raw view JSON.
+   */
+  sourceMetadata?: Record<string, SourceMetadata | Record<string, unknown> | null>;
 }

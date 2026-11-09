@@ -7,7 +7,10 @@ node packages/guard/demo/attack/run.mjs                 # guard on: refused_befo
 node packages/guard/demo/attack/run.mjs --no-guard      # builds the same tx, logs would_send, signs nothing
 node packages/guard/demo/attack/run.mjs --sandbox       # same refusal, registry and view_account from the local RPC
 node packages/guard/demo/attack/run.mjs --ticket packages/guard/demo/attack/tickets/benign.md   # allowed, dry signer called once
+node packages/guard/demo/attack/run.mjs --scenario metadata-elsewhere   # warn, no signature until a human approves
 ```
+
+`metadata-elsewhere` pays `elsewhere.owner.testnet`. Its attestation names `recferret-bit/OmniSwarm`, and its NEP-330 `contract_source_metadata` names `https://github.com/other/elsewhere`. The metadata is self-reported: the warning is not proof the bytes were rebuilt from that other repository. The demo's human declines the warning, so the signer is not called. A committed log is in `examples/metadata-elsewhere/`.
 
 Each run writes `attack-log.md` and `attack-log.json` to `--out` (default `<tmpdir>/omniswarm-guard-demo/<mode>/`), never into this folder. The logs from the two runs above are committed in `examples/guard/` and `examples/no-guard/`, and `test/demo.test.mjs` checks that they match what the demo prints today.
 

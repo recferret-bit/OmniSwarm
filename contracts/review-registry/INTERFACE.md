@@ -100,7 +100,9 @@ Every log is `EVENT_JSON:{"standard":"omniswarm","version":"1.2.0","event":<name
 
 What it proves: whoever controls `deployed` agreed that this review describes it. It blocks a third party from binding a clean report to someone else's contract, or a critical report to a competitor's.
 
-What it does not prove: that the code at `deployed` was built from `repo@commit`. An attacker who controls a malicious contract can still request a review of a benign repo and confirm the binding. Two things limit this today: `code_hash` is read by the operator at attest time, so any later redeploy shows as drift; and the guard treats the attestation as a claim by the account owner. The full fix is build provenance: the host builds `repo@commit` with `cargo near build reproducible-wasm` (host only, never in the review sandbox), and the operator attests only when the sha256 of the result equals the live `code_hash`. That needs an API-side change and is not in this contract version.
+What it does not prove: that the code at `deployed` was built from `repo@commit`. An attacker who controls a malicious contract can still request a review of a benign repo and confirm the binding. `code_hash` is read by the operator at attest time, so any later redeploy shows as drift, and the guard treats the attestation as a claim by the account owner.
+
+NEP-330 `contract_source_metadata` (embedded by `cargo near build reproducible-wasm`, cargo-near 0.23.0) is a second claim: the wasm says which repository and commit it came from. The guard compares that with the attested `repo` and `commit`. A difference is `SOURCE_METADATA_MISMATCH` (warn). No method is `SOURCE_METADATA_ABSENT` (info), which never decides the verdict. The metadata is self-reported. It does not prove the deployed bytes were rebuilt from that commit. NearBlocks **Verify and Publish**, or SourceScan, clones the commit, rebuilds in the image recorded in the metadata, and **Verified** means those bytes match. See README.md, "Verify".
 
 A contract account with no access keys and no code path to `confirm_binding` cannot confirm. It can bind only by being the requester, which also needs a code path.
 

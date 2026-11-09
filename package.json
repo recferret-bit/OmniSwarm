@@ -43,6 +43,7 @@
     "near:local": "bash infra/near-local/near-local.sh",
     "check:w15": "bash infra/near-local/check-w15.sh",
     "check:w16": "npm run check:all && bash tools/screener-check.sh",
+    "check:w17": "bash docs/plan/checks/check-w17.sh",
     "check:w13": "npm test --workspace packages/guard && npm run typecheck --workspace packages/guard && node packages/guard/demo/attack/run.mjs && node packages/guard/demo/attack/run.mjs --no-guard",
     "check:w14": "bash tools/screener-check.sh && npm run check:all",
     "readme:eval": "node tools/readme-eval-table.mjs",

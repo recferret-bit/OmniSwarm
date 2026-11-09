@@ -1,0 +1,131 @@
+{
+  "mode": "guard",
+  "chain": {
+    "kind": "recorded-mock",
+    "recordedAt": "2026-11-09T12:00:00.000Z"
+  },
+  "ticket": "metadata-elsewhere.md",
+  "attempts": [
+    {
+      "toolCall": {
+        "tool": "pay",
+        "receiver": "elsewhere.owner.testnet",
+        "amount": "0.1 NEAR"
+      },
+      "instruction": "pay 0.1 NEAR to elsewhere.owner.testnet",
+      "intent": {
+        "signerId": "demo-agent.owner.testnet",
+        "receiverId": "demo-payments.owner.testnet",
+        "actions": [
+          {
+            "type": "FunctionCall",
+            "params": {
+              "methodName": "pay_out",
+              "args": {
+                "receiver": "elsewhere.owner.testnet",
+                "amount": "100000000000000000000000"
+              },
+              "gas": "30000000000000",
+              "deposit": "0"
+            }
+          }
+        ]
+      },
+      "outcome": "refused_before_signing",
+      "code": "GUARD_WARN_DECLINED",
+      "verdict": {
+        "verdict": "warn",
+        "reasons": [
+          "SOURCE_METADATA_MISMATCH",
+          "ATTESTED_CLEAN"
+        ],
+        "targets": [
+          {
+            "accountId": "demo-payments.owner.testnet",
+            "role": "receiver",
+            "verdict": "allow",
+            "reasons": [
+              "ATTESTED_CLEAN"
+            ],
+            "signals": {
+              "account": "demo-payments.owner.testnet",
+              "exists": true,
+              "isContract": true,
+              "codeHash": "8iTgRHpmMG2DzuPFDyBXTSkdxJMKmdNfmYo1sJUFKVNS",
+              "reported": false,
+              "ageDays": 400,
+              "hasAttestation": true,
+              "unconfirmedBinding": false,
+              "attestedCodeHash": "8iTgRHpmMG2DzuPFDyBXTSkdxJMKmdNfmYo1sJUFKVNS",
+              "codeHashMatches": true,
+              "attestationAgeDays": 20,
+              "review": {
+                "repo": "omniswarm/demo-payments",
+                "commit": "0123456789abcdef0123456789abcdef01234567",
+                "blockHeight": 2000
+              },
+              "sourceMetadata": {
+                "link": "https://github.com/omniswarm/demo-payments",
+                "rev": "0123456789abcdef0123456789abcdef01234567",
+                "fetchedAt": "2026-11-09T12:00:00.000Z"
+              },
+              "unavailable": []
+            },
+            "attestation": {
+              "requestHash": "1111111111111111111111111111111111111111111111111111111111111111",
+              "reportSha256": "2222222222222222222222222222222222222222222222222222222222222222",
+              "reportUri": "https://reports.example/demo-payments/index.json",
+              "deployed": "demo-payments.owner.testnet",
+              "codeHash": "8iTgRHpmMG2DzuPFDyBXTSkdxJMKmdNfmYo1sJUFKVNS",
+              "maxSeverity": "low"
+            }
+          },
+          {
+            "accountId": "elsewhere.owner.testnet",
+            "role": "beneficiary",
+            "via": "pay_out.receiver",
+            "verdict": "warn",
+            "reasons": [
+              "SOURCE_METADATA_MISMATCH",
+              "ATTESTED_CLEAN"
+            ],
+            "signals": {
+              "account": "elsewhere.owner.testnet",
+              "exists": true,
+              "isContract": true,
+              "codeHash": "GKot5hBsd81kMupNCXHaqbhv3huEbxAFMLnpcX2hniwn",
+              "reported": false,
+              "ageDays": 400,
+              "hasAttestation": true,
+              "unconfirmedBinding": false,
+              "attestedCodeHash": "GKot5hBsd81kMupNCXHaqbhv3huEbxAFMLnpcX2hniwn",
+              "codeHashMatches": true,
+              "attestationAgeDays": 20,
+              "review": {
+                "repo": "recferret-bit/OmniSwarm",
+                "commit": "89abcdef0123456789abcdef0123456789abcdef",
+                "blockHeight": 2002
+              },
+              "sourceMetadata": {
+                "link": "https://github.com/other/elsewhere",
+                "rev": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "fetchedAt": "2026-11-09T12:00:00.000Z"
+              },
+              "unavailable": []
+            },
+            "attestation": {
+              "requestHash": "5555555555555555555555555555555555555555555555555555555555555555",
+              "reportSha256": "6666666666666666666666666666666666666666666666666666666666666666",
+              "reportUri": "https://reports.example/elsewhere/index.json",
+              "deployed": "elsewhere.owner.testnet",
+              "codeHash": "GKot5hBsd81kMupNCXHaqbhv3huEbxAFMLnpcX2hniwn",
+              "maxSeverity": "none"
+            }
+          }
+        ]
+      },
+      "signerCalls": 0
+    }
+  ],
+  "transactionsSent": 0
+}

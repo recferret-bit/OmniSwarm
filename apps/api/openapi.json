@@ -1762,6 +1762,32 @@
                     },
                     "signals": {
                       "type": "object",
+                      "properties": {
+                        "sourceMetadata": {
+                          "nullable": true,
+                          "type": "object",
+                          "properties": {
+                            "link": {
+                              "nullable": true,
+                              "type": "string"
+                            },
+                            "rev": {
+                              "nullable": true,
+                              "type": "string"
+                            },
+                            "fetchedAt": {
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          },
+                          "required": [
+                            "link",
+                            "rev",
+                            "fetchedAt"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
                       "additionalProperties": {}
                     },
                     "attestation": {

@@ -91,6 +91,12 @@ test('the sandbox reader asks the local RPC for view_account and the registry', 
     if (params.method_name === 'get_attestation_for_account') return { ok: true, json: async () => encoded(attestation) };
     if (params.method_name === 'is_reported') return { ok: true, json: async () => encoded(true) };
     if (params.method_name === 'get_report') return { ok: true, json: async () => encoded(null) };
+    if (params.method_name === 'contract_source_metadata' && params.account_id === 'good-dex.test.near') {
+      return { ok: true, json: async () => encoded({ link: 'https://github.com/near/example', build_info: { source_code_snapshot: 'git+https://github.com/near/example?rev=cccccccccccccccccccccccccccccccccccccccc' } }) };
+    }
+    if (params.method_name === 'contract_source_metadata') {
+      return { ok: true, json: async () => ({ error: { cause: { name: 'MethodResolveError' }, message: 'method not found' } }) };
+    }
     if (body.method === 'block') {
       return { ok: true, json: async () => ({ result: { header: { timestamp_nanosec: '1000000000000' } } }) };
     }
@@ -105,10 +111,27 @@ test('the sandbox reader asks the local RPC for view_account and the registry', 
   assert.ok(calls.every((call) => call.url === 'http://127.0.0.1:3180'));
   assert.ok(calls.some((call) => call.params.request_type === 'view_account'));
   assert.ok(calls.some((call) => call.params.method_name === 'is_reported'));
+  const meta = await reader.getSourceMetadata('good-dex.test.near');
+  assert.equal(meta.link, 'https://github.com/near/example');
+  assert.equal(await reader.getSourceMetadata('plain.test.near'), null);
+  assert.ok(calls.some((call) => call.params.method_name === 'contract_source_metadata' && call.params.account_id === 'good-dex.test.near'));
+});
+
+test('metadata-elsewhere warns and does not sign until a human approves', () => {
+  const { json, md } = run(['--scenario', 'metadata-elsewhere']);
+  const [attempt] = json.attempts;
+  assert.equal(attempt.outcome, 'refused_before_signing');
+  assert.equal(attempt.code, 'GUARD_WARN_DECLINED');
+  assert.equal(attempt.signerCalls, 0);
+  const elsewhere = attempt.verdict.targets.find((target) => target.accountId === 'elsewhere.owner.testnet');
+  assert.equal(elsewhere.verdict, 'warn');
+  assert.ok(elsewhere.reasons.includes('SOURCE_METADATA_MISMATCH'));
+  assert.equal(json.transactionsSent, 0);
+  assert.match(md, /self-reported/);
 });
 
 test('the committed example logs are what the demo prints today', () => {
-  for (const [mode, args] of [['guard', []], ['no-guard', ['--no-guard']]]) {
+  for (const [mode, args] of [['guard', []], ['no-guard', ['--no-guard']], ['metadata-elsewhere', ['--scenario', 'metadata-elsewhere']]]) {
     const { md, json } = run(args);
     assert.equal(md, fs.readFileSync(path.join(demo, 'examples', mode, 'attack-log.md'), 'utf8'), mode);
     assert.deepEqual(json, JSON.parse(fs.readFileSync(path.join(demo, 'examples', mode, 'attack-log.json'), 'utf8')), mode);

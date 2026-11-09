@@ -37,6 +37,13 @@ export function createRecordedReader(records, { fail = new Set() } = {}) {
         if (at === undefined) throw new Error(`no recorded block ${height}`);
         return at;
       }),
+    // `undefined` (no table) leaves the signal unset, so older snapshots keep their verdicts.
+    // A missing account, or null, means the contract has no contract_source_metadata.
+    getSourceMetadata: (id) => read('getSourceMetadata', () => {
+      if (!Object.hasOwn(records, 'sourceMetadata')) return undefined;
+      const table = records.sourceMetadata ?? {};
+      return Object.hasOwn(table, id) ? table[id] : null;
+    }),
   };
   return Object.freeze(reader);
 }
