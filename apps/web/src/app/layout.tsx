@@ -14,7 +14,12 @@ export const metadata: Metadata = {
   title: { default: 'OmniSwarm — AI code review attested on NEAR', template: '%s · OmniSwarm' },
   description: 'A swarm of AI reviewers argues over your public GitHub repository, then the report hash is attested on NEAR.',
   icons: { icon: '/favicon.svg' },
-  openGraph: { title: 'OmniSwarm', description: 'Multi-model security review with an on-chain attestation.', type: 'website' },
+  openGraph: {
+    title: 'OmniSwarm',
+    description: 'Multi-model security review with an on-chain attestation.',
+    type: 'website',
+    images: [{ url: '/sample/preview.jpg', width: 1100, height: 720, alt: 'OmniSwarm sample security report' }],
+  },
   robots: { index: true, follow: true },
 };
 

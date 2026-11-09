@@ -40,7 +40,12 @@ function useFrame(kind: 'hero' | 'pipe') {
       if (!reduce && !document.hidden) frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
-    const onVis = () => { if (!document.hidden && !reduce) frame = requestAnimationFrame(tick); };
+    const onVis = () => {
+      if (!document.hidden && !reduce) {
+        cancelAnimationFrame(frame);
+        frame = requestAnimationFrame(tick);
+      }
+    };
     document.addEventListener('visibilitychange', onVis);
     const theme = new MutationObserver(() => paint(performance.now()));
     theme.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });

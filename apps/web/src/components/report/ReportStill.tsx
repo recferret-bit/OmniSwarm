@@ -1,15 +1,22 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { readSampleHash } from './sample-hash';
 import './report-still.css';
 
 const REPORT = '/sample/report.html';
-const HASH = 'cd8a533dc78a6d48e47e7fbe6bb7f9f591badd1e5854564cd4f3dd8f09ca38ab';
 
 export function ReportStill({ linked = true }: { linked?: boolean }) {
   const [page, setPage] = useState<0 | 1>(0);
+  const [hash, setHash] = useState('');
   const stage = useRef<HTMLDivElement>(null);
   const open = linked ? '/sample' : REPORT;
+
+  useEffect(() => {
+    let live = true;
+    void readSampleHash().then((value) => { if (live) setHash(value); });
+    return () => { live = false; };
+  }, []);
 
   useEffect(() => {
     const node = stage.current;
@@ -96,7 +103,7 @@ export function ReportStill({ linked = true }: { linked?: boolean }) {
             <section className="report-doc__body">
               <p className="label">Surface</p>
               <p className="report-doc__surface"><b>S1 Identity</b> 1 high claim. Priority 5.1. The other surfaces are out of scope for this sample.</p>
-              <p className="report-doc__hash"><span className="label">SHA256</span> {HASH}</p>
+              <p className="report-doc__hash"><span className="label">SHA256</span> {hash}</p>
             </section>
             <p className="report-doc__notice"><b>Click the page</b> It turns to the finding.</p>
           </article>

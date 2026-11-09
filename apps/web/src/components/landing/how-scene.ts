@@ -6,9 +6,6 @@ export const BEAT_MS = 2800;
 export const BEATS = 4;
 export const SHOWCASE = BEAT_MS * 3 + BEAT_MS * 0.92;
 
-/** Sample report sha256. Illustrative only. */
-export const SAMPLE_HASH = 'cd8a533dc78a6d48e91b0c44a7f2e6d11b8c0a55e3d74f90a1c6b8d2e4f70913';
-
 export interface HowScene {
   ctx: CanvasRenderingContext2D;
   ink: Ink;
@@ -20,6 +17,8 @@ export interface HowScene {
   y: number;
   w: number;
   h: number;
+  /** Full report_sha256. Empty until the browser has read the public attestation. */
+  reportHash: string;
 }
 
 export interface Box { x: number; y: number; w: number; h: number }
