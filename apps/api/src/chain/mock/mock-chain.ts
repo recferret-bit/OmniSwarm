@@ -9,6 +9,9 @@ import { AppError } from '../../shared/errors.ts';
 import { ChainRejectedError, chainUnavailable } from '../errors.ts';
 import type { AttestArgs, ChainAttestation, ChainPort, ChainRequest, KeyPermission, PaymentTx, ReportAddressArgs } from '../port.ts';
 import { fromContractAttestation, toContractAttestation, type ContractAttestation } from '../near/attestation.ts';
+import {
+  requireCommit, requireDeployment, requireEvidenceUri, requireHash, requireReason, requireRepo, requireReportSha256, requireReportUri, requireSeverity,
+} from './mock-validate.ts';
 
 export interface MockChainOptions {
   contractId: string;
@@ -57,9 +60,10 @@ export class MockChainAdapter implements ChainPort {
     return row.rows[0]?.permission ?? null;
   }
 
-  async getPaymentTx(txHash: string): Promise<PaymentTx | null> {
+  async getPaymentTx(txHash: string, signerId: string): Promise<PaymentTx | null> {
     await this.#guard();
-    const result = await this.#db.query('SELECT * FROM mock_chain_tx WHERE tx_hash = $1', [txHash]);
+    // Same lookup as the tx RPC: the hash is only visible for the account that signed it.
+    const result = await this.#db.query('SELECT * FROM mock_chain_tx WHERE tx_hash = $1 AND signer = $2', [txHash, signerId]);
     const row = result.rows[0];
     if (!row) return null;
     return {
@@ -107,6 +111,7 @@ export class MockChainAdapter implements ChainPort {
 
   async markRunning(requestHash: string): Promise<string> {
     await this.#guard();
+    requireHash(requestHash);
     return this.#transition(requestHash, 'mark_running', ['Pending'], 'Running', {}, async (client) => {
       await client.query(`INSERT INTO mock_chain_event (event, request_hash, data) VALUES ('review_running', $1, '{}')`, [requestHash]);
     });
@@ -114,7 +119,13 @@ export class MockChainAdapter implements ChainPort {
 
   async attest(args: AttestArgs): Promise<string> {
     await this.#guard();
-    if ((args.deployed === null) !== (args.codeHash === null)) throw new ChainRejectedError('ERR_DEPLOYED_PAIR');
+    requireRepo(args.repo);
+    requireCommit(args.commit);
+    requireReportSha256(args.reportSha256);
+    requireReportUri(args.reportUri);
+    requireDeployment(args.deployed, args.codeHash);
+    requireSeverity(args.maxSeverity);
+    requireHash(args.requestHash);
     const txHash = await this.#transition(args.requestHash, 'attest', ['Pending', 'Running'], 'Done', args, async (client, tx) => {
       // As in the contract: the binding is confirmed when the deployed account paid for the review.
       await client.query(
@@ -132,10 +143,43 @@ export class MockChainAdapter implements ChainPort {
 
   async refund(requestHash: string): Promise<string> {
     await this.#guard();
-    const txHash = await this.#transition(requestHash, 'refund', ['Pending', 'Running'], 'Refunded', {}, async (client) => {
-      await client.query(`INSERT INTO mock_chain_event (event, request_hash, data) VALUES ('review_refunded', $1, '{}')`, [requestHash]);
-    });
+    requireHash(requestHash);
+    const client = await this.#db.connect();
+    let txHash = '';
+    let bounced = false;
+    try {
+      await client.query('BEGIN');
+      const current = await client.query<{ status: ChainRequest['status']; account: string; deposit: string }>(
+        'SELECT status, account, deposit::text AS deposit FROM mock_chain_request WHERE request_hash = $1 FOR UPDATE', [requestHash]);
+      const row = current.rows[0];
+      if (!row) throw new ChainRejectedError('ERR_NOT_FOUND');
+      if (row.status !== 'Pending' && row.status !== 'Running') throw new ChainRejectedError('ERR_BAD_STATUS');
+      const previous = row.status;
+      txHash = mockTxHash(`refund:${requestHash}`);
+      await client.query(`UPDATE mock_chain_request SET status = 'Refunded' WHERE request_hash = $1`, [requestHash]);
+      const event = { request_hash: requestHash, account: row.account, deposit: row.deposit, status: previous };
+      await client.query(`INSERT INTO mock_chain_event (event, request_hash, data) VALUES ('review_refunded', $1, $2)`, [requestHash, JSON.stringify(event)]);
+      // The parity test deletes the account row. A missing account is the transfer bounce.
+      const account = await client.query('SELECT 1 FROM mock_chain_account WHERE account = $1', [row.account]);
+      bounced = (account.rowCount ?? 0) === 0;
+      if (bounced) {
+        await client.query('UPDATE mock_chain_request SET status = $2 WHERE request_hash = $1', [requestHash, previous]);
+        await client.query(`INSERT INTO mock_chain_event (event, request_hash, data) VALUES ('refund_failed', $1, $2)`, [requestHash, JSON.stringify(event)]);
+      }
+      await client.query(
+        `INSERT INTO mock_chain_tx (tx_hash, signer, receiver, method, args, success) VALUES ($1, 'operator.mock', $2, 'refund', $3, $4)
+         ON CONFLICT (tx_hash) DO NOTHING`,
+        [txHash, this.contractId, JSON.stringify({ request_hash: requestHash }), !bounced]);
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => {});
+      if (error instanceof ChainRejectedError || error instanceof AppError) throw error;
+      throw chainUnavailable(error);
+    } finally {
+      client.release();
+    }
     await this.#hang('refund');
+    if (bounced) throw new ChainRejectedError('ERR_TRANSFER_FAILED', 'refund transfer did not land');
     return txHash;
   }
 
@@ -158,27 +202,40 @@ export class MockChainAdapter implements ChainPort {
 
   async #report(accountId: string) {
     const result = await this.#db.query(
-      `SELECT account AS account_id, evidence_uri, reason, 'operator.mock' AS reporter, (extract(epoch FROM reported_at) * 1000)::bigint::float8 AS reported_at_ms
+      `SELECT account AS account_id, evidence_uri, reason, reporter, (extract(epoch FROM reported_at) * 1000)::bigint::float8 AS reported_at_ms
        FROM mock_chain_report WHERE account = $1`, [accountId]);
     return result.rows[0] ?? null;
   }
 
-  /** As in the contract: one report per account, a second one is ERR_ALREADY_REPORTED. */
+  /** As in the contract: one report per account, the reporter is the caller, a second one is ERR_ALREADY_REPORTED. */
   async reportAddress(args: ReportAddressArgs): Promise<string> {
     await this.#guard();
+    requireEvidenceUri(args.evidenceUri);
+    requireReason(args.reason);
     const txHash = mockTxHash(`report_address:${args.accountId}`);
-    const inserted = await this.#db.query(
-      `WITH reported AS (
-         INSERT INTO mock_chain_report (account, evidence_uri, reason, tx_hash) VALUES ($1, $2, $3, $4)
-         ON CONFLICT (account) DO NOTHING RETURNING account)
-       INSERT INTO mock_chain_tx (tx_hash, signer, receiver, method, args, success)
-       SELECT $4, 'operator.mock', $5, 'report_address', $6, true FROM reported`,
-      [args.accountId, args.evidenceUri, args.reason, txHash, this.contractId,
-        JSON.stringify({ account_id: args.accountId, evidence_uri: args.evidenceUri, reason: args.reason })]).catch((error: unknown) => {
+    const caller = 'operator.mock';
+    const client = await this.#db.connect();
+    try {
+      await client.query('BEGIN');
+      const inserted = await client.query(
+        `INSERT INTO mock_chain_report (account, evidence_uri, reason, tx_hash, reporter) VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (account) DO NOTHING`,
+        [args.accountId, args.evidenceUri, args.reason, txHash, caller]);
+      if (inserted.rowCount !== 1) throw new ChainRejectedError('ERR_ALREADY_REPORTED');
+      await client.query(
+        `INSERT INTO mock_chain_tx (tx_hash, signer, receiver, method, args, success) VALUES ($1, $2, $3, 'report_address', $4, true)`,
+        [txHash, caller, this.contractId, JSON.stringify({ account_id: args.accountId, evidence_uri: args.evidenceUri, reason: args.reason })]);
+      await client.query(`INSERT INTO mock_chain_event (event, request_hash, data) VALUES ('address_reported', '', $1)`,
+        [JSON.stringify({ account_id: args.accountId, evidence_uri: args.evidenceUri, reason: args.reason, reporter: caller })]);
+      await client.query('COMMIT');
+      return txHash;
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => {});
+      if (error instanceof ChainRejectedError || error instanceof AppError) throw error;
       throw chainUnavailable(error);
-    });
-    if (inserted.rowCount !== 1) throw new ChainRejectedError('ERR_ALREADY_REPORTED');
-    return txHash;
+    } finally {
+      client.release();
+    }
   }
 
   async close(): Promise<void> {}

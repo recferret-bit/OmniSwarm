@@ -12,6 +12,7 @@ import { KeyPair } from 'near-api-js';
 import { ChainRejectedError } from '../../src/chain/errors.ts';
 import { NearChainAdapter } from '../../src/chain/near/near-chain.ts';
 import { loadOperatorKey } from '../../src/chain/near/operator-key.ts';
+import { panicReason, returnValue } from '../../src/chain/near/payment-tx.ts';
 import { chainReader, guardPort } from '../../src/modules/guard/guard.port.ts';
 import { AppError } from '../../src/shared/errors.ts';
 import { APP_ROOT } from '../../src/shared/paths.ts';
@@ -87,6 +88,17 @@ test('reads: tx with wait_until FINAL, views with finality final, key permission
   assert.deepEqual(await chain.health(), { rpc: true, contract: true });
 });
 
+test('a bounced refund is SuccessValue false, not a panic, even when the transfer receipt failed', () => {
+  const raw = {
+    final_execution_status: 'FINAL',
+    status: { SuccessValue: Buffer.from('false').toString('base64') },
+    receipts_outcome: [{ outcome: { status: { Failure: { ActionError: { kind: 'AccountDoesNotExist' } } }, logs: [] } }],
+  };
+  assert.equal(panicReason(raw), null);
+  assert.equal(returnValue(raw), false);
+  assert.equal(panicReason(REC.attest_bad_status), 'ERR_BAD_STATUS');
+});
+
 test('payment tx rules: a failed receipt or extra args never bind a request', async () => {
   const failed = await rpc(() => ({ result: REC.tx_failed }));
   assert.equal((await adapter([failed.url]).getPaymentTx('x', 'alice.testnet'))?.succeeded, false);
@@ -115,6 +127,15 @@ test('operator writes sign with the key file, wait for FINAL and read the refund
   assert.equal(sent?.params.wait_until, 'FINAL');
   sendResult = REC.refund_false;
   await assert.rejects(chain.refund(H), (error: unknown) => error instanceof ChainRejectedError && error.reason === 'ERR_TRANSFER_FAILED');
+  sendResult = {
+    ...REC.refund_false,
+    receipts_outcome: [
+      { id: 'transfer', outcome: { status: { Failure: { ActionError: { kind: { AccountDoesNotExist: { account_id: 'gone.testnet' } } } } }, logs: [] } },
+      { id: 'callback', outcome: { status: { SuccessValue: 'ZmFsc2U=' }, logs: ['EVENT_JSON:{"event":"refund_failed"}'] } },
+    ],
+  };
+  await assert.rejects(chain.refund(H), (error: unknown) => error instanceof ChainRejectedError && error.reason === 'ERR_TRANSFER_FAILED',
+    'a failed transfer receipt is the callback bool, not ERR_TX_FAILED');
   sendResult = REC.attest_bad_status;
   await assert.rejects(chain.markRunning(H), (error: unknown) => error instanceof ChainRejectedError && error.reason === 'ERR_BAD_STATUS');
   assert.ok(!JSON.stringify(server.calls).includes(fs.readFileSync(keyFile, 'utf8').slice(30, 60)), 'the secret never goes over the wire');
