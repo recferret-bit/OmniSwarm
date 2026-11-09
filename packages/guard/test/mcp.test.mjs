@@ -6,7 +6,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { createRecordedReader } from '../src/recorded-reader.mjs';
-import { FrameDecoder, createGuardServer, encodeFrame, handleMessage, parseArgs } from '../mcp.mjs';
+import { FrameDecoder, createGuardServer, encodeFrame, handleMessage, parseArgs, rpcReader } from '../mcp.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const HASH = 'GKot5hBsd81kMupNCXHaqbhv3huEbxAFMLnpcX2hniwn';
@@ -68,6 +68,31 @@ test('tools/list returns 3 tools and guard_verdict blocks drained-vault', async 
   assert.deepEqual(reported, { reported: false });
   const attestation = await guard.call('get_attestation', { request_hash: REQUEST_HASH });
   assert.equal(attestation.attestation.reportSha256, 'd'.repeat(64));
+});
+
+test('a mismatched network and a bare allow are refused', async () => {
+  const guard = server();
+  await assert.rejects(() => guard.call('guard_verdict', { account: 'drained-vault.test.near', network: 'mainnet' }), /reads sandbox/);
+  const open = createGuardServer({
+    apiUrl: 'http://guard.test', network: 'sandbox',
+    fetchImpl: async () => ({ ok: true, json: async () => ({ verdict: 'allow', reasons: [], signals: {} }) }),
+  });
+  await assert.rejects(() => open.call('guard_verdict', { account: 'alice.test.near' }), /allow is missing a signal/);
+});
+
+test('rpc view_account and block timestamps fail closed', async () => {
+  const missingHash = rpcReader('http://rpc.test', 'registry.test.near', async () => ({ ok: true, json: async () => ({ result: { amount: '1' } }) }));
+  await assert.rejects(() => missingHash.getAccount('alice.test.near'), /code_hash/);
+  const unknown = rpcReader('http://rpc.test', 'registry.test.near', async () => ({
+    ok: true, json: async () => ({ error: { cause: { name: 'UNKNOWN_ACCOUNT' }, message: 'gone' } }),
+  }));
+  assert.equal(await unknown.getAccount('missing.test.near'), null);
+  const timed = rpcReader('http://rpc.test', 'registry.test.near', async () => ({
+    ok: true, json: async () => ({ result: { header: { timestamp_nanosec: '1700000000000000000' } } }),
+  }));
+  assert.equal(await timed.getBlockTimestampMs(3), 1700000000000);
+  const broken = rpcReader('http://rpc.test', 'registry.test.near', async () => ({ ok: true, json: async () => ({ result: { error: 'wasm execution failed' } }) }));
+  await assert.rejects(() => broken.isReported('alice.test.near'), /call_function failed/);
 });
 
 test('is_reported does not answer false when the API did not read the blocklist', async () => {
