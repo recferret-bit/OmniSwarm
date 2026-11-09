@@ -40,6 +40,8 @@
     "check:w12": "npm run check:infra",
     "stack:local": "bash infra/compose/local.sh up",
     "stack:local:down": "bash infra/compose/local.sh down",
+    "near:local": "bash infra/near-local/near-local.sh",
+    "check:w15": "node -e \"process.stdout.write('check:w15 reserved\\n')\"",
     "check:w13": "npm test --workspace packages/guard && npm run typecheck --workspace packages/guard && node packages/guard/demo/attack/run.mjs && node packages/guard/demo/attack/run.mjs --no-guard",
     "check:w14": "bash tools/screener-check.sh && npm run check:all",
     "readme:eval": "node tools/readme-eval-table.mjs",
