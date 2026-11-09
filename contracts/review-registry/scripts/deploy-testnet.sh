@@ -5,9 +5,10 @@
 #   --execute   run the same commands with near-cli-rs and cargo-near
 #
 # Without a flag it refuses (exit 2). Keys go to the near-cli keychain; nothing prints a
-# secret key. Subcommands and flags were checked against the near-cli-rs 0.30.0 source
-# (`--allowance`, `--contract-account-id`, `--function-names`, `fund-myself`,
-# `save-to-legacy-keychain`, `with-init-call`), not against a running `near` binary.
+# secret key. The owner runs near-cli-rs 0.31.1. Subcommands and flags were checked
+# against the near-cli-rs 0.30.0 source (`--allowance`, `--contract-account-id`,
+# `--function-names`, `fund-myself`, `save-to-legacy-keychain`, `with-init-call`)
+# and are the same subcommands in 0.31.1. They were not checked against a running `near` binary.
 #
 # Accounts (override through the environment):
 #   OWNER     full-access account that pays for and signs everything (also the default treasury)
@@ -30,6 +31,8 @@ PRICE_YOCTO="${PRICE_YOCTO:-1000000000000000000000000}"
 OPERATOR_ALLOWANCE="${OPERATOR_ALLOWANCE:-1 NEAR}"
 MANIFEST="contracts/review-registry/Cargo.toml"
 WASM="${WASM:-contracts/review-registry/target/near/review_registry.wasm}"
+RES_WASM="${RES_WASM:-contracts/review-registry/res/review_registry.wasm}"
+RES_SHA="${RES_SHA:-contracts/review-registry/res/review_registry.wasm.sha256}"
 # Must equal review_registry::OPERATOR_METHODS (a unit test compares them).
 OPERATOR_METHODS="mark_running, attest, refund, report_address"
 
@@ -68,8 +71,23 @@ run() {
   printf '%s\n' "$line"
 }
 
-# 1. Build the wasm with cargo-near (host only; never inside the review sandbox).
-run cargo near build non-reproducible-wasm --manifest-path "$MANIFEST"
+# Copies the reproducible wasm into res/ and writes its sha256. --dry-run prints the
+# same steps and does not create or change either file.
+publish_wasm() {
+  if [ "$mode" = "--execute" ]; then
+    mkdir -p "$(dirname "$RES_WASM")"
+    cp "$WASM" "$RES_WASM"
+    shasum -a 256 "$RES_WASM" > "$RES_SHA"
+    return
+  fi
+  printf '%s\n' "cp $(quote "$WASM") $(quote "$RES_WASM")"
+  printf '%s\n' "shasum -a 256 $(quote "$RES_WASM") > $(quote "$RES_SHA")"
+}
+
+# 1. Reproducible wasm (NEP-330 metadata). Host only; never inside the review sandbox.
+#    The build clones the committed revision. Uncommitted edits are not in the wasm.
+run cargo near build reproducible-wasm --manifest-path "$MANIFEST"
+publish_wasm
 # 2. The contract account, funded by the owner. Its full-access key lands in the keychain.
 run near account create-account fund-myself "$CONTRACT" '5 NEAR' autogenerate-new-keypair save-to-keychain sign-as "$OWNER" "${network[@]}" sign-with-keychain send
 # 3. The operator account. The API never receives this account's full-access key.

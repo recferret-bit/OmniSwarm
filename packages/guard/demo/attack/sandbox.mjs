@@ -1,6 +1,6 @@
 // @ts-check
 // ChainReader over the local near-sandbox RPC. Registry views and view_account, no key, no broadcast.
-import { registryReader } from '@omniswarm/guard';
+import { registryReader, viewSourceMetadata } from '@omniswarm/guard';
 
 const DEFAULT_CONTRACT = 'registry.test.near';
 
@@ -18,6 +18,15 @@ function causeName(error) {
 /**
  * @param {unknown} error
  */
+function isMissingMethod(error) {
+  const name = causeName(error);
+  if (name === 'MethodResolveError' || name === 'MethodNotFound') return true;
+  const data = error && typeof error === 'object' ? /** @type {{ data?: unknown, message?: unknown }} */ (error).data : '';
+  const message = error && typeof error === 'object' ? /** @type {{ message?: unknown }} */ (error).message : '';
+  const text = `${typeof data === 'string' ? data : ''} ${typeof message === 'string' ? message : ''}`;
+  return /MethodResolveError|MethodNotFound|method not found/i.test(text);
+}
+
 function isUnknownAccount(error) {
   const name = causeName(error);
   if (name === 'UNKNOWN_ACCOUNT' || name === 'INVALID_ACCOUNT') return true;
@@ -80,8 +89,35 @@ export function createSandboxReader({ rpcUrl, contractId = DEFAULT_CONTRACT, fet
     return decodeCall(body.result);
   }
 
+  /**
+   * @param {string} accountId
+   * @param {string} method
+   * @param {Record<string, unknown>} args
+   */
+  async function viewAccountMethod(accountId, method, args) {
+    const body = await rpc('query', {
+      request_type: 'call_function',
+      finality: 'final',
+      account_id: accountId,
+      method_name: method,
+      args_base64: Buffer.from(JSON.stringify(args), 'utf8').toString('base64'),
+    });
+    if (body.error) {
+      if (isUnknownAccount(body.error) || isMissingMethod(body.error)) return null;
+      throw new Error(`sandbox ${method} failed for ${accountId}`);
+    }
+    // A missing method is a successful query whose result.error is MethodResolveError, not a JSON-RPC error.
+    const execution = body.result && typeof body.result === 'object' ? /** @type {{ error?: unknown }} */ (body.result).error : undefined;
+    if (typeof execution === 'string') {
+      if (isMissingMethod({ message: execution })) return null;
+      throw new Error(`sandbox ${method} failed for ${accountId}`);
+    }
+    return decodeCall(body.result);
+  }
+
   return Object.freeze({
     ...registryReader(view),
+    getSourceMetadata: async (/** @type {string} */ accountId) => viewSourceMetadata(viewAccountMethod, accountId),
     getAccount: async (/** @type {string} */ accountId) => {
       const body = await rpc('query', { request_type: 'view_account', finality: 'final', account_id: accountId });
       if (body.error) {

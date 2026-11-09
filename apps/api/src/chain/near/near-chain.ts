@@ -26,6 +26,16 @@ function isNotFound(error: unknown): boolean {
   return error instanceof AccountDoesNotExistError || error instanceof AccessKeyDoesNotExistError || error instanceof UnknownTransactionError;
 }
 
+/** A contract with no such method (NEP-330 was not embedded). Walks failover wrappers and `cause`. */
+function isMissingMethod(error: unknown, depth = 0): boolean {
+  if (error == null || depth > 5) return false;
+  if (error instanceof FailoverRpcError) return error.errors.length > 0 && error.errors.every((item) => isMissingMethod(item, depth + 1));
+  const text = error instanceof Error ? `${error.name} ${error.message}` : String(error);
+  if (/MethodResolveError|MethodNotFound|method not found/i.test(text)) return true;
+  if (error instanceof Error && 'cause' in error) return isMissingMethod(error.cause, depth + 1);
+  return false;
+}
+
 export function createProvider(urls: string[]): Provider {
   return new FailoverRpcProvider(urls.map((url) => new JsonRpcProvider({ url }, { retries: 2, wait: 100, backoff: 2 })));
 }
@@ -119,6 +129,18 @@ export class NearChainAdapter implements ChainPort {
 
   viewRegistry(method: string, args: Record<string, unknown>): Promise<unknown> {
     return this.#view<unknown>(method, args);
+  }
+
+  // On the receiver, not the registry. A missing method is null so the guard can report
+  // SOURCE_METADATA_ABSENT. #read would wrap that as CHAIN_UNAVAILABLE and the guard would warn.
+  async viewAccountMethod(accountId: string, method: string, args: Record<string, unknown>): Promise<unknown> {
+    try {
+      const value = await this.#provider.callFunction<never>({ contractId: accountId, method, args, blockQuery: FINAL });
+      return value ?? null;
+    } catch (error) {
+      if (isNotFound(error) || isMissingMethod(error)) return null;
+      throw chainUnavailable(error);
+    }
   }
 
   markRunning(requestHash: string): Promise<string> {

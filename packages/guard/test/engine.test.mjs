@@ -26,6 +26,26 @@ const TABLE = [
   ['clean attestation but live code hash unavailable', { codeHash: null, codeHashMatches: null, unavailable: ['account'] }, 'none', 'warn', ['SIGNAL_UNAVAILABLE']],
   ['critical attestation, blocklist unavailable', { reported: null, unavailable: ['reported'] }, 'critical', 'block', ['ATTESTED_CRITICAL_STILL_DEPLOYED', 'SIGNAL_UNAVAILABLE']],
   ['nothing established', { isContract: null, hasAttestation: null, codeHashMatches: null, ageDays: null }, null, 'warn', ['SIGNAL_UNAVAILABLE']],
+  ['metadata matches the attested repo and commit', {
+    review: { repo: 'near/example', commit: 'c'.repeat(40), blockHeight: 1 },
+    sourceMetadata: { link: 'https://github.com/near/example', rev: 'c'.repeat(40), fetchedAt: '2026-11-09T00:00:00.000Z' },
+  }, 'low', 'allow', ['ATTESTED_CLEAN']],
+  ['metadata names another commit', {
+    review: { repo: 'near/example', commit: 'c'.repeat(40), blockHeight: 1 },
+    sourceMetadata: { link: 'https://github.com/near/example', rev: 'a'.repeat(40), fetchedAt: '2026-11-09T00:00:00.000Z' },
+  }, 'low', 'warn', ['SOURCE_METADATA_MISMATCH', 'ATTESTED_CLEAN']],
+  ['metadata names another repo', {
+    review: { repo: 'near/example', commit: 'c'.repeat(40), blockHeight: 1 },
+    sourceMetadata: { link: 'https://github.com/other/elsewhere', rev: 'c'.repeat(40), fetchedAt: '2026-11-09T00:00:00.000Z' },
+  }, 'none', 'warn', ['SOURCE_METADATA_MISMATCH', 'ATTESTED_CLEAN']],
+  ['metadata absent on a clean attestation', {
+    review: { repo: 'near/example', commit: 'c'.repeat(40), blockHeight: 1 },
+    sourceMetadata: null,
+  }, 'none', 'allow', ['SOURCE_METADATA_ABSENT', 'ATTESTED_CLEAN']],
+  ['metadata read failed', {
+    review: { repo: 'near/example', commit: 'c'.repeat(40), blockHeight: 1 },
+    unavailable: ['sourceMetadata'],
+  }, 'none', 'warn', ['SIGNAL_UNAVAILABLE', 'ATTESTED_CLEAN']],
 ];
 
 for (const [name, overrides, severity, verdict, reasons] of TABLE) {

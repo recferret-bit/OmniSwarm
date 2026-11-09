@@ -1,6 +1,7 @@
 // @ts-check
 // Pure verdict engine (INTAKE §7): signals in, verdict and reasons out. block > warn > allow.
 
+import { sourceMetadataKind } from './source-metadata.mjs';
 import { REASONS, orderReasons, worst } from './reasons.mjs';
 
 /** @typedef {import('../types.js').Signals} Signals */
@@ -30,6 +31,13 @@ export function evaluate(s, severity, policy = DEFAULT_POLICY) {
   }
   if (s.isContract === false) codes.push('NOT_A_CONTRACT');
   if (s.ageDays !== null && s.ageDays < policy.minAgeDays) codes.push('ACCOUNT_TOO_NEW');
+  // Absent metadata is info and does not decide the verdict. A failed read is SIGNAL_UNAVAILABLE,
+  // added below, and is not also reported as absent. The metadata is self-reported.
+  if (s.review && Object.hasOwn(s, 'sourceMetadata') && !s.unavailable.includes('sourceMetadata')) {
+    const kind = sourceMetadataKind(s.sourceMetadata ?? null, s.review);
+    if (kind === 'mismatch') codes.push('SOURCE_METADATA_MISMATCH');
+    else if (kind === 'absent') codes.push('SOURCE_METADATA_ABSENT');
+  }
   if (s.unavailable.length > 0) codes.push('SIGNAL_UNAVAILABLE');
 
   const reasons = orderReasons(codes);

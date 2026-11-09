@@ -167,3 +167,42 @@ test('guard blocklist: is_reported is a final view; report_address is an operato
   await assert.rejects(adapter([old.url]).isReported('drainer.testnet'), (error: unknown) => error instanceof AppError && error.code === 'CHAIN_UNAVAILABLE',
     'a registry without is_reported is an unavailable signal, not "not reported"');
 });
+
+test('guard reads contract_source_metadata on the receiver, and a missing method is absent', async () => {
+  const rev = 'a'.repeat(40);
+  const metadata = {
+    link: 'https://github.com/other/elsewhere',
+    build_info: { source_code_snapshot: `git+https://github.com/other/elsewhere?rev=${rev}` },
+  };
+  const bytes = (value: unknown) => [...Buffer.from(JSON.stringify(value))];
+  const queryResult = (value: unknown) => ({
+    result: { result: bytes(value), logs: [], block_height: 220000000, block_hash: REC.null_view.block_hash },
+  });
+  const missing = await rpc((call) => {
+    if (call.method === 'query' && call.params.request_type === 'call_function' && call.params.method_name === 'contract_source_metadata') {
+      return { result: { error: 'wasm execution failed with error: MethodResolveError(MethodNotFound)', logs: [], block_height: 220000000, block_hash: REC.null_view.block_hash } };
+    }
+    return registry(call);
+  });
+  assert.equal(await adapter([missing.url]).viewAccountMethod('dex.testnet', 'contract_source_metadata', {}), null);
+  const absent = await guardPort(chainReader(adapter([missing.url]))).verdict('dex.testnet');
+  assert.ok(absent.reasons.includes('SOURCE_METADATA_ABSENT'), absent.reasons.join(','));
+  assert.equal(absent.reasons.includes('SOURCE_METADATA_MISMATCH'), false);
+  assert.equal(absent.signals.sourceMetadata, null);
+
+  const found = await rpc((call) => {
+    const params = call.params;
+    if (call.method === 'query' && params.request_type === 'call_function' && params.method_name === 'contract_source_metadata') {
+      assert.equal(params.account_id, 'dex.testnet');
+      assert.equal(params.finality, 'final');
+      return queryResult(metadata);
+    }
+    return registry(call);
+  });
+  assert.deepEqual(await adapter([found.url]).viewAccountMethod('dex.testnet', 'contract_source_metadata', {}), metadata);
+  const mismatch = await guardPort(chainReader(adapter([found.url]))).verdict('dex.testnet');
+  assert.equal(mismatch.verdict, 'warn');
+  assert.ok(mismatch.reasons.includes('SOURCE_METADATA_MISMATCH'), mismatch.reasons.join(','));
+  assert.equal(mismatch.signals.sourceMetadata?.link, 'https://github.com/other/elsewhere');
+  assert.equal(mismatch.signals.sourceMetadata?.rev, rev);
+});

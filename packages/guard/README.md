@@ -92,7 +92,9 @@ The NearBlocks source sends `Authorization: Bearer <apiKey>` when a key is given
 | `CONTRACT_NOT_REVIEWED` | warn | a contract with no confirmed attestation, including an attestation whose `binding_confirmed` is false |
 | `ATTESTATION_STALE` | warn | attestation older than `maxAttestAgeDays` (default 180) |
 | `ACCOUNT_TOO_NEW` | warn | younger than `minAgeDays` (default 30), or the account does not exist |
+| `SOURCE_METADATA_MISMATCH` | warn | NEP-330 `contract_source_metadata` names a different repo or commit than the attestation. The metadata is self-reported; it does not prove the bytes were rebuilt |
 | `SIGNAL_UNAVAILABLE` | warn | any reader or age-source call failed, or no age source is configured |
+| `SOURCE_METADATA_ABSENT` | info | the contract has no `contract_source_metadata`. Listed, and it never decides the verdict, so `allow` stays reachable |
 | `ATTESTED_CLEAN` | allow | confirmed attestation below `high`, code unchanged |
 | `NOT_A_CONTRACT` | allow | plain account (empty code hash) |
 
@@ -107,7 +109,7 @@ The verdict is the worst level among the reasons. An empty reason list is `warn`
 
 ## What the guard does not catch
 
-- **Build provenance.** A confirmed binding proves that the `deployed` account agreed to the attestation. It does not prove that its code was built from the reviewed commit. A malicious owner can get a clean review of a benign repo and confirm it for a malicious contract. See `contracts/review-registry/INTERFACE.md`, "Deployed-account binding".
+- **Build provenance, beyond the self-reported signal.** `SOURCE_METADATA_MISMATCH` warns when NEP-330 `contract_source_metadata` names a different repo or commit than the attestation, and `SOURCE_METADATA_ABSENT` notes a contract with no such method. That metadata is self-reported by the deployed wasm. It does not prove the bytes were rebuilt from that commit. Proof is a NearBlocks or SourceScan verification, which rebuilds the commit and compares the hash. A malicious owner can still publish metadata for a benign repo. See `contracts/review-registry/INTERFACE.md`, "Deployed-account binding".
 - Payees hidden anywhere other than the listed argument names, for example nested objects, or a contract that forwards funds elsewhere internally.
 - Mutation of `params` by other code between the check and the signer call. Pass an object nothing else holds.
 - Signers reached outside the wrapper. The agent must hold only the wrapped object.

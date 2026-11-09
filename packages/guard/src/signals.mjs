@@ -3,6 +3,8 @@
 // account-age port. Each signal that cannot be read is null and named in `unavailable`;
 // nothing here throws on a reader error.
 
+import { interpretSourceMetadata } from './source-metadata.mjs';
+
 /** @typedef {import('../types.js').ChainReader} ChainReader */
 /** @typedef {import('../types.js').ChainAttestation} ChainAttestation */
 /** @typedef {import('../types.js').AccountAgeSource} AccountAgeSource */
@@ -98,12 +100,14 @@ export async function collectSignals(reader, accountId, now, accountAge) {
   const codeHash = account ? account.codeHash : null;
   const attestationAgeDays = attestation ? await ageOf(reader, attestation, now, unavailable) : null;
   const report = reported === true ? await readReport(reader, accountId, unavailable) : null;
+  const isContract = exists === false ? false : account ? codeHash !== EMPTY_CODE_HASH : null;
+  const sourceMetadata = await readSourceMetadata(reader, accountId, isContract === true, now, unavailable);
 
   /** @type {Signals} */
   const signals = {
     account: accountId,
     exists,
-    isContract: exists === false ? false : account ? codeHash !== EMPTY_CODE_HASH : null,
+    isContract,
     codeHash,
     reported,
     ageDays: exists === false ? 0 : age,
@@ -113,10 +117,33 @@ export async function collectSignals(reader, accountId, now, accountAge) {
     codeHashMatches: attestation && codeHash !== null ? attestation.code_hash === codeHash : null,
     attestationAgeDays,
     review: attestation ? { repo: attestation.repo, commit: attestation.commit, blockHeight: attestation.block_height } : null,
+    ...(sourceMetadata.collected ? { sourceMetadata: sourceMetadata.value } : {}),
     ...(report ? { report } : {}),
     unavailable,
   };
   return { signals, attestation };
+}
+
+/**
+ * NEP-330 on the receiver. No method on the reader, or a reader with no metadata table,
+ * leaves the signal unset. A thrown read is `sourceMetadata` in `unavailable`.
+ * @param {ChainReader} reader
+ * @param {string} accountId
+ * @param {boolean} isContract
+ * @param {() => number} now
+ * @param {string[]} unavailable
+ * @returns {Promise<{ collected: boolean, value: import('./source-metadata.mjs').SourceMetadata | null }>}
+ */
+async function readSourceMetadata(reader, accountId, isContract, now, unavailable) {
+  if (!isContract || typeof reader.getSourceMetadata !== 'function') return { collected: false, value: null };
+  try {
+    const raw = await reader.getSourceMetadata(accountId);
+    if (raw === undefined) return { collected: false, value: null };
+    return { collected: true, value: interpretSourceMetadata(raw, now) };
+  } catch {
+    unavailable.push('sourceMetadata');
+    return { collected: false, value: null };
+  }
 }
 
 /**

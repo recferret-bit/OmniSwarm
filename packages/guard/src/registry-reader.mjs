@@ -32,6 +32,37 @@ function asAttestation(v) {
 }
 
 /**
+ * True when a view failed because the account has no such method (NEP-330 not embedded).
+ * Transport and malformed-JSON failures are not this. Wrapped errors are read through `cause`.
+ * @param {unknown} error
+ * @param {number} [depth]
+ */
+export function isMissingContractMethod(error, depth = 0) {
+  if (error == null || depth > 5) return false;
+  const text = error instanceof Error ? `${error.name} ${error.message}` : String(error);
+  if (/MethodResolveError|MethodNotFound|method not found/i.test(text)) return true;
+  if (typeof error === 'object' && error !== null && 'cause' in error) {
+    return isMissingContractMethod(/** @type {{ cause?: unknown }} */ (error).cause, depth + 1);
+  }
+  return false;
+}
+
+/**
+ * `contract_source_metadata` on the receiver. A missing method is null. Anything else throws,
+ * which the guard turns into SIGNAL_UNAVAILABLE.
+ * @param {(accountId: string, method: string, args: Record<string, unknown>) => Promise<unknown>} view
+ * @param {string} accountId
+ */
+export async function viewSourceMetadata(view, accountId) {
+  try {
+    return await view(accountId, 'contract_source_metadata', {});
+  } catch (error) {
+    if (isMissingContractMethod(error)) return null;
+    throw error;
+  }
+}
+
+/**
  * @param {RegistryView} view  view call on the registry contract at finality `final`
  * @returns {Pick<Required<ChainReader>, 'getAttestationForAccount' | 'isReported' | 'getReport'>}
  */

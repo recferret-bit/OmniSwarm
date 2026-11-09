@@ -2,7 +2,7 @@
 // Prompt-injection demo. Nothing here signs or sends a transaction: the signer is a dry
 // function-call key that only counts calls, and --no-guard never calls it.
 //
-//   node packages/guard/demo/attack/run.mjs [--no-guard] [--sandbox] [--ticket <file>] [--out <dir>]
+//   node packages/guard/demo/attack/run.mjs [--no-guard] [--sandbox] [--ticket <file>] [--scenario <id>] [--out <dir>]
 //
 // Without --sandbox the chain is fixtures/chain-snapshot.json. With --sandbox the registry and
 // view_account are read from the local RPC (NEAR_LOCAL_RPC_PORT, default 3030). Account age uses
@@ -30,14 +30,29 @@ const { values } = parseArgs({
   options: {
     'no-guard': { type: 'boolean', default: false },
     sandbox: { type: 'boolean', default: false },
-    ticket: { type: 'string', default: path.join(here, 'tickets', 'injected.md') },
+    ticket: { type: 'string' },
+    scenario: { type: 'string' },
     out: { type: 'string' },
   },
 });
 const mode = values['no-guard'] ? 'no-guard' : 'guard';
-const outDir = values.out ?? path.join(os.tmpdir(), 'omniswarm-guard-demo', values.sandbox ? `${mode}-sandbox` : mode);
-const snapshot = values.sandbox ? null : JSON.parse(fs.readFileSync(path.join(here, 'fixtures', 'chain-snapshot.json'), 'utf8'));
-const ticketText = fs.readFileSync(values.ticket, 'utf8');
+
+/** @type {{ id?: string, ticket?: string, snapshot?: string, note?: string } | null} */
+let scenario = null;
+if (values.scenario) {
+  const scenarioPath = values.scenario.includes('/') || values.scenario.endsWith('.json')
+    ? path.resolve(values.scenario)
+    : path.join(here, 'scenarios', `${values.scenario}.json`);
+  scenario = JSON.parse(fs.readFileSync(scenarioPath, 'utf8'));
+}
+const ticketPath = values.ticket
+  ?? (scenario?.ticket ? path.resolve(here, scenario.ticket) : path.join(here, 'tickets', 'injected.md'));
+const snapshotPath = scenario?.snapshot
+  ? path.resolve(here, scenario.snapshot)
+  : path.join(here, 'fixtures', 'chain-snapshot.json');
+const outDir = values.out ?? path.join(os.tmpdir(), 'omniswarm-guard-demo', values.sandbox ? `${mode}-sandbox` : scenario ? `${mode}-${scenario.id ?? 'scenario'}` : mode);
+const snapshot = values.sandbox ? null : JSON.parse(fs.readFileSync(snapshotPath, 'utf8'));
+const ticketText = fs.readFileSync(ticketPath, 'utf8');
 const rpcUrl = values.sandbox ? sandboxRpcUrl() : '';
 const reader = values.sandbox ? createSandboxReader({ rpcUrl }) : createRecordedReader(snapshot);
 const accountAge = values.sandbox ? nearblocksAgeSource({ network: 'sandbox', baseUrl: sandboxAgeUrl() }) : undefined;
@@ -69,13 +84,14 @@ for (const plan of planPayments(ticketText)) {
 const log = {
   mode,
   chain: values.sandbox ? { kind: 'sandbox', rpc: rpcUrl } : { kind: 'recorded-mock', recordedAt: snapshot.recordedAt },
-  ticket: path.basename(values.ticket),
+  ticket: path.basename(ticketPath),
   attempts,
   transactionsSent: 0,
 };
 fs.mkdirSync(outDir, { recursive: true });
 fs.writeFileSync(path.join(outDir, 'attack-log.json'), `${JSON.stringify(log, null, 2)}\n`);
-const markdown = renderMarkdown(log);
+const caveat = scenario?.note ? `${scenario.note}\n\n` : '';
+const markdown = `${caveat}${renderMarkdown(log)}`;
 fs.writeFileSync(path.join(outDir, 'attack-log.md'), markdown);
 process.stdout.write(markdown);
 

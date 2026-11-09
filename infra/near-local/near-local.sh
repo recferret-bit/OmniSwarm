@@ -22,7 +22,7 @@ RPC_ADDR="0.0.0.0:${RPC_PORT}"
 NETWORK_ADDR="127.0.0.1:${NETWORK_PORT}"
 RPC_URL="http://127.0.0.1:${RPC_PORT}/status"
 
-subs=(up down status reset seed view call redeploy)
+subs=(up down status reset seed view call redeploy verify)
 
 usage() {
   printf 'usage: near:local <subcommand>\n'
@@ -437,6 +437,10 @@ case "$1" in
   redeploy)
     shift
     dispatch_later redeploy redeploy.mjs "$@"
+    ;;
+  verify)
+    shift
+    dispatch_later verify verify.mjs "$@"
     ;;
   *)
     printf 'near:local: unknown subcommand: %s\n' "$1" >&2

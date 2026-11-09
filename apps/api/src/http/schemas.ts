@@ -80,7 +80,14 @@ export const localJobResponse = z.strictObject({
 
 export const guardQuery = z.strictObject({ account: accountId, network: network.optional() });
 export const guardVerdictResponse = z.strictObject({
-  verdict: z.enum(['allow', 'warn', 'block']), reasons: z.array(z.string().min(1)), signals: z.record(z.string(), z.unknown()),
+  verdict: z.enum(['allow', 'warn', 'block']), reasons: z.array(z.string().min(1)),
+  signals: z.object({
+    sourceMetadata: z.strictObject({
+      link: z.string().nullable(),
+      rev: z.string().nullable(),
+      fetchedAt: z.string().min(1),
+    }).nullable().optional(),
+  }).passthrough(),
   attestation: z.strictObject({
     requestHash: sha256Hex, reportSha256: sha256Hex, reportUri: https, deployed: accountId.nullable().optional(), codeHash: z.string().min(1).max(128).nullable().optional(),
     maxSeverity: z.enum(['critical', 'high', 'medium', 'low', 'info', 'none']),

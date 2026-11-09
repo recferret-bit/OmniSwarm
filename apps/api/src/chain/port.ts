@@ -86,6 +86,11 @@ export interface ChainPort {
   isReported(accountId: string): Promise<boolean>;
   /** A registry view at finality final, parsed JSON (null when absent): what @omniswarm/guard's registryReader calls. */
   viewRegistry(method: string, args: Record<string, unknown>): Promise<unknown>;
+  /**
+   * A view on the account itself (finality final). Used for NEP-330 `contract_source_metadata`.
+   * Null when the account or the method is missing. Transport failures reject.
+   */
+  viewAccountMethod(accountId: string, method: string, args: Record<string, unknown>): Promise<unknown>;
   /** Operator calls. Each returns the FINAL tx hash. `refund` throws when the transfer bounced. */
   markRunning(requestHash: string): Promise<string>;
   attest(args: AttestArgs): Promise<string>;
