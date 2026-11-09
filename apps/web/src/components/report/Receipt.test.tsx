@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react';
 import axe from 'axe-core';
 import { describe, expect, it } from 'vitest';
 import { Receipt, nearLabel, type ReceiptBody } from './Receipt';
+import { receiptMatch } from './ReceiptSection';
 
 const HASH = 'b'.repeat(64);
 const YOCTO = '1000000000000000000000000';
@@ -36,6 +37,16 @@ describe('receipt', () => {
     expect(screen.getByText('none')).toBeInTheDocument();
     const result = await axe.run(container);
     expect(result.violations).toEqual([]);
+  });
+
+  it('a published report with no request hash is not left checking, and does not keep the API match', () => {
+    expect(receiptMatch({ reportUrl: 'https://reports.example/r/report.html', requestHash: null, phase: 'checking', verifyState: 'match' })).toBe('unavailable');
+    expect(receiptMatch({ reportUrl: 'https://reports.example/r/report.html', requestHash: 'a'.repeat(64), phase: 'done', verifyState: 'unattested' })).toBe('unavailable');
+    expect(receiptMatch({ reportUrl: 'https://reports.example/r/report.html', requestHash: 'a'.repeat(64), phase: 'done', verifyState: 'match' })).toBe(true);
+    expect(receiptMatch({ requestHash: null, phase: 'idle' })).toBeUndefined();
+    render(<Receipt receipt={{ ...fixture, attestation: { ...fixture.attestation!, match: true } }} match="unavailable" />);
+    expect(screen.getByText('not verified in this browser')).toBeInTheDocument();
+    expect(screen.queryByText('match')).not.toBeInTheDocument();
   });
 
   it('a refunded receipt names the refund and has no attestation', () => {
