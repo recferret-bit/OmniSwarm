@@ -1,6 +1,7 @@
+import fs from 'node:fs';
 import path from 'node:path';
 import { z } from 'zod';
-import { APP_ROOT } from '../shared/paths.ts';
+import { APP_ROOT, REPO_ROOT } from '../shared/paths.ts';
 import { envSchema, type RawEnv } from './env.ts';
 
 export type Role = 'api' | 'worker' | 'migrate' | 'script';
@@ -74,6 +75,7 @@ function productionIssues(raw: RawEnv, role: Role): Issue[] {
   const need = (key: keyof RawEnv, ok: boolean, message: string) => { if (!ok) issues.push({ key, message }); };
   const chosen = adapters(raw);
   need('NETWORK', raw.NETWORK !== 'sandbox', 'sandbox is the local near-sandbox and is refused in production');
+  need('NEAR_NETWORK', raw.NEAR_NETWORK !== 'sandbox', 'sandbox is the local near-sandbox and is refused in production');
   need('CHAIN_ADAPTER', chosen.chain === 'near', 'must be "near" in production (mock is test-only)');
   need('GITHUB_ADAPTER', chosen.github === 'live', 'must be "live" in production (recorded is test-only)');
   need('COOKIE_SECURE', raw.COOKIE_SECURE !== false, 'cannot be disabled in production');
@@ -111,6 +113,29 @@ function adapterIssues(raw: RawEnv, role: Role): Issue[] {
 
 function fail(issues: Issue[]): never {
   throw new ConfigError(`invalid environment: ${issues.map((issue) => `${issue.key} ${issue.message}`).join('; ')}`);
+}
+
+/** Host tools use loopback. A container (`/.dockerenv`) uses the host gateway name. */
+export function sandboxRpcUrl(inDocker: boolean): string {
+  return inDocker ? 'http://host.docker.internal:3030' : 'http://127.0.0.1:3030';
+}
+
+const SANDBOX_PRICE_YOCTO = '1000000000000000000000000';
+
+/** Local near-sandbox profile. Not applied in production; productionIssues refuses the key. */
+function withSandboxDefaults(raw: RawEnv): RawEnv {
+  if (raw.NEAR_NETWORK !== 'sandbox' || raw.NODE_ENV === 'production') return raw;
+  return {
+    ...raw,
+    NETWORK: 'sandbox',
+    // Force near. An explicit mock must not take a sandbox job.
+    CHAIN_ADAPTER: 'near',
+    PRICE_YOCTO: raw.PRICE_YOCTO ?? SANDBOX_PRICE_YOCTO,
+    CONTRACT_ID: raw.CONTRACT_ID ?? 'registry.test.near',
+    RPC_URLS: raw.RPC_URLS.length > 0 ? raw.RPC_URLS : [sandboxRpcUrl(fs.existsSync('/.dockerenv'))],
+    // Path only. The key file is not read or created here.
+    OPERATOR_KEY_FILE: raw.OPERATOR_KEY_FILE ?? path.resolve(REPO_ROOT, 'infra/compose/.local/near/keys/operator.json'),
+  };
 }
 
 function build(raw: RawEnv): Config {
@@ -173,7 +198,8 @@ export function loadConfig(role: Role, env: NodeJS.ProcessEnv = process.env): Co
   if (!parsed.success) {
     fail(parsed.error.issues.map((issue: z.core.$ZodIssue) => ({ key: String(issue.path[0] ?? '?'), message: issue.message })));
   }
-  const issues = [...roleIssues(parsed.data, role), ...productionIssues(parsed.data, role), ...adapterIssues(parsed.data, role)];
+  const raw = withSandboxDefaults(parsed.data);
+  const issues = [...roleIssues(raw, role), ...productionIssues(raw, role), ...adapterIssues(raw, role)];
   if (issues.length) fail(issues);
-  return build(parsed.data);
+  return build(raw);
 }
