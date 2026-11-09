@@ -39,6 +39,15 @@ describe('dev wallet', () => {
     ]);
     expect(requested).toBe('http://127.0.0.1:3031/wallet/accounts');
 
+    const indexerShape = {
+      accounts: [{ account_id: alice.accountId, public_key: alice.publicKey, private_key: alice.secretKey }],
+    };
+    const fromIndexer = createDevWallet({
+      fetch: async () => new Response(JSON.stringify(indexerShape), { status: 200 }),
+      accountId: alice.accountId,
+    });
+    await expect(fromIndexer.listAccounts()).resolves.toEqual([{ accountId: alice.accountId, publicKey: alice.publicKey }]);
+
     const message = '{"account":"alice.test.near","v":1}';
     const nonce = new Uint8Array(32).fill(9);
     const recipient = 'omniswarm.test.near';

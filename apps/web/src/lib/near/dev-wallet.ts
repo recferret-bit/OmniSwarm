@@ -59,16 +59,27 @@ function accountsUrl(base?: string): string {
   return trimmed.endsWith('/wallet/accounts') ? trimmed : `${trimmed}/wallet/accounts`;
 }
 
+function textField(row: Record<string, unknown>, names: string[]): string {
+  for (const name of names) {
+    const value = row[name];
+    if (typeof value === 'string' && value) return value;
+  }
+  return '';
+}
+
 function parseAccounts(value: unknown): DevAccount[] {
   const accounts = (value as { accounts?: unknown } | null)?.accounts;
   if (!Array.isArray(accounts) || accounts.length === 0) throw new Error('dev wallet returned no accounts');
   return accounts.map((item, index) => {
-    const row = item as Partial<DevAccount>;
-    if (typeof row.accountId !== 'string' || !row.accountId || typeof row.publicKey !== 'string' || !KEY.test(row.publicKey)
-      || typeof row.secretKey !== 'string' || !KEY.test(row.secretKey)) {
+    const row = item as Record<string, unknown>;
+    // The indexer serves near-cli key files: account_id, public_key, private_key.
+    const accountId = textField(row, ['accountId', 'account_id']);
+    const publicKey = textField(row, ['publicKey', 'public_key']);
+    const secretKey = textField(row, ['secretKey', 'private_key', 'secret_key']);
+    if (!accountId || !KEY.test(publicKey) || !KEY.test(secretKey)) {
       throw new Error(`dev wallet account ${index} is missing accountId, publicKey or an ed25519 secretKey`);
     }
-    return { accountId: row.accountId, publicKey: row.publicKey, secretKey: row.secretKey };
+    return { accountId, publicKey, secretKey };
   });
 }
 
