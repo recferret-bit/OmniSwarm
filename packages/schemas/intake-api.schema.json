@@ -172,7 +172,7 @@
       }
     },
     "receipt": {
-      "description": "What was bought for one request, from the payment row, reviewers/*/usage.json, findings-and-scores.json and the chain tx ids. A refunded request has refund and no attestation.",
+      "description": "What was bought for one request, from the payment row, each reviewers/<id>/usage.json, findings-and-scores.json and the chain tx ids. A refunded request has refund and no attestation.",
       "type": "object",
       "required": ["paid", "reviewers", "check"],
       "additionalProperties": false,

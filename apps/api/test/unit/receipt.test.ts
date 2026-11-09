@@ -9,7 +9,8 @@ import type { ChainAttestation, ChainPort } from '../../src/chain/port.ts';
 import type { Config } from '../../src/config/load.ts';
 import type { Db } from '../../src/db/pool.ts';
 import type { RequestRow } from '../../src/db/repositories/requests.ts';
-import { reportIndex } from '../../src/modules/report-index/report-index.ts';
+import { checkFromFindings, reportIndex, reviewersFromDir } from '../../src/modules/report-index/report-index.ts';
+import { APP_ROOT } from '../../src/shared/paths.ts';
 
 const ID = '3f2b8c1e-5d4a-4b7e-9c1a-2e6f0a8b4d10';
 const HASH = 'b'.repeat(64);
@@ -72,6 +73,7 @@ test('a fixture report gives the expected receipt', async () => {
   writeReport(path.join(root, ID));
   const body = await reportIndex(deps(root, row('done')), ID);
   assert.equal(body.reportSha256, HASH);
+  assert.deepEqual(body.reviewers, ['key-zai-glm-5-3']);
   assert.ok(body.receipt);
   assert.deepEqual(body.receipt, {
     paid: { yocto: YOCTO, tx: 'PayTx111' },
@@ -81,6 +83,15 @@ test('a fixture report gives the expected receipt', async () => {
   });
   assert.equal('refund' in (body.receipt ?? {}), false);
   assert.equal(validate('intake-api#report-index-response', body).ok, true, validate('intake-api#report-index-response', body).errors?.join('; '));
+});
+
+test('the mock engine fixture stores the reviewer and a confirmed finding', () => {
+  const dir = path.join(APP_ROOT, 'test/fixtures/engine-report');
+  assert.deepEqual(reviewersFromDir(dir), [
+    { id: 'scripted-baseline', vendor: 'scripted', model: 'baseline', calls: 0, tokens: 0, usd: 0 },
+  ]);
+  const findings = JSON.parse(fs.readFileSync(path.join(dir, 'findings-and-scores.json'), 'utf8'));
+  assert.deepEqual(checkFromFindings(findings), { passed: 1, total: 1, byStatus: { CONFIRMED: 1 } });
 });
 
 test('a refunded request has refund and no attestation', async () => {

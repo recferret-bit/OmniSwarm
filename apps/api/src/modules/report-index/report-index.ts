@@ -38,11 +38,25 @@ export function attestationDto(a: ChainAttestation) {
   };
 }
 
+function idOf(value: unknown): string | null {
+  if (typeof value === 'string' && value.length > 0) return value;
+  if (value && typeof value === 'object' && typeof (value as { id?: unknown }).id === 'string') return (value as { id: string }).id;
+  return null;
+}
+
+/** Reviewer ids from either the early string list or the engine's vendor-grouped index. */
 function reviewersOf(dir: string): string[] {
   const groups = readJson(path.join(dir, 'reviewers', 'index.json'))?.groups;
   if (!Array.isArray(groups)) return [];
-  return groups.flatMap((group: { reviewers?: unknown }) => (Array.isArray(group?.reviewers) ? group.reviewers : []))
-    .filter((id: unknown): id is string => typeof id === 'string');
+  const ids = groups.flatMap((group: { reviewers?: unknown; vendors?: unknown }) => {
+    const direct = Array.isArray(group?.reviewers) ? group.reviewers.flatMap((row) => { const id = idOf(row); return id ? [id] : []; }) : [];
+    const vendors = Array.isArray(group?.vendors) ? group.vendors : [];
+    const nested = vendors.flatMap((bucket: { reviewers?: unknown }) => (Array.isArray(bucket?.reviewers)
+      ? bucket.reviewers.flatMap((row: unknown) => { const id = idOf(row); return id ? [id] : []; })
+      : []));
+    return [...direct, ...nested];
+  });
+  return [...new Set(ids)];
 }
 
 function text(value: unknown): string | null {

@@ -70,6 +70,20 @@ test('tools/list returns 3 tools and guard_verdict blocks drained-vault', async 
   assert.equal(attestation.attestation.reportSha256, 'd'.repeat(64));
 });
 
+test('is_reported does not answer false when the API did not read the blocklist', async () => {
+  const fetchImpl = async () => ({
+    ok: true,
+    json: async () => ({ verdict: 'warn', reasons: ['SIGNAL_UNAVAILABLE'], signals: { reported: null, unavailable: ['reported'] } }),
+  });
+  const guard = createGuardServer({ apiUrl: 'http://guard.test', fetchImpl });
+  await assert.rejects(() => guard.call('is_reported', { account: 'phish.test.near' }), /is_reported unavailable/);
+  const known = createGuardServer({
+    apiUrl: 'http://guard.test',
+    fetchImpl: async () => ({ ok: true, json: async () => ({ verdict: 'allow', reasons: ['NOT_A_CONTRACT'], signals: { reported: false } }) }),
+  });
+  assert.deepEqual(await known.call('is_reported', { account: 'alice.test.near' }), { reported: false });
+});
+
 test('stdio --recorded answers tools/list', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'omni-mcp-'));
   const file = path.join(dir, 'recorded.json');

@@ -29,8 +29,10 @@ function TxLink({ hash, children }: { hash: string; children: string }) {
   return <a href={txUrl(hash)} target="_blank" rel="noreferrer">{children}</a>;
 }
 
-export function Receipt({ receipt, match }: { receipt: ReceiptBody; match?: boolean }) {
-  const shown = match ?? receipt.attestation?.match;
+export function Receipt({ receipt, match }: { receipt: ReceiptBody; match?: boolean | 'pending' | 'unavailable' }) {
+  // A finished browser check replaces the API flag. While it runs, or when it cannot
+  // decide, the API flag is not shown as if the browser had agreed.
+  const shown = match === true || match === false ? match : match === 'pending' || match === 'unavailable' ? undefined : receipt.attestation?.match;
   const statuses = Object.entries(receipt.check.byStatus);
   return (
     <Panel id="receipt" title="Receipt">
@@ -46,6 +48,8 @@ export function Receipt({ receipt, match }: { receipt: ReceiptBody; match?: bool
             : 'none'}
           {shown === true ? <> <Pill tone="good">match</Pill></> : null}
           {shown === false ? <> <Pill tone="bad">does not match</Pill></> : null}
+          {match === 'pending' ? <> <Pill tone="neutral">checking the hash</Pill></> : null}
+          {match === 'unavailable' ? <> <Pill tone="warn">not verified in this browser</Pill></> : null}
           {receipt.attestation ? <> (<TxLink hash={receipt.attestation.tx}>attestation transaction</TxLink>)</> : null}
         </dd>
         <dt>Refund</dt>

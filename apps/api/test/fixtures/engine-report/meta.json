@@ -8,7 +8,9 @@
   "reviewers": [
     {
       "id": "scripted-baseline",
-      "family": "scripted"
+      "family": "scripted",
+      "vendor": "scripted",
+      "model": "baseline"
     }
   ],
   "auditors": [

@@ -38,8 +38,14 @@ export function ReceiptSection({ id }: { id: string }) {
   const { state } = useVerification(reportUrl && requestHash ? run : null);
   const receipt = index ? asReceipt(index.receipt) : null;
   if (!receipt) return null;
-  const verified = state.phase === 'done'
-    ? state.result.state === 'match' ? true : state.result.state === 'mismatch' ? false : undefined
-    : undefined;
-  return <Receipt receipt={receipt} match={verified} />;
+  // No published files: the API comparison is the only stored match. Otherwise the
+  // browser check (W15-10) decides, and a failed or unattested check does not fall
+  // back to the API flag.
+  const match = !reportUrl ? undefined
+    : state.phase === 'checking' ? 'pending' as const
+    : state.phase === 'error' ? 'unavailable' as const
+    : state.result.state === 'match' ? true
+    : state.result.state === 'mismatch' ? false
+    : 'unavailable' as const;
+  return <Receipt receipt={receipt} match={match} />;
 }

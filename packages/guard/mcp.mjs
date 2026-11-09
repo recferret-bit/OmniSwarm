@@ -165,7 +165,10 @@ async function apiVerdict(options, account) {
  * @param {ChainAttestation | null | undefined} attestation
  */
 function schemaAttestation(attestation) {
-  if (!attestation) return null;
+  if (attestation == null) return null;
+  const ok = typeof attestation.request_hash === 'string' && typeof attestation.report_sha256 === 'string'
+    && typeof attestation.report_uri === 'string' && typeof attestation.max_severity === 'string';
+  if (!ok) throw new Error('attestation has an unexpected shape');
   return toSchemaAttestation(attestation);
 }
 
@@ -236,12 +239,16 @@ export function createGuardServer(options) {
    */
   async function reportedOf(account) {
     const id = accountOf(account);
-    if (reader?.isReported) return reader.isReported(id);
+    if (reader?.isReported) {
+      const value = await reader.isReported(id);
+      if (typeof value !== 'boolean') throw new Error('is_reported unavailable');
+      return value;
+    }
     const body = await verdict(id, undefined);
+    const reported = body.signals && /** @type {{ reported?: unknown }} */ (body.signals).reported;
+    if (typeof reported === 'boolean') return reported;
     if (body.reasons.includes('REPORTED')) return true;
-    const unavailable = /** @type {{ unavailable?: unknown }} */ (body.signals).unavailable;
-    if (Array.isArray(unavailable) && unavailable.includes('reported')) throw new Error('is_reported unavailable');
-    return false;
+    throw new Error('is_reported unavailable');
   }
 }
 

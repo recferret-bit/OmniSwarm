@@ -4,6 +4,7 @@
     "title": "Missing owner check on set_price",
     "severity": "medium",
     "status": "UPHELD_REVIEW",
+    "finalStatus": "CONFIRMED",
     "score": 5.5,
     "locations": [
       "src/lib.rs:42"

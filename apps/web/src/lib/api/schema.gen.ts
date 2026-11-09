@@ -203,7 +203,7 @@ export interface RequestListResponse {
   }[];
 }
 /**
- * What was bought for one request, from the payment row, reviewers/* /usage.json, findings-and-scores.json and the chain tx ids. A refunded request has refund and no attestation.
+ * What was bought for one request, from the payment row, each reviewers/<id>/usage.json, findings-and-scores.json and the chain tx ids. A refunded request has refund and no attestation.
  */
 export interface Receipt {
   paid: {
