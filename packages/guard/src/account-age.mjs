@@ -11,12 +11,16 @@ export { nearblocksAgeSource, createdAtMsOf, NEARBLOCKS_BASE } from './nearblock
 export const ACCOUNT_AGE_PROVIDERS = Object.freeze(['off', 'nearblocks']);
 
 /**
- * @param {{ provider?: string, network?: 'mainnet' | 'testnet', apiKey?: string, fetch?: typeof fetch, baseUrl?: string }} [config]
+ * @param {{ provider?: string, network?: 'mainnet' | 'testnet' | 'sandbox', apiKey?: string, fetch?: typeof fetch, baseUrl?: string }} [config]
  * @returns {AccountAgeSource | undefined}  pass as `createGuard({ reader, accountAge })`
  */
 export function accountAgeFromConfig({ provider = 'off', network, apiKey, fetch, baseUrl } = {}) {
   if (provider === 'off') return undefined;
   if (provider === 'nearblocks') {
+    if (network === 'sandbox') {
+      if (!baseUrl) throw new TypeError('the nearblocks account age source on sandbox needs an explicit baseUrl');
+      return nearblocksAgeSource({ network, apiKey, fetch, baseUrl });
+    }
     if (network !== 'mainnet' && network !== 'testnet') throw new TypeError('the nearblocks account age source needs network mainnet or testnet');
     return nearblocksAgeSource({ network, apiKey, fetch, baseUrl });
   }

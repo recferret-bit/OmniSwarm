@@ -5,7 +5,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { nearToYocto, paymentIntent, planPayments } from '../demo/attack/agent.mjs';
+import { createFunctionCallSigner, nearToYocto, paymentIntent, planPayments } from '../demo/attack/agent.mjs';
+import { createSandboxReader } from '../demo/attack/sandbox.mjs';
 
 const demo = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'demo', 'attack');
 
@@ -61,6 +62,49 @@ test('a benign ticket to an attested account goes to the dry signer once', () =>
   const { json } = run(['--ticket', path.join(demo, 'tickets', 'benign.md')]);
   assert.equal(json.attempts[0].outcome, 'signed_dry_run');
   assert.equal(json.attempts[0].signerCalls, 1);
+});
+
+test('the function-call signer counts one call and refuses a transfer', async () => {
+  const key = createFunctionCallSigner();
+  const intent = paymentIntent({ agentId: 'a.testnet', paymentsContract: 'p.testnet', receiver: 'bob.testnet', amountNear: '1' });
+  assert.deepEqual(await key.signer.signAndSendTransaction(intent), { dryRun: true });
+  assert.equal(key.calls(), 1);
+  await assert.rejects(key.signer.signAndSendTransaction({ receiverId: 'bob.testnet', actions: [{ type: 'Transfer', params: { deposit: '1' } }] }), /function-call key/);
+  assert.equal(key.calls(), 2);
+});
+
+test('the sandbox reader asks the local RPC for view_account and the registry', async () => {
+  /** @type {{ url: string, method: string, params: any }[]} */
+  const calls = [];
+  const attestation = { request_hash: 'ab', binding_confirmed: true, max_severity: 'low', code_hash: 'HASH' };
+  const fetch = async (url, init) => {
+    const body = JSON.parse(init.body);
+    calls.push({ url: String(url), method: body.method, params: body.params });
+    const params = body.params;
+    if (params.request_type === 'view_account' && params.account_id === 'missing.test.near') {
+      return { ok: true, json: async () => ({ error: { cause: { name: 'UNKNOWN_ACCOUNT' } } }) };
+    }
+    if (params.request_type === 'view_account') {
+      return { ok: true, json: async () => ({ result: { code_hash: 'HASH' } }) };
+    }
+    const encoded = (value) => ({ result: { result: [...Buffer.from(JSON.stringify(value))] } });
+    if (params.method_name === 'get_attestation_for_account') return { ok: true, json: async () => encoded(attestation) };
+    if (params.method_name === 'is_reported') return { ok: true, json: async () => encoded(true) };
+    if (params.method_name === 'get_report') return { ok: true, json: async () => encoded(null) };
+    if (body.method === 'block') {
+      return { ok: true, json: async () => ({ result: { header: { timestamp_nanosec: '1000000000000' } } }) };
+    }
+    throw new Error(`unexpected ${body.method}`);
+  };
+  const reader = createSandboxReader({ rpcUrl: 'http://127.0.0.1:3180', fetch });
+  assert.deepEqual(await reader.getAccount('good-dex.test.near'), { codeHash: 'HASH' });
+  assert.equal(await reader.getAccount('missing.test.near'), null);
+  assert.equal((await reader.getAttestationForAccount('good-dex.test.near')).max_severity, 'low');
+  assert.equal(await reader.isReported('phish.test.near'), true);
+  assert.equal(await reader.getBlockTimestampMs(4), 1_000_000);
+  assert.ok(calls.every((call) => call.url === 'http://127.0.0.1:3180'));
+  assert.ok(calls.some((call) => call.params.request_type === 'view_account'));
+  assert.ok(calls.some((call) => call.params.method_name === 'is_reported'));
 });
 
 test('the committed example logs are what the demo prints today', () => {

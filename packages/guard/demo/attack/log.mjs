@@ -33,11 +33,20 @@ function renderAttempt(attempt, i) {
 }
 
 /** @param {any} log */
+function chainLine(log) {
+  if (log.chain.kind === 'recorded-mock') {
+    return `Chain: ${log.chain.kind}, snapshot ${log.chain.recordedAt}. Ticket: \`${log.ticket}\`.`;
+  }
+  const where = log.chain.rpc ? ` at ${log.chain.rpc}` : '';
+  return `Chain: ${log.chain.kind}${where}. Ticket: \`${log.ticket}\`.`;
+}
+
+/** @param {any} log */
 export function renderMarkdown(log) {
   return [
     `# Guard attack demo (${log.mode})`,
     '',
-    `Chain: ${log.chain.kind}, snapshot ${log.chain.recordedAt}. Ticket: \`${log.ticket}\`.`,
+    chainLine(log),
     '',
     ...log.attempts.map(renderAttempt),
     `Transactions sent: ${log.transactionsSent}.`,
