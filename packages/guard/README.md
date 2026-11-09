@@ -114,6 +114,24 @@ The verdict is the worst level among the reasons. An empty reason list is `warn`
 - Mutation of `params` by other code between the check and the signer call. Pass an object nothing else holds.
 - Signers reached outside the wrapper. The agent must hold only the wrapped object.
 
+## MCP
+
+The same check is available to an agent over MCP. The server is read-only. It holds no key and it cannot sign.
+
+Demo step 1, against the local stack:
+
+```sh
+claude mcp add omniswarm-guard -- node packages/guard/mcp.mjs --api http://omniswarm.localhost:18480
+```
+
+Then ask: is it safe to pay drained-vault.test.near?
+
+`guard_verdict` returns `block`, the reasons, and the attestation link. The default network is `sandbox`. Pass `--network testnet` or `--network mainnet` for the other chains.
+
+The other tools are `get_attestation` (`account` or `request_hash`) and `is_reported` (`account`). `request_hash` needs `--rpc` and `--contract`, because that view is not on the public API. Both flags are read-only JSON-RPC. There is no key flag.
+
+Example config for Claude Code is `examples/mcp/claude-code.json`. Example config for Codex is `examples/mcp/codex.toml`. Copy the table into the project's MCP config, with the paths relative to the OmniSwarm checkout.
+
 ## Key limits
 
 The guard holds no key and signs nothing. An agent should hold a function-call key: limited to one contract and its methods, with a gas allowance, unable to transfer NEAR or add keys. The guard covers what that key still allows, such as a payout method that pays any `receiver`. See `demo/attack/README.md`.
