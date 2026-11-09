@@ -65,8 +65,20 @@ export async function createGuardPort(config: Config, chain: ChainPort): Promise
   // The account-age indexer is a real network call: never with the mock chain (tests, local stack).
   if (chain.kind === 'mock') return guardPort(chainReader(chain));
   const { accountAgeFromConfig } = await import('@omniswarm/guard/account-age');
+  const accountAgeUrl = process.env.GUARD_ACCOUNT_AGE_URL?.trim() || undefined;
+  // Sandbox age is the local indexer. No URL means no source: do not call the public NearBlocks host.
+  if (config.intake.network === 'sandbox') {
+    if (!accountAgeUrl) return guardPort(chainReader(chain));
+    const accountAge = accountAgeFromConfig({
+      provider: 'nearblocks', network: 'sandbox', baseUrl: accountAgeUrl,
+      ...(config.guard.nearblocksApiKey ? { apiKey: config.guard.nearblocksApiKey } : {}),
+    });
+    return guardPort(chainReader(chain), accountAge);
+  }
   const accountAge = accountAgeFromConfig({
-    provider: config.guard.accountAge, network: config.intake.network, ...(config.guard.nearblocksApiKey ? { apiKey: config.guard.nearblocksApiKey } : {}),
+    provider: config.guard.accountAge, network: config.intake.network,
+    ...(accountAgeUrl ? { baseUrl: accountAgeUrl } : {}),
+    ...(config.guard.nearblocksApiKey ? { apiKey: config.guard.nearblocksApiKey } : {}),
   });
   return guardPort(chainReader(chain), accountAge);
 }
