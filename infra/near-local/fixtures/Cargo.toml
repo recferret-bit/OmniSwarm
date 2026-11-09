@@ -1,0 +1,13 @@
+# Two tiny NEAR contracts for the local guard drift demo.
+# Rebuild from the repository root: bash infra/near-local/fixtures/build.sh
+[workspace]
+resolver = "2"
+members = ["good-dex", "drained-vault"]
+
+[profile.release]
+codegen-units = 1
+opt-level = "z"
+lto = true
+debug = false
+panic = "abort"
+overflow-checks = true
