@@ -423,7 +423,15 @@ case "$1" in
   view|call)
     sub="$1"
     shift
-    dispatch_later "$sub" ops.mjs "$sub" "$@"
+    # ops.mjs (W15-12) owns view and call once it exists. Until then, view is
+    # lib/view.mjs so seed can show get_config.
+    if [ -f "$HERE/ops.mjs" ]; then
+      dispatch_later "$sub" ops.mjs "$sub" "$@"
+    elif [ "$sub" = view ] && [ -f "$HERE/lib/view.mjs" ]; then
+      dispatch_later "$sub" lib/view.mjs "$sub" "$@"
+    else
+      dispatch_later "$sub" ops.mjs "$sub" "$@"
+    fi
     ;;
   redeploy)
     shift
