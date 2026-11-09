@@ -12,11 +12,18 @@ const publicTurn = ({ round, role, anonId, verdict, argument, citations }) => ({
 // flip without new evidence) is shown marked so it is not counted as an independent vote.
 const judgeTurns = (turns) => turns.filter((t) => !t.discarded).map((t) => ({ ...publicTurn(t), ...(t.conformitySuspect ? { conformitySuspect: true } : {}) }));
 
+const PROVIDER_BLOCKS = ['usage_limit', 'auth_required', 'provider_policy'];
+
 async function session(ctx, { name, agent, role, prompt, assignment, kind, signal }) {
+  if (PROVIDER_BLOCKS.includes(ctx.providerFailures?.[agent])) return { body: null, reason: ctx.providerFailures[agent] };
   try {
     const logFile = path.join(ctx.output, 'harness', 'host', `agent-${name}.log`);
     const result = await ctx.execute({ name, agent, role, prompt, assignment, logFile, signal });
-    if (result?.code !== 0) return { body: null, reason: result?.failure?.reason || 'session_failed' };
+    if (result?.code !== 0) {
+      const reason = result?.failure?.reason || 'session_failed';
+      if (ctx.providerFailures && PROVIDER_BLOCKS.includes(reason)) ctx.providerFailures[agent] ||= reason;
+      return { body: null, reason };
+    }
     const body = readInbox(ctx.output, name, kind);
     return body ? { body } : { body: null, reason: 'nothing_committed' };
   } catch (error) {

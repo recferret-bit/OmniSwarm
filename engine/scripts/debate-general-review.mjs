@@ -61,17 +61,48 @@ export function composeGeneralReview({ rows, clusters, gaps, scope, failedSurfac
   return general;
 }
 
-// The summary when no model writes one (scripted orchestrator, or nothing to adjudicate): counts only.
-export function rulesSummary(rows) {
-  if (!rows.length) return { executiveSummary: 'No committed finding reached adjudication.', openDisagreements: [] };
+export function limitationClause(rows, { gaps = [], failedSurfaces = new Set(), partialSurfaces = [], fallbackReason = null } = {}) {
+  const limitations = [];
+  if (fallbackReason) limitations.push(`orchestrator synthesis unavailable (${fallbackReason}); generated from verified citation rules`);
+  const rulesOnly = rows.filter((row) => row.judge?.reviewerId === 'rules' || /(?:debate_time|debate_threshold|judge_threshold|judge_unavailable|debate_cap|pass2_budget_restored_from_pass1)/.test(row.rationale || '')).length;
+  if (rulesOnly) limitations.push(`${rulesOnly} cluster(s) adjudicated by deterministic citation rules`);
+  const failedList = [...failedSurfaces];
+  if (failedList.length) limitations.push(`incomplete surfaces: ${failedList.join(', ')}`);
+  const partialList = [...new Set(partialSurfaces)].filter(Boolean);
+  if (partialList.length) limitations.push(`partial passes (restored earlier pass or budget limit): ${partialList.join(', ')}`);
+  const gapReasons = [...new Set(gaps.map((g) => g?.reason).filter(Boolean).filter((r) => r !== 'debate_cap'))];
+  if (gapReasons.length) limitations.push(`recorded debate/coverage gaps: ${gapReasons.join(', ')}`);
+  return limitations.length ? `Open questions and limitations: ${limitations.join('; ')}.` : '';
+}
+
+// The summary when no model writes one (scripted orchestrator, nothing to adjudicate, or fallback when threshold/timeout reached): counts and limitations.
+export function rulesSummary(rows, options = {}) {
+  const { gaps = [], failedSurfaces = new Set(), partialSurfaces = [], fallbackReason = null } = options || {};
+  if (!rows.length && !fallbackReason) return { executiveSummary: 'No committed finding reached adjudication.', openDisagreements: [] };
   const counts = Object.keys(RANK).map((status) => [status, rows.filter((row) => row.finalStatus === status).length]).filter(([, n]) => n);
-  return { executiveSummary: `${rows.length} clusters adjudicated from verified citations: ${counts.map(([s, n]) => `${n} ${s}`).join(', ')}.`, openDisagreements: [] };
+  const base = rows.length
+    ? `${rows.length} clusters adjudicated from verified citations: ${counts.map(([s, n]) => `${n} ${s}`).join(', ')}.`
+    : 'No committed finding reached adjudication.';
+  if (!fallbackReason && !partialSurfaces.length) return { executiveSummary: base, openDisagreements: [] };
+  const clause = limitationClause(rows, { gaps, failedSurfaces, partialSurfaces, fallbackReason });
+  const disputed = rows.filter((row) => row.finalStatus === 'DISPUTED');
+  return {
+    executiveSummary: clause ? `${base} ${clause}` : base,
+    openDisagreements: disputed.map((row) => ({ clusterId: row.clusterId, summary: row.rationale })),
+  };
 }
 
 export function generalReviewMarkdown(general) {
   const lines = ['# General review', '', general.executiveSummary, '', `Risk posture: ${general.riskPosture}`, '', '## Top findings', ''];
   lines.push(...(general.topFindings.length ? general.topFindings.map((row) => `- [${row.clusterId}](#finding-${row.clusterId}) ${row.title}: ${row.finalStatus} (${row.severity})`) : ['- None adjudicated.']));
   if (general.openDisagreements.length) lines.push('', '## Open disagreements', '', ...general.openDisagreements.map((row) => `- ${row.clusterId}: ${row.summary}`));
+  const limitRows = (general.coverage || []).filter((row) => !row.covered || (row.gaps && row.gaps.length));
+  const summaryLimit = /Open questions and limitations:\s*(.+)$/.exec(general.executiveSummary || '')?.[1];
+  if (limitRows.length || summaryLimit) {
+    lines.push('', '## Coverage & limitations', '');
+    if (summaryLimit) lines.push(`- ${summaryLimit}`);
+    lines.push(...limitRows.map((row) => `- ${row.surface}: ${row.covered ? 'covered' : 'incomplete'}${row.gaps?.length ? ` (gaps: ${row.gaps.join(', ')})` : ''}`));
+  }
   lines.push('', '## Contributions', '', '| Reviewer | Unique confirmed | Refuted | Tool calls | Cost USD |', '|---|---|---|---|---|');
   lines.push(...general.contributions.map((row) => `| ${row.reviewerId} | ${row.uniqueConfirmed} | ${row.refuted} | ${row.toolCalls} | ${row.costUsd ?? '—'} |`));
   lines.push('', DISCLAIMER, '');

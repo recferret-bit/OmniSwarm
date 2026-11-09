@@ -18,9 +18,10 @@ export function heartbeatReporter(output, name) {
   };
 }
 
-function bridgeArguments(run, { role, agent, name, surface, identityFile, pass }) {
+function bridgeArguments(run, { role, agent, name, surface, identityFile, pass, toolBudget }) {
   const args = ['--docker-bin', run.dockerBin, '--container', run.session.container, '--report-dir', run.output, '--role', role, '--agent', agent, '--identity-file', identityFile, '--reviewers-file', path.join(run.output, 'harness', 'reviewers.json')];
-  if (pass) args.push('--pass', String(pass), '--tool-budget', String(run.budgets.toolBudget));
+  if (pass) args.push('--pass', String(pass), '--tool-budget', String(toolBudget || run.budgets.toolBudget));
+  else if (toolBudget) args.push('--tool-budget', String(toolBudget));
   // Cross-check, debate and judge sessions span every surface, so their context and plans must too (R-06).
   // Every session except a cross-check (named by its reviewer) carries its own name for the bridge identity.
   if (role === 'auditor') args.push('--auditor', name, '--surface', surface);
@@ -67,14 +68,24 @@ export function createExecute(run) {
       : { directory: path.join(run.output, 'sessions', name), resuming: false, prompt };
     if (plan.reused) return plan.reused;
     const resuming = plan.resuming || (pass > 1 && fs.existsSync(path.join(plan.directory, 'state.json')));
-    const bridgeArgs = bridgeArguments(run, { role, agent, name, surface, identityFile, pass });
+    const crosscheckBudget = role === 'crosscheck' && run.budgets
+      ? Math.min(120, Math.max(Number(run.budgets.toolBudget) || 40, (Array.isArray(assignment) ? assignment.length : 0) + 20))
+      : undefined;
+    const bridgeArgs = bridgeArguments(run, { role, agent, name, surface, identityFile, pass, toolBudget: crosscheckBudget });
     const transport = families.has(reviewer.family) ? families.get(reviewer.family).transport : undefined;
     writeReportFile(run.output, `harness/session-${name}.json`, JSON.stringify({ directory: plan.directory, identity, ...(transport ? { transport } : {}) }));
     const linked = linkSignals([run.signal, signal]);
+    const sessionBudgets = !run.budgets
+      ? run.budgets
+      : role === 'crosscheck'
+        ? { ...run.budgets, toolBudget: crosscheckBudget }
+        : (role === 'debater' || role === 'orchestrator') && Number(assignment?.budget) > 0
+          ? { ...run.budgets, toolBudget: Number(assignment.budget) }
+          : run.budgets;
     try {
       const result = await run.review({
         directory: plan.directory, identity, bridgeArgs, prompt: plan.prompt, logFile, resume: resuming,
-        budgets: run.budgets, prices: run.prices, signal: linked.signal, onProgress: heartbeatReporter(run.output, name),
+        budgets: sessionBudgets, prices: run.prices, signal: linked.signal, onProgress: heartbeatReporter(run.output, name),
       });
       return { ...recordExit(run.output, name, result), identity, ...(plan.restartedFrom ? { restartedFrom: plan.restartedFrom } : {}) };
     } finally {

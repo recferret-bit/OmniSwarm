@@ -69,6 +69,11 @@ test('a later pass that submits nothing restores the archived report and does no
   assert.equal(fs.readFileSync(path.join(out, 'submissions', `${name}.json`), 'utf8'), '{"pass":1}\n');
   assert.equal(fs.existsSync(path.join(out, 'submissions', `${name}-pass-1.json`)), true);
   assert.equal(loop.health[1].submitted, false);
+  assert.equal(loop.health[1].restored, true);
+  const bHealth = budgetHealth([loop.health[0], { ...loop.health[1], stop: 'budget' }]);
+  assert.equal(bHealth.state, 'COMPLETE', 'a restored earlier submission keeps budgetHealth complete');
+  assert.equal(bHealth.budgetStops.length, 1);
+  assert.deepEqual(bHealth.errors, []);
 });
 
 test('without a ceiling every pass runs', async () => {

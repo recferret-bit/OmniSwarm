@@ -87,7 +87,19 @@ fi
 
 RESOLVED_FILE="$(mktemp "${TMPDIR:-/tmp}/audit-reviewers.XXXXXX")"
 REQUEST_FILE=""
-trap 'rm -f -- "$RESOLVED_FILE" ${REQUEST_FILE:+"$REQUEST_FILE"}' EXIT
+HTML_DONE=0
+finalize_html() {
+  if [ "$HTML_DONE" -eq 0 ] && [ "${OMNI_DEMO_HOST:-0}" != "1" ] && [ -n "$OUTPUT_DIR" ] && [ -f "$OUTPUT_DIR/meta.json" ]; then
+    HTML_DONE=1
+    node "$SCRIPT_DIR/generate-html-report.mjs" "$OUTPUT_DIR" || [ "${code:-0}" -ne 0 ] || code=2
+  fi
+}
+cleanup_exit() {
+  finalize_html || true
+  rm -f -- "$RESOLVED_FILE" ${REQUEST_FILE:+"$REQUEST_FILE"}
+}
+trap cleanup_exit EXIT
+trap 'code=130' INT TERM
 # --target lets run-config refuse the scripted judge on anything but an OmniSwarm fixture (scripted_judge_demo_only).
 node "$SCRIPT_DIR/run-config.mjs" resolve --target "$TARGET_DIR" ${RC_ARGS[@]+"${RC_ARGS[@]}"} >"$RESOLVED_FILE" || exit 2
 { IFS= read -r AGENT_LABELS; IFS= read -r MODEL_LINE; } < <(node "$SCRIPT_DIR/reviewer-plan.mjs" header "$RESOLVED_FILE")
@@ -133,9 +145,7 @@ fs.writeFileSync(file, JSON.stringify({target, out, name, mode, source, ref, com
 code=0
 if [ "${BLOCKED:-${AUDIT_BLOCKED_RUN:-0}}" = "1" ]; then
   node "$SCRIPT_DIR/worker-supervisor.mjs" blocked-run "$REQUEST_FILE" || code=$?
-  if [ -f "$OUTPUT_DIR/meta.json" ]; then
-    node "$SCRIPT_DIR/generate-html-report.mjs" "$OUTPUT_DIR" || code=2
-  fi
+  finalize_html
   [ "$code" -ne 0 ] || code=2
   echo "Blocked/incomplete review record saved to: $OUTPUT_DIR"
   exit "$code"
@@ -148,7 +158,7 @@ else
 fi
 if [ "${OMNI_DEMO_HOST:-0}" != "1" ] && [ -f "$OUTPUT_DIR/meta.json" ]; then
   # HTML generation revalidates and scores current inputs before rendering.
-  node "$SCRIPT_DIR/generate-html-report.mjs" "$OUTPUT_DIR" || code=2
+  finalize_html
 fi
 if [ "$code" -ne 0 ] && [ "${OMNI_DEMO:-0}" = "1" ]; then
   # The demo decides its own outcome (audit-demo-verdict.mjs); do not announce a failed audit first.

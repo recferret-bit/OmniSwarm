@@ -52,6 +52,33 @@ function voicesFor(reviewers, { claims, controls, reader, bridge, budget }) {
   }));
 }
 
+function partialSurfacesOf(ctx) {
+  const targetPasses = ctx.budgets?.passes || 1;
+  const notes = [];
+  for (const job of ctx.jobs || []) {
+    if (job.state === 'collected' && Number.isInteger(job.passesCompleted) && job.passesCompleted < targetPasses) {
+      notes.push(`${job.name} (${job.passesCompleted}/${targetPasses} passes)`);
+    }
+  }
+  const health = readJsonOr(ctx.output, 'harness/budget-health.json', null);
+  for (const stop of health?.budgetStops || []) {
+    if (stop.restored || stop.submitted === false) {
+      const label = stop.job || stop.reviewer;
+      if (label && !notes.some((n) => n.startsWith(label))) notes.push(`${label} (pass ${stop.pass} ${stop.stop})`);
+    }
+  }
+  for (const reviewer of ctx.reviewers || []) {
+    const budget = readJsonOr(ctx.output, `harness/budget-${reviewer.id}.json`, null);
+    for (const [key, rec] of Object.entries(budget?.passes || {})) {
+      if (rec?.exhausted) {
+        const label = `${reviewer.id}:${key}`;
+        if (!notes.some((n) => n.includes(reviewer.id) && n.includes(key.split(':')[0]))) notes.push(`${label} (budget exhausted)`);
+      }
+    }
+  }
+  return notes;
+}
+
 // A plan with no bridge: scripted reviewers and the scripted judge only, on an OmniSwarm fixture. Used by the
 // host demo (claims loaded from its report dir) and the golden eval (claims passed in).
 export function offlinePlan({ out, sourceRoot, claims, controls, reviewers, rounds = DEBATE_DEFAULTS.rounds, scope = ['S1'], manifest = null }) {
@@ -66,7 +93,7 @@ export function offlinePlan({ out, sourceRoot, claims, controls, reviewers, roun
     voices: voicesFor(reviewers, { claims, controls, reader, bridge: null }),
     judgeVoice: () => async () => ({ unavailable: 'no_bridge_offline' }),
     summaryVoice: async ({ rows }) => rulesSummary(rows),
-    scope, failedSurfaces: new Set(), usage: usageOf(out, reviewers),
+    scope, failedSurfaces: new Set(), partialSurfaces: [], usage: usageOf(out, reviewers),
     methodology: { reviewers: reviewers.map((r) => r.id), orchestrator: 'scripted:judge', passes: 1, toolBudget: 40, debateRounds: rounds },
   };
 }
@@ -89,7 +116,8 @@ export function debatePlan(ctx, env = process.env) {
     judgeVoice: (choice) => bridgeJudge(ctx, choice.reviewer, debate.toolBudget),
     summaryVoice: orchestrator.family === 'scripted' ? async ({ rows }) => rulesSummary(rows) : bridgeSummary(ctx, orchestrator, debate.toolBudget),
     scope: selectSurfaces(ctx.surfaceArg || 'all').map((s) => s.code),
-    failedSurfaces: new Set((ctx.jobs || []).filter((job) => job.state === 'failed').map((job) => job.surface?.code).filter(Boolean)),
+    failedSurfaces: new Set((ctx.jobs || []).filter((job) => job.state && job.state !== 'collected').map((job) => job.surface?.code).filter(Boolean)),
+    partialSurfaces: partialSurfacesOf(ctx),
     usage: usageOf(ctx.output, reviewers),
     methodology: { reviewers: reviewers.map((r) => r.id), orchestrator: formatReviewerSpec(orchestrator), passes: ctx.budgets?.passes || 1, toolBudget: ctx.budgets?.toolBudget || 40, debateRounds: debate.rounds },
   };

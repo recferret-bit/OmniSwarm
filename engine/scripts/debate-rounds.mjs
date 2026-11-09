@@ -10,13 +10,14 @@ import { writeJson } from './report-util-files.mjs';
 import { DEFAULTS } from './run-config.mjs';
 
 const TEMPLATE = { challenge: 'challenge', devil: 'devil-advocate', defend: 'defend', rebut: 'rebut' };
+const DEFAULT_MAX_UNANSWERED = 6;
 const publicTurn = (turn) => ({
   round: turn.round, clusterId: turn.clusterId, role: turn.role, anonId: turn.anonId, verdict: turn.verdict,
   citations: turn.citations.map(({ file, startLine, endLine, quote }) => ({ file, startLine, endLine, quote })),
   argument: turn.argument, conformitySuspect: Boolean(turn.conformitySuspect), devilAdvocate: turn.role === 'devil',
 });
 
-// One cluster's debate. ctx: {out, reader, voices, vendors, rounds, names, record}.
+// One cluster's debate. ctx: {out, reader, voices, vendors, rounds, names, record, turnMs, phaseMs, started, now, signal, maxUnanswered, unanswered}.
 async function debateCluster(cluster, participants, ctx, seed) {
   const authors = cluster.authors.filter((id) => participants.includes(id));
   const challengers = participants.filter((id) => !cluster.authors.includes(id));
@@ -25,12 +26,23 @@ async function debateCluster(cluster, participants, ctx, seed) {
   const seen = new Set(cluster.evidence.filter((row) => row.valid).map(citationKey));
   const previous = new Map(authors.map((id) => [id, 'upheld']));
   const turns = [];
+  const stoppedReason = () => {
+    if (ctx.signal?.aborted) return 'cancelled';
+    if (ctx.now() - ctx.started >= ctx.phaseMs) return 'debate_time';
+    if (ctx.unanswered >= ctx.maxUnanswered) return 'debate_threshold';
+    return null;
+  };
   // An expected turn that never arrives (or does not validate) is a gap and a `missing` trace row.
   const missing = (speaker, round, role, reason) => {
+    ctx.unanswered += 1;
+    ctx.speakerUnanswered.set(speaker, (ctx.speakerUnanswered.get(speaker) || 0) + 1);
     ctx.record.gaps.push({ clusterId: cluster.id, anonId: map[speaker], round, reason });
     ctx.record.trace.push({ phase: 'debate', template: TEMPLATE[role], clusterId: cluster.id, round, anonId: map[speaker], stop: 'missing', reason });
   };
   const speak = async (speaker, round, role) => {
+    const speakerDown = (ctx.speakerUnanswered.get(speaker) || 0) >= ctx.maxSpeakerUnanswered ? 'speaker_threshold' : null;
+    const preStop = turns.length > 0 ? (stoppedReason() || speakerDown) : (ctx.signal?.aborted ? 'cancelled' : (ctx.unanswered >= ctx.maxUnanswered ? 'debate_threshold' : speakerDown));
+    if (preStop) return missing(speaker, round, role, preStop);
     const raw = await boundedCall(ctx.turnMs, ctx.signal, (signal) => ctx.voices.get(speaker)({ role, round, cluster, turns, anonId: map[speaker], signal }));
     if (raw?.unavailable === 'debate_turn_timeout') return missing(speaker, round, role, 'debate_turn_timeout');
     if (!raw || raw.unavailable || typeof raw.argument !== 'string') return missing(speaker, round, role, raw?.unavailable || 'invalid_turn');
@@ -39,6 +51,8 @@ async function debateCluster(cluster, participants, ctx, seed) {
     const body = publicTurn(turn);
     const check = validate('debate-round', body);
     if (!check.ok) return missing(speaker, round, role, 'invalid_turn');
+    ctx.unanswered = 0;
+    ctx.speakerUnanswered.set(speaker, 0);
     turns.push({ ...turn, speaker, speakerVendor: ctx.vendors.get(speaker) || speaker });
     writeJson(ctx.out, `debate/round-${round}/${map[speaker]}-${cluster.id}.json`, body);
     citations.forEach((row) => ctx.record.citations.push({ ...row, clusterId: cluster.id, anonId: map[speaker], round }));
@@ -48,31 +62,42 @@ async function debateCluster(cluster, participants, ctx, seed) {
   };
   for (const id of challengers) await speak(id, 1, id === devil ? 'devil' : 'challenge');
   const challenged = turns.some((turn) => !turn.discarded && ['refuted', 'partial'].includes(turn.verdict));
-  if (ctx.rounds >= 2 && challenged) for (const id of authors) await speak(id, 2, 'defend');
+  if (ctx.rounds >= 2 && challenged && !stoppedReason()) for (const id of authors) await speak(id, 2, 'defend');
   const changed = turns.some((turn) => turn.round === 2 && turn.verdictChanged);
-  if (ctx.rounds >= 3 && changed) for (const id of challengers) await speak(id, 3, 'rebut');
+  if (ctx.rounds >= 3 && changed && !stoppedReason()) for (const id of challengers) await speak(id, 3, 'rebut');
   return { turns, map, rounds: turns.reduce((n, turn) => Math.max(n, turn.round), 0) };
 }
 
 // clusters: buildClusters output rows. voices: Map reviewerId -> speak(). vendors: Map reviewerId -> vendor.
-// Clusters still QUEUED when the phase clock expires are returned as `skipped` and are not spoken.
-export async function runRounds({ out, clusters, voices, vendors, reader, rounds = 2, seed = 1, names = [], turnMs = DEFAULTS.debate.turnMs, phaseMs = DEFAULTS.debate.phaseMs, now = Date.now, signal } = {}) {
+// Clusters still QUEUED when the phase clock expires or threshold is reached are returned as `skipped` and are not spoken.
+export async function runRounds({ out, clusters, voices, vendors, reader, rounds = 2, seed = 1, names = [], turnMs = DEFAULTS.debate.turnMs, phaseMs = DEFAULTS.debate.phaseMs, maxUnanswered = DEFAULT_MAX_UNANSWERED, maxSpeakerUnanswered = Math.min(3, maxUnanswered), now = Date.now, signal } = {}) {
   const record = { citations: [], trace: [], gaps: [] };
   const participants = [...voices.keys()];
-  const ctx = { out, reader, voices, vendors, rounds, names, record, turnMs, signal };
   const started = now();
+  const ctx = { out, reader, voices, vendors, rounds, names, record, turnMs, phaseMs, started, now, signal, maxUnanswered, maxSpeakerUnanswered, unanswered: 0, speakerUnanswered: new Map() };
   const skipped = [];
+  const skippedReasons = new Map();
   const debated = new Map();
   const anonymization = { seed, clusters: {} };
   for (const cluster of clusters.filter((row) => row.status === 'QUEUED')) {
-    if (now() - started >= phaseMs) {
+    const challengers = participants.filter((id) => !cluster.authors.includes(id));
+    const allChallengersDown = challengers.length > 0 && challengers.every((id) => (ctx.speakerUnanswered.get(id) || 0) >= maxSpeakerUnanswered);
+    const skipReason = signal?.aborted
+      ? 'cancelled'
+      : now() - started >= phaseMs
+        ? 'debate_time'
+        : (ctx.unanswered >= maxUnanswered || allChallengersDown)
+          ? 'debate_threshold'
+          : null;
+    if (skipReason) {
       skipped.push(cluster.id);
-      record.trace.push({ phase: 'debate', template: 'skip', clusterId: cluster.id, stop: 'debate_time' });
+      skippedReasons.set(cluster.id, skipReason);
+      record.trace.push({ phase: 'debate', template: 'skip', clusterId: cluster.id, stop: skipReason });
       continue;
     }
     const result = await debateCluster(cluster, participants, ctx, seed);
     debated.set(cluster.id, result);
     anonymization.clusters[cluster.id] = result.map;
   }
-  return { debated, anonymization, skipped, ...record };
+  return { debated, anonymization, skipped, skippedReasons, ...record };
 }

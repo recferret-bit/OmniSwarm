@@ -21,7 +21,11 @@ export function renderBrief({ pass = 1, passes = 2, toolBudget = 40, filesRead =
   if (role === 'self-verify') {
     lines.push('Re-read every citation you made. Drop or correct a finding whose line does not say what you claimed.');
     lines.push(`Unread files: ${unread.join(', ') || '(none)'}.`);
+    lines.push('Your previous pass report was archived. Call submit_audit_report at the end of this pass with your complete verified report, even if findings hold unchanged.');
   }
-  if (role === 'deepen') lines.push('Spend the remaining calls on your own highest-severity leads.');
+  if (role === 'deepen') {
+    lines.push('Spend the remaining calls on your own highest-severity leads.');
+    lines.push('Your previous pass report was archived. Call submit_audit_report at the end of this pass with your complete updated report, even if findings hold unchanged.');
+  }
   return `${lines.join('\n')}\n`;
 }

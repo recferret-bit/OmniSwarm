@@ -76,6 +76,7 @@ export function buildCrosscheckPrompt({ targetName, agent, claims }) {
     REVIEW_SCOPE,
     'Each pass has a fixed tool budget. At the limit, inspection stops and you have 3 calls to submit. Disclose coverage gaps and never invent missing verdicts.',
     '1. Use `audit_docker` MCP tools (`get_review_plan`, `read_file`, `search_code`, `list_existing_tests`, `run_existing_tests`) to inspect the cited `file:line` locations under `/work/src`.',
+    '1b. When reviewing large claim sets under a tool budget, group peer claims by file, inspect overlapping ranges in batched `read_file` calls rather than one call per claim, and submit `submit_crosscheck_report` covering all assigned claims before exhausting the budget.',
     '2. Double-check the controls each claim depends on (authorization guards, locks and state transitions, response DTOs and error messages) against the exact source it cites.',
     '3. For EVERY assigned claim ID below, decide a verdict: "upheld", "partial", or "refuted", with `reason` and relative `file:line` `evidence` citations.',
     '4. Call `submit_crosscheck_report` with `verdicts: [...]` covering every assigned claim ID, then finish with a short acknowledgement; the committed MCP report is authoritative.',

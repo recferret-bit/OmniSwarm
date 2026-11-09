@@ -80,12 +80,12 @@ async function reviewJob(run, job) {
   if (loop.servedModel) job.servedModel = loop.servedModel;
   recordSession(run, job, res, logFile);
   const submission = res.identity ? deriveCommitted(run, job, res.identity) : null;
+  if (submission && submission !== 'invalid') job.submissionHash = submission.hash;
   if (res.code !== 0) { job.failure ||= classifyAuditFailure(res); throw new Error(job.failure.message); }
   if (!submission || submission === 'invalid') {
     job.failure = failureOf(submission === 'invalid' ? 'invalid_report' : 'missing_report');
     throw new Error(job.failure.message);
   }
-  job.submissionHash = submission.hash;
   run.workerExits[job.name] = 0;
   job.state = 'collected';
   console.log(`  <- [${job.name}] completed and validated.`);
@@ -117,7 +117,7 @@ async function crosscheckReviewer(run, agent, inbox, containerDir) {
   const prompt = buildCrosscheckPrompt({ targetName: run.request.name, agent, claims: inbox });
   const res = await run.execute({ name, agent, role: 'crosscheck', prompt, assignment: inbox, logFile: path.join(run.output, hostLogRel(name)) });
   run.crosscheckExits[agent] = res.code || 1;
-  if (res.code !== 0) { if (res.failure?.reason) run.providerFailures[agent] ||= res.failure.reason; throw new Error(res.failure.message); }
+  if (res.code !== 0) { if (PROVIDER_BLOCKS.includes(res.failure?.reason)) run.providerFailures[agent] ||= res.failure.reason; throw new Error(res.failure.message); }
   if (!fs.existsSync(path.join(run.output, 'submissions', `${name}.json`))) {
     const missing = new Error(FAILURE_MESSAGES.missing_report);
     missing.reason = 'missing_report';
@@ -147,7 +147,7 @@ export async function crosscheckPhase(run) {
     try { await crosscheckReviewer(run, agent, inbox, containerDir); }
     catch (err) {
       run.crosscheckExits[agent] ||= 1;
-      run.providerFailures[agent] ||= (Object.hasOwn(FAILURE_MESSAGES, err.reason) ? err.reason : 'crosscheck_failed');
+      if (PROVIDER_BLOCKS.includes(err.reason)) run.providerFailures[agent] ||= err.reason;
       run.stageFailures.push(`crosscheck_error:${agent}`);
       console.error(`  <- [crosscheck-${agent}] error: ${err.message}`);
     }

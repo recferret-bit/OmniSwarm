@@ -47,7 +47,7 @@ Keep the requested models and existing official subscription logins. Never chang
 2. Trace relevant data and control flow using `read_file` and `search_code`. A regex lead, dependency advisory or model assertion is not a confirmed finding by itself.
 3. Inspect existing tests. If useful, list the frozen catalog and run one supported existing suite through `run_existing_tests`. Distinguish source inspection from actual test execution; disclose failures and missing dependencies.
 4. For each finding, cite relative `file:line` evidence, explain the incorrect or missing control, assess impact and preconditions, describe validation limits, and recommend a fix. Do not supply exploitation instructions or payloads.
-5. Submit the report once through MCP. If the surface is absent, submit empty findings and explain why it is absent. Finish with a short acknowledgement; do not duplicate the report in terminal JSON.
+5. Submit the report once through MCP in every pass (`discover`, `self-verify`, and `deepen`). Before each later pass starts, the prior pass submission is archived; call `submit_audit_report` again at the end of every pass even when your findings hold unchanged. If the surface is absent, submit empty findings and explain why it is absent. Finish with a short acknowledgement; do not duplicate the report in terminal JSON.
 
 ## Large repositories
 
@@ -105,7 +105,9 @@ Severity: `critical|high|medium|low|info`. Confidence: `confirmed|probable`. `co
 
 The immutable MCP commit binds workflow, source digest, requested model, reviewer and assignment. JSON, markdown and HTML derive from it. Historical `attack`, `poc` and `how_attacked` storage fields remain for report compatibility; new reviews store empty attack/PoC fields and map control evidence into the legacy field. Reviewers do not populate those historical fields.
 
-Peer reviewers inspect the cited source and existing evidence for every assigned claim, then submit `upheld|partial|refuted` verdicts with reasons and citations. No missing verdict or evidence is invented. Agreement remains unverified model agreement.
+Peer reviewers inspect the cited source and existing evidence for every assigned claim, then submit `upheld|partial|refuted` verdicts with reasons and citations. When reviewing large claim sets under a tool budget, group peer claims by file, inspect overlapping ranges in batched `read_file` calls rather than one call per claim, and submit `submit_crosscheck_report` covering all assigned claims before exhausting the budget. No missing verdict or evidence is invented. Agreement remains unverified model agreement.
+
+During structured debate (`submit_debate_turn`), every turn requires `verdict` (`upheld|partial|refuted|insufficient_evidence`), `argument`, and `citations: [{ file, startLine, endLine, quote }]` (except when `verdict` is `insufficient_evidence`). Cite at least one span inside the cluster's anchor function or lines, and copy `quote` verbatim from `read_file`. In Round 2 (`defend`), add at least one fresh `file:startLine-endLine` span not already cited in Round 1.
 
 ## Report presentation
 
@@ -117,7 +119,7 @@ The visual direction is modern mechanical/Transformers-inspired: white panels, o
 
 ## Long sessions and recovery
 
-Each reviewer runs a fixed number of passes (`--passes`, default 2) and each pass allows a fixed number of bridge calls (`--tool-budget`, default 40). At that limit, inspection stops and the reviewer has 3 calls to submit. A pass that submits is complete. A pass that never submits leaves that surface incomplete. Heartbeats every 30 seconds distinguish process, transport and agent activity. The preparation budget does not end a held review container. Individual protocol controls and test executions remain bounded; npm, Cargo and shell suites are limited to 15 minutes each (including cold compilation); pytest suites to 30 minutes.
+Each reviewer runs a fixed number of passes (`--passes`, default 2) and each pass allows a fixed number of bridge calls (`--tool-budget`, default 40). Submit tools (`submit_audit_report`, `submit_crosscheck_report`, `submit_debate_turn`, `submit_adjudication`, `submit_general_review`) never count against the read budget and remain open after inspection stops; when a read returns `budget exhausted`, stop reading and call your submit tool immediately within the 3 grace calls. A pass that submits is complete. A pass that never submits leaves that surface incomplete (or restores the last verified pass submission with a recorded budget limitation). When pass, debate or adjudication thresholds are reached, the orchestrator preserves committed evidence, falls back to deterministic citation rules for remaining clusters and general review, writes every report artifact, and records open questions and limitations in the report. Heartbeats every 30 seconds distinguish process, transport and agent activity. The preparation budget does not end a held review container. Individual protocol controls and test executions remain bounded; npm, Cargo and shell suites are limited to 15 minutes each (including cold compilation); pytest suites to 30 minutes.
 
 Preserve the original private `sessions/` directories. `--resume-from` requires the same review workflow, source, models, reviewers and assignments. Legacy adversarial sessions cannot be resumed into this workflow. A transport loss permits one exact-session reconnect if supported; refusal, quota and authentication failures never auto-retry.
 

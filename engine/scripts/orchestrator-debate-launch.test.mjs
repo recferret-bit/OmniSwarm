@@ -37,9 +37,9 @@ function setup(t) {
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const calls = [];
   const review = async (options) => {
-    const { identity, bridgeArgs } = options;
+    const { identity, bridgeArgs, budgets } = options;
     const out = arg(bridgeArgs, '--report-dir');
-    calls.push({ identity, bridgeArgs });
+    calls.push({ identity, bridgeArgs, budgets });
     if (identity.role === 'auditor') {
       // What the API shim records for a priced reviewer; the other reviewer reports no cost at all.
       if (identity.agent === ZAI.id) {
@@ -79,6 +79,7 @@ test('debate turns, the judge and the general review launch through the bridge; 
   const judgeCall = f.calls.find((c) => c.identity.name === `${JUDGE.id}-judge-cluster-1`);
   assert.equal(arg(judgeCall.bridgeArgs, '--auditor'), judgeCall.identity.name);
   assert.equal(judgeCall.identity.model, JUDGE.model);
+  assert.equal(judgeCall.budgets.toolBudget, BUDGETS.debate.toolBudget, 'debate and judge sessions receive the debate toolBudget');
   assert.deepEqual(readReportJson(out, 'harness/reviewers.json').judges.map((j) => j.id), [JUDGE.id]);
   const [row] = readReportJson(out, 'debate/adjudication.json');
   assert.deepEqual([row.finalStatus, row.judge.reviewerId, row.judge.alternate], ['CONFIRMED', JUDGE.id, false]);
@@ -110,4 +111,37 @@ test('the bridge admits a judge only in the orchestrator role, under its own ses
     assert.throws(() => validateSubmissionIdentity({ ...identity, name }, name), /Invalid submission identity/, name);
   }
   assert.throws(() => commitSubmission(out, identity.name, identity, []), /debate inbox/);
+});
+
+test('a crosscheck missing_report failure does not poison providerFailures or block debate, adjudicate or general-review, and crosscheck scales toolBudget with peer claims', async (t) => {
+  const f = setup(t);
+  const manyClaims = Array.from({ length: 45 }, (_, i) => ({
+    ...WITHDRAW, title: `Finding ${i + 1}`, location: [`src/lib.rs:${(i % 20) + 1}`],
+  }));
+  const review = async (options) => {
+    if (options.identity.role === 'auditor' && options.identity.agent === ZAI.id) {
+      const out = arg(options.bridgeArgs, '--report-dir');
+      f.calls.push({ identity: options.identity, bridgeArgs: options.bridgeArgs, budgets: options.budgets });
+      commitSubmission(out, options.identity.name, options.identity, [...manyClaims, { verified_safe: [] }]);
+      return ok(options.identity, options);
+    }
+    if (options.identity.role === 'crosscheck') {
+      f.calls.push({ identity: options.identity, bridgeArgs: options.bridgeArgs, budgets: options.budgets });
+      return { code: 0, stop: 'budget', stopReason: 'cancelled', sessionId: options.identity.name, directory: options.directory, elapsedMs: 1, observedExitCode: 0 };
+    }
+    return f.review(options);
+  };
+  const result = await runOrchestratedAudit(f.request, { review, startSandbox: f.startSandbox });
+  assert.deepEqual(result.stageFailures, [`crosscheck_error:${QWEN.id}`]);
+  const out = f.request.out;
+  const meta = readReportJson(out, 'meta.json');
+  assert.equal(meta.crosscheckExits[QWEN.id], 1);
+  assert.deepEqual(meta.providerFailures, {}, 'missing_report on crosscheck must not poison providerFailures');
+  const xcheckCall = f.calls.find((c) => c.identity.role === 'crosscheck' && c.identity.agent === QWEN.id);
+  assert.equal(xcheckCall.budgets.toolBudget, 65, 'crosscheck toolBudget scales to claimCount (45) + 20');
+  assert.equal(Number(arg(xcheckCall.bridgeArgs, '--tool-budget')), 65);
+  const debateAndJudge = f.calls.filter((c) => ['debater', 'orchestrator'].includes(c.identity.role)).map((c) => c.identity.name);
+  assert.ok(debateAndJudge.includes(`${QWEN.id}-debate-cluster-1-r1`), 'reviewer with crosscheck missing_report still participates in debate');
+  assert.ok(debateAndJudge.includes(`${JUDGE.id}-judge-cluster-1`), 'judge still runs adjudication');
+  assert.ok(debateAndJudge.includes(`${JUDGE.id}-general-review`), 'orchestrator still runs general-review');
 });

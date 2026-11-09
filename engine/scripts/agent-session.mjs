@@ -49,15 +49,19 @@ export const submitNowText = (role, name) => `This pass ended without a report. 
 const SAME_PASS_CONTINUATION = '\n\nContinue the saved review for this exact source and assignment. Retain supported work and disclose remaining coverage. Use the current audit MCP bridge. The report for this pass is already committed. Finish without submitting a second report.';
 const NEW_PASS_CONTINUATION = '\n\nContinue the saved review for this exact source and assignment. Retain supported work and disclose remaining coverage. Use the current audit MCP bridge. This pass has no committed report yet. Call its submit tool with the updated report before you finish.';
 
+function hasCommittedOutput(options) {
+  const args = options?.bridgeArgs || [];
+  const dirAt = args.indexOf('--report-dir');
+  const dir = dirAt >= 0 ? args[dirAt + 1] : '';
+  const name = options?.identity?.name;
+  if (!dir || !name) return null;
+  return fs.existsSync(path.join(dir, 'submissions', `${name}.json`)) || fs.existsSync(path.join(dir, 'debate', 'inbox', `${name}.json`));
+}
+
 // A resumed session is either a transport recovery of the current pass (the submission is still there)
 // or the next pass (the previous submission was archived). The continuation must not tell a new pass to stop.
 export function continuationText(options) {
-  const args = options.bridgeArgs || [];
-  const dirAt = args.indexOf('--report-dir');
-  const dir = dirAt >= 0 ? args[dirAt + 1] : '';
-  const name = options.identity?.name;
-  const committed = Boolean(dir && name && fs.existsSync(path.join(dir, 'submissions', `${name}.json`)));
-  return committed ? SAME_PASS_CONTINUATION : NEW_PASS_CONTINUATION;
+  return hasCommittedOutput(options) ? SAME_PASS_CONTINUATION : NEW_PASS_CONTINUATION;
 }
 
 // The CLI reports a full id ("claude-opus-5-5") for a requested alias ("opus"). A different family does not match.
@@ -109,6 +113,21 @@ function startHeartbeat(s, heartbeatMs) {
   }, heartbeatMs);
 }
 
+function isSearchToolUpdate(update) {
+  const xai = update?._meta?.['x.ai/tool'];
+  return update?.rawInput?.variant === 'SearchTool'
+    || update?.rawOutput?.type === 'SearchTool'
+    || update?.title === 'search_tool'
+    || String(update?.title || '').startsWith('Search tools:')
+    || xai?.name === 'search_tool'
+    || xai?.kind === 'search_tool';
+}
+
+function updateToolText(update) {
+  const raw = update?.rawInput || {};
+  return [update?.title, raw.tool_name, raw.tool, raw.name, update?._meta?.claudeCode?.toolName].filter(Boolean).join(' ');
+}
+
 // Tool calls the agent reports in this turn. More than N+3 counted calls without a submit cancels the pass.
 function onSessionUpdate(s, turn, params) {
   // During load, an adapter may replay history before returning. Its notifications must still belong to the exact saved session.
@@ -117,18 +136,30 @@ function onSessionUpdate(s, turn, params) {
   const update = params?.update;
   if (update?.sessionUpdate === 'config_option_update') {
     const value = modelValue(update.configOptions);
-    if (value && s.activeModel && value !== s.activeModel) throw new SessionError('model_changed');
+    if (value && s.activeModel && value !== s.activeModel && !modelMatches(s.options.identity?.model, value)) throw new SessionError('model_changed');
   }
   // session/load replays history before the prompt. Those calls are not this pass.
-  if (update?.sessionUpdate === 'tool_call' && turn.live) {
-    turn.toolCalls += 1;
-    const title = String(update.title || '');
-    const { identity } = s.options;
-    if (title.includes(submitTool(identity?.role, identity?.name))) turn.submitted = true;
-    const { budgets } = s.options;
-    if (budgets && !turn.submitted && !turn.budgetCancel && turn.toolCalls > budgets.toolBudget + GRACE) {
-      turn.budgetCancel = true;
-      try { s.rpc.notify('session/cancel', { sessionId: s.sessionId }); } catch { /* the prompt result records the stop */ }
+  if ((update?.sessionUpdate === 'tool_call' || update?.sessionUpdate === 'tool_call_update') && turn.live) {
+    if (isSearchToolUpdate(update)) {
+      if (update.toolCallId) turn.seenCalls.add(update.toolCallId);
+    } else {
+      const callId = update.toolCallId;
+      const firstSeen = callId ? !turn.seenCalls.has(callId) : update.sessionUpdate === 'tool_call';
+      if (callId) turn.seenCalls.add(callId);
+      const { identity, budgets } = s.options;
+      const isSubmit = updateToolText(update).includes(submitTool(identity?.role, identity?.name));
+      const failed = update.status === 'failed' || update.status === 'STEP_STATE_ERROR' || update.status === 'error';
+      if (isSubmit) {
+        if (failed && hasCommittedOutput(s.options) === false) turn.submitted = false;
+        else if (!failed) turn.submitted = true;
+      } else if (firstSeen) {
+        turn.toolCalls += 1;
+      }
+      if (!turn.submitted && hasCommittedOutput(s.options) === true) turn.submitted = true;
+      if (budgets && !turn.submitted && !turn.budgetCancel && turn.toolCalls > budgets.toolBudget + GRACE) {
+        turn.budgetCancel = true;
+        try { s.rpc.notify('session/cancel', { sessionId: s.sessionId }); } catch { /* the prompt result records the stop */ }
+      }
     }
   }
   if (['tool_call', 'tool_call_update', 'plan'].includes(update?.sessionUpdate)) s.store.save(s.phase, { activity: update.sessionUpdate });
@@ -145,7 +176,10 @@ function openRpc(s, spec, turn) {
       s.phase = 'waiting_permission';
       const decision = permissionDecision(params, s.sessionId);
       const allowed = params?.options?.find(option => option.optionId === decision.outcome.optionId)?.kind === 'allow_once';
-      if (!allowed) turn.refused = refusedToolName(params?.toolCall);
+      if (!allowed) {
+        turn.refused = refusedToolName(params?.toolCall);
+        if (turn.toolCalls > 0) turn.toolCalls -= 1;
+      }
       s.store.save(s.phase, { event: allowed ? 'permission_decided' : 'permission_denied' });
       s.phase = 'running';
       return decision;
@@ -174,8 +208,17 @@ async function openSession(s, spec, turn) {
     if (typeof opened.sessionId !== 'string' || !/^[A-Za-z0-9_.:-]{1,200}$/.test(opened.sessionId)) throw new SessionError('protocol_error');
     s.sessionId = opened.sessionId;
   }
-  s.activeModel = modelValue(opened.configOptions) || opened.models?.currentModelId;
-  if (families.modelPinned({ family: identity.family || 'cli', provider: identity.provider || identity.agent }) && s.activeModel && !modelMatches(identity.model, s.activeModel)) throw new SessionError('model_changed');
+  let activeModel = modelValue(opened.configOptions) || opened.models?.currentModelId;
+  if (families.modelPinned({ family: identity.family || 'cli', provider: identity.provider || identity.agent }) && activeModel && !modelMatches(identity.model, activeModel)) {
+    const modelOption = opened.configOptions?.find(option => option.category === 'model' || option.id === 'model');
+    const match = modelOption?.options?.find(opt => modelMatches(identity.model, opt?.value));
+    if (modelOption && match) {
+      const updated = await s.rpc.request('session/set_config_option', { sessionId: s.sessionId, configId: modelOption.id || 'model', value: match.value }, 15_000).catch(() => null);
+      activeModel = modelValue(updated?.configOptions) || match.value;
+    }
+    if (!modelMatches(identity.model, activeModel)) throw new SessionError('model_changed');
+  }
+  s.activeModel = activeModel;
   s.store.save('running', { sessionId: s.sessionId, selectedModel: s.activeModel || identity.model });
   s.phase = 'running';
   return init;
@@ -211,11 +254,15 @@ async function endTurn(s, spec, stop, stopReason) {
 async function settleTurn(s, spec, turn, init, result) {
   const { budgets, signal, identity } = s.options;
   if (providerStop(s.store) === 'cost') return endTurn(s, spec, 'cost', result.stopReason);
+  if (hasCommittedOutput(s.options) === true) turn.submitted = true;
+  if (signal?.aborted) throw new SessionError('cancelled');
   if (budgets && result.stopReason === 'end_turn' && !turn.submitted && !turn.budgetCancel) {
     s.store.save('running', { event: 'submit_now' });
     result = await s.rpc.request('session/prompt', { sessionId: s.sessionId, prompt: [{ type: 'text', text: submitNowText(identity.role, identity.name) }] }, null);
+    if (hasCommittedOutput(s.options) === true) turn.submitted = true;
   }
-  if (budgets && !turn.submitted && (turn.budgetCancel || result.stopReason === 'end_turn' || result.stopReason === 'cancelled')) {
+  if (signal?.aborted) throw new SessionError('cancelled');
+  if (budgets && !turn.submitted && (turn.budgetCancel || result.stopReason === 'end_turn')) {
     try { s.rpc.notify('session/cancel', { sessionId: s.sessionId }); } catch { /* already cancelled */ }
     return endTurn(s, spec, 'budget', 'cancelled');
   }
@@ -240,7 +287,7 @@ function failureReason(error, signal) {
 
 // One turn of a session. Returns the session result, or null when a lost transport is recovered (load and retry).
 async function runTurn(s, spec, maxRecoveries) {
-  const turn = { resumeCapable: false, refused: null, toolCalls: 0, submitted: false, budgetCancel: false };
+  const turn = { resumeCapable: false, refused: null, toolCalls: 0, seenCalls: new Set(), submitted: false, budgetCancel: false };
   const attempt = s.recoveries;
   openRpc(s, spec, turn);
   try {

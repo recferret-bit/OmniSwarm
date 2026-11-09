@@ -52,6 +52,12 @@ test('a debate turn is schema-checked, needs a citation, takes its labels from t
   const stored = JSON.parse(fs.readFileSync(file, 'utf8'));
   fs.writeFileSync(file, JSON.stringify({ ...stored, body: { ...stored.body, verdict: 'upheld' } }));
   assert.throws(() => readInbox(ctx.reportDir, ctx.submissionIdentity.name, 'debate-turn'), /does not match its hash/);
+
+  const aliasCtx = session('debater', 'cli-codex-gpt-5-5-debate-cluster-1-r2', { ...turnTask, round: 2, role: 'defend' });
+  await submit(aliasCtx, { verdict: 'upheld', evidence: [{ file: 'src/lib.rs', line: 2, quote: 'balance -= amount;' }], reason: 'Single-line evidence alias.' });
+  const normalized = readInbox(aliasCtx.reportDir, aliasCtx.submissionIdentity.name, 'debate-turn');
+  assert.deepEqual(normalized.citations, [QUOTE]);
+  assert.equal(normalized.argument, 'Single-line evidence alias.');
 });
 
 test('a session cannot submit for a different assignment or role', async () => {

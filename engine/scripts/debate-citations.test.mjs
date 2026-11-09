@@ -35,11 +35,82 @@ test('a blank line or a lone brace is not evidence', () => {
   assert.equal(anchorEvidence(reader, { file: 'src/lib.rs', line: 4 }).reason, 'not_evidence');
 });
 
-test('a valid quote far from the cluster does not count for it', () => {
-  const reader = sourceReader(sourceTree({ 'src/lib.rs': BODY }));
+test('a valid quote far from the cluster does not count for it, while a quote in the same function does', () => {
+  const longFn = [
+    'fn withdraw() {',
+    ...Array.from({ length: 14 }, (_, i) => `    let step_${i} = ${i};`),
+    '    self.balance = self.balance.saturating_sub(amount);',
+    '}',
+    '',
+    'fn other() {',
+    '    guard();',
+    '}',
+    '',
+  ].join('\n');
+  const reader = sourceReader(sourceTree({ 'src/lib.rs': BODY, 'src/long.rs': longFn }));
   const far = { file: 'src/lib.rs', startLine: 6, endLine: 6, quote: 'guard();' };
   const near = { file: 'src/lib.rs', startLine: 2, endLine: 2, quote: 'saturating_sub' };
   const [a, b] = checkTurnCitations(reader, [far, near], [{ file: 'src/lib.rs', line: 1 }]);
   assert.equal(a.reason, 'not_about_this_cluster');
   assert.equal(b.valid, true);
+  const sameFn = { file: 'src/long.rs', startLine: 16, endLine: 16, quote: 'saturating_sub' };
+  const otherFn = { file: 'src/long.rs', startLine: 20, endLine: 20, quote: 'guard();' };
+  const [c, d] = checkTurnCitations(reader, [sameFn, otherFn], [{ file: 'src/long.rs', line: 1 }]);
+  assert.equal(c.valid, true);
+  assert.equal(d.reason, 'not_about_this_cluster');
+});
+
+test('sameFunctionSpan separates TS arrow functions, TS class methods, and Python top-level statements while allowing inner callbacks', () => {
+  const tsArrows = [
+    'export const withdraw = async (amount: number) => {',
+    ...Array.from({ length: 6 }, (_, i) => `  const s${i} = ${i};`),
+    '  items.forEach((item) => {',
+    '    checkItem(item);',
+    '  });',
+    '  return balance - amount;',
+    '};',
+    'export const deposit = async (amount: number) => {',
+    '  return balance + amount;',
+    '};',
+  ].join('\n');
+  const tsClass = [
+    'export class Vault {',
+    '  async withdraw(amount: number): Promise<number> {',
+    ...Array.from({ length: 6 }, (_, i) => `    const s${i} = ${i};`),
+    '    return this.balance - amount;',
+    '  }',
+    '  async deposit(amount: number): Promise<number> {',
+    '    return this.balance + amount;',
+    '  }',
+    '}',
+  ].join('\n');
+  const pyMod = [
+    'def withdraw(amount):',
+    ...Array.from({ length: 6 }, (_, i) => `    step_${i} = ${i}`),
+    '    return balance - amount',
+    '',
+    'GLOBAL_LIMIT = 100',
+  ].join('\n');
+  const reader = sourceReader(sourceTree({ 'src/arrows.ts': tsArrows, 'src/class.ts': tsClass, 'src/mod.py': pyMod }));
+
+  const [arrowSame, arrowOther] = checkTurnCitations(reader, [
+    { file: 'src/arrows.ts', startLine: 11, endLine: 11, quote: 'return balance - amount;' },
+    { file: 'src/arrows.ts', startLine: 14, endLine: 14, quote: 'return balance + amount;' },
+  ], [{ file: 'src/arrows.ts', line: 1 }]);
+  assert.equal(arrowSame.valid, true, 'citation after inner .forEach callback in same arrow function is accepted');
+  assert.equal(arrowOther.reason, 'not_about_this_cluster', 'citation in next arrow function is rejected');
+
+  const [classSame, classOther] = checkTurnCitations(reader, [
+    { file: 'src/class.ts', startLine: 9, endLine: 9, quote: 'return this.balance - amount;' },
+    { file: 'src/class.ts', startLine: 12, endLine: 12, quote: 'return this.balance + amount;' },
+  ], [{ file: 'src/class.ts', line: 2 }]);
+  assert.equal(classSame.valid, true, 'citation in same TS class method is accepted');
+  assert.equal(classOther.reason, 'not_about_this_cluster', 'citation in adjacent TS class method is rejected');
+
+  const [pySame, pyOther] = checkTurnCitations(reader, [
+    { file: 'src/mod.py', startLine: 8, endLine: 8, quote: 'return balance - amount' },
+    { file: 'src/mod.py', startLine: 10, endLine: 10, quote: 'GLOBAL_LIMIT = 100' },
+  ], [{ file: 'src/mod.py', line: 1 }]);
+  assert.equal(pySame.valid, true, 'citation in same Python function is accepted');
+  assert.equal(pyOther.reason, 'not_about_this_cluster', 'citation on top-level Python statement after function is rejected');
 });

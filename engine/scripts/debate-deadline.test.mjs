@@ -7,7 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { bridgeVoice } from './debate-voices.mjs';
 import { runRounds } from './debate-rounds.mjs';
-import { adjudicateStage, debateStage } from './debate-run.mjs';
+import { adjudicateStage, debateStage, generalReviewStage } from './debate-run.mjs';
 import { adjudicateWithRetry } from './debate-judge.mjs';
 import { sourceReader } from './debate-citations.mjs';
 import { finding, sourceTree } from './debate-test-run.mjs';
@@ -223,4 +223,108 @@ test('createExecute aborts the review when either the turn signal or the run sig
   await pendingRun;
   assert.equal(secondSignal.aborted, true);
   assert.equal(call.signal.aborted, false);
+});
+
+test('threshold fallback skips remaining clusters after maxUnanswered, adjudicates via rules after maxJudgeUnavailable, and writes general-review files when summaryVoice is unavailable', async (t) => {
+  const root = sourceTree({ 'src/a.rs': 'let a = 1;\n', 'src/b.rs': 'let b = 2;\n', 'src/c.rs': 'let c = 3;\n' });
+  const out = temp();
+  t.after(() => { fs.rmSync(root, { recursive: true, force: true }); fs.rmSync(out, { recursive: true, force: true }); });
+  const claims = ['a', 'b', 'c'].map((f) => ({ ...finding(`Issue ${f}`, [`src/${f}.rs:1`]), reviewerId: 'alice', vendor: 'anthropic', auditor: 'alice-s1-auth', claimId: `alice-s1-auth#Issue ${f}` }));
+  let debateCalls = 0;
+  let judgeCalls = 0;
+  const plan = {
+    out, claims, reader: sourceReader(root), maxClusters: 25, rounds: 2, seed: 1, phaseMs: 60000, turnMs: 60000,
+    maxJudgeUnavailable: 1,
+    scope: ['S1', 'S2'], failedSurfaces: new Set(['S2']),
+    reviewers: [
+      { id: 'alice', vendor: 'anthropic', model: 'opus' },
+      { id: 'bob', vendor: 'openai', model: 'gpt' },
+    ],
+    voices: new Map([
+      ['alice', async () => ({ unavailable: 'no_answer' })],
+      ['bob', async () => { debateCalls += 1; return { unavailable: 'no_answer' }; }],
+    ]),
+    vendors: new Map([['alice', 'anthropic'], ['bob', 'openai']]),
+    orchestrator: codex,
+    judgeVoice: () => async () => { judgeCalls += 1; return { unavailable: 'judge_down' }; },
+    summaryVoice: async () => ({ unavailable: 'cancelled' }),
+    usage: new Map(),
+    methodology: { reviewers: ['alice', 'bob'], orchestrator: codex.id, passes: 2, toolBudget: 40, debateRounds: 2 },
+  };
+  const debated = await runRounds({
+    out, clusters: [1, 2, 3].map((i) => ({ id: `CLUSTER-${i}`, status: 'QUEUED', severity: 'high', authors: ['alice'], anchors: [], evidence: [], vendors: ['anthropic'], citationsOk: true })),
+    voices: plan.voices, vendors: plan.vendors, reader: plan.reader, rounds: 2, maxUnanswered: 1,
+  });
+  assert.equal(debateCalls, 1, 'stops calling voices once maxUnanswered threshold is reached');
+  assert.deepEqual(debated.skipped, ['CLUSTER-2', 'CLUSTER-3']);
+
+  const state = await debateStage(plan);
+  const adjudicated = await adjudicateStage(plan, state);
+  assert.equal(judgeCalls, 2, 'stops calling judgeVoice after first cluster retry fails (maxJudgeUnavailable=1) and adjudicates remaining clusters by rules');
+  assert.equal(adjudicated.rows.length, 3);
+  assert.match(adjudicated.rows[1].rationale, /judge_threshold/);
+  assert.match(adjudicated.rows[2].rationale, /judge_threshold/);
+
+  await assert.rejects(generalReviewStage(plan, adjudicated), /general_review_unavailable: cancelled/);
+  assert.equal(fs.existsSync(path.join(out, 'general-review.json')), true, 'general-review.json is still written on fallback');
+  assert.equal(fs.existsSync(path.join(out, 'general-review.md')), true, 'general-review.md is still written on fallback');
+  const general = JSON.parse(fs.readFileSync(path.join(out, 'general-review.json'), 'utf8'));
+  assert.match(general.executiveSummary, /Open questions and limitations:/);
+  assert.match(fs.readFileSync(path.join(out, 'general-review.md'), 'utf8'), /## Coverage & limitations/);
+
+  // Even when summaryVoice succeeds, threshold adjudications, partial passes and incomplete surfaces are appended to executiveSummary.
+  const out2 = temp();
+  t.after(() => fs.rmSync(out2, { recursive: true, force: true }));
+  const okPlan = { ...plan, out: out2, maxUnanswered: 1, partialSurfaces: ['alice-s1-auth (1/2 passes)'], summaryVoice: async () => ({ executiveSummary: 'Synthesized by orchestrator.', openDisagreements: [] }) };
+  const state2 = await debateStage(okPlan);
+  assert.deepEqual(state2.coverageGaps.map((g) => g.reason), ['debate_threshold', 'debate_threshold']);
+  const adj2 = await adjudicateStage(okPlan, state2);
+  assert.match(adj2.rows[1].rationale, /debate_threshold/);
+  const gen2 = await generalReviewStage(okPlan, adj2);
+  assert.match(gen2.executiveSummary, /Synthesized by orchestrator\. Open questions and limitations:/);
+  assert.match(gen2.executiveSummary, /incomplete surfaces: S2/);
+  assert.match(gen2.executiveSummary, /partial passes \(restored earlier pass or budget limit\): alice-s1-auth \(1\/2 passes\)/);
+  const md2 = fs.readFileSync(path.join(out2, 'general-review.md'), 'utf8');
+  assert.match(md2, /- \d+ cluster\(s\) adjudicated by deterministic citation rules; incomplete surfaces: S2; partial passes/);
+});
+
+test('per-speaker threshold isolates one failing reviewer while healthy reviewers finish all clusters, and providerFailures skips doomed debate sessions', async (t) => {
+  const root = sourceTree({ 'src/lib.rs': 'let a = 1;\nlet b = 2;\nlet c = 3;\nlet d = 4;\n' });
+  const out = temp();
+  t.after(() => { fs.rmSync(root, { recursive: true, force: true }); fs.rmSync(out, { recursive: true, force: true }); });
+  const reader = sourceReader(root);
+  const clusters = [1, 2, 3, 4].map((i) => ({
+    id: `CLUSTER-${i}`, status: 'QUEUED', severity: 'high', authors: ['alice'],
+    anchors: [{ file: 'src/lib.rs', line: i }],
+    evidence: [{ file: 'src/lib.rs', startLine: i, endLine: i, quote: `let ${['a', 'b', 'c', 'd'][i - 1]} = ${i};`, valid: true }],
+    vendors: ['anthropic'], citationsOk: true,
+  }));
+  let brokenCalls = 0;
+  let healthyCalls = 0;
+  const voices = new Map([
+    ['alice', async () => ({ verdict: 'upheld', argument: 'Author.', citations: [] })],
+    ['broken', async () => { brokenCalls += 1; return { unavailable: 'debate_turn_timeout' }; }],
+    ['healthy', async ({ cluster: c }) => {
+      healthyCalls += 1;
+      const line = Number(c.id.split('-')[1]);
+      return { verdict: 'upheld', argument: 'Verified.', citations: [{ file: 'src/lib.rs', startLine: line, endLine: line, quote: `= ${line};` }] };
+    }],
+  ]);
+  const res = await runRounds({ out, clusters, voices, vendors: new Map([['alice', 'anthropic'], ['broken', 'xai'], ['healthy', 'openai']]), reader, rounds: 1, maxUnanswered: 6, maxSpeakerUnanswered: 2 });
+  assert.equal(brokenCalls, 2, 'broken speaker stops being called after maxSpeakerUnanswered (2) consecutive failures');
+  assert.equal(healthyCalls, 4, 'healthy speaker still debates all 4 clusters');
+  assert.deepEqual(res.skipped, []);
+  assert.ok(res.gaps.some((g) => g.reason === 'speaker_threshold'));
+
+  let executeCalls = 0;
+  const ctx = {
+    output: out, providerFailures: {},
+    execute: async () => { executeCalls += 1; return { code: 1, failure: { reason: 'usage_limit' } }; },
+  };
+  const voice = bridgeVoice(ctx, { id: 'cli-grok-grok-4' });
+  const first = await voice({ role: 'challenge', round: 1, cluster: { id: 'CLUSTER-1' }, turns: [], anonId: 'Reviewer A' });
+  const second = await voice({ role: 'challenge', round: 1, cluster: { id: 'CLUSTER-2' }, turns: [], anonId: 'Reviewer A' });
+  assert.equal(first.unavailable, 'usage_limit');
+  assert.equal(second.unavailable, 'usage_limit');
+  assert.equal(executeCalls, 1, 'second call short-circuits on recorded providerFailures[agent]');
 });

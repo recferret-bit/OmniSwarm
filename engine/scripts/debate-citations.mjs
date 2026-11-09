@@ -66,9 +66,49 @@ export function anchorEvidence(reader, { file, line }) {
   return { file, startLine: line, endLine: line, quote, valid: true };
 }
 
-export function relevantTo(citation, anchors, tolerance = LINE_TOLERANCE) {
+const FUNCTION_SPAN = 80;
+const DECLARATION_BOUNDARY = /^\s*(?:export\s+)?(?:default\s+)?(?:pub(?:\([^)]*\))?\s+)?(?:async\s+)?(?:fn|def|function|class|struct|enum|impl|trait|mod|interface)\b/;
+const ARROW_BOUNDARY = /^\s*(?:export\s+)?(?:const|let|var)\s+[A-Za-z_$][\w$]*\s*(?::[^=]+)?=\s*(?:async\s*)?(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*(?::[^=]+)?=>/;
+const METHOD_CONTROL = new Set(['if', 'for', 'while', 'switch', 'catch', 'with', 'function', 'return', 'throw', 'new', 'super', 'import', 'export', 'match', 'loop']);
+
+function isMethodBoundary(text) {
+  const m = /^\s{0,4}(?:(?:public|private|protected|static|readonly|override|async|get|set)\s+)*([A-Za-z_$][\w$]*)\s*(?:<[^>]*>)?\s*\([A-Za-z0-9_$,\s:?=.\[\]<>|&'"]*\)\s*(?::\s*[A-Za-z0-9_$,\s.<>|&\[\]?]+)?\{\s*$/.exec(text);
+  return Boolean(m && !METHOD_CONTROL.has(m[1]));
+}
+
+function isFunctionBoundary(text, sawIndented) {
+  if (DECLARATION_BOUNDARY.test(text) || ARROW_BOUNDARY.test(text) || isMethodBoundary(text)) return true;
+  if (sawIndented && /^[A-Za-z_@][\w.]*\s*(?:=|\(|:)/.test(text)) return true;
+  return false;
+}
+
+function sameFunctionSpan(lines, span, anchorLine, maxDistance = FUNCTION_SPAN) {
+  if (!Array.isArray(lines)) return false;
+  if (anchorLine >= span.start && anchorLine <= span.end) return true;
+  const below = anchorLine < span.start;
+  const first = below ? anchorLine : span.start;
+  const from = below ? anchorLine + 1 : span.end + 1;
+  const to = below ? span.start : anchorLine;
+  if (to - from > maxDistance) return false;
+  let sawIndented = /^\s+\S/.test(lines[first - 1] ?? '');
+  for (let i = from; i <= to; i++) {
+    const text = lines[i - 1] ?? '';
+    if (/^\}(?:\s*\))?\s*;?\s*$/.test(text)) return false;
+    if ((below || i < to) && isFunctionBoundary(text, sawIndented)) return false;
+    if (/^\s+\S/.test(text)) sawIndented = true;
+  }
+  return true;
+}
+
+export function relevantTo(citation, anchors, tolerance = LINE_TOLERANCE, reader = null) {
   const span = range(citation);
-  return Boolean(span) && anchors.some((anchor) => anchor.file === citation.file && anchor.line >= span.start - tolerance && anchor.line <= span.end + tolerance);
+  if (!span) return false;
+  const lines = reader ? reader.lines(citation.file)?.lines : null;
+  return anchors.some((anchor) => {
+    if (anchor.file !== citation.file) return false;
+    if (anchor.line >= span.start - tolerance && anchor.line <= span.end + tolerance) return true;
+    return lines ? sameFunctionSpan(lines, span, anchor.line) : false;
+  });
 }
 
 // Check every citation of a debate turn against the source and the cluster's anchors.
@@ -76,7 +116,7 @@ export function checkTurnCitations(reader, citations, anchors) {
   return (Array.isArray(citations) ? citations : []).map((citation) => {
     const checked = checkCitation(reader, citation);
     if (!checked.valid) return checked;
-    return relevantTo(checked, anchors) ? checked : { ...checked, valid: false, reason: 'not_about_this_cluster' };
+    return relevantTo(checked, anchors, LINE_TOLERANCE, reader) ? checked : { ...checked, valid: false, reason: 'not_about_this_cluster' };
   });
 }
 

@@ -93,14 +93,17 @@ export function verificationHealth(root, read) {
   return { state: gaps.length ? 'incomplete' : 'passed', gaps, suites, scans, scope: 'captured_source_and_existing_tests', outsideScope: ['private source absent from the supplied snapshot', 'deployed program bytes and production configuration', 'live service behavior'], evidenceLimit: 'Test counts and scanner results are tool-reported; they do not prove vulnerability reproduction or attest model identity.' };
 }
 
-// A budget or cost stop that still submitted is complete. The same stop with no submission is not.
+// A budget or cost stop that still submitted (or kept an earlier pass's submission) is complete.
+// The same stop with no submission across any pass of that job is not.
 export function budgetHealth(rows) {
   const budgetStops = [];
   const errors = [];
+  const submittedJobs = new Set(rows.filter(r => r.submitted && r.job).map(r => r.job));
   for (const row of rows) {
     if (row.skipped) continue;
-    if ((row.stop === 'budget' || row.stop === 'cost') && row.submitted) budgetStops.push(row);
-    if ((row.stop === 'budget' || row.stop === 'cost') && !row.submitted) errors.push(`${row.reviewer}: budget_exhausted_without_submission`);
+    const hasSubmission = Boolean(row.submitted || row.restored || (row.job && submittedJobs.has(row.job)));
+    if ((row.stop === 'budget' || row.stop === 'cost') && hasSubmission) budgetStops.push(row);
+    if ((row.stop === 'budget' || row.stop === 'cost') && !hasSubmission) errors.push(`${row.reviewer}: budget_exhausted_without_submission`);
   }
   return { state: errors.length ? 'INCOMPLETE' : 'COMPLETE', budgetStops, errors };
 }

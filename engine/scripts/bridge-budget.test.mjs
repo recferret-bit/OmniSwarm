@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { costLedger, createBeforeCall, decideCall, loadBudget, spentUsd } from './bridge-budget.mjs';
+import { costLedger, createBeforeCall, decideCall, loadBudget, passKey, spentUsd } from './bridge-budget.mjs';
 import { withFileLock } from './fs-lock.mjs';
 
 test('reads count and submits do not, and a new bridge continues the count', async () => {
@@ -19,6 +19,13 @@ test('reads count and submits do not, and a new bridge continues the count', asy
   const resumed = createBeforeCall({ reportDir: root, reviewerId: 'scripted-lazy', surface: 'S1', pass: 1, toolBudget: 40 });
   await resumed({ pendingArgs: { path: 'src/more.rs' } }, 'read_file');
   assert.equal(loadBudget(root, 'scripted-lazy').passes['s1:1'].calls, 8);
+  assert.equal(passKey({ role: 'crosscheck', pass: 1 }), 'crosscheck:1');
+  assert.equal(passKey({ role: 'crosscheck', surface: 'S1', pass: 1 }), 'crosscheck:1');
+  assert.equal(passKey({ role: 'crosscheck', surface: 'ALL', pass: 1 }), 'crosscheck:1');
+  const xcheck = createBeforeCall({ reportDir: root, reviewerId: 'scripted-lazy', role: 'crosscheck', pass: 1, toolBudget: 40 });
+  await xcheck({ pendingArgs: { path: 'src/peer.rs' } }, 'read_file');
+  assert.equal(loadBudget(root, 'scripted-lazy').passes['s1:1'].calls, 8, 'crosscheck never collides with s1:1');
+  assert.equal(loadBudget(root, 'scripted-lazy').passes['crosscheck:1'].calls, 1);
 });
 
 test('N=2 returns finalize text for three calls and then an error; submit still works', async () => {
@@ -40,6 +47,7 @@ test('N=2 returns finalize text for three calls and then an error; submit still 
   assert.equal(record.exhausted, true);
   assert.ok(Date.parse(record.exhaustedAt));
   assert.equal(decideCall({ calls: 2, graceUsed: 3, filesRead: [] }, { tool: 'read_file', toolBudget: 2 }).error, 'budget_exhausted');
+  assert.match(decideCall({ calls: 2, graceUsed: 0, filesRead: [] }, { tool: 'read_file', toolBudget: 2, role: 'crosscheck' }).text, /call submit_crosscheck_report now/);
 });
 
 test('one reviewer on several surfaces in parallel bridges never loses a count', async () => {

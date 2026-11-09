@@ -49,13 +49,22 @@ function argumentsOf(turns) {
   };
 }
 
-// A cluster the phase clock never started. Citation rules only: no model call, and the row is not a missing answer.
-export function unheardAdjudication(cluster) {
+// A cluster the phase clock never started or that was skipped after the unanswered-turn threshold.
+export function unheardAdjudication(cluster, reason = 'debate_time') {
   const mechanical = rulesVerdict(cluster, []);
+  const detail = reason === 'debate_threshold'
+    ? 'debate_threshold: unanswered debate turn threshold reached before this cluster was heard'
+    : reason === 'cancelled'
+      ? 'cancelled: the debate was cancelled before this cluster was heard'
+      : reason === 'debate_cap'
+        ? 'debate_cap: cluster exceeded maxClusters and was adjudicated by citation rules'
+        : reason === 'pass2_budget_restored_from_pass1'
+          ? 'pass2_budget_restored_from_pass1: restored from Pass-1 submission after Pass-2 tool budget limit'
+          : 'debate_time: the debate phase clock expired before this cluster was heard';
   return {
     clusterId: cluster.id, finalStatus: mechanical, severity: cluster.severity, severityReason: 'Left at the reported severity.',
     judge: { reviewerId: 'rules', vendor: 'rules', alternate: false },
-    rationale: `${mechanical} from verified citations only (debate_time: the debate phase clock expired before this cluster was heard).`,
+    rationale: `${mechanical} from verified citations only (${detail}).`,
     validArguments: [], discardedArguments: [],
   };
 }

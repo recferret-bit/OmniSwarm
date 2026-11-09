@@ -20,8 +20,12 @@ export function budgetedRole(role) {
   return !UNBUDGETED_ROLES.has(role);
 }
 
-export function passKey(surface, pass) {
-  return `${String(surface || 's1').toLowerCase()}:${pass}`;
+export function passKey(surface, pass, role) {
+  if (surface && typeof surface === 'object') {
+    ({ role = 'auditor', surface, pass = 1 } = surface);
+  }
+  const prefix = role === 'crosscheck' ? 'crosscheck' : String(surface || 's1').toLowerCase();
+  return `${prefix}:${pass ?? 1}`;
 }
 
 export function budgetFile(reviewerId) {
@@ -42,7 +46,7 @@ export function saveBudget(reportDir, budget) {
   writeReportFile(reportDir, budgetFile(budget.reviewer), `${JSON.stringify(budget, null, 2)}\n`);
 }
 
-export function decideCall(record, { tool, path, toolBudget, grace = GRACE }) {
+export function decideCall(record, { tool, path, toolBudget, grace = GRACE, role }) {
   const next = { calls: record.calls || 0, graceUsed: record.graceUsed || 0, filesRead: [...(record.filesRead || [])], finalizeOnlyAt: record.finalizeOnlyAt || null, ...(record.exhaustedAt ? { exhausted: true, exhaustedAt: record.exhaustedAt } : {}) };
   if (SUBMIT.has(tool)) return { allow: true, record: next };
   if (next.calls >= toolBudget) {
@@ -50,7 +54,8 @@ export function decideCall(record, { tool, path, toolBudget, grace = GRACE }) {
     const left = grace - next.graceUsed;
     next.graceUsed += 1;
     next.finalizeOnlyAt = next.finalizeOnlyAt || new Date().toISOString();
-    return { allow: false, text: `budget exhausted: call submit_audit_report now (${left} calls left)`, finalize: true, record: next };
+    const submitTool = role === 'crosscheck' ? 'submit_crosscheck_report' : 'submit_audit_report';
+    return { allow: false, text: `budget exhausted: call ${submitTool} now (${left} calls left)`, finalize: true, record: next };
   }
   next.calls += 1;
   if (READS.has(tool) && path && !next.filesRead.includes(path)) next.filesRead.push(path);
@@ -63,14 +68,14 @@ export function budgetLockFile(reportDir, reviewerId) {
 }
 
 // The decision is taken on the freshest saved record, under the lock, so parallel surfaces never lose a count.
-export function createBeforeCall({ reportDir, reviewerId, surface, pass, toolBudget }) {
-  const key = passKey(surface, pass);
+export function createBeforeCall({ reportDir, reviewerId, surface, pass, toolBudget, role }) {
+  const key = passKey({ role, surface, pass });
   return async (ctx, name) => {
     fs.mkdirSync(path.join(reportDir, 'harness'), { recursive: true });
     const decision = await withFileLock(budgetLockFile(reportDir, reviewerId), () => {
       const budget = loadBudget(reportDir, reviewerId);
       const current = budget.passes[key] || { calls: 0, filesRead: [], finalizeOnlyAt: null };
-      const verdict = decideCall(current, { tool: name, path: ctx.pendingArgs?.path, toolBudget });
+      const verdict = decideCall(current, { tool: name, path: ctx.pendingArgs?.path, toolBudget, role: role || ctx?.role });
       budget.passes[key] = verdict.record;
       saveBudget(reportDir, budget);
       return verdict;
@@ -109,6 +114,6 @@ export function attachBudget(ctx) {
     catch { toolBudget = 40; }
   }
   const pass = Number(ctx.pass) || 1;
-  ctx.beforeCall = createBeforeCall({ reportDir: ctx.reportDir, reviewerId: ctx.agent, surface: ctx.surface, pass, toolBudget });
+  ctx.beforeCall = createBeforeCall({ reportDir: ctx.reportDir, reviewerId: ctx.agent, surface: ctx.surface, pass, toolBudget, role: ctx.role });
   return ctx;
 }

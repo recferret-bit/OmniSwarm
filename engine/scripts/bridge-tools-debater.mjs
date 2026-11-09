@@ -26,14 +26,29 @@ export function toolDefinitions() {
   return [...readToolDefinitions(), submit];
 }
 
+function normalizeCitations(raw) {
+  if (!Array.isArray(raw)) return raw;
+  return raw.map((item) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return item;
+    if (typeof item.line === 'number' && item.startLine === undefined && item.endLine === undefined) {
+      const { line, ...rest } = item;
+      return { ...rest, startLine: line, endLine: line };
+    }
+    return item;
+  });
+}
+
 async function submitDebateTurn(ctx, raw) {
   const identity = requireRole(ctx, role);
   const task = assignmentOf(ctx);
   if (task.kind !== 'debate-turn') throw new Error('This session was not assigned a debate turn');
   const args = unwrapReportJson(raw);
+  const rawCitations = args.citations !== undefined ? args.citations : (Array.isArray(args.evidence) ? args.evidence : (args.verdict === 'insufficient_evidence' ? [] : undefined));
+  const citations = normalizeCitations(rawCitations);
+  const argument = args.argument !== undefined ? args.argument : args.reason;
   const body = {
     round: task.round, clusterId: task.clusterId, role: task.role, anonId: task.anonId,
-    verdict: args.verdict, citations: args.citations, argument: args.argument, devilAdvocate: task.role === 'devil',
+    verdict: args.verdict, citations, argument, devilAdvocate: task.role === 'devil',
   };
   // The schema refuses this too (citations minItems 1 unless insufficient_evidence); the named code tells the model why.
   if (body.verdict !== 'insufficient_evidence' && Array.isArray(body.citations) && !body.citations.length) throw new Error('citation_required: cite file, lines and a quote, or answer insufficient_evidence');

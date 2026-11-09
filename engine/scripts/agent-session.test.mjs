@@ -247,6 +247,16 @@ test('silent reasoning survives repeated heartbeats and explicit cancellation re
   assert.ok(heartbeats.every(beat => beat.timeLimitMs === null));
   assert.equal(f.state().sessionId, 'saved-review-1');
   assert.equal(f.state().phase, 'cancelled');
+  const controller2 = new AbortController();
+  let beats = 0;
+  const budgetedCancel = await runReviewSession({
+    ...f.options, directory: path.join(f.root, 'session-budget-cancel'),
+    budgets: { toolBudget: 5, passes: 2, maxCostUsd: null },
+    signal: controller2.signal,
+    onProgress: event => { if (event.phase === 'running' && ++beats >= 2) controller2.abort(); },
+  }, f.support);
+  assert.equal(budgetedCancel.code, 130, 'external signal abort with budgets must return 130 cancelled, not 0 budget');
+  assert.equal(budgetedCancel.failureReason, 'cancelled');
 });
 
 test('a lost transport resumes once using the same identity without provider substitution', async t => {
@@ -362,4 +372,79 @@ test('session directories reject symlinks and unsafe permissions before launchin
   const real = path.join(f.root, 'real'); fs.mkdirSync(real, { mode: 0o700 });
   fs.symlinkSync(real, f.options.directory);
   assert.throws(() => openSessionStore(f.options.directory, identity), /session_directory_rejected/);
+});
+
+test('SearchTool is not counted against toolBudget, tool_call_update detects submits, and session/load re-pins a drifted default model', async t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'audit-session-quirks-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const executable = path.join(root, 'quirks.mjs');
+  fs.writeFileSync(executable, `
+import fs from 'node:fs';
+import readline from 'node:readline';
+const send = msg => process.stdout.write(JSON.stringify({jsonrpc:'2.0',...msg})+'\\n');
+const sid = 'quirk-session';
+readline.createInterface({input:process.stdin}).on('line', line => {
+  const msg = JSON.parse(line);
+  fs.appendFileSync('methods.txt', msg.method + '\\n');
+  if (msg.method === 'initialize') send({id:msg.id,result:{protocolVersion:1,agentCapabilities:{loadSession:true}}});
+  else if (msg.method === 'session/new') send({id:msg.id,result:{sessionId:sid,configOptions:[{id:'model',category:'model',currentValue:'opus'}]}});\n  else if (msg.method === 'session/load') send({id:msg.id,result:{configOptions:[{id:'model',category:'model',currentValue:'sonnet',options:[{value:'sonnet'},{value:'opus'}]}]}});
+  else if (msg.method === 'session/set_config_option') send({id:msg.id,result:{configOptions:[{id:'model',category:'model',currentValue:msg.params.value}]}});
+  else if (msg.method === 'session/prompt') {
+    for (let i = 0; i < 6; i++) {
+      send({method:'session/update',params:{sessionId:sid,update:{sessionUpdate:'tool_call',toolCallId:'s'+i,title:'search_tool',rawInput:{query:'submit_audit_report',limit:8},_meta:{'x.ai/tool':{version:1,name:'search_tool',kind:'search_tool'}}}}});
+      send({method:'session/update',params:{sessionId:sid,update:{sessionUpdate:'tool_call_update',toolCallId:'s'+i,title:'Search tools: select:audit_docker__submit_audit_report',rawInput:{variant:'SearchTool'}}}});
+      send({method:'session/update',params:{sessionId:sid,update:{sessionUpdate:'tool_call_update',toolCallId:'s'+i,status:'completed',content:[]}}});
+      send({method:'session/update',params:{sessionId:sid,update:{sessionUpdate:'tool_call',toolCallId:'sr'+i,status:'completed',rawOutput:{type:'SearchTool',result_count:8}}}});
+    }
+    send({method:'session/update',params:{sessionId:sid,update:{sessionUpdate:'tool_call',toolCallId:'u1',title:'use_tool'}}});
+    send({method:'session/update',params:{sessionId:sid,update:{sessionUpdate:'tool_call_update',toolCallId:'u1',title:'use_tool',rawInput:{tool_name:'audit_docker__submit_audit_report'}}}});
+    send({id:msg.id,result:{stopReason:'end_turn'}});
+  }
+});
+`);
+  const opusIdentity = { ...identity, model: 'opus', provider: 'claude' };
+  const support = {
+    heartbeatMs: 30_000,
+    preflight: async () => ({ state: 'ready', tools: ['read_file', 'submit_audit_report'] }),
+    launch: ({ workDir }) => ({ invocation: { executable: process.execPath, args: [executable], cwd: workDir, env: process.env }, mcpServers: [{}], transport: 'inert_acp_fixture' }),
+  };
+  const baseOpts = { directory: path.join(root, 'session'), identity: opusIdentity, bridgeArgs: [], prompt: 'Review.', budgets: { toolBudget: 2, passes: 2, maxCostUsd: null } };
+  const pass1 = await runReviewSession(baseOpts, support);
+  assert.equal(pass1.code, 0);
+  assert.equal(pass1.stop, 'submitted');
+  const pass2 = await runReviewSession({ ...baseOpts, resume: true }, support);
+  assert.equal(pass2.code, 0);
+  assert.equal(pass2.stop, 'submitted');
+  const methods = fs.readFileSync(path.join(root, 'session', 'workspace', 'methods.txt'), 'utf8');
+  assert.match(methods, /session\/set_config_option/);
+  assert.doesNotMatch(methods, /session\/cancel/);
+
+  // AGY emits tool_call_update with title: "call_mcp_tool" and no tool_name; once submissions/<name>.json is on disk,
+  // extra calls past toolBudget + GRACE must not budget-cancel the turn.
+  const agyExec = path.join(root, 'agy-fixture.mjs');
+  fs.writeFileSync(agyExec, `
+import readline from 'node:readline';
+const send = msg => process.stdout.write(JSON.stringify({jsonrpc:'2.0',...msg})+'\\n');
+const sid = 'agy-session';
+readline.createInterface({input:process.stdin}).on('line', line => {
+  const msg = JSON.parse(line);
+  if (msg.method === 'initialize') send({id:msg.id,result:{protocolVersion:1,agentCapabilities:{loadSession:false}}});
+  else if (msg.method === 'session/new') send({id:msg.id,result:{sessionId:sid}});
+  else if (msg.method === 'session/cancel') send({id:1,result:{stopReason:'cancelled'}});
+  else if (msg.method === 'session/prompt') {
+    for (let i = 0; i < 8; i++) {
+      send({method:'session/update',params:{sessionId:sid,update:{sessionUpdate:'tool_call_update',toolCallId:'c'+i,title:'call_mcp_tool',status:'completed'}}});
+    }
+    send({id:msg.id,result:{stopReason:'end_turn'}});
+  }
+});
+`);
+  fs.mkdirSync(path.join(root, 'submissions'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'submissions', `${identity.name}.json`), '{"ok":true}\n');
+  const agyResult = await runReviewSession(
+    { directory: path.join(root, 'session-agy'), identity, bridgeArgs: ['--report-dir', root], prompt: 'Review.', budgets: { toolBudget: 2, passes: 1, maxCostUsd: null } },
+    { ...support, launch: ({ workDir }) => ({ invocation: { executable: process.execPath, args: [agyExec], cwd: workDir, env: process.env }, mcpServers: [{}], transport: 'inert_acp_fixture' }) },
+  );
+  assert.equal(agyResult.code, 0);
+  assert.equal(agyResult.stop, 'submitted');
 });
