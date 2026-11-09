@@ -134,4 +134,23 @@ The indexer does **not** proxy RPC. The browser calls `http://127.0.0.1:3030` di
 | `accounts.json` | paths and public ids only, validated by `near-local-accounts.schema.json` |
 | CORS allow-origin the indexer sends on its own pages | `http://omniswarm.localhost:18480` |
 
-`NEAR_LOCAL=0` keeps today's mock-chain stack. The sandbox URLs replace the mock URLs only when `NEAR_LOCAL=1` (W15-11). Until that issue lands, `dev.env.example` keeps the mock `RPC_URLS` and https `NEXT_PUBLIC_*` URLs so `stack:local` still builds.
+`NEAR_LOCAL=0` keeps today's mock-chain stack. `npm run stack:local` defaults an unset `NEAR_LOCAL` to 1. `dev.env.example` keeps `NEAR_LOCAL=0` so `npm run check:infra` still brings up the mock stack.
+
+## Coverage
+
+| Touchpoint | Status | Where | Test |
+|---|---|---|---|
+| Wallet | local | dev wallet lists indexer accounts and signs with ed25519 | `dev-wallet.test.ts`; browser file `tests/e2e/landing/near-local.test.mjs` |
+| NEP-413 | local | canonical message, real signature | dev-wallet test; `tests/e2e/near-local/flow.test.mjs` |
+| Payment | local | `request_review` for 1 NEAR on `registry.test.near` | headless flow; dashboard sandbox payer |
+| Function-call key | local | operator key limited to `mark_running`, `attest`, `refund`, `report_address` | seed; attack demo signer calls 0 |
+| Tx finality | local | near adapter waits for FINAL | `near-chain.test.ts`; headless payment |
+| Operator calls | local | `mark_running`, `attest`, `refund`, `report_address` | headless flow; `ops.mjs` |
+| Blocklist | local | `report_address` / `is_reported` / `retract_report` | seed-guard; parity report/retract |
+| Guard signals | local | critical, reported, code drift, account age | `run.mjs --sandbox`. A fresh sandbox account is under 30 days, so `good-dex` is `warn ACCOUNT_TOO_NEW` until `created.json` records an older timestamp. `allow` on testnet is lane O2 |
+| Verify | local | RPC `get_attestation`, API fallback labelled "via API, not independent" | `verify.test.ts`; headless hash match |
+| Explorer | local-stub | indexer HTML for `/txns` and `/address`, not NearBlocks | `indexer.test.mjs`. Live NearBlocks pages are lane O3 |
+| Owner methods | local | `withdraw`, `set_*`, `propose_owner` / `accept_owner`, `refund`, `confirm_binding`, `retract_report` | `ops.mjs` withdraw and refund bounce |
+| Events | local | NEP-297 `EVENT_JSON`, including `refund_failed` and `binding_confirmed` | parity table, every row `same` |
+| near-connect extension | testnet-only | the dev wallet replaces it on sandbox | lane O2 |
+| Testnet finality timing | testnet-only | local finality is the sandbox | lane O2 |
