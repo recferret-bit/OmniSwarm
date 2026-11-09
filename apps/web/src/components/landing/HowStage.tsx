@@ -8,9 +8,14 @@ export function HowStage({ active }: { active: number }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const aim = useRef(0.5);
   const hash = useRef('');
+  const paintNow = useRef<(() => void) | null>(null);
   useEffect(() => {
     let live = true;
-    void readSampleHash().then((value) => { if (live) hash.current = value; });
+    void readSampleHash().then((value) => {
+      if (!live || !value) return;
+      hash.current = value;
+      paintNow.current?.();
+    });
     return () => { live = false; };
   }, []);
   useEffect(() => {
@@ -42,11 +47,13 @@ export function HowStage({ active }: { active: number }) {
         frame = requestAnimationFrame(tick);
       }
     };
+    paintNow.current = () => paint(performance.now());
     document.addEventListener('visibilitychange', onVis);
     const theme = new MutationObserver(() => paint(performance.now()));
     theme.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
     return () => {
       live = false;
+      paintNow.current = null;
       cancelAnimationFrame(frame);
       theme.disconnect();
       canvas.removeEventListener('pointermove', onMove);

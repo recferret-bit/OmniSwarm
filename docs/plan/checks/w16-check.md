@@ -21,15 +21,15 @@ That is `npm run check:all` and then `bash tools/screener-check.sh`. On the wave
 
 `npm run guard -w apps/web` prints `production bundle checked (303 files): no mock wallet, MSW, mock controls, fixture hash or key-shaped strings`.
 
-The production head from that guard build contains:
+`npm run build -w apps/web` then `next start` renders `og:image` on the request host, not `localhost:3000`. A start on `127.0.0.1:31991` produced:
 
 ```html
-<meta property="og:image" content="http://localhost:3000/sample/preview.jpg"/>
+<meta property="og:image" content="http://127.0.0.1:31991/sample/preview.jpg"/>
 <meta property="og:image:width" content="1100"/>
 <meta property="og:image:height" content="720"/>
 ```
 
-`apps/web/public/sample/preview.jpg` is 1100×720.
+Behind nginx the host comes from `X-Forwarded-Host` and the scheme from `X-Forwarded-Proto`. `apps/web/public/sample/preview.jpg` is 1100×720.
 
 ## Steps
 
@@ -39,7 +39,9 @@ The production head from that guard build contains:
 
 **3. Landing hash and one animation loop.** Open `http://omniswarm.localhost:18480/` with `npm run stack:local`, or the web dev server. The How-it-works line says "Two reviewers by default, up to six". The hash stage draws `cd8a533dc78a6d48e47e7fbe6bb7f9f591badd1e5854564cd4f3dd8f09ca38ab`, the `report_sha256` in `apps/web/public/sample/attestation.json`. Hide and show the tab ten times: one canvas loop keeps running. The unit tests that lock this are `how-scene.test.ts`, `how-paint.test.ts`, and `frame-loop.test.tsx`.
 
-**4. Link preview.** The built `<head>` has `og:image` pointing at `/sample/preview.jpg`, as quoted above.
+**4. Link preview.** The served `<head>` has `og:image` on that host plus `/sample/preview.jpg`, as quoted above. An empty sample-hash read draws "Reading the sample attestation." and does not print `LOCKED` or `MATCH`.
+
+The two commit subjects named in W16-06 are not in `git log`. The painters, the sample-report buttons, and the dropped band borders are already on main as `62f9346` ("Show each review stage as a timed canvas picture."). The hash lock-in is `fc937b6` on this branch. Empty commits with the old subjects were not added.
 
 ## When you're done
 

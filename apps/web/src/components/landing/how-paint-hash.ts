@@ -1,3 +1,4 @@
+import { isReportHash } from '@/components/report/sample-hash';
 import {
   BEAT_MS,
   beat,
@@ -173,8 +174,21 @@ function drawKeyOrder(
   ctx.textAlign = 'left';
 }
 
+function drawWaiting(scene: HowScene, x: number, y: number) {
+  const { ctx, ink } = scene;
+  ctx.font = mono(ink, 14, 600);
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = ink.steel;
+  ctx.fillText('Reading the sample attestation.', x, y + 24);
+}
+
 function drawLock(scene: HowScene, x: number, y: number, w: number, h: number, u: number) {
   const { ctx, ink } = scene;
+  if (!isReportHash(scene.reportHash)) {
+    drawWaiting(scene, x, y);
+    return;
+  }
   const locked = easeOut(u) * scene.reportHash.length;
   const metrics = hashMetrics(w, 16, scene.reportHash.length);
   const gridH = metrics.pitch * metrics.rows;
@@ -210,6 +224,10 @@ function drawLock(scene: HowScene, x: number, y: number, w: number, h: number, u
 
 function drawMatch(scene: HowScene, x: number, y: number, w: number, h: number, u: number) {
   const { ctx, ink } = scene;
+  if (!isReportHash(scene.reportHash)) {
+    drawWaiting(scene, x, y);
+    return;
+  }
   const browser = easeOut(u) * scene.reportHash.length;
   const inspect = Math.floor(scene.pointerX * (scene.reportHash.length - 1));
   const matched = u > 0.78;
@@ -254,7 +272,7 @@ function drawAttest(scene: HowScene, x: number, y: number, w: number, h: number,
   const narrow = w < 680;
   const facts: Array<[string, string]> = [
     ['method', 'attest'],
-    ['report_sha256', `${scene.reportHash.slice(0, 16)}…`],
+    ['report_sha256', isReportHash(scene.reportHash) ? `${scene.reportHash.slice(0, 16)}…` : 'reading sample'],
     ['repo', 'sample/vault'],
     ['commit', 'a1c4e9b'],
     ['max_severity', 'high'],
@@ -289,7 +307,7 @@ function drawAttest(scene: HowScene, x: number, y: number, w: number, h: number,
   const chainY = narrow ? y + factH + 8 : y;
   const chainW = narrow ? w : w - factW - 14;
   const chainH = narrow ? Math.max(36, h - foot - factH - 8) : h - foot;
-  drawChain(ctx, ink, chainX, chainY, chainW, chainH, land, scene.reportHash);
+  drawChain(ctx, ink, chainX, chainY, chainW, chainH, land, isReportHash(scene.reportHash) ? scene.reportHash : '');
   ctx.font = mono(ink, 12, 600);
   ctx.fillStyle = ink.steel;
   ctx.textAlign = 'left';

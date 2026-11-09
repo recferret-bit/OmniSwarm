@@ -100,4 +100,14 @@ describe('how stage pictures', () => {
     const drawn = paint(3, 2800 * 1.9, false, SAMPLE_HASH).replaceAll('\n', '');
     expect(drawn).toContain(SAMPLE_HASH);
   });
+
+  it('does not present an empty fetch as a locked digest', () => {
+    expect(paint(3, 2800 * 1.2, false, '')).not.toMatch(/(^|\n)LOCKED(\n|$)/);
+    expect(paint(3, 2800 * 2.2, false, '')).not.toMatch(/(^|\n)MATCH(\n|$)/);
+    expect(paint(3, 2800 * 1.2, false, '')).toContain('Reading the sample attestation.');
+    const attested = paint(3, 0, true, '');
+    expect(attested).toContain('reading sample');
+    expect(attested).not.toContain('…');
+    expect(paint(3, 2800 * 1.2, false, 'zz'.repeat(32))).toContain('Reading the sample attestation.');
+  });
 });
