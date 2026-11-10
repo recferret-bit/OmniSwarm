@@ -1,0 +1,600 @@
+{
+  "stack": "fullstack",
+  "layers": [
+    "web2",
+    "web3",
+    "infra"
+  ],
+  "bugs": [
+    {
+      "file": "backend/src/routes/tips.js",
+      "startLine": 12,
+      "endLine": 12,
+      "class": "sql-injection",
+      "title": "creator search interpolates the query string into SQL",
+      "severity": "high",
+      "layer": "web2"
+    },
+    {
+      "file": "backend/src/routes/tips.js",
+      "startLine": 23,
+      "endLine": 23,
+      "class": "idor",
+      "title": "GET /tips/:id returns any sender's tip row",
+      "severity": "medium",
+      "layer": "web2"
+    },
+    {
+      "file": "backend/src/routes/tips.js",
+      "startLine": 35,
+      "endLine": 35,
+      "class": "mass-assignment",
+      "title": "profile update takes column names from the request body",
+      "severity": "high",
+      "layer": "web2"
+    },
+    {
+      "file": "backend/src/routes/tips.js",
+      "startLine": 45,
+      "endLine": 45,
+      "class": "race-condition",
+      "title": "withdraw pays out before the unlocked balance is debited",
+      "severity": "critical",
+      "layer": "web2",
+      "missedBy": [
+        "baseline"
+      ]
+    },
+    {
+      "file": "backend/src/routes/tips.js",
+      "startLine": 50,
+      "endLine": 50,
+      "class": "missing-authentication",
+      "title": "tip confirmation credits a balance with no authentication or on-chain check",
+      "severity": "critical",
+      "layer": "web2"
+    },
+    {
+      "file": "backend/src/routes/admin.js",
+      "startLine": 15,
+      "endLine": 15,
+      "class": "missing-authorization",
+      "title": "balance override has no admin check",
+      "severity": "critical",
+      "layer": "web2"
+    },
+    {
+      "file": "backend/src/routes/admin.js",
+      "startLine": 21,
+      "endLine": 21,
+      "class": "ssrf",
+      "title": "avatar proxy fetches a caller-supplied URL",
+      "severity": "high",
+      "layer": "web2"
+    },
+    {
+      "file": "backend/src/routes/admin.js",
+      "startLine": 27,
+      "endLine": 27,
+      "class": "command-injection",
+      "title": "export builds a shell command from the query string",
+      "severity": "high",
+      "layer": "web2"
+    },
+    {
+      "file": "backend/src/auth.js",
+      "startLine": 13,
+      "endLine": 13,
+      "class": "weak-randomness",
+      "title": "sign-in nonce comes from Math.random",
+      "severity": "medium",
+      "layer": "web2",
+      "missedBy": [
+        "paranoid"
+      ]
+    },
+    {
+      "file": "backend/src/auth.js",
+      "startLine": 21,
+      "endLine": 21,
+      "class": "signature-replay",
+      "title": "login accepts any signed text containing the nonce, never consumes it and does not bind the key to the wallet",
+      "severity": "high",
+      "layer": "web2"
+    },
+    {
+      "file": "backend/src/auth.js",
+      "startLine": 30,
+      "endLine": 30,
+      "class": "privilege-escalation",
+      "title": "login copies the role from the request body into the token",
+      "severity": "critical",
+      "layer": "web2"
+    },
+    {
+      "file": "backend/src/config.js",
+      "startLine": 6,
+      "endLine": 6,
+      "class": "hardcoded-secret",
+      "title": "JWT secret falls back to a literal",
+      "severity": "high",
+      "layer": "web2"
+    },
+    {
+      "file": "backend/src/server.js",
+      "startLine": 11,
+      "endLine": 11,
+      "class": "cors",
+      "title": "CORS reflects every origin with credentials",
+      "severity": "medium",
+      "layer": "web2"
+    },
+    {
+      "file": "backend/src/server.js",
+      "startLine": 21,
+      "endLine": 21,
+      "class": "information-leak",
+      "title": "error handler returns the stack and the process environment",
+      "severity": "high",
+      "layer": "web2"
+    },
+    {
+      "file": "backend/src/db.js",
+      "startLine": 6,
+      "endLine": 6,
+      "class": "tls",
+      "title": "database TLS verification is disabled",
+      "severity": "medium",
+      "layer": "web2"
+    },
+    {
+      "file": "backend/package.json",
+      "startLine": 18,
+      "endLine": 18,
+      "class": "supply-chain",
+      "title": "dependency installed from an unpinned git branch, with no lockfile",
+      "severity": "medium",
+      "layer": "web2"
+    },
+    {
+      "file": "frontend/src/app.js",
+      "startLine": 21,
+      "endLine": 21,
+      "class": "dom-xss",
+      "title": "creator bio is written with innerHTML",
+      "severity": "high",
+      "layer": "web2"
+    },
+    {
+      "file": "frontend/src/app.js",
+      "startLine": 44,
+      "endLine": 44,
+      "class": "postmessage-origin",
+      "title": "message listener signs a transaction for any origin",
+      "severity": "critical",
+      "layer": "web2"
+    },
+    {
+      "file": "frontend/src/app.js",
+      "startLine": 59,
+      "endLine": 59,
+      "class": "unconfirmed-transfer",
+      "title": "a link with ?tip=&to= sends a transfer on page load",
+      "severity": "high",
+      "layer": "web2"
+    },
+    {
+      "file": "frontend/src/api.js",
+      "startLine": 2,
+      "endLine": 2,
+      "class": "client-secret",
+      "title": "an admin secret is shipped in the browser bundle",
+      "severity": "medium",
+      "layer": "web2"
+    },
+    {
+      "file": "frontend/index.html",
+      "startLine": 6,
+      "endLine": 6,
+      "class": "missing-sri",
+      "title": "third-party scripts load without a version pin or integrity hash",
+      "severity": "medium",
+      "layer": "web2"
+    },
+    {
+      "file": "backend/src/payout.js",
+      "startLine": 15,
+      "endLine": 15,
+      "class": "key-custody",
+      "title": "payout private key is written to the log",
+      "severity": "high",
+      "layer": "web3"
+    },
+    {
+      "file": "frontend/src/wallet.js",
+      "startLine": 16,
+      "endLine": 16,
+      "class": "wallet-access-key",
+      "title": "function-call key covers every method with a 250 NEAR allowance",
+      "severity": "medium",
+      "layer": "web3"
+    },
+    {
+      "file": "frontend/src/wallet.js",
+      "startLine": 54,
+      "endLine": 54,
+      "class": "blind-signing",
+      "title": "a serialized transaction from outside is signed without inspection",
+      "severity": "high",
+      "layer": "web3"
+    },
+    {
+      "file": "contracts/tipjar/src/lib.rs",
+      "startLine": 32,
+      "endLine": 32,
+      "class": "missing-access-control",
+      "title": "set_owner has no caller check",
+      "severity": "critical",
+      "layer": "web3"
+    },
+    {
+      "file": "contracts/tipjar/src/lib.rs",
+      "startLine": 42,
+      "endLine": 42,
+      "class": "signer-vs-predecessor",
+      "title": "set_fee authorizes the transaction signer instead of the predecessor",
+      "severity": "medium",
+      "layer": "web3",
+      "missedBy": [
+        "baseline"
+      ]
+    },
+    {
+      "file": "contracts/tipjar/src/lib.rs",
+      "startLine": 27,
+      "endLine": 27,
+      "class": "storage-collision",
+      "title": "two collections share the storage prefix b",
+      "severity": "high",
+      "layer": "web3"
+    },
+    {
+      "file": "contracts/tipjar/src/lib.rs",
+      "startLine": 50,
+      "endLine": 50,
+      "class": "unchecked-arithmetic",
+      "title": "fee math is unchecked and fee_bps is unbounded with overflow-checks off",
+      "severity": "medium",
+      "layer": "web3"
+    },
+    {
+      "file": "contracts/tipjar/src/lib.rs",
+      "startLine": 61,
+      "endLine": 61,
+      "class": "callback-settlement",
+      "title": "withdraw transfers before the balance is locked",
+      "severity": "critical",
+      "layer": "web3"
+    },
+    {
+      "file": "contracts/tipjar/src/lib.rs",
+      "startLine": 65,
+      "endLine": 65,
+      "class": "public-callback",
+      "title": "on_withdraw callback is not #[private]",
+      "severity": "critical",
+      "layer": "web3"
+    },
+    {
+      "file": "contracts/tipjar/src/lib.rs",
+      "startLine": 72,
+      "endLine": 72,
+      "class": "ft-receiver",
+      "title": "ft_on_transfer credits any caller without checking the token contract",
+      "severity": "high",
+      "layer": "web3"
+    },
+    {
+      "file": "contracts/tipjar/Cargo.toml",
+      "startLine": 17,
+      "endLine": 17,
+      "class": "release-profile",
+      "title": "release profile turns overflow checks off",
+      "severity": "medium",
+      "layer": "web3"
+    },
+    {
+      "file": "programs/tip_vault/src/lib.rs",
+      "startLine": 73,
+      "endLine": 73,
+      "class": "reinitialization",
+      "title": "initialize can be re-run on a live vault",
+      "severity": "low",
+      "layer": "web3"
+    },
+    {
+      "file": "programs/tip_vault/src/lib.rs",
+      "startLine": 32,
+      "endLine": 32,
+      "class": "unchecked-arithmetic",
+      "title": "vault total uses unchecked addition",
+      "severity": "low",
+      "layer": "web3",
+      "missedBy": [
+        "paranoid"
+      ]
+    },
+    {
+      "file": "programs/tip_vault/src/lib.rs",
+      "startLine": 38,
+      "endLine": 38,
+      "class": "unchecked-arithmetic",
+      "title": "withdraw fee math can overflow and underflow",
+      "severity": "medium",
+      "layer": "web3"
+    },
+    {
+      "file": "programs/tip_vault/src/lib.rs",
+      "startLine": 101,
+      "endLine": 101,
+      "class": "missing-signer",
+      "title": "withdraw authority is not a signer and is not bound to the vault",
+      "severity": "critical",
+      "layer": "web3"
+    },
+    {
+      "file": "programs/tip_vault/src/lib.rs",
+      "startLine": 62,
+      "endLine": 62,
+      "class": "arbitrary-cpi",
+      "title": "notify invokes a caller-chosen program",
+      "severity": "high",
+      "layer": "web3"
+    },
+    {
+      "file": "infra/Dockerfile",
+      "startLine": 1,
+      "endLine": 1,
+      "class": "container-base",
+      "title": "end-of-life unpinned base image running as root",
+      "severity": "medium",
+      "layer": "infra"
+    },
+    {
+      "file": "infra/Dockerfile",
+      "startLine": 4,
+      "endLine": 4,
+      "class": "curl-pipe-shell",
+      "title": "image build pipes a remote script into bash",
+      "severity": "high",
+      "layer": "infra"
+    },
+    {
+      "file": "infra/Dockerfile",
+      "startLine": 6,
+      "endLine": 6,
+      "class": "secret-in-image",
+      "title": "production secrets are copied into the image",
+      "severity": "high",
+      "layer": "infra"
+    },
+    {
+      "file": "infra/Dockerfile",
+      "startLine": 11,
+      "endLine": 11,
+      "class": "debug-port",
+      "title": "Node inspector listens on every interface",
+      "severity": "high",
+      "layer": "infra"
+    },
+    {
+      "file": "infra/production.env",
+      "startLine": 6,
+      "endLine": 6,
+      "class": "committed-secret",
+      "title": "payout key and JWT secret are committed",
+      "severity": "critical",
+      "layer": "infra"
+    },
+    {
+      "file": "infra/docker-compose.yml",
+      "startLine": 6,
+      "endLine": 6,
+      "class": "privileged-container",
+      "title": "api container runs privileged",
+      "severity": "high",
+      "layer": "infra"
+    },
+    {
+      "file": "infra/docker-compose.yml",
+      "startLine": 11,
+      "endLine": 11,
+      "class": "docker-socket",
+      "title": "Docker socket is mounted into the api container",
+      "severity": "high",
+      "layer": "infra"
+    },
+    {
+      "file": "infra/docker-compose.yml",
+      "startLine": 22,
+      "endLine": 22,
+      "class": "exposed-database",
+      "title": "Postgres with a default password is published on every interface",
+      "severity": "medium",
+      "layer": "infra",
+      "missedBy": [
+        "baseline"
+      ]
+    },
+    {
+      "file": "infra/nginx.conf",
+      "startLine": 7,
+      "endLine": 7,
+      "class": "no-tls",
+      "title": "proxy serves plain HTTP only",
+      "severity": "medium",
+      "layer": "infra"
+    },
+    {
+      "file": "infra/nginx.conf",
+      "startLine": 12,
+      "endLine": 12,
+      "class": "directory-listing",
+      "title": "directory listing is enabled",
+      "severity": "low",
+      "layer": "infra"
+    },
+    {
+      "file": "infra/nginx.conf",
+      "startLine": 17,
+      "endLine": 17,
+      "class": "spoofable-client-ip",
+      "title": "proxy forwards the client-supplied X-Forwarded-For",
+      "severity": "medium",
+      "layer": "infra"
+    },
+    {
+      "file": ".github/workflows/deploy.yml",
+      "startLine": 4,
+      "endLine": 4,
+      "class": "ci-untrusted-checkout",
+      "title": "pull_request_target workflow checks out and runs the PR head with secrets",
+      "severity": "critical",
+      "layer": "infra"
+    },
+    {
+      "file": ".github/workflows/deploy.yml",
+      "startLine": 8,
+      "endLine": 8,
+      "class": "ci-permissions",
+      "title": "workflow token has write-all permissions",
+      "severity": "medium",
+      "layer": "infra"
+    },
+    {
+      "file": ".github/workflows/deploy.yml",
+      "startLine": 14,
+      "endLine": 14,
+      "class": "unpinned-action",
+      "title": "checkout action follows a moving branch",
+      "severity": "medium",
+      "layer": "infra"
+    },
+    {
+      "file": ".github/workflows/deploy.yml",
+      "startLine": 30,
+      "endLine": 30,
+      "class": "ci-secret-log",
+      "title": "deploy step echoes a secret",
+      "severity": "high",
+      "layer": "infra"
+    },
+    {
+      "file": ".github/workflows/deploy.yml",
+      "startLine": 31,
+      "endLine": 31,
+      "class": "ci-script-injection",
+      "title": "commit message is interpolated into a shell step",
+      "severity": "high",
+      "layer": "infra"
+    }
+  ],
+  "decoys": [
+    {
+      "file": "backend/src/auth.js",
+      "startLine": 53,
+      "endLine": 53,
+      "reason": "the service key is compared in constant time and an empty key is refused",
+      "claim": "service key comparison leaks timing",
+      "layer": "web2"
+    },
+    {
+      "file": "backend/src/routes/tips.js",
+      "startLine": 17,
+      "endLine": 17,
+      "reason": "the creator id is a bound parameter",
+      "claim": "creator lookup builds SQL from the path",
+      "layer": "web2"
+    },
+    {
+      "file": "backend/src/routes/admin.js",
+      "startLine": 34,
+      "endLine": 34,
+      "reason": "execFile takes a fixed argv with no request data",
+      "claim": "reindex runs a shell command from the request",
+      "layer": "web2"
+    },
+    {
+      "file": "frontend/src/app.js",
+      "startLine": 51,
+      "endLine": 51,
+      "reason": "the status listener checks the origin first",
+      "claim": "status listener trusts any origin",
+      "layer": "web2"
+    },
+    {
+      "file": "frontend/src/app.js",
+      "startLine": 13,
+      "endLine": 13,
+      "reason": "the handle is written with textContent",
+      "claim": "creator list renders the handle as HTML",
+      "layer": "web2"
+    },
+    {
+      "file": "contracts/tipjar/src/lib.rs",
+      "startLine": 37,
+      "endLine": 37,
+      "reason": "set_paused checks the predecessor against the owner",
+      "claim": "set_paused has no access control",
+      "layer": "web3"
+    },
+    {
+      "file": "contracts/tipjar/src/lib.rs",
+      "startLine": 85,
+      "endLine": 85,
+      "reason": "fees are zeroed before the transfer, behind one yocto and the owner check",
+      "claim": "collect_fees can be drained twice",
+      "layer": "web3"
+    },
+    {
+      "file": "programs/tip_vault/src/lib.rs",
+      "startLine": 82,
+      "endLine": 82,
+      "reason": "the vault PDA is re-derived with the stored canonical bump",
+      "claim": "deposit accepts a forged vault account",
+      "layer": "web3"
+    },
+    {
+      "file": "programs/tip_vault/src/lib.rs",
+      "startLine": 113,
+      "endLine": 113,
+      "reason": "close requires has_one and a signing authority",
+      "claim": "anyone can close the vault",
+      "layer": "web3"
+    },
+    {
+      "file": "infra/nginx.conf",
+      "startLine": 22,
+      "endLine": 22,
+      "reason": "the internal location is limited to the private range and denies the rest",
+      "claim": "internal location is public",
+      "layer": "infra"
+    },
+    {
+      "file": "infra/docker-compose.yml",
+      "startLine": 25,
+      "endLine": 25,
+      "reason": "the proxy image is pinned by digest and read-only",
+      "claim": "proxy image follows a moving tag",
+      "layer": "infra"
+    },
+    {
+      "file": ".github/workflows/deploy.yml",
+      "startLine": 17,
+      "endLine": 17,
+      "reason": "the action is pinned to a commit",
+      "claim": "setup-node action is unpinned",
+      "layer": "infra"
+    }
+  ]
+}

@@ -11,8 +11,9 @@
 
 | Path | What it is |
 |---|---|
-| `golden/<repo>/` | One small repo per stack, with at least two seeded bugs and two decoys (code that looks vulnerable and is safe): `near-escrow` (Rust, `near-sdk`), `solana-vault` (Anchor), `ts-api` (Express + pg), `py-fastapi` (FastAPI), `near-client` (`near-api-js`), `rust-crate` (plain Rust). |
+| `golden/<repo>/` | One small repo per stack, with at least two seeded bugs and two decoys (code that looks vulnerable and is safe): `near-escrow` (Rust, `near-sdk`), `solana-vault` (Anchor), `ts-api` (Express + pg), `py-fastapi` (FastAPI), `near-client` (`near-api-js`), `rust-crate` (plain Rust), and `fullstack-dapp` (see below). |
 | `golden/<repo>/expected.json` | `bugs[]` and `decoys[]` with `file`, `startLine`, `endLine`; bugs carry `class`, `title`, `severity`, decoys `reason` and the plausible wrong `claim`. `missedBy` and `misjudgedBy` steer the scripted panel only. |
+| `build-expected.mjs` | Rebuilds `golden/fullstack-dapp/expected.json` from code needles, so its line numbers follow the source. `--check` fails when the file is stale. |
 | `validate.mjs` | Every range exists and is real code (not blank, not a lone brace); no two repos share source; at least six repos. |
 | `panel.mjs` | The offline panel: the W03 scripted strategies (`engine/scripts/scripted-strategies.mjs`) with answers derived from `expected.json` by one fixed policy. |
 | `metrics.mjs` | Recall, precision, decoy false-positive rate, dedup, conformity, and the OD-14 default-rounds rule. |
@@ -21,3 +22,11 @@
 | `runs/` | Output, gitignored. `runs/last-run.json` holds the date and commit of the latest run. |
 
 The offline numbers measure the debate protocol (citation checks, the conformity rule, the evidence floor), not model skill: the scripted answers come from `expected.json`. A live eval with real models (`OMNI_LIVE=1`) is not built yet. When it is, its target must be a copy of the repo without `expected.json`.
+
+## fullstack-dapp
+
+`golden/fullstack-dapp/` is the one fixture that is a whole product instead of one stack: a static frontend with NEAR and Solana wallet flows, an Express backend, a NEAR contract, an Anchor program, and a Dockerfile, compose file, nginx config, committed environment file and deploy workflow. Every part is written badly on purpose. `expected.json` lists 53 seeded bugs and 12 decoys, each with its `layer` (`web2`, `web3` or `infra`, the same split as `engine/scripts/harness-layers.mjs`). The source carries no comment that marks a defect, so the tree can be handed to real reviewers.
+
+`tests/e2e/engine/fullstack.test.mjs` (`npm run check:fullstack`) drives the offline modes over it: stack routing, the layer map, the lead scan, the reviewer guidance, `--plan` for the local, hosted and demo presets, the intake's theme split, and a scripted review with the debate at 1, 2 and 3 rounds through to the HTML report.
+
+It is inert: nothing in it is installed, built, deployed or run. The key-shaped strings are repeated digits, not keys. For a live review, copy the directory without `expected.json` and run `./bin/audit local --repo <copy>`.

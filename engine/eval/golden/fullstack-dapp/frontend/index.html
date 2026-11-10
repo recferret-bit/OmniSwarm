@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>TipJar</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://widgets.tipjar-cdn.example/embed.js"></script>
+  </head>
+  <body>
+    <header>
+      <h1>TipJar</h1>
+      <button id="connect-near">Connect NEAR</button>
+      <button id="connect-solana">Connect Solana</button>
+      <span id="account"></span>
+    </header>
+    <main>
+      <input id="search" placeholder="Find a creator" />
+      <section id="creators"></section>
+      <section id="creator"></section>
+      <p id="status"></p>
+    </main>
+    <script type="module" src="/src/app.js"></script>
+  </body>
+</html>

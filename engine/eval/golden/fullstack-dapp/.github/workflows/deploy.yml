@@ -1,0 +1,31 @@
+name: deploy
+
+on:
+  pull_request_target:
+  push:
+    branches: [main]
+
+permissions: write-all
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@main
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a
+        with:
+          node-version: 18
+      - run: cd backend && npm install && npm test
+        env:
+          PAYOUT_PRIVATE_KEY: ${{ secrets.PAYOUT_PRIVATE_KEY }}
+
+  deploy:
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - run: echo "deploying with ${{ secrets.DEPLOY_TOKEN }}"
+      - run: ./infra/deploy.sh "${{ github.event.head_commit.message }}"

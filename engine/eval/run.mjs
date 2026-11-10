@@ -20,10 +20,11 @@ const GOLDEN = path.join(HERE, 'golden');
 const RUNS = path.join(HERE, 'runs');
 const MODES = ['union', 'majority', 'debate-1', 'debate-2'];
 
-async function debate(dir, panel, rounds, out) {
+// maxClusters: every cluster is debated. The eval measures the protocol, not the cluster cap (a budget knob).
+async function debate(dir, panel, rounds, out, maxClusters) {
   fs.rmSync(out, { recursive: true, force: true });
   fs.mkdirSync(out, { recursive: true });
-  const result = await runDebateStages(offlinePlan({ out, sourceRoot: dir, claims: panel.claims, controls: panel.controls, reviewers: panel.reviewers, rounds }));
+  const result = await runDebateStages(offlinePlan({ out, sourceRoot: dir, claims: panel.claims, controls: panel.controls, reviewers: panel.reviewers, rounds, maxClusters }));
   const turns = [...result.debated.values()].flatMap((row) => row.turns);
   return { adjudication: result.rows, turns: turns.length, suspect: turns.filter((t) => t.conformitySuspect).length };
 }
@@ -40,7 +41,7 @@ async function evalRepo(name) {
     majority: score(retainedBy('majority', clusters, { submitters }), expected),
   };
   for (const rounds of [1, 2]) {
-    const run = await debate(dir, panel, rounds, path.join(work, `debate-r${rounds}`));
+    const run = await debate(dir, panel, rounds, path.join(work, `debate-r${rounds}`), Math.max(clusters.length, 25));
     row[`debate-${rounds}`] = { ...score(retainedBy('debate', clusters, { adjudication: run.adjudication }), expected), turns: run.turns, suspect: run.suspect };
   }
   return { name, row };
@@ -76,7 +77,8 @@ not model skill. The live eval with real models (\`OMNI_LIVE=1\`) is pending.
 Default debate rounds: ${decision.rounds}. ${decision.reason}
 
 Union keeps every cluster. Majority keeps clusters reported by more than half of the reviewers that submitted
-a finding. debate-N keeps every cluster the N-round debate did not REFUTE. Totals are micro-averaged.
+a finding. debate-N keeps every cluster the N-round debate did not REFUTE; every cluster is debated (no cluster
+cap), so the table measures the protocol and not the cap. Totals are micro-averaged.
 
 ${text}
 `;

@@ -1,0 +1,16 @@
+{
+  "name": "tipjar-frontend",
+  "version": "0.3.1",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "@solana/web3.js": "^1.95.0",
+    "near-api-js": "^4.0.3"
+  },
+  "devDependencies": {
+    "vite": "^5.4.0"
+  }
+}
