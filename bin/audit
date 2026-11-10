@@ -25,7 +25,7 @@ COMMAND="${1:-help}"
 shift || true
 
 ARG_REPO="" ARG_GITHUB="" ARG_REF="" ARG_WORKDIR="" ARG_CLEAN=0
-SURFACE="all" OUT_DIR="" POSITIONAL=()
+SURFACE="all" SCOPE="full" OUT_DIR="" POSITIONAL=()
 PLAN=0
 RPC="" RESUME_FROM="" TEST_ARTIFACTS="" RESTART_FAILED=0
 REVIEWER_ARGS=()   # reviewer, model, preset and budget flags, resolved by engine/scripts/run-config.mjs
@@ -40,6 +40,7 @@ parse_flags() {
       --workdir) ARG_WORKDIR="${2:?--workdir needs a path}"; shift 2 ;;
       --clean) ARG_CLEAN=1; shift ;;
       --surface|-s) SURFACE="${2:?$1 needs a value}"; shift 2 ;;
+      --scope) SCOPE="${2:?--scope needs full, web2, web3 or infra}"; shift 2 ;;
       --out|-o) OUT_DIR="${2:?$1 needs a path}"; shift 2 ;;
       --agents|-a) REVIEWER_ARGS+=(--agents "${2:?$1 needs a list}"); shift 2 ;;
       --reviewers|--config|--preset|--assign|--orchestrator|--alternate-judge|--passes|--tool-budget|--max-cost-usd|--debate-rounds|--debate-max-clusters|--debate-tool-budget|--debate-turn-ms|--debate-phase-ms|--model|--models|--model-claude|--model-grok|--model-agy|--model-codex)
@@ -127,7 +128,7 @@ case "$COMMAND" in
     bash "$AUDIT_ROOT/scripts/orchestrate.sh" \
       --target "$TARGET_DIR" --name "$TARGET_NAME" --mode "$TARGET_MODE" \
       --source "$TARGET_SOURCE" --ref "$TARGET_REF" --commit "$TARGET_COMMIT" \
-      --surface "$SURFACE" --out "$OUT_DIR" ${model_args[@]+"${model_args[@]}"}
+      --surface "$SURFACE" --scope "$SCOPE" --out "$OUT_DIR" ${model_args[@]+"${model_args[@]}"}
     report_kept_clone
     ;;
 

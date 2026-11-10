@@ -9,6 +9,7 @@ Two operator modes. Do not invent a third review loop. `audit run --rpc` is reje
 ```sh
 ./bin/audit local                              # current directory; installed claude/codex/grok/agy
 ./bin/audit local --repo /path                # or: --github owner/repo
+./bin/audit local --scope web3                 # one layer only: web2, web3 or infra (also on audit run)
 npm run stack:local                            # http://omniswarm.localhost:18480/
 npm run stack:local:down                       # stop containers and the two host workers
 ```
@@ -77,7 +78,7 @@ When you change detection or leads, update the matching pieces together:
 - `engine/scripts/docker-mcp-bridge.mjs` and `engine/scripts/docker-agent-orchestrator.mjs` if a new lead file must reach the reviewer
 - both skill copies, which must stay byte-identical
 
-Every file of a target also belongs to one review layer: `web2` (application), `web3` (contracts, programs and code that imports a chain SDK or signs) or `infra` (containers, CI, proxy, Terraform, committed environment files). `engine/scripts/harness-layers.mjs` decides it; the layer map is in `harness/stack-profile.json`, the plan (`## Review Layers`), the per-surface guidance (one block per layer), and on every row of `findings-and-scores.json` (`layer`). Layers say where a file is; the surfaces S1 to S6 and the risk domains say what to look for. Keep a new guidance line in the table of its own layer (`audit-plans-data-surfaces.mjs`), and a new infra lead in `CONFIG_PATTERNS`.
+Every file of a target also belongs to one review layer: `web2` (application), `web3` (contracts, programs and code that imports a chain SDK or signs) or `infra` (containers, CI, proxy, Terraform, committed environment files). `engine/scripts/harness-layers.mjs` decides it; the layer map is in `harness/stack-profile.json`, the plan (`## Review Layers`), the per-surface guidance (one block per layer), and on every row of `findings-and-scores.json` (`layer`). Layers say where a file is; the surfaces S1 to S6 and the risk domains say what to look for. `--scope web2|web3|infra` on `audit run` and `audit local` reviews one layer: the snapshot stays whole, the reviewer sees that layer's guidance and leads, and the bridge refuses a finding that cites another layer first (`reviewer-plan-assign.mjs`, `bridge-tools-auditor.mjs`). Keep a new guidance line in the table of its own layer (`audit-plans-data-surfaces.mjs`), and a new infra lead in `CONFIG_PATTERNS`.
 
 Run `node engine/scripts/harness.mjs --self-test` after a lead-pattern change. A pattern that matches `good.rs` or `good.js` fails that test.
 

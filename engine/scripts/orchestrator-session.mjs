@@ -24,6 +24,7 @@ function bridgeArguments(run, { role, agent, name, surface, identityFile, pass, 
   else if (toolBudget) args.push('--tool-budget', String(toolBudget));
   // Cross-check, debate and judge sessions span every surface, so their context and plans must too (R-06).
   // Every session except a cross-check (named by its reviewer) carries its own name for the bridge identity.
+  if (run.scope && run.scope !== 'full') args.push('--scope', run.scope);
   if (role === 'auditor') args.push('--auditor', name, '--surface', surface);
   else if (role === 'crosscheck') args.push('--surface', 'ALL');
   else args.push('--auditor', name, '--surface', 'ALL');

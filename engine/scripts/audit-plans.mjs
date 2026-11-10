@@ -20,7 +20,7 @@ import path from 'node:path';
 import { detectEcosystems, isProductionPath } from './stack-detect.mjs';
 import { DOMAIN_SPECS, PYTHON_CHECKS, REVIEW_CHECKS } from './audit-plans-data-domains.mjs';
 import { INFRA_SURFACE, NEAR_CLIENT_SURFACE, NEAR_CONTRACT_SURFACE, NODE_SURFACE, PYTHON_SURFACE, SOLANA_SURFACE, SURFACE_TITLES, WALLET_SURFACE } from './audit-plans-data-surfaces.mjs';
-import { LAYER_TITLES, buildLayerMap, renderLayerLines } from './harness-layers.mjs';
+import { LAYERS, LAYER_TITLES, buildLayerMap, renderLayerLines, scopeNote } from './harness-layers.mjs';
 import { SKIP_DIRS as WALK_SKIP_DIRS, matchLines, readText, rel as relPath, walk } from './harness-walk.mjs';
 
 // The harness skip list plus reports/, walked in name order so the plan is stable across file systems.
@@ -137,7 +137,7 @@ function renderEcosystemLines(profile) {
   ];
 }
 
-export function renderReviewPlansMarkdown(profile, surfaceFilter = '') {
+export function renderReviewPlansMarkdown(profile, surfaceFilter = '', scope = '') {
   const filter = String(surfaceFilter || '').toUpperCase();
   const lines = [
     '# Stack Inventory & Source Security Review Plans',
@@ -146,7 +146,7 @@ export function renderReviewPlansMarkdown(profile, surfaceFilter = '') {
     '',
     ...renderEcosystemLines(profile),
     '',
-    ...renderLayerLines(profile.layers),
+    ...renderLayerLines(profile.layers, scope),
     ...(profile.layers ? [''] : []),
     '## Stack & Risk Domain Matrix',
     '',
@@ -195,9 +195,10 @@ export function renderReviewPlansMarkdown(profile, surfaceFilter = '') {
 }
 
 // With a profile, only the detected ecosystems' guidance is emitted; with none, every stack is included.
-export function renderSurfaceSkillGuidance(surfaceCode, profile) {
+// scope: 'web2' | 'web3' | 'infra' shows that layer's block only; anything else shows every present layer.
+export function renderSurfaceSkillGuidance(surfaceCode, profile, scope = '') {
   // Cross-check reviewers span every surface (R-06): show the guidance of all six.
-  if (String(surfaceCode).toUpperCase() === 'ALL') return ['S1', 'S2', 'S3', 'S4', 'S5', 'S6'].map((code) => renderSurfaceSkillGuidance(code, profile)).join('\n\n');
+  if (String(surfaceCode).toUpperCase() === 'ALL') return ['S1', 'S2', 'S3', 'S4', 'S5', 'S6'].map((code) => renderSurfaceSkillGuidance(code, profile, scope)).join('\n\n');
   const code = /^S[1-6]$/i.test(String(surfaceCode)) ? String(surfaceCode).toUpperCase() : 'S1';
   const eco = profile?.ecosystems;
   const want = (name) => !eco || eco[name]?.detected;
@@ -220,8 +221,10 @@ export function renderSurfaceSkillGuidance(surfaceCode, profile) {
     ],
     infra: !layers || layers.counts?.infra > 0 ? INFRA_SURFACE[code] || [] : [],
   };
+  const only = LAYERS.includes(scope) ? scope : '';
+  if (only) lines.push('', scopeNote(only));
   for (const [layer, rows] of Object.entries(blocks)) {
-    if (rows.length) lines.push('', `#### ${LAYER_TITLES[layer]}`, ...rows);
+    if (rows.length && (!only || layer === only)) lines.push('', `#### ${LAYER_TITLES[layer]}`, ...rows);
   }
   lines.push(
     '',

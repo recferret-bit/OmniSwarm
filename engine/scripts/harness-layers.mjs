@@ -68,9 +68,15 @@ export function buildLayerMap(targetRoot) {
   };
 }
 
-export function renderLayerLines(layers) {
+// The sentence a scoped run puts in front of its reviewers. scope: 'web2' | 'web3' | 'infra'; '' for a full run.
+export function scopeNote(scope) {
+  if (!LAYERS.includes(scope)) return '';
+  return `This run reviews the ${scope} layer only (${LAYER_TITLES[scope]}). Files of the other layers are context: read them to follow a flow, but every finding must cite a ${scope} file first, and a report that cites another layer first is refused. Put anything you notice outside the ${scope} layer in markdown_summary under "Out of scope", not in findings.`;
+}
+
+export function renderLayerLines(layers, scope = '') {
   if (!layers?.counts) return [];
-  const lines = ['## Review Layers', 'Every file belongs to one layer. Name the layer of each finding from the file it cites; do not mix layers in one finding.'];
+  const lines = ['## Review Layers', 'Every file belongs to one layer. Name the layer of each finding from the file it cites; do not mix layers in one finding.', ...(scopeNote(scope) ? [scopeNote(scope)] : [])];
   for (const layer of LAYERS) {
     const listed = layers.files?.[layer] || [];
     const count = layers.counts[layer] || 0;

@@ -66,7 +66,7 @@ async function reviewJob(run, job) {
   job.state = 'running';
   run.saveWorkers();
   console.log(`  -> [${job.name}] (${job.adapter} @ ${job.requestedModel}) auditing ${job.surface.code} (${job.surface.name})...`);
-  const prompt = buildAuditorPrompt({ targetName: run.request.name, auditorName: job.name, surface: job.surface, reportDir: run.output });
+  const prompt = buildAuditorPrompt({ targetName: run.request.name, auditorName: job.name, surface: job.surface, reportDir: run.output, scope: run.scope });
   const startPass = resumePassStart({ resumeRoot: run.resumeRoot, output: run.output, name: job.name, passes: run.budgets?.passes });
   const loop = await runReviewerPasses({
     out: run.output, name: job.name, reviewerId: job.adapter, surface: job.surface.code, budgets: run.budgets, files: run.sourceFiles,

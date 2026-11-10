@@ -177,10 +177,11 @@ Interrupted, refused, missing or malformed reviews remain incomplete and are not
 ./bin/audit run --repo /path/to/repo
 ./bin/audit run --github owner/repo --surface s1
 ./bin/audit run --repo /path/to/repo --agents claude,codex --surface s4
+./bin/audit run --repo /path/to/repo --scope web3              # one layer: web2, web3 or infra
 ./bin/audit run --repo /path/to/repo --resume-from /path/to/previous-review --out /path/to/new-review
 ```
 
-`--plan` prints requested models without launching a review. `--blocked` writes an offline blocked record. `check-agents --live` explicitly makes provider requests against an inert fixture; it qualifies transport and session recovery only. It is not a security review or clearance of a provider-policy rejection.
+`--scope web2|web3|infra` reviews one layer (default `full`). The whole snapshot stays readable as context, guidance and leads are that layer's, a finding must cite a file of that layer first or the submit is refused, and the infra scope runs S1, S4, S5 and S6 only. `--plan` prints requested models without launching a review. `--blocked` writes an offline blocked record. `check-agents --live` explicitly makes provider requests against an inert fixture; it qualifies transport and session recovery only. It is not a security review or clearance of a provider-policy rejection.
 
 **Reviewer families.** `key` and `openrouter` reviewers use the same bridge as the CLIs. Each such process receives one allow-listed variable for its own provider (`ZAI_API_KEY`, optionally `ZAI_BASE_URL`, or `OPENROUTER_API_KEY`). The bridge and the sandbox never receive a key. Reports record `keyFingerprint` only. OpenRouter requests set `data_collection: deny` because source leaves the machine. `cli:claude-zai` maps `ZAI_API_KEY` onto Claude Code's Anthropic variables. `scripted` reviewers make no provider request.
 

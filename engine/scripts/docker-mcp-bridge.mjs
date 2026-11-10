@@ -21,6 +21,7 @@ import { REVIEW_TOOLS } from './review-workflow.mjs';
 import { bridgeRole } from './bridge-tools-registry.mjs';
 import { BridgeError, scrubProviderEnv } from './bridge-tools-common.mjs';
 import { attachBudget } from './bridge-budget.mjs';
+import { normalizeScope } from './reviewer-plan-assign.mjs';
 
 // Helpers that lived here before the per-role split stay importable from this module.
 export { boundedCapture, execInContainer, normalizeCitation } from './bridge-tools-common.mjs';
@@ -45,6 +46,7 @@ export function parseBridgeArgs(argv) {
     auditor: process.env.SECURITY_AUDITOR || '',
     agent: process.env.AUDIT_AGENT || '',
     surface: (process.env.AUDIT_SURFACE || 'S1').toUpperCase(),
+    scope: 'full',
     identityFile: '',
     reviewersFile: '',
     demoHost: '',
@@ -60,6 +62,7 @@ export function parseBridgeArgs(argv) {
     else if (a === '--auditor') opts.auditor = argv[++i] || '';
     else if (a === '--agent') opts.agent = argv[++i] || '';
     else if (a === '--surface') opts.surface = (argv[++i] || 'S1').toUpperCase();
+    else if (a === '--scope') opts.scope = normalizeScope(argv[++i]);
     else if (a === '--identity-file') opts.identityFile = argv[++i] || '';
     else if (a === '--reviewers-file') opts.reviewersFile = argv[++i] || '';
     else if (a === '--demo-host') opts.demoHost = argv[++i] || '';

@@ -9,7 +9,7 @@ import { families } from './reviewer-families.mjs';
 import { grokMaxTurnsSupport } from './provider-cli.mjs';
 import { passRoles } from './review-briefs.mjs';
 import { formatReviewerSpec, parseReviewerSpec } from './reviewer-registry.mjs';
-import { assignJobs, selectSurfaces } from './reviewer-plan-assign.mjs';
+import { assignJobs, normalizeScope, selectSurfaces } from './reviewer-plan-assign.mjs';
 import { DEFAULTS } from './run-config.mjs';
 
 export { assignJobs, selectSurfaces };
@@ -53,9 +53,9 @@ export function alternateJudgeLine({ orchestrator, alternateJudge, reviewers }) 
     : `Alternate judge: none (no run reviewer of another vendor than ${orchestrator.vendor}; its clusters stay DISPUTED, no_independent_judge)`;
 }
 
-export function renderPlan({ reviewers, assign, budgets, orchestrator, alternateJudge, warnings = [], surfaceArg = 'all', env = process.env }) {
-  const jobs = assignJobs({ reviewers, surfaceArg, assign });
-  const surfaces = selectSurfaces(surfaceArg);
+export function renderPlan({ reviewers, assign, budgets, orchestrator, alternateJudge, warnings = [], surfaceArg = 'all', scope = 'full', env = process.env }) {
+  const jobs = assignJobs({ reviewers, surfaceArg, assign, scope });
+  const surfaces = selectSurfaces(surfaceArg, scope);
   const pad = (v, n) => String(v).padEnd(n);
   const w = Math.max(8, ...reviewers.map((r) => r.id.length)) + 2;
   const lines = [`Reviewers (${reviewers.length}):`, `  ${pad('id', w)}${pad('family', 12)}${pad('vendor', 11)}${pad('model', 30)}installed`];
@@ -99,15 +99,17 @@ export function renderPlan({ reviewers, assign, budgets, orchestrator, alternate
 }
 
 function main() {
-  const [command, file, surfaceArg] = process.argv.slice(2);
-  if (!['header', 'plan'].includes(command) || !file) { process.stderr.write('usage: reviewer-plan.mjs header|plan <resolved.json> [surface]\n'); process.exit(2); }
+  const [command, file, surfaceArg, scopeArg] = process.argv.slice(2);
+  if (!['header', 'plan'].includes(command) || !file) { process.stderr.write('usage: reviewer-plan.mjs header|plan <resolved.json> [surface] [scope]\n'); process.exit(2); }
   const resolved = JSON.parse(fs.readFileSync(file, 'utf8'));
   if (command === 'header') {
     const { agents, models } = headerLabels(resolved.reviewers);
     process.stdout.write(`${agents}\n${models}\n`);
     return;
   }
-  const { text, problems } = renderPlan({ ...resolved, surfaceArg });
+  let scope;
+  try { scope = normalizeScope(scopeArg); selectSurfaces(surfaceArg, scope); } catch (error) { process.stderr.write(`${error.message}\n`); process.exit(2); }
+  const { text, problems } = renderPlan({ ...resolved, surfaceArg, scope });
   process.stdout.write(`${text}\n`);
   if (problems.length) { for (const p of problems) process.stderr.write(`${p}\n`); process.exit(2); }
 }

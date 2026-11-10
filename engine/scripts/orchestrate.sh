@@ -8,7 +8,7 @@ set -euo pipefail
 # Reviewers, models, presets and budgets are resolved by scripts/run-config.mjs (flags > preset > config file > defaults).
 #
 # Usage (normally via bin/audit):
-#   orchestrate.sh --target <dir> --out <dir> [--name <slug>] [--surface s1..s6|all]
+#   orchestrate.sh --target <dir> --out <dir> [--name <slug>] [--surface s1..s6|all] [--scope full|web2|web3|infra]
 #                  [--reviewers <spec,spec>] [--config <file>] [--preset <name>] [--assign matrix|round-robin]
 #                  [--orchestrator <spec|recommended>] [--alternate-judge <spec>] [--passes N] [--tool-budget N]
 #                  [--debate-rounds N] [--debate-max-clusters N] [--debate-tool-budget N] [--debate-turn-ms N] [--debate-phase-ms N]
@@ -20,7 +20,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AUDIT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-TARGET_DIR="" OUTPUT_DIR="" TARGET_NAME="" SURFACE="all" RPC="" RESUME_FROM="" TEST_ARTIFACTS="" RESTART_FAILED=0
+TARGET_DIR="" OUTPUT_DIR="" TARGET_NAME="" SURFACE="all" SCOPE="full" RPC="" RESUME_FROM="" TEST_ARTIFACTS="" RESTART_FAILED=0
 TARGET_MODE="local" TARGET_SOURCE="" TARGET_REF="" TARGET_COMMIT=""
 PLAN=0 BLOCKED="${AUDIT_BLOCKED_RUN:-0}"
 RC_ARGS=()   # reviewer/budget flags, forwarded to scripts/run-config.mjs
@@ -31,6 +31,7 @@ while [[ $# -gt 0 ]]; do
     --out) OUTPUT_DIR="$2"; shift 2 ;;
     --name) TARGET_NAME="$2"; shift 2 ;;
     --surface) SURFACE="$2"; shift 2 ;;
+    --scope) SCOPE="$2"; shift 2 ;;
     --agents|--reviewers|--config|--preset|--assign|--orchestrator|--alternate-judge|--passes|--tool-budget|--max-cost-usd|--debate-rounds|--debate-max-clusters|--debate-tool-budget|--debate-turn-ms|--debate-phase-ms|--model|--models|--model-claude|--model-grok|--model-agy|--model-codex)
       [ $# -ge 2 ] || { echo "orchestrate: $1 needs a value" >&2; exit 1; }
       RC_ARGS+=("$1" "$2"); shift 2 ;;
@@ -55,7 +56,7 @@ TARGET_SOURCE="${TARGET_SOURCE:-$TARGET_DIR}"
 
 [ -z "$RPC" ] || { echo "source security review does not contact deployed RPCs" >&2; exit 2; }
 
-# --- surfaces: generic attack areas, not tied to any one codebase --------------------
+# --- surfaces: generic review areas, not tied to any one codebase --------------------
 # id|slug|name|focus
 SURFACES=(
   "s1|auth|Identity & Access Control|authentication, sessions/tokens/cookies, authorization and IDOR, privilege escalation, admin/internal planes, CSRF, password/key handling"
@@ -110,6 +111,7 @@ echo " Target:   $TARGET_NAME ($TARGET_MODE)"
 echo " Source:   $TARGET_SOURCE${TARGET_REF:+ @ $TARGET_REF}${TARGET_COMMIT:+ [$TARGET_COMMIT]}"
 echo " Path:     $TARGET_DIR"
 echo " Surface:  $SURFACE"
+echo " Scope:    $SCOPE"
 echo " Agents:   $AGENT_LABELS"
 echo " Models:   $MODEL_LINE"
 echo " Output:   ${OUTPUT_DIR:-<plan>}"
@@ -122,9 +124,9 @@ fi
 # Reviewer table, assignment, budgets and orchestrator. Exits 2 when a reviewer's family is not installed.
 # A blocked run prints the plan without probing host CLIs (worker-isolation).
 if [ "$BLOCKED" = 1 ]; then
-  OMNI_SKIP_CLI_PROBE=1 node "$SCRIPT_DIR/reviewer-plan.mjs" plan "$RESOLVED_FILE" "$SURFACE" || exit 2
+  OMNI_SKIP_CLI_PROBE=1 node "$SCRIPT_DIR/reviewer-plan.mjs" plan "$RESOLVED_FILE" "$SURFACE" "$SCOPE" || exit 2
 else
-  node "$SCRIPT_DIR/reviewer-plan.mjs" plan "$RESOLVED_FILE" "$SURFACE" || exit 2
+  node "$SCRIPT_DIR/reviewer-plan.mjs" plan "$RESOLVED_FILE" "$SURFACE" "$SCOPE" || exit 2
 fi
 [ "$PLAN" -eq 0 ] || exit 0
 
@@ -136,11 +138,11 @@ fi
 REQUEST_FILE="$(mktemp "${TMPDIR:-/tmp}/audit-review-request.XXXXXX")"
 node -e '
 const fs = require("node:fs");
-const [file, resolved, target, out, name, mode, source, ref, commit, surface, rpc, resumeFrom, testArtifacts, restartFailed] = process.argv.slice(1);
+const [file, resolved, target, out, name, mode, source, ref, commit, surface, rpc, resumeFrom, testArtifacts, restartFailed, scope] = process.argv.slice(1);
 const r = JSON.parse(fs.readFileSync(resolved, "utf8"));
 const models = Object.fromEntries(r.reviewers.map((x) => [x.id, x.model]));
-fs.writeFileSync(file, JSON.stringify({target, out, name, mode, source, ref, commit, surface, agents: r.reviewers.map((x) => x.id), models, reviewers: r.reviewers, orchestrator: r.orchestrator, alternateJudge: r.alternateJudge, assign: r.assign, budgets: r.budgets, prices: r.prices || null, preset: r.preset, rpc: rpc || "", resumeFrom: resumeFrom || null, testArtifacts: testArtifacts || null, restartFailed: restartFailed === "1"}), {mode: 0o600});
-' "$REQUEST_FILE" "$RESOLVED_FILE" "$TARGET_DIR" "$OUTPUT_DIR" "$TARGET_NAME" "$TARGET_MODE" "$TARGET_SOURCE" "$TARGET_REF" "$TARGET_COMMIT" "$SURFACE" "$RPC" "$RESUME_FROM" "$TEST_ARTIFACTS" "$RESTART_FAILED"
+fs.writeFileSync(file, JSON.stringify({target, out, name, mode, source, ref, commit, surface, scope: scope || "full", agents: r.reviewers.map((x) => x.id), models, reviewers: r.reviewers, orchestrator: r.orchestrator, alternateJudge: r.alternateJudge, assign: r.assign, budgets: r.budgets, prices: r.prices || null, preset: r.preset, rpc: rpc || "", resumeFrom: resumeFrom || null, testArtifacts: testArtifacts || null, restartFailed: restartFailed === "1"}), {mode: 0o600});
+' "$REQUEST_FILE" "$RESOLVED_FILE" "$TARGET_DIR" "$OUTPUT_DIR" "$TARGET_NAME" "$TARGET_MODE" "$TARGET_SOURCE" "$TARGET_REF" "$TARGET_COMMIT" "$SURFACE" "$RPC" "$RESUME_FROM" "$TEST_ARTIFACTS" "$RESTART_FAILED" "$SCOPE"
 
 code=0
 if [ "${BLOCKED:-${AUDIT_BLOCKED_RUN:-0}}" = "1" ]; then

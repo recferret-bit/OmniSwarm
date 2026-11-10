@@ -44,12 +44,12 @@ const priorExit = (meta, role, name, agent) => (role === 'auditor' ? meta.worker
 
 // Same source, workflow, surfaces, reviewers and models, and every started job has matching saved state.
 // Returns the names of jobs that never started in the previous run.
-export function assertResumable({ resumeRoot, sourceDigest, surfaceArg, request, jobs }) {
+export function assertResumable({ resumeRoot, sourceDigest, surfaceArg, scope = 'full', request, jobs }) {
   const previous = readReportJson(resumeRoot, 'meta.json');
   const sameRun = readReportJson(resumeRoot, 'source-manifest.json').digest === sourceDigest && previous.workflow === REVIEW_WORKFLOW
-    && previous.surface === surfaceArg && JSON.stringify(previous.agents) === JSON.stringify(request.agents)
+    && previous.surface === surfaceArg && (previous.scope || 'full') === scope && JSON.stringify(previous.agents) === JSON.stringify(request.agents)
     && request.agents.every((agent) => previous.models?.[agent] === request.models[agent]);
-  if (!sameRun) throw new Error('Resume requires the same source digest, surfaces, reviewers and requested models');
+  if (!sameRun) throw new Error('Resume requires the same source digest, surfaces, scope, reviewers and requested models');
   const neverStarted = new Set();
   for (const job of jobs) {
     const directory = previousSessionDirectory(resumeRoot, job.name);

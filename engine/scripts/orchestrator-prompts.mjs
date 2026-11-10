@@ -5,16 +5,18 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { renderReviewPlansMarkdown, renderSurfaceSkillGuidance } from './audit-plans.mjs';
 import { REVIEW_SCOPE } from './review-workflow.mjs';
+import { scopeNote } from './harness-layers.mjs';
 
-// Lead files: [file, heading, marker the harness writes when the stack is absent, limit, surfaces (null = all)].
+// Lead files: [file, heading, marker the harness writes when the stack is absent, limit, surfaces (null = all),
+// layers a scoped run (--scope) shows the file to].
 const LEAD_FILES = [
-  ['solana.md', 'Solana Leads', 'Solana surface absent', 3000, null],
-  ['near.md', 'NEAR Leads', 'NEAR surface absent', 3000, null],
-  ['python.md', 'Python Leads', 'Python surface absent', 4000, ['S1', 'S2', 'S3', 'S4']],
-  ['node.md', 'Node Leads', 'Node surface absent', 4000, ['S1', 'S2', 'S4', 'S6']],
-  ['web.md', 'Web Leads', 'Web surface absent', 2500, ['S1', 'S2', 'S6']],
-  ['config.md', 'Infra Leads', 'surface absent', 3500, ['S4', 'S5']],
-  ['deps.md', 'Dependency Leads', null, 2500, ['S5']],
+  ['solana.md', 'Solana Leads', 'Solana surface absent', 3000, null, ['web3']],
+  ['near.md', 'NEAR Leads', 'NEAR surface absent', 3000, null, ['web3']],
+  ['python.md', 'Python Leads', 'Python surface absent', 4000, ['S1', 'S2', 'S3', 'S4'], ['web2']],
+  ['node.md', 'Node Leads', 'Node surface absent', 4000, ['S1', 'S2', 'S4', 'S6'], ['web2']],
+  ['web.md', 'Web Leads', 'Web surface absent', 2500, ['S1', 'S2', 'S6'], ['web2', 'web3']],
+  ['config.md', 'Infra Leads', 'surface absent', 3500, ['S4', 'S5'], ['infra']],
+  ['deps.md', 'Dependency Leads', null, 2500, ['S5'], ['web2', 'web3', 'infra']],
 ];
 
 function harnessReader(reportDir) {
@@ -24,33 +26,35 @@ function harnessReader(reportDir) {
   return { text, profile };
 }
 
-function planBlock(read, surfaceCode, profile) {
-  const plans = profile ? renderReviewPlansMarkdown(profile, surfaceCode).slice(0, 7500) : read.text('review-plans.md', 7500);
+function planBlock(read, surfaceCode, profile, scope) {
+  const plans = profile ? renderReviewPlansMarkdown(profile, surfaceCode, scope).slice(0, 7500) : read.text('review-plans.md', 7500);
   return plans ? `### Tailored Stack & Domain Source Review Plans\n${plans}` : '';
 }
 
-export function readHarnessContext(reportDir, surfaceCode) {
+export function readHarnessContext(reportDir, surfaceCode, scope = '') {
   const read = harnessReader(reportDir);
   const profile = read.profile();
-  const blocks = [renderSurfaceSkillGuidance(surfaceCode, profile)];
+  const blocks = [renderSurfaceSkillGuidance(surfaceCode, profile, scope)];
   const summary = read.text('summary.md', 4000);
   if (summary) blocks.push(`### Harness & Sandbox Summary\n${summary}`);
   let plans = '';
-  try { plans = planBlock(read, surfaceCode, profile); } catch { /* a malformed profile leaves the plans out */ }
+  try { plans = planBlock(read, surfaceCode, profile, scope); } catch { /* a malformed profile leaves the plans out */ }
   if (plans) blocks.push(plans);
-  for (const [file, heading, absent, limit, surfaces] of LEAD_FILES) {
+  for (const [file, heading, absent, limit, surfaces, layers] of LEAD_FILES) {
     if (surfaces && !surfaces.includes(surfaceCode)) continue;
+    if (scope && scope !== 'full' && !layers.includes(scope)) continue;
     const text = read.text(file, limit);
     if (text && !(absent && text.includes(absent))) blocks.push(`### ${heading}\n${text}`);
   }
   return blocks.join('\n\n');
 }
 
-export function buildAuditorPrompt({ targetName, auditorName, surface, reportDir }) {
+export function buildAuditorPrompt({ targetName, auditorName, surface, reportDir, scope = '' }) {
   return [
     `You are security auditor "${auditorName}" performing an authorized source security review of "${targetName}" inside a one-shot Docker container using the \`security-audit\` skill.`,
     `Assigned Surface: ${surface.code} — ${surface.name}`,
     `Focus Areas: ${surface.focus}`,
+    ...(scopeNote(scope) ? [`Scope: ${scopeNote(scope)}`] : []),
     'Each pass has a fixed tool budget. At the limit, inspection stops and you have 3 calls to submit. A pass that submits is complete; a pass that never submits is incomplete. Heartbeats are not requests to rush.',
     '',
     REVIEW_SCOPE,
@@ -66,7 +70,7 @@ export function buildAuditorPrompt({ targetName, auditorName, surface, reportDir
     '7. After successful MCP report submission, finish with a short acknowledgement. The committed MCP report is authoritative; the coordinator generates JSON, markdown and HTML from it.',
     '8. If the audit_docker tools are unavailable, stop and explain the MCP connection failure. Do not search the host for tools, recreate a container, or substitute host commands.',
     '',
-    readHarnessContext(reportDir, surface.code),
+    readHarnessContext(reportDir, surface.code, scope),
   ].filter(Boolean).join('\n');
 }
 

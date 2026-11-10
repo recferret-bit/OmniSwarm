@@ -23,7 +23,7 @@ import { REVIEW_WORKFLOW, buildExistingTestCatalog } from './review-workflow.mjs
 import { families } from './reviewer-families.mjs';
 import { publishReviewers } from './reviewer-publish.mjs';
 import { formatReviewerSpec, reviewersOfMeta } from './reviewer-registry.mjs';
-import { assignJobs, defaultAssign } from './reviewer-plan-assign.mjs';
+import { assignJobs, defaultAssign, normalizeScope } from './reviewer-plan-assign.mjs';
 import { recommendedOrchestrator } from './reviewer-plan.mjs';
 import { loadPhases, runPhases } from './orchestrator-phases.mjs';
 import { DEMO_FIXTURE } from './scripted-strategies.mjs';
@@ -68,13 +68,14 @@ function planJobs(request) {
     if (!verdict.ok) throw new Error(`Reviewer ${reviewer.id}: ${verdict.reason}`);
   }
   const assign = defaultAssign({ assign: request.assign, reviewers: request.reviewers });
-  const jobs = assignJobs({ reviewers, surfaceArg, assign }).map(({ name, reviewer, surface }) => ({
+  const scope = normalizeScope(request.scope);
+  const jobs = assignJobs({ reviewers, surfaceArg, assign, scope }).map(({ name, reviewer, surface }) => ({
     id: crypto.randomUUID(), name, adapter: reviewer.id, family: reviewer.family, provider: reviewer.provider, vendor: reviewer.vendor,
     requestedModel: reviewer.model, surface, state: 'pending',
   }));
   request.models = Object.fromEntries(reviewers.map((r) => [r.id, r.model]));
   request.agents = reviewers.map((r) => r.id);
-  return { surfaceArg, reviewers, assign, jobs, ...planJudges(request) };
+  return { surfaceArg, scope, reviewers, assign, jobs, ...planJudges(request) };
 }
 
 // The judges: the orchestrator (`recommended` is resolved once, here, so the bridge and the debate agree on it)
@@ -108,7 +109,7 @@ function writeInitialRecords(run) {
   // Reviewers, judges, orchestrator choice and budgets are recorded at plan time (harness/reviewers.json) and in
   // meta.json. `models` stays populated for every reviewer so reports and tools that read the old map keep working.
   run.initialMeta = {
-    name: request.name || path.basename(request.target), mode: request.mode || 'local', source: request.source || request.target, surface: surfaceArg,
+    name: request.name || path.basename(request.target), mode: request.mode || 'local', source: request.source || request.target, surface: surfaceArg, ...(run.scope && run.scope !== 'full' ? { scope: run.scope } : {}),
     agents: request.agents, models: request.models, reviewers: published, orchestrator, assign, budgets, auditors: jobs.map((job) => job.name),
     workerExits: run.workerExits, crosscheckExits: run.crosscheckExits, stageFailures: run.stageFailures, finalized: false, sandboxHardening: 1,
     workflow: REVIEW_WORKFLOW, agentTransport: 'acp_v1', submissionAuthority: 'mcp_commit', ...(isDemo(request) ? { demo: true } : {}),
@@ -134,7 +135,7 @@ function createRun(request, output, sealed, planned, options) {
   };
   run.saveWorkers = () => writeReportFile(output, 'workers.json', JSON.stringify({ version: 1, policy: 'docker_mcp_bridge', sourceDigest: run.sourceDigest, jobs: run.jobs }, null, 2));
   if (run.resumeRoot) {
-    const neverStarted = assertResumable({ resumeRoot: run.resumeRoot, sourceDigest: run.sourceDigest, surfaceArg: run.surfaceArg, request, jobs: run.jobs });
+    const neverStarted = assertResumable({ resumeRoot: run.resumeRoot, sourceDigest: run.sourceDigest, surfaceArg: run.surfaceArg, scope: run.scope, request, jobs: run.jobs });
     run.resume = { resumeRoot: run.resumeRoot, request, output, neverStarted, get session() { return run.session; } };
   }
   run.execute = createExecute(run);

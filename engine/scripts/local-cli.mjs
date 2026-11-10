@@ -44,17 +44,17 @@ export function selectLocalPanel(installed) {
 }
 
 export function parseLocalArgs(argv) {
-  const result = { repo: '', github: '' };
+  const result = { repo: '', github: '', scope: '' };
   for (let i = 0; i < argv.length; i += 1) {
     const flag = argv[i];
     const value = argv[i + 1];
-    if (flag === '--repo' || flag === '--github') {
+    if (flag === '--repo' || flag === '--github' || flag === '--scope') {
       if (!value || value.startsWith('-')) throw new Error(`${flag} needs a value`);
       result[flag.slice(2)] = value;
       i += 1;
       continue;
     }
-    throw new Error('usage: audit local [--repo <directory> | --github <owner/repo or url>]');
+    throw new Error('usage: audit local [--repo <directory> | --github <owner/repo or url>] [--scope full|web2|web3|infra]');
   }
   if (result.repo && result.github) throw new Error('pass --repo or --github, not both');
   return result;
@@ -62,7 +62,8 @@ export function parseLocalArgs(argv) {
 
 export function localAuditArgs(panel, target) {
   const args = ['run', ...(target.github ? ['--github', target.github] : ['--repo', target.repo || '.']),
-    '--reviewers', panel.reviewers.join(','), '--orchestrator', panel.orchestrator, '--assign', 'matrix'];
+    '--reviewers', panel.reviewers.join(','), '--orchestrator', panel.orchestrator, '--assign', 'matrix',
+    ...(target.scope ? ['--scope', target.scope] : [])];
   return args;
 }
 

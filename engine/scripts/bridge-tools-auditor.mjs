@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { LAYERS, layerOfPath } from './harness-layers.mjs';
 import { validateAuditor } from './report-contract-auditor.mjs';
 import { commitSubmission, deriveSubmission } from './audit-submission.mjs';
 import { SAFE_ANNOTATIONS, BridgeError, objSchema, strProp, boolProp, strArr, normalizeCitation, commonToolDefinitions, commonHandlers } from './bridge-tools-common.mjs';
@@ -77,6 +80,19 @@ export function toolDefinitions() {
   return [...commonToolDefinitions(), submit];
 }
 
+// A scoped run (--scope web2|web3|infra) commits only findings of its layer. The layer is that of the first cited
+// file (harness-layers.mjs, with the map the harness recorded). The refusal names each finding so the model can
+// move it to markdown_summary and submit again; nothing is committed.
+function assertInScope(ctx, findings) {
+  if (!LAYERS.includes(ctx.scope)) return;
+  let layers = null;
+  try { layers = JSON.parse(fs.readFileSync(path.join(ctx.reportDir, 'harness', 'stack-profile.json'), 'utf8')).layers || null; } catch { /* path rules only */ }
+  const outside = findings.filter((finding) => layerOfPath(finding.location[0] || '', layers) !== ctx.scope);
+  if (!outside.length) return;
+  const listed = outside.slice(0, 8).map((finding) => `"${String(finding.title).slice(0, 80)}" (${finding.location[0]}, ${layerOfPath(finding.location[0], layers)})`).join('; ');
+  throw new BridgeError('OUT_OF_SCOPE', `out_of_scope: this run reviews the ${ctx.scope} layer only. Remove these findings, or cite the ${ctx.scope} file where the control is missing first, and note them in markdown_summary under "Out of scope": ${listed}`);
+}
+
 export async function submitAuditReport(ctx, args) {
   const { reportDir, role, auditor, surface } = ctx;
   if (role !== 'auditor') throw new Error('Audit submission is unavailable in this bridge role');
@@ -93,6 +109,7 @@ export async function submitAuditReport(ctx, args) {
     return { ...control, evidence, how_attacked: evidence };
   }) };
   const { payload, findings, verifiedSafe } = normalizeFindingsPayload(args, auditor, surface);
+  assertInScope(ctx, findings);
   const submission = commitSubmission(reportDir, auditor, ctx.submissionIdentity, payload, args.markdown_summary || '');
   deriveSubmission(reportDir, submission, renderMarkdownFromFindings);
   return `Report committed for ${auditor}: ${findings.length} findings, ${verifiedSafe.length} control assertions. Submission hash: ${submission.hash}. Finish with a short acknowledgement; the coordinator generates the report files.`;
