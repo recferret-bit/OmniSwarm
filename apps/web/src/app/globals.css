@@ -118,7 +118,13 @@ progress { width: 100%; accent-color: var(--os-ember); }
 .progress__id { overflow-wrap: anywhere; }
 .progress__surface { color: var(--os-steel); font-weight: 400; }
 .progress__counts { margin: 0; color: var(--os-steel); font-size: 0.9rem; }
-@media (max-width: 560px) { .progress__reviewers thead { display: none; } .progress__reviewers tr { display: grid; grid-template-columns: 1fr 1fr; padding: 6px 0; border-bottom: 1px solid var(--os-seam); } .progress__reviewers th, .progress__reviewers td { border: 0; padding: 2px 0; } }
+@media (max-width: 560px) {
+  .progress__reviewers thead { display: none; }
+  .progress__reviewers tr { display: grid; grid-template-columns: 1fr; gap: 2px; padding: 8px 0; border-bottom: 1px solid var(--os-seam); }
+  .progress__reviewers th, .progress__reviewers td { border: 0; padding: 0; }
+  .progress__reviewers td { display: flex; justify-content: space-between; gap: 12px; }
+  .progress__reviewers td::before { content: attr(data-label); color: var(--os-steel); }
+}
 .reviewers__row, .request-row {
   display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between;
   padding: 8px 0; border-bottom: 1px solid var(--os-seam);

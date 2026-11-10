@@ -57,10 +57,10 @@ function Reviewers({ rows, live }: { rows: Reviewer[]; live: boolean }) {
           return (
             <tr key={row.id}>
               <th scope="row" className="progress__id">{row.id}{row.surface ? <span className="progress__surface"> {row.surface}</span> : null}</th>
-              <td><Pill tone={status.tone}>{status.text}</Pill></td>
-              <td>{row.pass ? `${row.pass} of ${row.passes}` : row.state === 'done' ? `${row.passes} of ${row.passes}` : '—'}</td>
-              <td>{row.calls !== undefined && row.budget ? `${row.calls} of ${row.budget}` : '—'}</td>
-              <td>{row.jobsDone} of {row.jobs}</td>
+              <td data-label="Status"><Pill tone={status.tone}>{status.text}</Pill></td>
+              <td data-label="Pass">{row.pass ? `${row.pass} of ${row.passes}` : row.state === 'done' ? `${row.passes} of ${row.passes}` : '—'}</td>
+              <td data-label="Tool calls">{row.calls !== undefined && row.budget ? `${row.calls} of ${row.budget}` : '—'}</td>
+              <td data-label="Jobs">{row.jobsDone} of {row.jobs}</td>
             </tr>
           );
         })}
@@ -99,7 +99,8 @@ export function ProgressPanel({ progress, status }: { progress: Progress; status
     <section className="progress" aria-label="Live progress">
       {/* Not a live region: the elapsed time changes on every update. The request status is announced elsewhere. */}
       <p className="progress__head">
-        {detail ? <Pill tone={STATE_TONE[state]}>{STATE_LABEL[state]}</Pill> : null} {head}
+        {/* While running, the request's own status pill already says so; the run's state is shown once it ends. */}
+        {detail && !running ? <Pill tone={STATE_TONE[state]}>{STATE_LABEL[state]}</Pill> : null} {head}
       </p>
       <progress max={100} value={percent} aria-label="Review progress" aria-valuetext={head} />
       {detail?.phases.length ? (
