@@ -69,6 +69,27 @@ function Reviewers({ rows, live }: { rows: Reviewer[]; live: boolean }) {
   );
 }
 
+// Sessions that are not a reviewer's own job (cross-check, debate turns, judgements). A count while they run,
+// and each one with no agent activity for STALL_MS called out, so a stuck provider shows in every phase.
+function Sessions({ rows }: { rows: NonNullable<ProgressDetail['sessions']> }) {
+  const stalled = rows.filter((row) => row.idleMs >= STALL_MS);
+  return (
+    <div className="progress__sessions">
+      <p className="progress__counts">Sessions running: {rows.length}</p>
+      {stalled.length ? (
+        <ul className="reviewers" aria-label="Stalled sessions">
+          {stalled.map((row) => (
+            <li key={row.id} className="reviewers__row">
+              <span className="reviewers__id">{row.id}</span>
+              <Pill tone="warn">No activity for {duration(row.idleMs)}</Pill>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
 function Themes({ rows }: { rows: NonNullable<ProgressDetail['themes']> }) {
   return (
     <ul className="reviewers" aria-label="Themes">
@@ -114,6 +135,7 @@ export function ProgressPanel({ progress, status }: { progress: Progress; status
       ) : null}
       {detail?.themes?.length ? <Themes rows={detail.themes} /> : null}
       {detail?.reviewers?.length ? <Reviewers rows={detail.reviewers} live={running} /> : null}
+      {running && detail?.sessions?.length ? <Sessions rows={detail.sessions} /> : null}
       {detail?.crosscheck?.total ? <p className="progress__counts">Cross-checks done: {detail.crosscheck.done} of {detail.crosscheck.total}</p> : null}
       {debate && (debate.clusters || debate.toJudge) ? (
         <p className="progress__counts">

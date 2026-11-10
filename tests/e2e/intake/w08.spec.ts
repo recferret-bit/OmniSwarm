@@ -100,7 +100,12 @@ describe('W08 intake API @hack', NEEDS_DB, () => {
     const reused = await call(base, `/api/requests/${other.body.requestId}/payment`, { method: 'POST', body: { txHash }, cookie: otherCookie });
     assert.equal(reused.body.error.code, 'TX_ALREADY_USED');
     const foreign = mockPay(other.body.requestId, ['--signer', 'mallory.mock']);
-    assert.equal((await call(base, `/api/requests/${other.body.requestId}/payment`, { method: 'POST', body: { txHash: foreign }, cookie: otherCookie })).status, 403);
+    // The chain looks a transaction up by hash AND signer (the tx RPC), so a hash signed by another account is not
+    // found for this request: 402 PAYMENT_NOT_FOUND. The 403 PAYMENT_SIGNER_MISMATCH is the contract-side check
+    // (the request is held for another account), covered in test/unit/payment-checks.test.ts.
+    const refusedForeign = await call(base, `/api/requests/${other.body.requestId}/payment`, { method: 'POST', body: { txHash: foreign }, cookie: otherCookie });
+    assert.equal(refusedForeign.status, 402, JSON.stringify(refusedForeign.body));
+    assert.equal(refusedForeign.body.error.code, 'PAYMENT_NOT_FOUND');
     const third = await call(base, '/api/requests', { method: 'POST', body: signed(await challenge(), 'erin.mock') });
     const under = mockPay(third.body.requestId, ['--amount', '1']);
     assert.equal((await call(base, `/api/requests/${third.body.requestId}/payment`, { method: 'POST', body: { txHash: under }, cookie: sessionCookie(third) })).status, 402);

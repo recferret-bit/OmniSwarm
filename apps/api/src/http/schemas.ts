@@ -49,6 +49,7 @@ export const progressDetail = z.strictObject({
     jobsDone: count, jobs: z.int().min(1), passes: z.int().min(1), pass: z.int().min(1).optional(), calls: count.optional(),
     budget: z.int().min(1).optional(), surface: z.string().regex(/^S[1-6]$/).optional(), idleMs: count.optional(),
   })).max(32).optional(),
+  sessions: z.array(z.strictObject({ id: z.string().regex(/^[a-z0-9][a-z0-9-]{0,120}$/), idleMs: count })).max(32).optional(),
   crosscheck: z.strictObject({ done: count, total: count }).optional(),
   debate: z.strictObject({ clusters: count.optional(), heard: count.optional(), judged: count.optional(), toJudge: count.optional() }).optional(),
   themes: z.array(z.strictObject({
@@ -97,7 +98,7 @@ export const localJobListResponse = z.strictObject({
 });
 export const localJobResponse = z.strictObject({
   id: uuid, kind: operatorKind, source: z.string().min(1), ref: z.string().min(1).nullable(), commitSha: commitSha.nullable(),
-  status: operatorStatus, error: z.string().min(1).nullable(), createdAt: timestamp, pdfReady: z.boolean(),
+  status: operatorStatus, error: z.string().min(1).nullable(), createdAt: timestamp, pdfReady: z.boolean(), progress: progress.optional(),
 });
 
 export const guardQuery = z.strictObject({ account: accountId, network: network.optional() });

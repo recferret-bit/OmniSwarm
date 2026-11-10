@@ -41,6 +41,15 @@ function reviewers(value: unknown) {
     }));
 }
 
+function sessions(value: unknown) {
+  if (!Array.isArray(value)) return undefined;
+  const rows = value.filter(record)
+    .filter((row) => /^[a-z0-9][a-z0-9-]{0,120}$/.test(String(row.id)) && count(row.idleMs) !== undefined)
+    .slice(0, 32)
+    .map((row) => ({ id: String(row.id), idleMs: count(row.idleMs) as number }));
+  return rows.length ? rows : undefined;
+}
+
 function counts(value: unknown, keys: string[]) {
   if (!record(value)) return undefined;
   const out = pick(Object.fromEntries(keys.map((key) => [key, count(value[key])])));
@@ -56,6 +65,7 @@ export function progressFromSnapshot(outDir: string): Progress | null {
   const detail: ProgressDetail = pick({
     state: String(raw.state), startedAt: stamp(raw.startedAt), updatedAt: stamp(raw.updatedAt), elapsedMs: count(raw.elapsedMs),
     phases: phases(raw.phases), reviewers: list,
+    sessions: sessions(raw.sessions),
     crosscheck: counts(raw.crosscheck, ['done', 'total']),
     debate: counts(raw.debate, ['clusters', 'heard', 'judged', 'toJudge']),
   });

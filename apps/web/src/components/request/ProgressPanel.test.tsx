@@ -83,6 +83,25 @@ describe('<ProgressPanel>', () => {
     expect(displayState('finished', 'failed')).toBe('finished');
   });
 
+  it('counts running sessions and calls out a stalled one, only while the run is live', () => {
+    const detail = { sessions: [{ id: 'crosscheck-cli-claude-opus', idleMs: 4_000 }, { id: 'cli-grok-grok-4-7-debate-cluster-3-r1-devil', idleMs: STALL_MS + 65_000 }] };
+    const { unmount } = render(<ProgressPanel progress={progress(detail, 74, 'crosscheck')} />);
+    expect(screen.getByText('Sessions running: 2')).toBeInTheDocument();
+    const stalled = screen.getByRole('list', { name: 'Stalled sessions' });
+    expect(within(stalled).getAllByRole('listitem')).toHaveLength(1);
+    expect(stalled).toHaveTextContent('cli-grok-grok-4-7-debate-cluster-3-r1-devil');
+    expect(stalled).toHaveTextContent('No activity for 3m 5s');
+    unmount();
+    // Nothing is stalled: the count alone. The run has ended: neither.
+    const calm = render(<ProgressPanel progress={progress({ sessions: [{ id: 'crosscheck-cli-claude-opus', idleMs: 4_000 }] }, 74, 'crosscheck')} />);
+    expect(screen.getByText('Sessions running: 1')).toBeInTheDocument();
+    expect(screen.queryByRole('list', { name: 'Stalled sessions' })).toBeNull();
+    calm.unmount();
+    render(<ProgressPanel progress={progress(detail, 74, 'crosscheck')} status="failed" />);
+    expect(screen.queryByText(/Sessions running/)).toBeNull();
+    expect(screen.queryByRole('list', { name: 'Stalled sessions' })).toBeNull();
+  });
+
   it('shows cross-check and debate counts, and the themes of a split review', () => {
     const { unmount } = render(<ProgressPanel progress={progress({ crosscheck: { done: 1, total: 3 }, debate: { clusters: 4, heard: 2, judged: 1, toJudge: 4 } }, 84, 'adjudicate')} />);
     expect(screen.getByText('Cross-checks done: 1 of 3')).toBeInTheDocument();

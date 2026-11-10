@@ -10,6 +10,8 @@ import {
 import type { GitHubPort } from '../../github/port.ts';
 import { iso, type Clock } from '../../shared/clock.ts';
 import { fail } from '../../shared/errors.ts';
+import type { z } from 'zod';
+import type { progress as progressSchema } from '../../http/schemas.ts';
 import type { Logger } from '../../shared/logger.ts';
 import { checkRepo } from '../quote/quote.service.ts';
 import { parseGitHubInput } from '../quote/repo-url.ts';
@@ -76,7 +78,8 @@ export function localJobView(config: Config, row: OperatorJobRow) {
   return {
     id: row.id, kind: row.kind, source: row.source, ref: row.ref, commitSha: row.commit_sha, status: row.status,
     error: row.error, createdAt: iso(row.created_at), pdfReady: row.status === 'done' && pdfReady(pdfPath(config, row.id)),
-    ...(progress ? { progress } : {}),
+    // progressFromSnapshot copies only the schema's fields, as the worker does for a hosted request.
+    ...(progress ? { progress: progress as z.infer<typeof progressSchema> } : {}),
   };
 }
 

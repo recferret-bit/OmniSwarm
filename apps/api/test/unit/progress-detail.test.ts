@@ -74,6 +74,59 @@ test('fields outside the contract, and malformed values, never leave the worker'
   assert.ok(validate('intake-api#progress-event', asEvent(row)).ok);
 });
 
+test('sessions pass through bounded and checked, and a stall is a change worth writing at once', async () => {
+  const row = progressFromSnapshot(outWith(engineSnapshot({ sessions: [
+    { id: 'crosscheck-cli-claude-opus', idleMs: 4_000 }, { id: 'Bad Id', idleMs: 1 }, { id: 'cli-grok-debate-cluster-3-r1-devil', idleMs: -5 }, { id: 'cli-codex-judge-cluster-9', idleMs: 200_000, note: 'Missing owner check' },
+  ] })));
+  assert.deepEqual((row?.detail as { sessions: unknown }).sessions, [{ id: 'crosscheck-cli-claude-opus', idleMs: 4_000 }, { id: 'cli-codex-judge-cluster-9', idleMs: 200_000 }]);
+  assert.ok(validate('intake-api#progress-event', asEvent(row)).ok);
+  assert.equal('sessions' in (progressFromSnapshot(outWith(engineSnapshot({ sessions: [] })))?.detail ?? {}), false);
+  assert.equal(JSON.stringify(row).includes('Missing owner'), false);
+
+  const dir = outWith(engineSnapshot({ sessions: [{ id: 'cli-codex-judge-cluster-9', idleMs: 1_000 }] }));
+  const appended: Appended[] = [];
+  let now = 3_000_000;
+  const tailer = new ProgressTailer({ pool: fakePool(appended) as never, clock: { now: () => new Date(now) } }, 'r', dir, () => {});
+  await tailer.tick();
+  const put = (idleMs: number) => fs.writeFileSync(path.join(dir, 'harness', 'host', 'progress.json'), JSON.stringify(engineSnapshot({ sessions: [{ id: 'cli-codex-judge-cluster-9', idleMs }] })));
+  put(60_000);
+  now += 1_000;
+  await tailer.tick();
+  assert.equal(appended.length, 1, 'idle time moving is not a change');
+  put(200_000);
+  now += 1_000;
+  await tailer.tick();
+  assert.equal(appended.length, 2, 'crossing into a stall is');
+});
+
+test('a run that ends below the percent already shown still has its final state written', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'progress-ended-'));
+  const appended: Appended[] = [];
+  let now = 4_000_000;
+  const tailer = new ProgressTailer({ pool: fakePool(appended) as never, clock: { now: () => new Date(now) } }, 'r', dir, () => {});
+  await tailer.tick();
+  assert.deepEqual(appended.map((row) => row.progress.percent), [5]);
+  // The sandbox never started: the engine's last word is failed at 0%.
+  fs.mkdirSync(path.join(dir, 'harness', 'host'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'harness', 'host', 'progress.json'), JSON.stringify(engineSnapshot({
+    state: 'failed', phase: 'prepare', percent: 0, reviewers: [], phases: PHASES.map((name, i) => ({ name, state: i === 0 ? 'failed' : 'skipped' })),
+  })));
+  now += 1_000;
+  await tailer.stop();
+  const last = appended.at(-1)!;
+  assert.deepEqual([last.progress.phase, last.progress.percent, (last.progress.detail as { state: string }).state], ['prepare', 5, 'failed']);
+  // A running snapshot below the percent shown is still not written.
+  const running = fs.mkdtempSync(path.join(os.tmpdir(), 'progress-ended-'));
+  const quiet: Appended[] = [];
+  const second = new ProgressTailer({ pool: fakePool(quiet) as never, clock: { now: () => new Date(now) } }, 'r', running, () => {});
+  await second.tick();
+  fs.mkdirSync(path.join(running, 'harness', 'host'), { recursive: true });
+  fs.writeFileSync(path.join(running, 'harness', 'host', 'progress.json'), JSON.stringify(engineSnapshot({ percent: 3, phase: 'prepare', reviewers: [] })));
+  now += 60_000;
+  await second.tick();
+  assert.equal(quiet.length, 2, 'the first engine snapshot replaces the guess at the percent shown, and nothing more');
+});
+
 test('no snapshot, an unreadable one or an unknown version falls back to inferring from the report files', () => {
   const fallback = { phase: 'starting', percent: 5 };
   assert.deepEqual(snapshot(fs.mkdtempSync(path.join(os.tmpdir(), 'progress-none-'))), fallback);

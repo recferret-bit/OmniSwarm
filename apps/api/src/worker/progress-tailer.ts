@@ -52,7 +52,7 @@ export interface TailerDeps { pool: Pool; clock: Clock }
 export const DETAIL_EVERY_MS = 30_000;
 const STALL_MS = 120_000;
 
-type DetailShape = { state?: string; phases?: unknown; reviewers?: Array<Record<string, unknown>>; crosscheck?: unknown; debate?: unknown; themes?: unknown };
+type DetailShape = { state?: string; phases?: unknown; reviewers?: Array<Record<string, unknown>>; sessions?: Array<Record<string, unknown>>; crosscheck?: unknown; debate?: unknown; themes?: unknown };
 
 // What makes a row worth writing at once, and what may wait for DETAIL_EVERY_MS.
 function detailKeys(progress: Progress): { now: string; later: string } {
@@ -61,7 +61,8 @@ function detailKeys(progress: Progress): { now: string; later: string } {
   const reviewers = detail.reviewers ?? [];
   return {
     now: JSON.stringify([detail.state, detail.phases, detail.crosscheck, detail.debate, detail.themes,
-      reviewers.map((row) => [row.id, row.state, row.pass, Number(row.idleMs ?? 0) >= STALL_MS])]),
+      reviewers.map((row) => [row.id, row.state, row.pass, Number(row.idleMs ?? 0) >= STALL_MS]),
+      (detail.sessions ?? []).map((row) => [row.id, Number(row.idleMs ?? 0) >= STALL_MS])]),
     later: JSON.stringify([progress.percent, reviewers.map((row) => row.calls)]),
   };
 }
@@ -119,7 +120,10 @@ export class ProgressTailer {
     const read = snapshot(this.#outDir);
     // The engine's first snapshot replaces the inferred "starting" row even when it is below that guess (a 0-4%
     // "Preparing sandbox"); the row keeps the higher percent, so what a client sees never goes back.
-    const next = read.detail && last && !last.detail && read.percent < last.percent ? { ...read, percent: last.percent } : read;
+    // The same holds for a run that ended below the percent already shown (a sandbox that never started): its
+    // final state is written at that percent instead of being dropped as a step backwards.
+    const ended = Boolean(read.detail) && (read.detail as { state?: string }).state !== 'running';
+    const next = read.detail && last && read.percent < last.percent && (!last.detail || ended) ? { ...read, percent: last.percent } : read;
     const now = this.#deps.clock.now();
     const keys = detailKeys(next);
     const forward = !last || next.percent >= last.percent;

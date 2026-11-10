@@ -197,6 +197,15 @@ export interface ProgressDetail {
     surface?: string;
     idleMs?: number;
   }[];
+  /**
+   * Sessions running now that are not a reviewer's own job (cross-check, debate turns, judgements, the general review). Ids and idle time only.
+   *
+   * @maxItems 32
+   */
+  sessions?: {
+    id: string;
+    idleMs: number;
+  }[];
   crosscheck?: {
     done: number;
     total: number;
