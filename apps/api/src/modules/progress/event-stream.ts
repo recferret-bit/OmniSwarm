@@ -3,7 +3,7 @@
 // `progress-event` {status, progress?, at}; the stream ends after a terminal status.
 import type { ServerResponse } from 'node:http';
 import type { Db } from '../../db/pool.ts';
-import { progressSince } from '../../db/repositories/progress.ts';
+import { latestProgress, progressSince } from '../../db/repositories/progress.ts';
 import { findRequest } from '../../db/repositories/requests.ts';
 import { iso } from '../../shared/clock.ts';
 import { progressDto } from '../requests/request-view.ts';
@@ -20,6 +20,7 @@ export class EventStream {
   #lastStatus: Status | null = null;
   #chain: Promise<void> = Promise.resolve();
   #closed = false;
+  #started = false;
   readonly #cleanup: Array<() => void> = [];
 
   constructor(db: Db, res: ServerResponse, requestId: string, lastEventId: string | undefined) {
@@ -52,6 +53,14 @@ export class EventStream {
     if (this.#closed) return;
     const row = await findRequest(this.#db, this.#requestId);
     if (!row) return this.close();
+    // A fresh connection (no Last-Event-ID) to a run whose rows carry the engine's full snapshot needs only the
+    // latest row: the older ones are superseded, and a long run has hundreds. Rows without a snapshot (an older
+    // engine) are replayed from the start, as the page builds its phase list from them.
+    if (this.#lastId === '0' && !this.#started) {
+      this.#started = true;
+      const latest = await latestProgress(this.#db, this.#requestId);
+      if (latest?.detail) this.#lastId = String(BigInt(latest.id) - 1n);
+    }
     for (const progress of await progressSince(this.#db, this.#requestId, this.#lastId)) {
       this.#send({ status: row.status, progress: progressDto(progress), at: iso(progress.ts) }, progress.id);
       this.#lastId = progress.id;

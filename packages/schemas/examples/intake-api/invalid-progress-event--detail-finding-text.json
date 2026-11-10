@@ -1,0 +1,82 @@
+{
+  "status": "running",
+  "progress": {
+    "phase": "review",
+    "reviewer": "cli-grok-grok-4-7",
+    "pass": 1,
+    "percent": 46,
+    "detail": {
+      "state": "running",
+      "startedAt": "2026-11-10T12:44:51.000Z",
+      "updatedAt": "2026-11-10T13:31:20.000Z",
+      "elapsedMs": 2789000,
+      "phases": [
+        {
+          "name": "prepare",
+          "state": "done",
+          "startedAt": "2026-11-10T12:44:51.000Z",
+          "endedAt": "2026-11-10T12:46:02.000Z"
+        },
+        {
+          "name": "tests",
+          "state": "done"
+        },
+        {
+          "name": "review",
+          "state": "running",
+          "startedAt": "2026-11-10T12:46:10.000Z"
+        },
+        {
+          "name": "crosscheck",
+          "state": "pending"
+        },
+        {
+          "name": "debate",
+          "state": "pending"
+        },
+        {
+          "name": "adjudicate",
+          "state": "pending"
+        },
+        {
+          "name": "general-review",
+          "state": "pending"
+        },
+        {
+          "name": "report",
+          "state": "pending"
+        }
+      ],
+      "reviewers": [
+        {
+          "id": "cli-claude-opus",
+          "state": "done",
+          "jobsDone": 1,
+          "jobs": 1,
+          "passes": 2
+        },
+        {
+          "id": "cli-codex-gpt-6-1-sol",
+          "state": "done",
+          "jobsDone": 1,
+          "jobs": 1,
+          "passes": 2
+        },
+        {
+          "id": "cli-grok-grok-4-7",
+          "state": "running",
+          "jobsDone": 0,
+          "jobs": 1,
+          "passes": 2,
+          "pass": 1,
+          "calls": 31,
+          "budget": 40,
+          "surface": "S3",
+          "idleMs": 185000,
+          "title": "Missing owner check in withdraw"
+        }
+      ]
+    }
+  },
+  "at": "2026-11-10T13:31:20.000Z"
+}

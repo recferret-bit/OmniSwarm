@@ -76,7 +76,10 @@ test('publish copies without private files, is read-only, and the first publicat
 
 test('progress snapshots follow the report files', () => {
   assert.deepEqual(snapshot(outDir({})), { phase: 'starting', percent: 5 });
-  const reviewing = outDir({ 'meta.json': { finalized: false }, 'workers.json': { jobs: [{ name: 'a', state: 'collected' }, { name: 'b', state: 'running' }] } });
-  assert.deepEqual(snapshot(reviewing), { phase: 'review', reviewer: 'b', percent: 40 });
+  // Without the engine's live snapshot: the running job's reviewer id (not its job name), and its pass from usage rows.
+  const reviewing = outDir({ 'meta.json': { finalized: false }, 'workers.json': { jobs: [{ name: 'a-s1-auth', adapter: 'a', state: 'collected' }, { name: 'c-s1-auth', adapter: 'c', state: 'pending' }, { name: 'b-s1-auth', adapter: 'b', state: 'running' }] }, 'harness/usage/b/s1-pass-1.json': { k: 1 } });
+  assert.deepEqual(snapshot(reviewing), { phase: 'review', reviewer: 'b', pass: 2, percent: 30 });
+  const unnamed = outDir({ 'workers.json': { jobs: [{ name: 'x', state: 'running' }] } });
+  assert.deepEqual(snapshot(unnamed), { phase: 'review', percent: 10 });
   assert.deepEqual(snapshot(outDir({ ...finished })), { phase: 'report', percent: 100 });
 });

@@ -13,6 +13,7 @@ import { fail } from '../../shared/errors.ts';
 import type { Logger } from '../../shared/logger.ts';
 import { checkRepo } from '../quote/quote.service.ts';
 import { parseGitHubInput } from '../quote/repo-url.ts';
+import { progressFromSnapshot } from '../../worker/progress-detail.ts';
 import { assertNormalizedAbsolute, launchLocalJob, localAuditArgv, localAuditCommand, type LocalLaunch } from './local-audit.ts';
 
 const LOOPBACK = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
@@ -70,9 +71,12 @@ export function localJobListItem(row: OperatorJobRow) {
 }
 
 export function localJobView(config: Config, row: OperatorJobRow) {
+  // The engine's live snapshot from the job's own out dir: the same progress object a hosted request carries.
+  const progress = row.status !== 'queued' && row.out_dir ? progressFromSnapshot(row.out_dir) : null;
   return {
     id: row.id, kind: row.kind, source: row.source, ref: row.ref, commitSha: row.commit_sha, status: row.status,
     error: row.error, createdAt: iso(row.created_at), pdfReady: row.status === 'done' && pdfReady(pdfPath(config, row.id)),
+    ...(progress ? { progress } : {}),
   };
 }
 

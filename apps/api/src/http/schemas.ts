@@ -35,8 +35,30 @@ export const requestParams = z.strictObject({ id: uuid });
 export const paymentRequest = z.strictObject({ txHash });
 export const paymentResponse = z.strictObject({ status, position: z.int().min(1).nullable() });
 
+const count = z.int().min(0);
+const phaseName = z.enum(['prepare', 'tests', 'review', 'crosscheck', 'debate', 'adjudicate', 'general-review', 'report']);
+/** intake-api.schema.json#/$defs/progress-detail */
+export const progressDetail = z.strictObject({
+  state: z.enum(['running', 'finished', 'incomplete', 'failed', 'cancelled']),
+  startedAt: timestamp.optional(), updatedAt: timestamp.optional(), elapsedMs: count.optional(),
+  phases: z.array(z.strictObject({
+    name: phaseName, state: z.enum(['pending', 'running', 'done', 'failed', 'skipped']), startedAt: timestamp.optional(), endedAt: timestamp.optional(),
+  })).max(32),
+  reviewers: z.array(z.strictObject({
+    id: z.string().regex(/^[a-z0-9][a-z0-9-]{0,80}$/), state: z.enum(['pending', 'running', 'done', 'failed']),
+    jobsDone: count, jobs: z.int().min(1), passes: z.int().min(1), pass: z.int().min(1).optional(), calls: count.optional(),
+    budget: z.int().min(1).optional(), surface: z.string().regex(/^S[1-6]$/).optional(), idleMs: count.optional(),
+  })).max(32).optional(),
+  crosscheck: z.strictObject({ done: count, total: count }).optional(),
+  debate: z.strictObject({ clusters: count.optional(), heard: count.optional(), judged: count.optional(), toJudge: count.optional() }).optional(),
+  themes: z.array(z.strictObject({
+    theme: z.enum(['web3', 'apps', 'infra', 'scripts']), status, phase: z.string().min(1).optional(), percent: z.number().min(0).max(100).optional(),
+  })).max(32).optional(),
+});
+
 export const progress = z.strictObject({
   phase: z.string().min(1), reviewer: z.string().optional(), pass: z.int().min(1).optional(), percent: z.number().min(0).max(100).optional(),
+  detail: progressDetail.optional(),
 });
 
 export const requestStatusResponse = z.strictObject({
@@ -50,7 +72,7 @@ export const progressEvent = z.strictObject({ status, progress: progress.optiona
 
 export const listQuery = z.strictObject({ mine: z.literal('1') });
 export const requestListResponse = z.strictObject({
-  requests: z.array(z.strictObject({ requestId: uuid, repo, status, createdAt: timestamp, theme: z.string().min(1).optional() })),
+  requests: z.array(z.strictObject({ requestId: uuid, repo, status, createdAt: timestamp, theme: z.string().min(1).optional(), progress: progress.optional() })),
 });
 
 export const loginBody = z.strictObject({ login: z.string().min(1).max(256), password: z.string().min(1).max(256) });

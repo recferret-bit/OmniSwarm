@@ -1,0 +1,29 @@
+{
+  "status": "running",
+  "progress": {
+    "phase": "themes",
+    "percent": 40,
+    "detail": {
+      "state": "running",
+      "phases": [],
+      "themes": [
+        {
+          "theme": "web3",
+          "status": "running",
+          "phase": "review",
+          "percent": 35
+        },
+        {
+          "theme": "apps",
+          "status": "done",
+          "percent": 100
+        },
+        {
+          "theme": "infra",
+          "status": "queued"
+        }
+      ]
+    }
+  },
+  "at": "2026-11-10T13:31:20.000Z"
+}
