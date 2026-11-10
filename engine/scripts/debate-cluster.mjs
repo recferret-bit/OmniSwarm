@@ -24,17 +24,23 @@ export function sameDefect(a, b) {
   return [...titleWords(b.title)].filter((word) => words.has(word)).length >= 2;
 }
 
+// True when two claims of different vendors are the same defect. vendorOf(finding) names a claim's vendor.
+export function vendorsAgree(findings, vendorOf) {
+  for (let i = 0; i < findings.length; i++) {
+    for (let j = i + 1; j < findings.length; j++) {
+      const [a, b] = [vendorOf(findings[i]), vendorOf(findings[j])];
+      if (a && b && a !== b && sameDefect(findings[i], findings[j])) return true;
+    }
+  }
+  return false;
+}
+
 // 'same_claim': two vendors reported the same defect. 'merged_only': two vendors are in the cluster but no pair
 // of their claims is the same defect. 'single_vendor' otherwise.
 function agreementOf(findings) {
   const vendorOf = (finding) => finding.vendor || finding.reviewerId;
   if (new Set(findings.map(vendorOf).filter(Boolean)).size < 2) return 'single_vendor';
-  for (let i = 0; i < findings.length; i++) {
-    for (let j = i + 1; j < findings.length; j++) {
-      if (vendorOf(findings[i]) !== vendorOf(findings[j]) && sameDefect(findings[i], findings[j])) return 'same_claim';
-    }
-  }
-  return 'merged_only';
+  return vendorsAgree(findings, vendorOf) ? 'same_claim' : 'merged_only';
 }
 
 function describe(cluster, reader) {

@@ -130,3 +130,26 @@ test('a review by a reviewer of the author\'s own vendor is ignored, whatever th
   assert.deepEqual(row.reviews, []);
   assert.deepEqual(row.vendors, ['anthropic']);
 });
+
+test('two vendors whose claims only merged on nearby lines are not MODEL_AGREEMENT', async (t) => {
+  // Structural merge: both cite two files within three lines of each other, with no line in common.
+  const f = fixture(t, ['claude', 'codex']);
+  f.save('claude', [finding({ title: 'Payout races the balance update', location: ['src/pay.ts:10', 'src/ledger.ts:20'] }), controls()]);
+  f.save('codex', [finding({ title: 'Payout races the balance update', location: ['src/pay.ts:12', 'src/ledger.ts:22'] }), controls()]);
+  f.cross(() => 'upheld');
+  const [row, ...rest] = (await adjudicate(f.dir)).scoredFindings;
+  assert.equal(rest.length, 0, 'one merged cluster');
+  assert.deepEqual(row.vendors.sort(), ['anthropic', 'openai']);
+  assert.notEqual(row.status, 'MODEL_AGREEMENT');
+});
+
+test('two vendors on the same line and surface are MODEL_AGREEMENT whatever their wording', async (t) => {
+  // The different-surface, different-subject case is covered on sameDefect in debate-cluster.test.mjs; one
+  // auditor file holds one surface, so it cannot be built here.
+  const at = ['src/pay.ts:10', 'src/ledger.ts:20'];
+  const f = fixture(t, ['claude', 'codex']);
+  f.save('claude', [finding({ title: 'Payout races the balance update', location: at }), controls()]);
+  f.save('codex', [finding({ title: 'Double spend on withdraw', location: at }), controls()]);
+  const rows = (await adjudicate(f.dir)).scoredFindings;
+  assert.deepEqual(rows.map((row) => row.status), ['MODEL_AGREEMENT']);
+});

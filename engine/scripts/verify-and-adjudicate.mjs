@@ -28,6 +28,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { clusterFindings, dedupCandidates, isCompoundTitle } from './cluster-findings.mjs';
+import { vendorsAgree } from './debate-cluster.mjs';
 import { loadAuditors, readReportJson, validCrosscheckRow, writeReportFile } from './report-contract.mjs';
 import { reviewersOfMeta, vendorOfJob } from './reviewer-registry.mjs';
 import { mergeDebateOutcome } from './verify-and-adjudicate-debate.mjs';
@@ -128,7 +129,10 @@ function readLayers(reportDir) {
 
 function scoreCluster(c, context) {
   const vendorSet = new Set(c.auditors.map(context.authorVendor).filter(Boolean));
-  const reviewed = applyReview(vendorSet.size >= 2 ? 'MODEL_AGREEMENT' : 'MODEL_ASSERTION', c, context);
+  // Agreement is two vendors reporting the same defect on the same line (debate-cluster.sameDefect), not two
+  // vendors whose nearby claims were merged into one cluster.
+  const agreed = vendorSet.size >= 2 && vendorsAgree(c.findings, (finding) => context.authorVendor(finding.auditor));
+  const reviewed = applyReview(agreed ? 'MODEL_AGREEMENT' : 'MODEL_ASSERTION', c, context);
   const status = reviewed.status;
   const locations = Array.from(new Set(c.findings.flatMap((f) => f.location || [])));
   const layers = [...new Set(locations.map((loc) => layerOfPath(loc, context.layers)))];

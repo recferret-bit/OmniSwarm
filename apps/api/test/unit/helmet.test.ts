@@ -4,7 +4,7 @@ import helmet from '@fastify/helmet';
 import Fastify from 'fastify';
 import { helmetOptions } from '../../src/http/app.ts';
 
-async function headers(cookieSecure: boolean): Promise<Record<string, string | string[] | undefined>> {
+async function headers(cookieSecure: boolean): Promise<Record<string, unknown>> {
   const app = Fastify();
   await app.register(helmet, helmetOptions(cookieSecure));
   app.get('/api/health', async () => ({ ok: true }));
