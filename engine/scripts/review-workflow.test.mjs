@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { createSnapshot, disposeSnapshot } from './worker-isolation.mjs';
-import { REVIEW_WORKFLOW, REVIEW_TOOLS, NEAR_BUILD_ARTIFACT, EXISTING_TEST_RUNNER, buildExistingTestCatalog, nearSandboxGap, selectExistingTest } from './review-workflow.mjs';
+import { REVIEW_WORKFLOW, REVIEW_TOOLS, NEAR_BUILD_ARTIFACT, EXISTING_TEST_RUNNER, buildExistingTestCatalog, evmTestGap, nearSandboxGap, selectExistingTest } from './review-workflow.mjs';
 import { callBridgeTool, toolDefinitions } from './docker-mcp-bridge.mjs';
 import { permissionDecision } from './agent-session.mjs';
 import { auditToolDecision } from './audit-tool-policy.mjs';
@@ -234,4 +234,23 @@ test('SBF discovery excludes NEAR even under Anchor and preserves actual Solana 
     process, console: { error() {} }, setTimeout, clearTimeout,
   });
   assert.deepEqual(builds, ['/work/src/solana/Cargo.toml']);
+});
+
+test('Foundry and Hardhat contract tests are coverage gaps, and an ordinary npm suite beside them still runs', t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'security-review-evm-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const put = (rel, text) => { fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true }); fs.writeFileSync(path.join(root, rel), text); };
+  put('contracts/foundry.toml', '[profile.default]\n');
+  put('contracts/lib/forge-std/foundry.toml', '[profile.default]\n');
+  put('hh/package.json', JSON.stringify({ scripts: { test: 'hardhat test' }, devDependencies: { hardhat: '^2.22.0' } }));
+  put('scripted/package.json', JSON.stringify({ scripts: { test: 'forge test -vvv' } }));
+  put('api/package.json', JSON.stringify({ scripts: { test: 'node --test' }, dependencies: { ethers: '^6.13.0' } }));
+  const snapshot = createSnapshot(root);
+  const catalog = buildExistingTestCatalog(snapshot.snapshot, snapshot.manifest);
+  disposeSnapshot(snapshot);
+  // A package that only uses a client library is an ordinary offline npm suite.
+  assert.deepEqual(catalog.tests.map((row) => `${row.kind}:${row.cwd}`), ['npm:api']);
+  assert.deepEqual(catalog.coverageGaps.filter((gap) => gap.startsWith('EVM')).sort(), [evmTestGap('contracts', 'foundry'), evmTestGap('hh', 'hardhat'), evmTestGap('scripted', 'test script')].sort());
+  // The vendored forge-std project is not a second gap.
+  assert.equal(catalog.coverageGaps.some((gap) => gap.includes('lib/forge-std')), false);
 });

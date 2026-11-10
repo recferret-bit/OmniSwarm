@@ -12,6 +12,7 @@ import { scopeNote } from './harness-layers.mjs';
 const LEAD_FILES = [
   ['solana.md', 'Solana Leads', 'Solana surface absent', 3000, null, ['web3']],
   ['near.md', 'NEAR Leads', 'NEAR surface absent', 3000, null, ['web3']],
+  ['evm.md', 'EVM Leads', 'EVM surface absent', 3500, null, ['web3']],
   ['python.md', 'Python Leads', 'Python surface absent', 4000, ['S1', 'S2', 'S3', 'S4'], ['web2']],
   ['node.md', 'Node Leads', 'Node surface absent', 4000, ['S1', 'S2', 'S4', 'S6'], ['web2']],
   ['web.md', 'Web Leads', 'Web surface absent', 2500, ['S1', 'S2', 'S6'], ['web2', 'web3']],

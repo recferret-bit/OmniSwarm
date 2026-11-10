@@ -94,3 +94,51 @@ export const NEAR_CLIENT_PATTERNS = [
   { id: 'outlayer-host', cls: 'off-chain compute', re: /outlayer\.fastnear\.com/g,
     note: 'OutLayer decrypts credentials inside an enclave. Do not send jobs or secrets.' },
 ];
+
+// EVM contracts (Solidity, Vyper). Greppable subset of the SWC registry and the OWASP Smart Contract Top 10. A hit is a lead.
+export const EVM_CONTRACT_PATTERNS = [
+  { id: 'tx-origin', cls: 'access control', re: /\btx\.origin\b/g,
+    note: 'tx.origin is the externally owned account that started the transaction, not the caller. Authorization on it is phishable; msg.sender is the caller.' },
+  { id: 'delegatecall', cls: 'code execution', re: /\.delegatecall\s*\(|\bdelegatecall\s*\(/g,
+    note: 'Runs foreign code in this contract\'s storage. Confirm the target is fixed or allow-listed and the caller is authorized.' },
+  { id: 'selfdestruct', cls: 'availability', re: /\bselfdestruct\s*\(|\bsuicide\s*\(/g,
+    note: 'Destroys the contract and sends its balance. Confirm who can call it.' },
+  { id: 'low-level-call', cls: 'reentrancy / unchecked call', re: /\.call\s*\{[^}]*\}\s*\(|\.call\s*\(|\.call\.value\s*\(/g,
+    note: 'Low-level call hands control to the callee. Confirm the return value is checked and state is updated before the call (checks-effects-interactions) or a reentrancy guard holds.' },
+  { id: 'eth-transfer-send', cls: 'value transfer', re: /\.(?:transfer|send)\s*\(\s*(?![^)]*,)[^)]*\)/g,
+    note: 'transfer/send forward 2300 gas and can fail for contract recipients; send returns false instead of reverting. Confirm the failure path.' },
+  { id: 'erc20-unchecked', cls: 'token', re: /\bIERC20\s*\([^)]*\)\s*\.(?:transfer|transferFrom|approve)\s*\(/g,
+    note: 'ERC-20 call through the bare interface. Tokens that return nothing or false need SafeERC20, and fee-on-transfer tokens need the received amount measured.' },
+  { id: 'ecrecover', cls: 'signature', re: /\becrecover\s*\(/g,
+    note: 'Raw ecrecover returns address(0) on a bad signature and accepts malleable ones. Confirm a zero check, a nonce, a deadline and a domain separator (EIP-712) with the chain id.' },
+  { id: 'encode-packed', cls: 'signature / hashing', re: /\babi\.encodePacked\s*\(/g,
+    note: 'Packed encoding of several dynamic values is ambiguous. A finding when the hash is signed or used as a key.' },
+  { id: 'block-timestamp', cls: 'timing / randomness', re: /\bblock\.(?:timestamp|number|difficulty|prevrandao)\b|\bblockhash\s*\(|\bnow\b(?=\s*[;<>=+\-)])/g,
+    note: 'Block values are validator-influenced. A finding when they decide a payout, a random outcome or a tight deadline.' },
+  { id: 'unchecked-block', cls: 'arithmetic', re: /\bunchecked\s*\{/g,
+    note: 'Arithmetic that skips overflow checks. Confirm the operands are bounded.' },
+  { id: 'old-pragma', cls: 'arithmetic / compiler', re: /^\s*pragma\s+solidity\s+[^;]*\b0\.[4-7]\.\d+/gm,
+    note: 'Solidity before 0.8 does not check arithmetic. Every +, - and * on a balance needs SafeMath or a bound.' },
+  { id: 'floating-pragma', cls: 'build', re: /^\s*pragma\s+solidity\s*(?:\^|>=?)/gm,
+    note: 'Floating compiler version. The deployed bytecode depends on whichever compiler built it; pin it.' },
+  { id: 'initializer', cls: 'initialization', re: /\bfunction\s+(?:initialize|init|__\w+_init)\s*\(/g,
+    note: 'Initializer function. Confirm it can run only once (initializer modifier) and that the implementation contract disables it.' },
+  { id: 'assembly', cls: 'memory safety', re: /\bassembly\s*(?:\(\s*"memory-safe"\s*\))?\s*\{/g,
+    note: 'Inline assembly bypasses type and bounds checks. Read it line by line.' },
+  { id: 'storage-gap-proxy', cls: 'upgradeability', re: /\b(?:upgradeTo(?:AndCall)?|_authorizeUpgrade|ERC1967|TransparentUpgradeableProxy|UUPSUpgradeable)\b/g,
+    note: 'Upgradeable contract. Confirm who authorizes an upgrade and that the storage layout is append-only.' },
+];
+
+// EVM wallet and RPC client code (ethers, viem, wagmi, web3.js, injected providers). A hit is a lead.
+export const EVM_CLIENT_PATTERNS = [
+  { id: 'evm-private-key', cls: 'key custody', re: /\b0x[0-9a-fA-F]{64}\b/g,
+    note: 'A 32-byte hex value: a private key shape (or a hash). Report the source. Do not extract or use it.' },
+  { id: 'wallet-from-key', cls: 'key custody', re: /\bnew\s+(?:ethers\.)?Wallet\s*\(|\bprivateKeyToAccount\s*\(|\bmnemonicToAccount\s*\(|\bWallet\.fromPhrase\s*\(/g,
+    note: 'A signer built from key material in code. Confirm the key is not a literal, a committed value or shipped to the browser.' },
+  { id: 'eth-sign', cls: 'signing intent', re: /['"]eth_sign['"]/g,
+    note: 'eth_sign signs an arbitrary 32-byte hash the user cannot read; it can authorize any transaction. personal_sign or EIP-712 typed data is the fix.' },
+  { id: 'unlimited-approval', cls: 'token approval', re: /\b(?:MaxUint256|maxUint256|UINT256_MAX|MAX_UINT256)\b|\bconstants\.MaxUint256\b|2\s*\*\*\s*256\s*-\s*1/g,
+    note: 'Unlimited token approval. A compromised or upgradeable spender can take the whole balance; approve the amount the flow needs.' },
+  { id: 'typed-data', cls: 'signing intent', re: /\bsignTypedData\s*\(|eth_signTypedData\w*/g,
+    note: 'Typed-data signature. Confirm the domain (name, version, chainId, verifyingContract) is fixed by the app and not taken from a response or URL.' },
+];

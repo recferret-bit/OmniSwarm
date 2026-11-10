@@ -29,7 +29,7 @@ Do not read, print, commit or copy `infra/compose/.local/stack.env`, `infra/comp
 
 ## What this repository is
 
-OmniSwarm is multichain: Solana, NEAR (contracts, clients, Intents, NEAR AI), Rust, Python, and Node/TypeScript. It runs `source_security_review_v1`: an authorized source review by Claude, Codex, Grok, and AGY through a restricted MCP bridge into one offline Docker sandbox. Findings need `file:line` evidence and a defensive fix. The bridge does not accept exploits, arbitrary commands, deployed probes, or transactions.
+OmniSwarm is multichain: Solana, NEAR (contracts, clients, Intents, NEAR AI), EVM (Solidity and Vyper contracts, wallet clients), Rust, Python, and Node/TypeScript. It runs `source_security_review_v1`: an authorized source review by Claude, Codex, Grok, and AGY through a restricted MCP bridge into one offline Docker sandbox. Findings need `file:line` evidence and a defensive fix. The bridge does not accept exploits, arbitrary commands, deployed probes, or transactions.
 
 Operator entry is `./bin/audit` (also `./bin/omniswarm`). The review engine lives under `engine/`: the workflow in `engine/scripts/`. The image is `engine/docker/sandbox.Dockerfile`. Native Codex and Grok admission gates are under `engine/native/`.
 
@@ -65,6 +65,8 @@ npm run stack:local                               # local HTTP stack and two hos
 | NEAR client | `near-api-js`, `@hot-labs/near-connect` | client leads; npm test stays catalogued |
 | NEAR Intents | `@defuse-protocol/one-click-sdk-typescript`, `@defuse-protocol/intents-sdk`, `@near-intents-agent-api/sdk` | leads only; do not catalog that package's npm test as offline |
 | NEAR AI | `@neardefi/shade-agent-js`, `near-ai-cloud`, `cloud-api.near.ai` | recognition leads; do not call the hosts |
+| EVM contract | production `.sol`/`.vy` source, `foundry.toml`, `hardhat.config.*`, `truffle-config.js` (not `*.t.sol`, `*.s.sol` or `lib/`) | `evm.md`, EVM guidance; Foundry, Hardhat and Truffle tests are a coverage gap (no `forge`, `hardhat` or `solc` in the image) |
+| EVM client | `ethers`, `viem`, `wagmi`, `web3` in a production `package.json` | client leads in `evm.md`; npm test stays catalogued |
 
 `v1.signer` and the hosted API strings are leads in `near.md`. They are not stack marks. Absent ecosystems do not receive checks.
 

@@ -352,6 +352,129 @@
       "layer": "web3"
     },
     {
+      "file": "contracts/evm/src/TipVault.sol",
+      "startLine": 2,
+      "endLine": 2,
+      "class": "compiler",
+      "title": "floating pre-0.8 compiler: arithmetic is unchecked",
+      "severity": "medium",
+      "layer": "web3"
+    },
+    {
+      "file": "contracts/evm/src/TipVault.sol",
+      "startLine": 41,
+      "endLine": 41,
+      "class": "unprotected-initializer",
+      "title": "initialize can be called by anyone, at any time, to take ownership",
+      "severity": "critical",
+      "layer": "web3"
+    },
+    {
+      "file": "contracts/evm/src/TipVault.sol",
+      "startLine": 51,
+      "endLine": 51,
+      "class": "tx-origin",
+      "title": "setFeeCollector authorizes tx.origin",
+      "severity": "medium",
+      "layer": "web3",
+      "missedBy": [
+        "baseline"
+      ]
+    },
+    {
+      "file": "contracts/evm/src/TipVault.sol",
+      "startLine": 57,
+      "endLine": 57,
+      "class": "unchecked-arithmetic",
+      "title": "unbounded feeBps makes the tip subtraction underflow",
+      "severity": "medium",
+      "layer": "web3"
+    },
+    {
+      "file": "contracts/evm/src/TipVault.sol",
+      "startLine": 64,
+      "endLine": 64,
+      "class": "unchecked-erc20",
+      "title": "token tip ignores the transferFrom result and credits the requested amount",
+      "severity": "medium",
+      "layer": "web3"
+    },
+    {
+      "file": "contracts/evm/src/TipVault.sol",
+      "startLine": 70,
+      "endLine": 70,
+      "class": "reentrancy",
+      "title": "withdraw sends ether before it debits the balance",
+      "severity": "critical",
+      "layer": "web3"
+    },
+    {
+      "file": "contracts/evm/src/TipVault.sol",
+      "startLine": 83,
+      "endLine": 83,
+      "class": "signature-replay",
+      "title": "withdrawFor signature has no nonce, deadline or domain and pays whoever submits it",
+      "severity": "critical",
+      "layer": "web3"
+    },
+    {
+      "file": "contracts/evm/src/TipVault.sol",
+      "startLine": 85,
+      "endLine": 85,
+      "class": "unchecked-arithmetic",
+      "title": "withdrawFor debits without a balance check and underflows",
+      "severity": "high",
+      "layer": "web3",
+      "missedBy": [
+        "paranoid"
+      ]
+    },
+    {
+      "file": "contracts/evm/src/TipVault.sol",
+      "startLine": 90,
+      "endLine": 90,
+      "class": "delegatecall",
+      "title": "execute delegatecalls an arbitrary target with the vault storage",
+      "severity": "high",
+      "layer": "web3"
+    },
+    {
+      "file": "contracts/evm/src/TipVault.sol",
+      "startLine": 106,
+      "endLine": 106,
+      "class": "missing-access-control",
+      "title": "destroy has no caller check",
+      "severity": "critical",
+      "layer": "web3"
+    },
+    {
+      "file": "frontend/src/evm.js",
+      "startLine": 7,
+      "endLine": 7,
+      "class": "key-custody",
+      "title": "a relayer private key is embedded in the browser bundle",
+      "severity": "high",
+      "layer": "web3"
+    },
+    {
+      "file": "frontend/src/evm.js",
+      "startLine": 22,
+      "endLine": 22,
+      "class": "unlimited-approval",
+      "title": "token tip approves the vault for the whole balance",
+      "severity": "medium",
+      "layer": "web3"
+    },
+    {
+      "file": "frontend/src/evm.js",
+      "startLine": 28,
+      "endLine": 28,
+      "class": "blind-signing",
+      "title": "login uses eth_sign on a server-supplied message",
+      "severity": "high",
+      "layer": "web3"
+    },
+    {
       "file": "infra/Dockerfile",
       "startLine": 1,
       "endLine": 1,
@@ -570,6 +693,22 @@
       "endLine": 113,
       "reason": "close requires has_one and a signing authority",
       "claim": "anyone can close the vault",
+      "layer": "web3"
+    },
+    {
+      "file": "contracts/evm/src/TipVault.sol",
+      "startLine": 75,
+      "endLine": 75,
+      "reason": "the guard is set and the balance is debited before the token call",
+      "claim": "token withdraw is reentrant",
+      "layer": "web3"
+    },
+    {
+      "file": "contracts/evm/src/TipVault.sol",
+      "startLine": 100,
+      "endLine": 100,
+      "reason": "ownership transfer is two-step and only the pending owner can accept",
+      "claim": "anyone can accept ownership",
       "layer": "web3"
     },
     {

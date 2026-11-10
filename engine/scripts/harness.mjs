@@ -12,8 +12,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { analyzeStackAndPlans, renderReviewPlansMarkdown } from './audit-plans.mjs';
 import { scannerChecks, missingScanner, setScannerOutputDir, depScan, writeTools } from './harness-scanners.mjs';
-import { solanaStack, writeConfig, writeNear, writeSolana, writePython, writeNode, writeWeb } from './harness-leads.mjs';
-import { SOLANA_PATTERNS, NEAR_CONTRACT_PATTERNS, NEAR_CLIENT_PATTERNS } from './harness-patterns-chain.mjs';
+import { solanaStack, writeConfig, writeEvm, writeNear, writeSolana, writePython, writeNode, writeWeb } from './harness-leads.mjs';
+import { SOLANA_PATTERNS, NEAR_CONTRACT_PATTERNS, NEAR_CLIENT_PATTERNS, EVM_CONTRACT_PATTERNS, EVM_CLIENT_PATTERNS } from './harness-patterns-chain.mjs';
 import { PY_PATTERNS, NODE_PATTERNS } from './harness-patterns-app.mjs';
 
 function parseArgs(argv) {
@@ -40,6 +40,8 @@ async function scan(target, outDir, noDeps) {
   const stackProfile = analyzeStackAndPlans(root);
   const nearEco = stackProfile.ecosystems?.near;
   const near = writeNear(root, nearEco);
+  const evmEco = stackProfile.ecosystems?.evm;
+  const evm = writeEvm(root, evmEco);
   const python = writePython(root, stackProfile.ecosystems);
   const node = writeNode(root, stackProfile.ecosystems);
   const reviewPlansMd = renderReviewPlansMarkdown(stackProfile);
@@ -49,6 +51,7 @@ async function scan(target, outDir, noDeps) {
   fs.writeFileSync(path.join(outDir, 'scanner-results.json'), JSON.stringify({ version: 1, rustsecRevision: fs.existsSync('/opt/audit-scanners/rustsec-revision.txt') ? fs.readFileSync('/opt/audit-scanners/rustsec-revision.txt', 'utf8').trim() : null, databases: fs.existsSync('/opt/audit-scanners/databases.sha256') ? fs.readFileSync('/opt/audit-scanners/databases.sha256', 'utf8') : null, preparedAt: fs.existsSync('/opt/audit-scanners/prepared-at.txt') ? fs.readFileSync('/opt/audit-scanners/prepared-at.txt', 'utf8').trim() : null, rules: fs.existsSync('/opt/audit-scanners/rules.sha256') ? fs.readFileSync('/opt/audit-scanners/rules.sha256', 'utf8') : null, checks: scannerChecks }, null, 2));
   fs.writeFileSync(path.join(outDir, 'solana.md'), solana.body);
   fs.writeFileSync(path.join(outDir, 'near.md'), near.body);
+  fs.writeFileSync(path.join(outDir, 'evm.md'), evm.body);
   fs.writeFileSync(path.join(outDir, 'web.md'), web.body);
   fs.writeFileSync(path.join(outDir, 'python.md'), python.body);
   fs.writeFileSync(path.join(outDir, 'node.md'), node.body);
@@ -64,6 +67,7 @@ async function scan(target, outDir, noDeps) {
     `detected stacks: ${stackProfile.detectedStacks.join(', ') || 'none'}`,
     `solana stack: ${marks.length ? 'yes' : 'no'} (${solana.leads} leads, ${solana.files} rust files)`,
     `near stack: ${nearEco?.detected ? 'yes' : 'no'} (${near.leads} leads, ${near.files} files; kinds: ${(nearEco?.kinds || []).join(', ') || 'none'}; contracts: ${nearEco?.contracts ? 'yes' : 'no'})`,
+    `evm stack: ${evmEco?.detected ? 'yes' : 'no'} (${evm.leads} leads, ${evm.files} files; kinds: ${(evmEco?.kinds || []).join(', ') || 'none'}; tooling: ${(evmEco?.tooling || []).join(', ') || 'none'})`,
     `python: ${stackProfile.ecosystems.python.detected ? 'yes' : 'no'} (${python.leads} leads, ${python.files} production files; frameworks: ${stackProfile.ecosystems.python.frameworks.join(', ') || 'none'}; test runner: ${stackProfile.ecosystems.python.hasPytestSignal ? 'pytest' : 'none found'})`,
     `stacks by production source: ${stackProfile.ecosystems.primary.join(', ') || 'none'}`,
     `node: ${stackProfile.ecosystems.node.detected ? 'yes' : 'no'} (${node.leads} leads, ${node.files} production files; frameworks: ${stackProfile.ecosystems.node.frameworks.join(', ') || 'none'})`,
@@ -78,7 +82,7 @@ async function scan(target, outDir, noDeps) {
     '',
   ].join('\n');
   fs.writeFileSync(path.join(outDir, 'summary.md'), summary);
-  return { solana: solana.leads, near: near.leads, web: web.leads, python: python.leads, node: node.leads, stacks: stackProfile.detectedStacks };
+  return { solana: solana.leads, near: near.leads, evm: evm.leads, web: web.leads, python: python.leads, node: node.leads, stacks: stackProfile.detectedStacks };
 }
 
 function selfTest() {
@@ -86,6 +90,7 @@ function selfTest() {
   const fx = path.join(here, 'harness-fixtures');
   const solana = writeSolana(path.join(fx, 'solana'), ['Cargo.toml']);
   const near = writeNear(path.join(fx, 'near'), { detected: true, contracts: true, kinds: ['contract', 'client', 'intents', 'ai'], marks: ['Cargo.toml'] });
+  const evm = writeEvm(path.join(fx, 'evm'), { detected: true, contracts: true, kinds: ['client', 'contract'], tooling: ['foundry'], marks: ['foundry.toml'] });
   const web = writeWeb(path.join(fx, 'web'));
   const config = writeConfig(path.join(fx, 'config'));
   const python = writePython(path.join(fx, 'python'));
@@ -100,6 +105,8 @@ function selfTest() {
     ...SOLANA_PATTERNS.map((p) => [p.id, solana.body]),
     ...NEAR_CONTRACT_PATTERNS.map((p) => [p.id, near.body]),
     ...NEAR_CLIENT_PATTERNS.map((p) => [p.id, near.body]),
+    ...EVM_CONTRACT_PATTERNS.map((p) => [p.id, evm.body]),
+    ...EVM_CLIENT_PATTERNS.map((p) => [p.id, evm.body]),
     ['xss-html', web.body], ['command-exec', web.body], ['sql-template', web.body], ['yaml-load', web.body],
     ['pickle-loads', web.body], ['tls-verify-off', web.body], ['cors-star', web.body], ['jwt-none', web.body],
     ['cookie-no-httponly', web.body], ['message-listener', web.body], ['postmessage', web.body], ['private-key', web.body],
@@ -117,8 +124,8 @@ function selfTest() {
   for (const [id, body] of must) {
     const block = body.split(`## ${id} `)[1] || '';
     const until = block.split('\n## ')[0];
-    if (!until.includes('bad.rs') && !until.includes('bad.js') && !until.includes('bad.py') && !until.includes('bad.yml')) bad.push(`${id}: no bad-file hit`);
-    if (until.includes('good.rs') || until.includes('good.js') || until.includes('good.py') || until.includes('good.yml')) bad.push(`${id}: good file matched`);
+    if (!['bad.rs', 'bad.js', 'bad.py', 'bad.yml', 'bad.sol'].some((name) => until.includes(name))) bad.push(`${id}: no bad-file hit`);
+    if (['good.rs', 'good.js', 'good.py', 'good.yml', 'good.sol'].some((name) => until.includes(name))) bad.push(`${id}: good file matched`);
   }
   if (!plansMd.includes('[SCOPES_ROLES]') || !plansMd.includes('[ABUSE_ECONOMY]') || !plansMd.includes('[API_DTO_ABUSE]')) {
     bad.push('review-plans.md: missing cross-cutting plans');
@@ -147,7 +154,7 @@ else if (!args.target || !args.outDir) {
   process.exit(2);
 } else {
   scan(args.target, args.outDir, args.noDeps).then(
-    (r) => console.log(`harness: solana leads ${r.solana}, near leads ${r.near}, web leads ${r.web}, python leads ${r.python}, node leads ${r.node}, stacks [${(r.stacks || []).join(',')}] -> ${args.outDir}`),
+    (r) => console.log(`harness: solana leads ${r.solana}, near leads ${r.near}, evm leads ${r.evm}, web leads ${r.web}, python leads ${r.python}, node leads ${r.node}, stacks [${(r.stacks || []).join(',')}] -> ${args.outDir}`),
     (err) => { console.error(err.message || err); process.exit(1); },
   );
 }

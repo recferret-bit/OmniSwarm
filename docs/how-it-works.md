@@ -14,7 +14,7 @@ Before publishing `ready.json`, the parent removes the proxy and verifies that t
 
 ## Stack routing
 
-There is no chain flag. The harness writes `harness/stack-profile.json` from production manifests and production source. The profile records Python, Node/TypeScript, Rust, Solana, and NEAR. One repository can match several. Tests, docs, scripts, and fixtures do not decide the stack. Absent ecosystems receive no checks.
+There is no chain flag. The harness writes `harness/stack-profile.json` from production manifests and production source. The profile records Python, Node/TypeScript, Rust, Solana, NEAR, and EVM (Solidity or Vyper source, a Foundry, Hardhat or Truffle project, or an ethers/viem/wagmi/web3 client; contract tests are not run because the image carries no forge, hardhat or solc). One repository can match several. Tests, docs, scripts, and fixtures do not decide the stack. Absent ecosystems receive no checks.
 
 The profile also places every file in one of three review layers (`engine/scripts/harness-layers.mjs`): `web2` for application code, `web3` for contracts, programs and any file that imports a chain SDK or calls an injected wallet, and `infra` for Dockerfiles, compose and CI workflows, proxy configuration, Terraform and committed environment files. The stack says which languages are present; the layer says which part of the system a file is. Reviewer guidance is one block per layer, infra leads (`config.md`) go to the S4 and S5 reviewers, and each row of `findings-and-scores.json` carries the `layer` of the file it cites, which the HTML report can filter on.
 

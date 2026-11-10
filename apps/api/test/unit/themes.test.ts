@@ -72,3 +72,16 @@ test('root files are not themes, and each slice receives only the root files of 
   assert.deepEqual(rootOf('web3'), ['Anchor.toml', 'README.md', 'package.json', 'programs']);
   assert.deepEqual(rootOf('infra'), ['.env', 'Dockerfile', 'README.md', 'docker-compose.yml', 'infra', 'package.json']);
 });
+
+test('EVM projects are web3 themes, wherever they sit', () => {
+  assert.equal(themeOf('evm'), 'web3');
+  assert.equal(themeOf('solidity'), 'web3');
+  assert.equal(themeOf('evmos-docs-site'), 'apps');
+  const files = ['backend/onchain/foundry.toml', 'backend/onchain/src/Vault.sol', 'backend/src/index.ts', 'packages/hh/hardhat.config.ts', 'packages/hh/contracts/Token.sol', 'packages/ui/src/app.tsx'];
+  assert.deepEqual(partitionTree(files, 'web3'), [{ theme: 'web3', dirs: ['backend/onchain', 'packages/hh'] }]);
+  const apps = partitionTree(files, 'web2').find((slice) => slice.theme === 'apps');
+  assert.deepEqual(apps, { theme: 'apps', dirs: ['backend', 'packages'], exclude: ['backend/onchain', 'packages/hh'] });
+  assert.deepEqual(rootFileThemes('foundry.toml'), ['web3']);
+  assert.deepEqual(rootFileThemes('hardhat.config.ts'), ['web3']);
+  assert.equal(rootFileThemes('hardhat.md').length, 4);
+});

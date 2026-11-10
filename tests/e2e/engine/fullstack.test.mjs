@@ -64,12 +64,13 @@ test('the answer key follows the source and seeds every layer', () => {
   for (const rel of source) assert.doesNotMatch(fs.readFileSync(path.join(FIXTURE, rel), 'utf8'), /\b(?:BUG|VULN|FIXME|decoy|insecure|vulnerab)/i, rel);
 });
 
-test('stack routing finds the Node apps, the Solana program and the NEAR contract and client, and nothing else', () => {
+test('stack routing finds the Node apps, the Solana program, the NEAR and EVM contracts and clients, and nothing else', () => {
   const eco = detectEcosystems(FIXTURE);
   assert.deepEqual(eco.primary, ['node', 'rust']);
   assert.equal(eco.python.detected, false);
   assert.deepEqual(eco.solana.marks, ['Anchor.toml', 'programs/tip_vault/Cargo.toml']);
   assert.deepEqual(eco.near.kinds, ['client', 'contract']);
+  assert.deepEqual([eco.evm.contracts, eco.evm.kinds, eco.evm.tooling], [true, ['client', 'contract'], ['foundry']]);
   assert.equal(eco.near.contracts, true);
   for (const framework of ['express', 'near-api-js', 'solana-web3']) assert.ok(eco.node.frameworks.includes(framework), framework);
 });
@@ -78,7 +79,7 @@ test('every seeded row lands in the layer the answer key names', () => {
   const { layers } = harness().profile;
   assert.deepEqual(layers.present, LAYERS);
   for (const row of [...expected.bugs, ...expected.decoys]) assert.equal(layerOfPath(where(row), layers), row.layer, where(row));
-  assert.deepEqual(layers.roots.web3, ['contracts/tipjar', 'programs/tip_vault']);
+  assert.deepEqual(layers.roots.web3, ['contracts/evm', 'contracts/tipjar', 'programs/tip_vault']);
   // A backend file that signs chain transactions is web3; the rest of the backend is not.
   assert.equal(layerOfPath('backend/src/payout.js', layers), 'web3');
   assert.equal(layerOfPath('backend/src/auth.js', layers), 'web2');
@@ -87,7 +88,7 @@ test('every seeded row lands in the layer the answer key names', () => {
 test('the lead scan reaches each layer with its own lead file', () => {
   const { dir } = harness();
   const read = (name) => fs.readFileSync(path.join(dir, name), 'utf8');
-  const leadFiles = { web2: ['web.md', 'node.md', 'review-plans.md'], web3: ['solana.md', 'near.md', 'web.md', 'review-plans.md'], infra: ['config.md'] };
+  const leadFiles = { web2: ['web.md', 'node.md', 'review-plans.md'], web3: ['solana.md', 'near.md', 'evm.md', 'web.md', 'review-plans.md'], infra: ['config.md'] };
   // A lead within two lines of the seeded line points a reviewer at the same statement.
   const near = (row) => [-2, -1, 0, 1, 2].map((delta) => `${row.file}:${row.startLine + delta}`);
   const hit = (row) => leadFiles[row.layer].some((name) => near(row).some((cite) => new RegExp(`${cite.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(read(name))));

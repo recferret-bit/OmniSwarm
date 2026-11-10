@@ -37,7 +37,15 @@ const NODE_FRAMEWORKS = [
   ['near-connect', /["']@hot-labs\/near-connect["']/],
   ['near-intents', /["']@defuse-protocol\/(?:one-click-sdk-typescript|intents-sdk)["']|["']@near-intents-agent-api\/sdk["']/],
   ['near-ai', /["']@neardefi\/shade-agent-js["']|cloud-api\.near\.ai|["']near-ai-cloud["']/],
+  ['evm-client', /["'](?:ethers|viem|wagmi|web3|@wagmi\/core|@rainbow-me\/rainbowkit|@metamask\/sdk|@web3modal\/[\w-]+)["']/],
+  ['hardhat', /["'](?:hardhat|@nomicfoundation\/[\w-]+)["']/],
 ];
+
+// EVM: Solidity or Vyper source, a Foundry, Hardhat or Truffle project file, or a wallet/RPC client library.
+const EVM_PROJECT_FILE = /^(?:foundry\.toml|hardhat\.config\.[cm]?[jt]s|truffle-config\.js|remappings\.txt)$/;
+const EVM_CLIENT_DEP = /["'](?:ethers|viem|wagmi|web3|@wagmi\/core|@rainbow-me\/rainbowkit|@metamask\/sdk|@web3modal\/[\w-]+)["']\s*:/;
+// Foundry keeps dependencies (forge-std, OpenZeppelin) under lib/; they are vendored code, not the target's contracts.
+const EVM_VENDORED = /(?:^|\/)lib\//;
 
 function walk(root, onFile) {
   const stack = [root];
@@ -80,6 +88,7 @@ export function detectEcosystems(targetRoot) {
   const rust = { manifests: [], sourceFiles: 0 };
   const solana = { marks: [] };
   const near = { marks: [], kinds: new Set() };
+  const evm = { marks: [], kinds: new Set(), sourceFiles: 0, testFiles: 0, tooling: new Set() };
   const other = { go: 0, java: 0, ruby: 0, php: 0 };
   const markNear = (relPath, kinds) => {
     if (!kinds.length || !isProductionPath(relPath)) return;
@@ -107,6 +116,7 @@ export function detectEcosystems(targetRoot) {
       if (/["']@defuse-protocol\/(?:one-click-sdk-typescript|intents-sdk)["']|["']@near-intents-agent-api\/sdk["']/.test(text)) nearKinds.push('intents');
       if (/["']@neardefi\/shade-agent-js["']|cloud-api\.near\.ai|["']near-ai-cloud["']/.test(text)) nearKinds.push('ai');
       markNear(rel, nearKinds);
+      if (prod && EVM_CLIENT_DEP.test(text)) { evm.marks.push(rel); evm.kinds.add('client'); }
     } else if (['package-lock.json', 'yarn.lock', 'pnpm-lock.yaml'].includes(name)) node.lockfiles.push(rel);
     else if (name === 'Cargo.toml') {
       rust.manifests.push(rel);
@@ -115,12 +125,21 @@ export function detectEcosystems(targetRoot) {
       // docs.near.org/tools/sdk: the only official contract SDK is near-sdk-rs, crate near-sdk.
       if (isNearCargo(cargoInfo(root, file))) markNear(rel, ['contract']);
     } else if (name === 'Anchor.toml') solana.marks.push(rel);
+    else if (EVM_PROJECT_FILE.test(name) && prod && !EVM_VENDORED.test(rel)) {
+      evm.marks.push(rel);
+      evm.kinds.add('contract');
+      evm.tooling.add(name === 'foundry.toml' || name === 'remappings.txt' ? 'foundry' : name.startsWith('hardhat') ? 'hardhat' : 'truffle');
+    }
 
     if (ext === '.py') {
       if (prod) py.sourceFiles++; else py.testFiles++;
       if (/(?:^|\/)(?:test_[^/]*|[^/]*_test|conftest)\.py$/.test(rel)) py.pytestRoots.add(path.posix.dirname(rel));
     } else if (['.js', '.mjs', '.cjs', '.ts', '.tsx', '.jsx'].includes(ext)) { if (prod) node.sourceFiles++; else node.testFiles++; }
     else if (ext === '.rs') { if (prod) rust.sourceFiles++; }
+    else if ((ext === '.sol' || ext === '.vy') && !EVM_VENDORED.test(rel)) {
+      // Foundry tests and scripts are *.t.sol and *.s.sol; they never mark the stack.
+      if (prod && !/\.[ts]\.sol$/.test(name)) { evm.sourceFiles++; evm.kinds.add('contract'); if (evm.marks.length < 20) evm.marks.push(rel); } else evm.testFiles++;
+    }
     else if (ext === '.go') other.go++;
     else if (ext === '.java' || ext === '.kt') other.java++;
     else if (ext === '.rb') other.ruby++;
@@ -153,7 +172,16 @@ export function detectEcosystems(targetRoot) {
     marks: [...new Set(near.marks)].sort().slice(0, 20),
     kinds: [...near.kinds].sort(),
   };
-  const ecosystems = { python, node: nodeEco, rust: rustEco, solana: solanaEco, near: nearEco };
+  const evmEco = {
+    detected: evm.marks.length > 0,
+    contracts: evm.sourceFiles > 0,
+    sourceFiles: evm.sourceFiles,
+    testFiles: evm.testFiles,
+    marks: [...new Set(evm.marks)].sort().slice(0, 20),
+    kinds: [...evm.kinds].sort(),
+    tooling: [...evm.tooling].sort(),
+  };
+  const ecosystems = { python, node: nodeEco, rust: rustEco, solana: solanaEco, near: nearEco, evm: evmEco };
   const primary = Object.entries({ python: python.sourceFiles, node: nodeEco.sourceFiles, rust: rustEco.sourceFiles })
     .filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]).map(([id]) => id);
   return { ...ecosystems, primary, unsupported: Object.entries(other).filter(([, n]) => n).map(([id]) => id) };
@@ -226,6 +254,6 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const target = process.argv[2];
   if (!target) { process.stderr.write('usage: stack-detect.mjs <dir>\n'); process.exit(2); }
   const profile = detectEcosystems(target);
-  const names = ['near', 'node', 'rust', 'python', 'solana'].filter((name) => profile[name]?.detected);
+  const names = ['evm', 'near', 'node', 'rust', 'python', 'solana'].filter((name) => profile[name]?.detected);
   process.stdout.write(`${names.join(' + ') || 'none'}\n`);
 }

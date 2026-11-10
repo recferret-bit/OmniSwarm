@@ -25,7 +25,7 @@ The offline numbers measure the debate protocol (citation checks, the conformity
 
 ## fullstack-dapp
 
-`golden/fullstack-dapp/` is the one fixture that is a whole product instead of one stack: a static frontend with NEAR and Solana wallet flows, an Express backend, a NEAR contract, an Anchor program, and a Dockerfile, compose file, nginx config, committed environment file and deploy workflow. Every part is written badly on purpose. `expected.json` lists 53 seeded bugs and 12 decoys, each with its `layer` (`web2`, `web3` or `infra`, the same split as `engine/scripts/harness-layers.mjs`). The source carries no comment that marks a defect, so the tree can be handed to real reviewers.
+`golden/fullstack-dapp/` is the one fixture that is a whole product instead of one stack: a static frontend with NEAR, Solana and EVM wallet flows, an Express backend, a NEAR contract, an Anchor program, a Solidity vault (Foundry), and a Dockerfile, compose file, nginx config, committed environment file and deploy workflow. Every part is written badly on purpose. `expected.json` lists 66 seeded bugs and 14 decoys, each with its `layer` (`web2`, `web3` or `infra`, the same split as `engine/scripts/harness-layers.mjs`). The source carries no comment that marks a defect, so the tree can be handed to real reviewers.
 
 `tests/e2e/engine/fullstack.test.mjs` (`npm run check:fullstack`) drives the offline modes over it: stack routing, the layer map, the lead scan, the reviewer guidance, `--plan` for the local, hosted and demo presets, the intake's theme split, and a scripted review with the debate at 1, 2 and 3 rounds through to the HTML report.
 

@@ -19,7 +19,7 @@
 import path from 'node:path';
 import { detectEcosystems, isProductionPath } from './stack-detect.mjs';
 import { DOMAIN_SPECS, PYTHON_CHECKS, REVIEW_CHECKS } from './audit-plans-data-domains.mjs';
-import { INFRA_SURFACE, NEAR_CLIENT_SURFACE, NEAR_CONTRACT_SURFACE, NODE_SURFACE, PYTHON_SURFACE, SOLANA_SURFACE, SURFACE_TITLES, WALLET_SURFACE } from './audit-plans-data-surfaces.mjs';
+import { EVM_CONTRACT_SURFACE, INFRA_SURFACE, NEAR_CLIENT_SURFACE, NEAR_CONTRACT_SURFACE, NODE_SURFACE, PYTHON_SURFACE, SOLANA_SURFACE, SURFACE_TITLES, WALLET_SURFACE } from './audit-plans-data-surfaces.mjs';
 import { LAYERS, LAYER_TITLES, buildLayerMap, renderLayerLines, scopeNote } from './harness-layers.mjs';
 import { SKIP_DIRS as WALK_SKIP_DIRS, matchLines, readText, rel as relPath, walk } from './harness-walk.mjs';
 
@@ -133,6 +133,7 @@ function renderEcosystemLines(profile) {
     row('Rust', eco.rust),
     `- **Solana program**: ${eco.solana.detected ? `DETECTED (${eco.solana.marks.slice(0, 4).join(', ')})` : 'absent'}`,
     `- **NEAR**: ${eco.near?.detected ? `DETECTED (${eco.near.contracts ? 'near-sdk contract' : 'no near-sdk crate'}; ${(eco.near.kinds || []).join(', ') || 'no kind'}; ${(eco.near.marks || []).slice(0, 4).join(', ')})` : 'absent'}`,
+    `- **EVM**: ${eco.evm?.detected ? `DETECTED (${eco.evm.contracts ? `${eco.evm.sourceFiles} contract file(s)` : 'no contract source'}; ${(eco.evm.kinds || []).join(', ') || 'no kind'}; tooling ${(eco.evm.tooling || []).join(', ') || 'none'})` : 'absent'}`,
     `- Primary stack(s) by production source: ${eco.primary.join(', ') || 'none'}${eco.unsupported?.length ? `; no dedicated harness for: ${eco.unsupported.join(', ')}` : ''}`,
   ];
 }
@@ -207,7 +208,7 @@ export function renderSurfaceSkillGuidance(surfaceCode, profile, scope = '') {
   const nearClient = !eco || ['client', 'intents', 'ai'].some((kind) => nearKinds.has(kind));
   const [title, domains] = SURFACE_TITLES[code];
   const lines = [`### ${code} Skill Focus — ${title} (${domains})`];
-  if (eco) lines.push(`Detected stack: ${eco.primary.join(', ') || 'unknown'}${eco.python?.frameworks?.length ? ` (Python frameworks: ${eco.python.frameworks.join(', ')})` : ''}${eco.solana?.detected ? '; Solana program present' : ''}${eco.near?.detected ? `; NEAR (${eco.near.contracts ? 'contract' : 'no contract crate'}${eco.near.kinds?.length ? `: ${eco.near.kinds.join(', ')}` : ''})` : ''}. Do not apply checks for ecosystems that are absent.`);
+  if (eco) lines.push(`Detected stack: ${eco.primary.join(', ') || 'unknown'}${eco.python?.frameworks?.length ? ` (Python frameworks: ${eco.python.frameworks.join(', ')})` : ''}${eco.solana?.detected ? '; Solana program present' : ''}${eco.near?.detected ? `; NEAR (${eco.near.contracts ? 'contract' : 'no contract crate'}${eco.near.kinds?.length ? `: ${eco.near.kinds.join(', ')}` : ''})` : ''}${eco.evm?.detected ? `; EVM (${(eco.evm.kinds || []).join(', ')})` : ''}. Do not apply checks for ecosystems that are absent.`);
   // One block per layer, so application, on-chain and infrastructure checks are never read as one list.
   const layers = profile?.layers;
   const clientFiles = layers?.clientFiles?.length > 0;
@@ -217,7 +218,8 @@ export function renderSurfaceSkillGuidance(surfaceCode, profile, scope = '') {
       ...(want('solana') ? SOLANA_SURFACE[code] || [] : []),
       ...(want('near') && nearContract ? NEAR_CONTRACT_SURFACE[code] || [] : []),
       ...(want('near') && nearClient ? NEAR_CLIENT_SURFACE[code] || [] : []),
-      ...(!layers || clientFiles || eco?.solana?.detected || nearClient ? WALLET_SURFACE[code] || [] : []),
+      ...(!eco || eco.evm?.contracts ? EVM_CONTRACT_SURFACE[code] || [] : []),
+      ...(!layers || clientFiles || eco?.solana?.detected || nearClient || eco?.evm?.detected ? WALLET_SURFACE[code] || [] : []),
     ],
     infra: !layers || layers.counts?.infra > 0 ? INFRA_SURFACE[code] || [] : [],
   };

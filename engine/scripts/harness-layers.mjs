@@ -19,7 +19,8 @@ const INFRA_FILE = /(?:^|\/)(?:Dockerfile[^/]*|[^/]+\.dockerfile|(?:docker-)?com
 const INFRA_DIR = /(?:^|\/)(?:\.github|\.gitlab|\.circleci|infra|infrastructure|deploy|deployment|ops|devops|k8s|kubernetes|helm|charts|terraform|ansible|nginx)\//i;
 const CHAIN_SOURCE = /\.(?:sol|vy|move|cairo)$/i;
 const CHAIN_MANIFEST = /\b(?:anchor-lang|solana-program|solana-sdk|pinocchio|near-sdk)\b/;
-const CHAIN_PACKAGE = '(?:near-api-js|@near-js/[^\'"]+|@hot-labs/near-connect|@solana/[^\'"]+|@coral-xyz/[^\'"]+|@anchor-lang/[^\'"]+|@defuse-protocol/[^\'"]+|@near-intents-agent-api/sdk|@neardefi/shade-agent-js|ethers|viem|wagmi|web3)';
+const CHAIN_PROJECT_FILE = /^(?:Anchor\.toml|foundry\.toml|remappings\.txt|hardhat\.config\.[cm]?[jt]s|truffle-config\.js)$/;
+const CHAIN_PACKAGE = '(?:hardhat|@nomicfoundation/[^\'"]+|@openzeppelin/[^\'"]+|@wagmi/[^\'"]+|@rainbow-me/[^\'"]+|@metamask/[^\'"]+|@web3modal/[^\'"]+|near-api-js|@near-js/[^\'"]+|@hot-labs/near-connect|@solana/[^\'"]+|@coral-xyz/[^\'"]+|@anchor-lang/[^\'"]+|@defuse-protocol/[^\'"]+|@near-intents-agent-api/sdk|@neardefi/shade-agent-js|ethers|viem|wagmi|web3)';
 const CHAIN_IMPORT = new RegExp(`\\bfrom\\s+['"]${CHAIN_PACKAGE}['"]|\\b(?:require|import)\\s*\\(\\s*['"]${CHAIN_PACKAGE}['"]\\s*\\)|\\bwindow\\.(?:solana|ethereum|near)\\b`);
 const JS_EXT = new Set(['.js', '.mjs', '.cjs', '.ts', '.tsx', '.jsx', '.vue', '.svelte']);
 const ROOT_CRATE_FILE = /^(?:src\/.*\.rs|build\.rs|Cargo\.(?:toml|lock))$/;
@@ -34,7 +35,7 @@ function underRoot(rel, root) {
 export function layerOfPath(file, layers = null) {
   const rel = String(file || '').replace(/^\.?\//, '').replace(/:\d+(?:-\d+)?$/, '');
   if (INFRA_FILE.test(rel)) return 'infra';
-  if (CHAIN_SOURCE.test(rel) || path.posix.basename(rel) === 'Anchor.toml') return 'web3';
+  if (CHAIN_SOURCE.test(rel) || CHAIN_PROJECT_FILE.test(path.posix.basename(rel))) return 'web3';
   if ((layers?.roots?.web3 || []).some((root) => underRoot(rel, root))) return 'web3';
   if (INFRA_DIR.test(rel)) return 'infra';
   if ((layers?.clientFiles || []).includes(rel)) return 'web3';
@@ -52,6 +53,9 @@ export function buildLayerMap(targetRoot) {
     const base = path.basename(file);
     if (base === 'Cargo.toml') {
       if (CHAIN_MANIFEST.test(readText(file) || '')) chainRoots.add(path.posix.dirname(rel));
+    } else if (base === 'foundry.toml' || /^hardhat\.config\./.test(base) || base === 'truffle-config.js') {
+      // An EVM project directory is on-chain code: its contracts, tests, scripts and vendored libraries.
+      if (path.posix.dirname(rel) !== '.') chainRoots.add(path.posix.dirname(rel));
     } else if (JS_EXT.has(path.extname(file).toLowerCase()) && !file.endsWith('.min.js')) {
       if (CHAIN_IMPORT.test(readText(file) || '')) clientFiles.push(rel);
     }

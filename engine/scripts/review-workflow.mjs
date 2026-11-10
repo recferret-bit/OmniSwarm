@@ -42,6 +42,16 @@ const catalogEntry = (manifest, files, kind, cwd, file, description) => ({
   id: `test-${hash(`${manifest.digest}:${kind}:${cwd}`).slice(0, 24)}`, kind, cwd, files: [{ path: file, sha256: files.get(file).sha256 }], description,
 });
 
+// Hardhat and Truffle download a Solidity compiler and Foundry is not in the sandbox image: none is an offline suite.
+const EVM_TOOLING = /^(?:hardhat|truffle|@nomicfoundation\/.+|@nomiclabs\/.+)$/;
+export const evmTestGap = (cwd, tool) => `EVM contract tests in ${cwd} (${tool}) are not run: forge, hardhat and solc are not in the sandbox image and are not installed during a review.`;
+function evmNpmBlocked(pkg) {
+  const deps = { ...pkg.dependencies, ...pkg.devDependencies };
+  const dep = Object.keys(deps).find((name) => EVM_TOOLING.test(name));
+  if (dep) return dep;
+  return /\b(?:hardhat|forge|truffle)\b/.test(String(pkg.scripts?.test || '')) ? 'test script' : null;
+}
+
 const NEAR_NPM_NOT_OFFLINE = ['@defuse-protocol/one-click-sdk-typescript', '@defuse-protocol/intents-sdk', '@near-intents-agent-api/sdk'];
 const VENDORED_MANIFEST = /(?:^|\/)(?:node_modules|vendor|target|dist|build)\//;
 
@@ -73,7 +83,9 @@ export function buildExistingTestCatalog(snapshot, manifest) {
         const pkg = JSON.parse(fs.readFileSync(path.join(snapshot, file.path), 'utf8'));
         if (typeof pkg.scripts?.test === 'string') {
           const blocked = nearNpmBlocked(pkg);
+          const evmTool = evmNpmBlocked(pkg);
           if (blocked) coverageGaps.push(`NEAR package tests in ${cwd} (${blocked}) are not catalogued as an offline suite. Do not call 1Click, the Intents SDK, or the Intents agent API.`);
+          else if (evmTool) coverageGaps.push(evmTestGap(cwd, evmTool));
           else kind = 'npm';
         }
       } catch { /* malformed manifest is a review lead */ }
@@ -94,6 +106,8 @@ export function buildExistingTestCatalog(snapshot, manifest) {
           else for (const [build, label] of [['near-build', 'NEAR WASM build (cargo near build non-reproducible-wasm)'], ['near-clippy', 'NEAR clippy for wasm32-unknown-unknown']]) tests.push(catalogEntry(manifest, files, build, cwd, file.path, `${label} in ${cwd}`));
         }
       }
+    } else if (name === 'foundry.toml' && isProductionPath(file.path) && !VENDORED_MANIFEST.test(file.path) && !/(?:^|\/)lib\//.test(file.path)) {
+      coverageGaps.push(evmTestGap(cwd, 'foundry'));
     } else if (name === 'test.sh') kind = 'shell';
     if (!kind) continue;
     tests.push(catalogEntry(manifest, files, kind, cwd, file.path, `${kind} existing tests in ${cwd}`));

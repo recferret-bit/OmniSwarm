@@ -14,6 +14,8 @@ const APP = 'frontend/src/app.js';
 const W = 'frontend/src/wallet.js';
 const NEAR = 'contracts/tipjar/src/lib.rs';
 const SOL = 'programs/tip_vault/src/lib.rs';
+const EVM = 'contracts/evm/src/TipVault.sol';
+const EVMJS = 'frontend/src/evm.js';
 const CI = '.github/workflows/deploy.yml';
 
 // [file, needle, class, title, severity, layer, extra]
@@ -55,6 +57,19 @@ const BUGS = [
   [SOL, 'let fee = amount * vault.fee_bps / 10_000;', 'unchecked-arithmetic', 'withdraw fee math can overflow and underflow', 'medium', 'web3'],
   [SOL, "pub authority: AccountInfo<'info>,", 'missing-signer', 'withdraw authority is not a signer and is not bound to the vault', 'critical', 'web3'],
   [SOL, 'invoke(&ix, &[ctx.accounts.hook_program.clone()])?;', 'arbitrary-cpi', 'notify invokes a caller-chosen program', 'high', 'web3'],
+  [EVM, 'pragma solidity ^0.7.0;', 'compiler', 'floating pre-0.8 compiler: arithmetic is unchecked', 'medium', 'web3'],
+  [EVM, 'function initialize(address _owner, uint256 _feeBps) external {', 'unprotected-initializer', 'initialize can be called by anyone, at any time, to take ownership', 'critical', 'web3'],
+  [EVM, 'require(tx.origin == owner, "owner only");', 'tx-origin', 'setFeeCollector authorizes tx.origin', 'medium', 'web3', { missedBy: ['baseline'] }],
+  [EVM, 'uint256 fee = msg.value * feeBps / 10000;', 'unchecked-arithmetic', 'unbounded feeBps makes the tip subtraction underflow', 'medium', 'web3'],
+  [EVM, 'IERC20(token).transferFrom(msg.sender, address(this), amount);', 'unchecked-erc20', 'token tip ignores the transferFrom result and credits the requested amount', 'medium', 'web3'],
+  [EVM, '(bool ok, ) = msg.sender.call{value: amount}("");', 'reentrancy', 'withdraw sends ether before it debits the balance', 'critical', 'web3'],
+  [EVM, 'address signer = ecrecover(digest, v, r, s);', 'signature-replay', 'withdrawFor signature has no nonce, deadline or domain and pays whoever submits it', 'critical', 'web3'],
+  [EVM, 'balances[creator] -= amount;', 'unchecked-arithmetic', 'withdrawFor debits without a balance check and underflows', 'high', 'web3', { missedBy: ['paranoid'] }],
+  [EVM, '(bool ok, bytes memory result) = target.delegatecall(data);', 'delegatecall', 'execute delegatecalls an arbitrary target with the vault storage', 'high', 'web3'],
+  [EVM, 'selfdestruct(payable(feeCollector));', 'missing-access-control', 'destroy has no caller check', 'critical', 'web3'],
+  [EVMJS, "new Wallet('0x1111", 'key-custody', 'a relayer private key is embedded in the browser bundle', 'high', 'web3'],
+  [EVMJS, 'await erc20.approve(VAULT, MaxUint256);', 'unlimited-approval', 'token tip approves the vault for the whole balance', 'medium', 'web3'],
+  [EVMJS, "method: 'eth_sign'", 'blind-signing', 'login uses eth_sign on a server-supplied message', 'high', 'web3'],
   ['infra/Dockerfile', 'FROM node:18', 'container-base', 'end-of-life unpinned base image running as root', 'medium', 'infra'],
   ['infra/Dockerfile', 'curl -fsSL', 'curl-pipe-shell', 'image build pipes a remote script into bash', 'high', 'infra'],
   ['infra/Dockerfile', 'COPY infra/production.env', 'secret-in-image', 'production secrets are copied into the image', 'high', 'infra'],
@@ -84,6 +99,8 @@ const DECOYS = [
   [NEAR, 'self.fees = 0;', 'fees are zeroed before the transfer, behind one yocto and the owner check', 'collect_fees can be drained twice', 'web3'],
   [SOL, '#[account(mut, seeds = [b"vault", vault.authority.as_ref()], bump = vault.bump)]', 'the vault PDA is re-derived with the stored canonical bump', 'deposit accepts a forged vault account', 'web3'],
   [SOL, '#[account(mut, close = authority, has_one = authority', 'close requires has_one and a signing authority', 'anyone can close the vault', 'web3'],
+  [EVM, 'function withdrawToken(address token, uint256 amount) external nonReentrant {', 'the guard is set and the balance is debited before the token call', 'token withdraw is reentrant', 'web3'],
+  [EVM, 'require(msg.sender == pendingOwner, "not pending owner");', 'ownership transfer is two-step and only the pending owner can accept', 'anyone can accept ownership', 'web3'],
   ['infra/nginx.conf', 'allow 10.0.0.0/8;', 'the internal location is limited to the private range and denies the rest', 'internal location is public', 'infra'],
   ['infra/docker-compose.yml', 'image: nginx:1.27.2@sha256:', 'the proxy image is pinned by digest and read-only', 'proxy image follows a moving tag', 'infra'],
   [CI, 'actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a', 'the action is pinned to a commit', 'setup-node action is unpinned', 'infra'],

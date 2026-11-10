@@ -1,6 +1,6 @@
 # Golden eval
 
-Command: `npm run eval:golden` · date 2026-11-10 · commit fd80822
+Command: `npm run eval:golden` · date 2026-11-10 · commit 33e420b
 
 Reviewers: scripted:baseline, scripted:paranoid, scripted:wrong, scripted:lazy; judge scripted:judge. Cost: none (no model was called).
 
@@ -8,7 +8,7 @@ These are scripted reviewers whose answers derive from each repo's expected.json
 eval/panel.mjs, so the table measures the debate protocol (citation checks, conformity rule, evidence floor),
 not model skill. The live eval with real models (`OMNI_LIVE=1`) is pending.
 
-Default debate rounds: 2. debate precision 1 beats union 0.73 and majority 0.89; 1 seeded bug(s) lost against union (limit 1).
+Default debate rounds: 2. debate precision 1 beats union 0.75 and majority 0.91; 1 seeded bug(s) lost against union (limit 1).
 
 Union keeps every cluster. Majority keeps clusters reported by more than half of the reviewers that submitted
 a finding. debate-N keeps every cluster the N-round debate did not REFUTE; every cluster is debated (no cluster
@@ -16,8 +16,8 @@ cap), so the table measures the protocol and not the cap. Totals are micro-avera
 
 | repo | mode | recall | precision | decoy FP | dedup | conformity | cost USD |
 |---|---|---:|---:|---:|---:|---:|---:|
-| fullstack-dapp | union | 1 | 0.82 | 1 | 1 | 0 | 0 |
-| fullstack-dapp | majority | 0.91 | 0.98 | 0.08 | 1 | 0 | 0 |
+| fullstack-dapp | union | 1 | 0.83 | 1 | 1 | 0 | 0 |
+| fullstack-dapp | majority | 0.89 | 0.98 | 0.07 | 1 | 0 | 0 |
 | fullstack-dapp | debate-1 | 1 | 1 | 0 | 1 | 0 | 0 |
 | fullstack-dapp | debate-2 | 1 | 1 | 0 | 1 | 0.06 | 0 |
 | near-client | union | 1 | 0.5 | 1 | 1 | 0 | 0 |
@@ -44,7 +44,7 @@ cap), so the table measures the protocol and not the cap. Totals are micro-avera
 | ts-api | majority | 1 | 0.67 | 0.5 | 1 | 0 | 0 |
 | ts-api | debate-1 | 1 | 1 | 0 | 1 | 0 | 0 |
 | ts-api | debate-2 | 1 | 1 | 0 | 1 | 0.21 | 0 |
-| **total** | union | 1 | 0.73 | 1 | 1 | 0 | 0 |
-| **total** | majority | 0.86 | 0.89 | 0.29 | 1 | 0 | 0 |
-| **total** | debate-1 | 0.98 | 1 | 0 | 1 | 0 | 0 |
-| **total** | debate-2 | 0.98 | 1 | 0 | 1 | 0.11 | 0 |
+| **total** | union | 1 | 0.75 | 1 | 1 | 0 | 0 |
+| **total** | majority | 0.86 | 0.91 | 0.27 | 1 | 0 | 0 |
+| **total** | debate-1 | 0.99 | 1 | 0 | 1 | 0 | 0 |
+| **total** | debate-2 | 0.99 | 1 | 0 | 1 | 0.1 | 0 |

@@ -74,3 +74,15 @@ test('the plan lists the layers and the guidance shows only the layers that are 
   // With no profile every layer's guidance is shown.
   assert.match(renderSurfaceSkillGuidance('S4'), /#### Web2:[\s\S]+#### Web3:[\s\S]+#### Infra:/);
 });
+
+test('an EVM project directory and EVM wallet code are web3', () => {
+  const layers = buildLayerMap(tree({
+    'contracts/evm/foundry.toml': '[profile.default]\n', 'contracts/evm/src/Vault.sol': 'contract Vault {}\n', 'contracts/evm/test/Vault.t.sol': 'contract T {}\n',
+    'contracts/evm/package.json': '{}', 'web/src/evm.ts': "import { Contract } from 'ethers';\n", 'web/src/chain.ts': "import { createPublicClient } from 'viem';\n",
+    'web/src/page.tsx': 'export const Page = () => null;\n', 'hardhat.config.ts': 'export default {};\n', 'src/Token.sol': 'contract Token {}\n', 'src/server.ts': 'export {};\n',
+  }));
+  assert.deepEqual(layers.roots.web3, ['contracts/evm']);
+  for (const rel of ['contracts/evm/src/Vault.sol', 'contracts/evm/test/Vault.t.sol', 'contracts/evm/package.json', 'web/src/evm.ts', 'web/src/chain.ts', 'hardhat.config.ts', 'src/Token.sol']) assert.equal(layerOfPath(rel, layers), 'web3', rel);
+  // A root-level project file marks itself, not every file beside it.
+  for (const rel of ['web/src/page.tsx', 'src/server.ts']) assert.equal(layerOfPath(rel, layers), 'web2', rel);
+});

@@ -111,3 +111,41 @@ test('NEAR guidance includes callback receipt failure and bounded FT settlement'
   const guidance = renderSurfaceSkillGuidance('S3', analyzeStackAndPlans(root));
   for (const check of ['callback receipt itself fails', 'bound result bytes', 'settle once', 'receiver balance', 'stuck operations']) assert.ok(guidance.includes(check), check);
 });
+
+test('EVM is detected from production contract source, a project file or a client library', (t) => {
+  const foundry = detectEcosystems(tree(t, { 'foundry.toml': '[profile.default]\n', 'src/Vault.sol': 'contract Vault {}\n', 'test/Vault.t.sol': 'contract T {}\n', 'script/Deploy.s.sol': 'contract D {}\n', 'lib/forge-std/src/Test.sol': 'contract Test {}\n' })).evm;
+  assert.deepEqual([foundry.detected, foundry.contracts, foundry.sourceFiles, foundry.kinds, foundry.tooling], [true, true, 1, ['contract'], ['foundry']]);
+  assert.deepEqual(foundry.marks, ['foundry.toml', 'src/Vault.sol']);
+  const hardhat = detectEcosystems(tree(t, { 'hardhat.config.ts': 'export default {};\n', 'contracts/Token.sol': 'contract Token {}\n', 'package.json': '{"devDependencies":{"hardhat":"^2.22.0"}}' })).evm;
+  assert.deepEqual([hardhat.contracts, hardhat.tooling], [true, ['hardhat']]);
+  const vyper = detectEcosystems(tree(t, { 'contracts/Vault.vy': '# @version 0.4.0\n' })).evm;
+  assert.deepEqual([vyper.detected, vyper.contracts], [true, true]);
+  // A dApp front end with no contract source: client only.
+  const client = detectEcosystems(tree(t, { 'package.json': '{"dependencies":{"viem":"^2.0.0","wagmi":"^2.0.0"}}', 'src/app.ts': 'export {};\n' })).evm;
+  assert.deepEqual([client.detected, client.contracts, client.kinds], [true, false, ['client']]);
+});
+
+test('tests, scripts, vendored libraries and unrelated packages do not mark EVM', (t) => {
+  const absent = (files) => assert.equal(detectEcosystems(tree(t, files)).evm.detected, false, Object.keys(files).join(', '));
+  absent({ 'src/index.ts': 'export {};\n', 'package.json': '{"dependencies":{"express":"^4"}}' });
+  // Only test and script contracts, and a vendored library, with no project file.
+  absent({ 'test/Vault.t.sol': 'contract T {}\n', 'script/Deploy.s.sol': 'contract D {}\n', 'lib/openzeppelin/Ownable.sol': 'contract Ownable {}\n' });
+  // A project file or a client dependency that lives only under tests or examples.
+  absent({ 'examples/demo/foundry.toml': '', 'tests/e2e/package.json': '{"dependencies":{"ethers":"^6"}}' });
+  // A package whose name merely contains a library name, and a Rust file that mentions Solidity.
+  absent({ 'package.json': '{"dependencies":{"ethers-like-lib":"1.0.0","my-web3-helpers":"1.0.0"}}', 'src/lib.rs': '// pragma solidity ^0.8.0;\n' });
+  const eco = detectEcosystems(tree(t, { 'Cargo.toml': '[package]\nname = "c"\n[dependencies]\nnear-sdk = "5.1.0"\n', 'src/lib.rs': 'pub fn f() {}\n' }));
+  assert.deepEqual([eco.near.detected, eco.evm.detected], [true, false]);
+});
+
+test('EVM guidance and the EVM lead file appear only for an EVM target', (t) => {
+  const evm = analyzeStackAndPlans(tree(t, { 'foundry.toml': '', 'src/Vault.sol': 'pragma solidity ^0.8.0;\ncontract Vault { function f() external { require(tx.origin == msg.sender); } }\n' }));
+  const plain = analyzeStackAndPlans(tree(t, { 'src/server.js': "require('express')().get('/x', (req, res) => res.end());\n", 'package.json': '{"dependencies":{"express":"^4"}}' }));
+  for (const code of ['S1', 'S2', 'S3', 'S4', 'S5']) {
+    assert.match(renderSurfaceSkillGuidance(code, evm), /- EVM contract:/, code);
+    assert.doesNotMatch(renderSurfaceSkillGuidance(code, plain), /EVM/, code);
+  }
+  assert.doesNotMatch(renderSurfaceSkillGuidance('S3', evm), /Solana\/Anchor|NEAR contract|Python:/);
+  assert.equal(evm.layers.counts.web3, 2);
+  assert.deepEqual(evm.layers.present, ['web3']);
+});

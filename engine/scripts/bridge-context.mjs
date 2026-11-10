@@ -7,6 +7,7 @@ import { REVIEW_SCOPE } from './review-workflow.mjs';
 const LEAD_FILES = [
   ['solana.md', 'Solana Leads', 'Solana surface absent', null, ['web3']],
   ['near.md', 'NEAR Leads', 'NEAR surface absent', null, ['web3']],
+  ['evm.md', 'EVM Leads', 'EVM surface absent', null, ['web3']],
   ['python.md', 'Python Leads', 'Python surface absent', null, ['web2']],
   ['node.md', 'Node Leads', 'Node surface absent', null, ['web2']],
   ['web.md', 'Web Leads', 'Web surface absent', ['S1', 'S2', 'S6'], ['web2', 'web3']],

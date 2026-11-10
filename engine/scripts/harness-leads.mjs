@@ -1,9 +1,9 @@
-// The per-stack lead files (solana.md, near.md, web.md, python.md, node.md, config.md). Regex leads only, not findings.
+// The per-stack lead files (solana.md, near.md, evm.md, web.md, python.md, node.md, config.md). Regex leads only, not findings.
 import path from 'node:path';
 import { cargoInfo, isNearCargo, nearReleaseEvidence } from './cargo-manifest.mjs';
 import { isProductionPath } from './stack-detect.mjs';
 import { PER_PATTERN, walk, rel, readText, cookieLeads, collect, section } from './harness-walk.mjs';
-import { SOLANA_PATTERNS, NEAR_CONTRACT_PATTERNS, NEAR_CLIENT_PATTERNS } from './harness-patterns-chain.mjs';
+import { SOLANA_PATTERNS, NEAR_CONTRACT_PATTERNS, NEAR_CLIENT_PATTERNS, EVM_CONTRACT_PATTERNS, EVM_CLIENT_PATTERNS } from './harness-patterns-chain.mjs';
 import { WEB_PATTERNS, PY_PATTERNS, NODE_PATTERNS, CONFIG_PATTERNS, WEB_EXT } from './harness-patterns-app.mjs';
 
 export function solanaStack(root) {
@@ -117,6 +117,34 @@ export function writeNear(root, eco) {
     parts.join('\n'),
   ];
   return { leads: total, files, body: header.join('\n') };
+}
+
+// evm.md: Solidity/Vyper contract leads and wallet/RPC client leads. Foundry dependencies under lib/, tests
+// (*.t.sol, test/) and scripts (*.s.sol, script/) are not scanned.
+export function writeEvm(root, eco) {
+  const absent = '# EVM leads\n\nNo production Solidity or Vyper source, no Foundry, Hardhat or Truffle project, and no production manifest for ethers, viem, wagmi or web3. EVM surface absent.\n';
+  if (eco && !eco.detected) return { leads: 0, files: 0, body: absent };
+  const vendored = (name) => /(?:^|\/)lib\//.test(name);
+  const contracts = collect(root, (file, ext) => (ext === '.sol' || ext === '.vy') && !/\.[ts]\.sol$/.test(file) && isProductionPath(rel(root, file)) && !vendored(rel(root, file)), EVM_CONTRACT_PATTERNS);
+  const nodeExt = new Set(['.js', '.mjs', '.cjs', '.ts', '.tsx', '.jsx', '.vue', '.svelte']);
+  const clients = collect(root, (file, ext) => nodeExt.has(ext) && !file.endsWith('.min.js') && isProductionPath(rel(root, file)), EVM_CLIENT_PATTERNS);
+  const contractSection = section(EVM_CONTRACT_PATTERNS, contracts.found);
+  const clientSection = section(EVM_CLIENT_PATTERNS, clients.found);
+  if (!eco && !contracts.files && !clientSection.total) return { leads: 0, files: 0, body: absent };
+  const total = contractSection.total + clientSection.total;
+  const header = [
+    '# EVM leads',
+    '',
+    'Regex leads only. Not findings. Contract leads follow the SWC registry and the OWASP Smart Contract Top 10.',
+    'Grep cannot close: a function with no access modifier, a state update after an external call, price-oracle and flash-loan exposure, storage-layout collisions in a proxy, or rounding in share math. Those are a source read.',
+    'Do not contact an RPC, a block explorer or a deployed contract, and do not send a transaction. forge, hardhat and solc are not in the sandbox image: contract tests are not run and stay a coverage gap.',
+    `Kinds: ${(eco?.kinds || []).join(', ') || 'unspecified'}. Tooling: ${(eco?.tooling || []).join(', ') || 'none found'}. Marks: ${(eco?.marks || []).slice(0, 8).join(', ') || 'none'}.`,
+    `Contract files scanned: ${contracts.files}. Client files scanned: ${clients.files}. Leads listed: ${total} (capped at ${PER_PATTERN} per pattern).`,
+    '',
+    contractSection.body,
+    clientSection.body,
+  ];
+  return { leads: total, files: contracts.files + clients.files, body: header.join('\n') };
 }
 
 export function writeSolana(root, marks) {

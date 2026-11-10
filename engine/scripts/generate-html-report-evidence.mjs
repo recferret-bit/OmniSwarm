@@ -34,11 +34,13 @@ function sandboxDetails({ sandboxRows }) {
 
 function stackRows(eco, suiteRows, gapRows) {
   const near = eco.near;
+  const evm = eco.evm;
   return [
     ['Python', eco.python.detected, `${eco.python.sourceFiles} production files; ${eco.python.frameworks.join(', ') || 'no framework recognised'}${eco.python.declaredVersion ? `; declared Python ${eco.python.declaredVersion.version}` : ''}`, suiteRows(['pytest']), gapRows(/python-deps|osv-scanner|semgrep|pytest/)],
     ['Node / TypeScript', eco.node.detected, `${eco.node.sourceFiles} production files; ${eco.node.frameworks.join(', ') || 'no framework recognised'}`, suiteRows(['npm']), gapRows(/npm-audit|node-deps|npm existing/)],
     ['Solana program', eco.solana.detected, eco.solana.marks.join(', ') || 'none', suiteRows(['cargo']), [...gapRows(/cargo-audit|cargo existing/), 'Reproducible build and deployed-bytes comparison are outside this review by policy.']],
     ['NEAR', Boolean(near?.detected), !near?.detected ? 'absent' : `${near.contracts ? 'near-sdk contract' : 'no near-sdk crate'}; kinds ${(near.kinds || []).join(', ') || 'none'}; ${(near.marks || []).join(', ') || 'no manifest mark'}`, !near?.detected ? [] : near.contracts ? ['cargo test not run: local near-sandbox or testnet', ...suiteRows(['near-build', 'near-clippy'])] : suiteRows(['npm']), !near?.detected ? [] : [...gapRows(/NEAR|near-sandbox|cargo existing/), 'near-sandbox, cargo near reproducible-wasm, mainnet v1.signer reads, and deployed code-hash comparison are outside this offline review.']],
+    ['EVM', Boolean(evm?.detected), !evm?.detected ? 'absent' : `${evm.contracts ? `${evm.sourceFiles} contract file(s)` : 'no contract source'}; kinds ${(evm.kinds || []).join(', ') || 'none'}; tooling ${(evm.tooling || []).join(', ') || 'none'}`, !evm?.detected ? [] : evm.contracts ? ['contract tests not run: no forge, hardhat or solc in the sandbox'] : suiteRows(['npm']), !evm?.detected ? [] : [...gapRows(/EVM contract tests/), 'Deployed bytecode and on-chain state are outside this review by policy.']],
   ];
 }
 
