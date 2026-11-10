@@ -14,6 +14,7 @@
 | `golden/<repo>/` | One small repo per stack, with at least two seeded bugs and two decoys (code that looks vulnerable and is safe): `near-escrow` (Rust, `near-sdk`), `solana-vault` (Anchor), `ts-api` (Express + pg), `py-fastapi` (FastAPI), `near-client` (`near-api-js`), `rust-crate` (plain Rust), and `fullstack-dapp` (see below). |
 | `golden/<repo>/expected.json` | `bugs[]` and `decoys[]` with `file`, `startLine`, `endLine`; bugs carry `class`, `title`, `severity`, decoys `reason` and the plausible wrong `claim`. `missedBy` and `misjudgedBy` steer the scripted panel only. |
 | `build-expected.mjs` | Rebuilds `golden/fullstack-dapp/expected.json` from code needles, so its line numbers follow the source. `--check` fails when the file is stale. |
+| `score.mjs`, `live.mjs` | The live eval on `fullstack-dapp`. `npm run eval:live:prepare` copies the fixture without its answer key to `runs/live/<stamp>/target` and prints the review command; the operator starts the review (it calls their models). `npm run eval:live:score -- <report-dir>` scores the finished report: recall, decoys, per layer, per reviewer, severity, what was missed and what the debate lost. Rows that match nothing in the key are listed as unlisted, not counted as false positives. |
 | `validate.mjs` | Every range exists and is real code (not blank, not a lone brace); no two repos share source; at least six repos. |
 | `panel.mjs` | The offline panel: the W03 scripted strategies (`engine/scripts/scripted-strategies.mjs`) with answers derived from `expected.json` by one fixed policy. |
 | `metrics.mjs` | Recall, precision, decoy false-positive rate, dedup, conformity, and the OD-14 default-rounds rule. |
@@ -21,7 +22,7 @@
 | `results.mjs` | Keeps `RESULTS.md` deterministic: its date and commit are those of the run that last changed the numbers. |
 | `runs/` | Output, gitignored. `runs/last-run.json` holds the date and commit of the latest run. |
 
-The offline numbers measure the debate protocol (citation checks, the conformity rule, the evidence floor), not model skill: the scripted answers come from `expected.json`. A live eval with real models (`OMNI_LIVE=1`) is not built yet. When it is, its target must be a copy of the repo without `expected.json`.
+The offline numbers measure the debate protocol (citation checks, the conformity rule, the evidence floor), not model skill: the scripted answers come from `expected.json`. The live eval with real models is `live.mjs` (below); its target is a copy of the fixture without `expected.json`. It has not been run yet, so no live numbers are recorded.
 
 ## fullstack-dapp
 
@@ -29,4 +30,4 @@ The offline numbers measure the debate protocol (citation checks, the conformity
 
 `tests/e2e/engine/fullstack.test.mjs` (`npm run check:fullstack`) drives the offline modes over it: stack routing, the layer map, the lead scan, the reviewer guidance, `--plan` for the local, hosted and demo presets, the intake's theme split, and a scripted review with the debate at 1, 2 and 3 rounds through to the HTML report.
 
-It is inert: nothing in it is installed, built, deployed or run. The key-shaped strings are repeated digits, not keys. For a live review, copy the directory without `expected.json` and run `./bin/audit local --repo <copy>`.
+It is inert: nothing in it is installed, built, deployed or run. The key-shaped strings are repeated digits, not keys. For a live review use `npm run eval:live:prepare`, start the printed command, then `npm run eval:live:score -- <report-dir>`.
