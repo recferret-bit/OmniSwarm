@@ -18,6 +18,7 @@ import { callBridgeTool, resolveDockerBin } from './docker-mcp-bridge.mjs';
 import { readReportJson, writeReportFile } from './report-files.mjs';
 import { createSnapshot, disposeSnapshot } from './worker-isolation.mjs';
 import { HOST_DIR } from './sandbox-host-paths.mjs';
+import { createProgress } from './orchestrator-progress.mjs';
 import { runReviewSession } from './agent-session.mjs';
 import { REVIEW_WORKFLOW, buildExistingTestCatalog } from './review-workflow.mjs';
 import { families } from './reviewer-families.mjs';
@@ -133,7 +134,8 @@ function createRun(request, output, sealed, planned, options) {
     resumeRoot: request.resumeFrom ? fs.realpathSync(request.resumeFrom) : null,
     session: null, sandboxFailure: null,
   };
-  run.saveWorkers = () => writeReportFile(output, 'workers.json', JSON.stringify({ version: 1, policy: 'docker_mcp_bridge', sourceDigest: run.sourceDigest, jobs: run.jobs }, null, 2));
+  run.progress = createProgress({ output, jobs: planned.jobs, budgets: request.budgets || null, print: options.quietProgress ? null : (line) => console.log(line) });
+  run.saveWorkers = () => { run.progress.refresh(); return writeReportFile(output, 'workers.json', JSON.stringify({ version: 1, policy: 'docker_mcp_bridge', sourceDigest: run.sourceDigest, jobs: run.jobs }, null, 2)); };
   if (run.resumeRoot) {
     const neverStarted = assertResumable({ resumeRoot: run.resumeRoot, sourceDigest: run.sourceDigest, surfaceArg: run.surfaceArg, scope: run.scope, request, jobs: run.jobs });
     run.resume = { resumeRoot: run.resumeRoot, request, output, neverStarted, get session() { return run.session; } };
@@ -143,7 +145,7 @@ function createRun(request, output, sealed, planned, options) {
 }
 
 async function preparePhase(run) {
-  console.log('[1/4] Starting one-shot Docker sandbox and source scanners...');
+  console.log('      Starting one-shot Docker sandbox and source scanners...');
   const sealed = createSnapshot(run.request.target, { exclude: [run.output] });
   try {
     if (sealed.manifest.digest !== run.sourceDigest) throw new Error('Source changed before sandbox creation; start a new review');
@@ -185,6 +187,7 @@ function phaseContext(run, cleanupSignal) {
     request: run.request, output: run.output, reviewers: run.reviewers, jobs: run.jobs, assign: run.assign, budgets: run.budgets, surfaceArg: run.surfaceArg,
     stageFailures: run.stageFailures, providerFailures: run.providerFailures, workerExits: run.workerExits, crosscheckExits: run.crosscheckExits,
     cancellation: run.cancellation, get session() { return run.session; }, execute: run.execute,
+    progress: run.progress,
     fail(err) {
       run.stageFailures.push(`sandbox_or_orchestrator:${err.message}`);
       console.error(`Orchestrator error: ${err.message}`);
@@ -193,10 +196,26 @@ function phaseContext(run, cleanupSignal) {
       process.removeListener('SIGINT', cleanupSignal);
       process.removeListener('SIGTERM', cleanupSignal);
       if (!run.session) return;
-      console.log('[4/4] Stopping and removing one-shot Docker container and volumes...');
+      console.log('      Stopping and removing one-shot Docker container and volumes...');
       await run.session.stop();
     },
   };
+}
+
+// Each phase reports its start and end to the progress tracker. A stub phase, or a debate-family phase that had
+// nothing to do (no orchestrator), is shown as skipped rather than done.
+const DEBATE_PHASES = new Set(['debate', 'adjudicate', 'general-review']);
+export function trackPhases(phases, progress) {
+  return phases.map((phase) => ({
+    ...phase,
+    async run(ctx) {
+      if (phase.stub) { progress.phaseEnd(phase.name, 'skipped'); return phase.run(ctx); }
+      progress.phaseStart(phase.name);
+      try { await phase.run(ctx); }
+      catch (error) { progress.phaseEnd(phase.name, 'failed'); throw error; }
+      progress.phaseEnd(phase.name, DEBATE_PHASES.has(phase.name) && !ctx.debate ? 'skipped' : 'done');
+    },
+  }));
 }
 
 export async function runOrchestratedAudit(request, options = {}) {
@@ -209,8 +228,11 @@ export async function runOrchestratedAudit(request, options = {}) {
   process.on('SIGINT', cleanupSignal);
   process.on('SIGTERM', cleanupSignal);
   const builtin = { prepare: () => preparePhase(run), tests: () => testsPhase(run), review: () => reviewPhase(run), crosscheck: () => crosscheckPhase(run), report: async () => reportPhase(run) };
-  await runPhases(await loadPhases({ builtin, dir: options.phasesDir }), phaseContext(run, cleanupSignal));
-  return { stageFailures: run.stageFailures, output, cancelled: run.cancellation.signal.aborted && !run.sandboxFailure };
+  const ctx = phaseContext(run, cleanupSignal);
+  const outcome = await runPhases(trackPhases(await loadPhases({ builtin, dir: options.phasesDir }), run.progress), ctx);
+  const cancelled = run.cancellation.signal.aborted && !run.sandboxFailure;
+  run.progress.finish(cancelled ? 'cancelled' : outcome.failed ? 'failed' : run.stageFailures.length ? 'incomplete' : 'finished');
+  return { stageFailures: run.stageFailures, output, cancelled };
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

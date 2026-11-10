@@ -92,7 +92,7 @@ async function reviewJob(run, job) {
 }
 
 export async function reviewPhase(run) {
-  console.log(`[2/4] Running ${run.jobs.length} surface audit job(s) in parallel across [${run.request.agents.join(', ')}] via MCP bridge (one active job per provider)...`);
+  console.log(`      Running ${run.jobs.length} surface audit job(s) in parallel across [${run.request.agents.join(', ')}] via MCP bridge (one active job per provider)...`);
   await runProviderQueues(run.request.agents, run.jobs, async (job) => {
     if (skipJob(run, job)) { run.saveWorkers(); return; }
     try { await reviewJob(run, job); }
@@ -138,8 +138,18 @@ export async function crosscheckPhase(run) {
   fs.mkdirSync(path.join(run.output, 'crosscheck'), { recursive: true });
   const containerDir = path.join(run.session.hostRunDir, 'crosscheck');
   fs.mkdirSync(containerDir, { recursive: true });
-  console.log('[3/4] Running peer cross-checks in parallel via MCP bridge...');
+  console.log('      Running peer cross-checks in parallel via MCP bridge...');
+  const total = run.request.agents.length;
+  let done = 0;
+  run.progress?.counter('crosscheck', 0, total);
   await runProviderQueues(run.request.agents, run.request.agents.map((adapter) => ({ adapter })), async ({ adapter: agent }) => {
+    try { await crosscheckAgent(run, agent, allClaims, containerDir); }
+    finally { done += 1; run.progress?.counter('crosscheck', done, total); }
+  });
+}
+
+async function crosscheckAgent(run, agent, allClaims, containerDir) {
+  {
     if (run.cancellation.signal.aborted) return;
     if (run.providerFailures[agent]) { run.crosscheckExits[agent] = 1; run.stageFailures.push(`crosscheck_deferred:${agent}`); return; }
     const inbox = peerClaims(allClaims, run.reviewerById.get(agent));
@@ -151,7 +161,7 @@ export async function crosscheckPhase(run) {
       run.stageFailures.push(`crosscheck_error:${agent}`);
       console.error(`  <- [crosscheck-${agent}] error: ${err.message}`);
     }
-  });
+  }
 }
 
 // Workers and served models are copied into meta.reviewers so per-reviewer reports can show them (W03-10).

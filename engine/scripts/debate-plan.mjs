@@ -117,6 +117,7 @@ export function debatePlan(ctx, env = process.env) {
     rounds: debate.rounds, maxClusters: debate.maxClusters, turnMs: debate.turnMs, phaseMs: debate.phaseMs,
     signal: ctx.cancellation?.signal, seed: 1,
     prior: crosscheckPrior(ctx.output, reader),
+    onProgress: ctx.progress ? (name, done, total) => ctx.progress.counter(name, done, total) : null,
     vendors: new Map(reviewers.map((r) => [r.id, r.vendor])),
     voices: voicesFor(reviewers, { claims, controls, reader, bridge: ctx, budget: debate.toolBudget }),
     judgeVoice: (choice) => bridgeJudge(ctx, choice.reviewer, debate.toolBudget),

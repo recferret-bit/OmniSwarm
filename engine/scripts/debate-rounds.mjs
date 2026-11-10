@@ -107,7 +107,7 @@ async function debateCluster(cluster, participants, ctx, seed) {
 // judgeOf(cluster): the id of the reviewer that will judge the cluster, or null (rules judge, or none).
 // prior(cluster, reviewerId): that reviewer's cross-check answer as a raw round-1 turn, or null.
 // Clusters still QUEUED when the phase clock expires or threshold is reached are returned as `skipped` and are not spoken.
-export async function runRounds({ out, clusters, voices, vendors, reader, rounds = 2, seed = 1, names = [], turnMs = DEFAULTS.debate.turnMs, phaseMs = DEFAULTS.debate.phaseMs, maxUnanswered = DEFAULT_MAX_UNANSWERED, maxSpeakerUnanswered = Math.min(3, maxUnanswered), now = Date.now, signal, judgeOf = null, prior = null } = {}) {
+export async function runRounds({ out, clusters, voices, vendors, reader, rounds = 2, seed = 1, names = [], turnMs = DEFAULTS.debate.turnMs, phaseMs = DEFAULTS.debate.phaseMs, maxUnanswered = DEFAULT_MAX_UNANSWERED, maxSpeakerUnanswered = Math.min(3, maxUnanswered), now = Date.now, signal, judgeOf = null, prior = null, onCluster = null } = {}) {
   const record = { citations: [], trace: [], gaps: [] };
   const participants = [...voices.keys()];
   const started = now();
@@ -116,7 +116,10 @@ export async function runRounds({ out, clusters, voices, vendors, reader, rounds
   const skippedReasons = new Map();
   const debated = new Map();
   const anonymization = { seed, clusters: {} };
-  for (const cluster of clusters.filter((row) => row.status === 'QUEUED')) {
+  const queued = clusters.filter((row) => row.status === 'QUEUED');
+  let heard = 0;
+  onCluster?.(0, queued.length);
+  for (const cluster of queued) {
     const challengers = participants.filter((id) => !cluster.authors.includes(id));
     const allChallengersDown = challengers.length > 0 && challengers.every((id) => (ctx.speakerUnanswered.get(id) || 0) >= maxSpeakerUnanswered);
     const skipReason = signal?.aborted
@@ -135,6 +138,8 @@ export async function runRounds({ out, clusters, voices, vendors, reader, rounds
     const result = await debateCluster(cluster, participants, ctx, seed);
     debated.set(cluster.id, result);
     anonymization.clusters[cluster.id] = result.map;
+    heard += 1;
+    onCluster?.(heard, queued.length);
   }
   return { debated, anonymization, skipped, skippedReasons, ...record };
 }

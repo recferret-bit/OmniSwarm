@@ -36,6 +36,7 @@ export async function debateStage(plan) {
     ...(plan.maxSpeakerUnanswered != null ? { maxSpeakerUnanswered: plan.maxSpeakerUnanswered } : {}),
     now: plan.now, signal: plan.signal,
     prior: plan.prior || null,
+    onCluster: plan.onProgress ? (done, total) => plan.onProgress('debate', done, total) : null,
     judgeOf: (cluster) => { const choice = pickJudge(cluster, plan); return choice && !choice.rules ? choice.reviewer.id : null; },
   });
   const unheard = new Set(result.skipped);
@@ -57,7 +58,10 @@ export async function adjudicateStage(plan, state) {
   const gaps = [];
   const maxUnavailable = plan.maxJudgeUnavailable ?? DEFAULT_MAX_JUDGE_UNAVAILABLE;
   let consecutiveUnavailable = 0;
+  const toJudge = state.clusters.length;
+  plan.onProgress?.('adjudicate', 0, toJudge);
   for (const cluster of state.clusters) {
+    plan.onProgress?.('adjudicate', rows.length, toJudge);
     if (cluster.status === 'CAPPED') {
       // Not debated, but not dropped: the citation rules give it a status so the risk posture still counts it.
       const row = unheardAdjudication(cluster, 'debate_cap');
@@ -100,6 +104,7 @@ export async function adjudicateStage(plan, state) {
     }
     state.trace.push(...judged.trace);
   }
+  plan.onProgress?.('adjudicate', rows.length, toJudge);
   writeJson(plan.out, 'debate/adjudication.json', rows);
   writeTrace(plan.out, state.trace);
   return { ...state, rows, missing: [...state.gaps, ...gaps] };

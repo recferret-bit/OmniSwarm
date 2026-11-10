@@ -8,14 +8,24 @@ import { writeReportFile } from './report-files.mjs';
 import { REVIEW_WORKFLOW } from './review-workflow.mjs';
 import { families } from './reviewer-families.mjs';
 import { resumeSession } from './orchestrator-resume.mjs';
+import { STALL_MS } from './orchestrator-progress.mjs';
 
-export function heartbeatReporter(output, name) {
+// The per-session heartbeat line. With the live status line (orchestrator-progress.mjs) printing the run as a
+// whole, a session's own line is printed only while it has had no agent activity for STALL_MS, so a stalled
+// provider stays visible without thirty-second lines from every healthy session. The heartbeat file is always written.
+export function heartbeatReporter(output, name, { quiet = false } = {}) {
   return (status) => {
     const idle = status.agentIdleMs == null ? 'none yet' : `${Math.floor(status.agentIdleMs / 1000)}s ago`;
-    console.log(`     [${name}] heartbeat: ${status.phase}; running ${Math.floor(status.elapsedMs / 1000)}s; last agent activity ${idle}; each pass is bounded by its tool budget.`);
+    if (!quiet || (status.agentIdleMs ?? 0) >= STALL_MS) console.log(`     [${name}] heartbeat: ${status.phase}; running ${Math.floor(status.elapsedMs / 1000)}s; last agent activity ${idle}; each pass is bounded by its tool budget.`);
     try { writeReportFile(output, `harness/heartbeat-${name}.json`, `${JSON.stringify({ state: 'running', at: new Date().toISOString(), ...status })}\n`); }
     catch { console.error(`     [${name}] heartbeat record could not be saved; review continues.`); }
   };
+}
+
+// The heartbeat also feeds the live progress snapshot (last agent activity per session).
+function withProgress(report, progress, name) {
+  if (!progress) return report;
+  return (status) => { report(status); progress.activity(name, status); };
 }
 
 function bridgeArguments(run, { role, agent, name, surface, identityFile, pass, toolBudget }) {
@@ -86,7 +96,7 @@ export function createExecute(run) {
     try {
       const result = await run.review({
         directory: plan.directory, identity, bridgeArgs, prompt: plan.prompt, logFile, resume: resuming,
-        budgets: sessionBudgets, prices: run.prices, signal: linked.signal, onProgress: heartbeatReporter(run.output, name),
+        budgets: sessionBudgets, prices: run.prices, signal: linked.signal, onProgress: withProgress(heartbeatReporter(run.output, name, { quiet: Boolean(run.progress) }), run.progress, name),
       });
       return { ...recordExit(run.output, name, result), identity, ...(plan.restartedFrom ? { restartedFrom: plan.restartedFrom } : {}) };
     } finally {

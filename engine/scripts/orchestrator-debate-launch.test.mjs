@@ -100,6 +100,13 @@ test('debate turns, the judge and the general review launch through the bridge; 
   // Debate sessions never draw on (or get blocked by) a reviewer's per-pass budget. Only they used the real
   // bridge here, so no per-pass budget file exists at all.
   for (const id of [QWEN.id, JUDGE.id]) assert.equal(fs.existsSync(path.join(out, 'harness', `budget-${id}.json`)), false, id);
+  // The live progress snapshot ends finished at 100%, with every phase accounted for and the debate counted.
+  const progress = readReportJson(out, 'harness/host/progress.json');
+  assert.deepEqual([progress.state, progress.percent, progress.phase], ['finished', 100, 'report']);
+  assert.deepEqual(progress.phases.map((row) => [row.name, row.state]), [['prepare', 'done'], ['tests', 'done'], ['review', 'done'], ['crosscheck', 'done'], ['debate', 'done'], ['adjudicate', 'done'], ['general-review', 'done'], ['report', 'done']]);
+  assert.deepEqual(progress.debate, { clusters: 1, heard: 1, judged: 1, toJudge: 1 });
+  assert.deepEqual(progress.crosscheck, { done: 2, total: 2 });
+  assert.deepEqual(progress.reviewers.map((row) => [row.id, row.state, row.jobsDone, row.jobs]), [[ZAI.id, 'done', 1, 1], [QWEN.id, 'done', 1, 1]]);
 });
 
 test('the bridge admits a judge only in the orchestrator role, under its own session names', async (t) => {
@@ -140,6 +147,10 @@ test('a crosscheck missing_report failure does not poison providerFailures or bl
   const result = await runOrchestratedAudit(f.request, { review, startSandbox: f.startSandbox });
   assert.deepEqual(result.stageFailures, [`crosscheck_error:${QWEN.id}`]);
   const out = f.request.out;
+  // A run with a stage failure finishes its report but is not shown as done.
+  const progress = readReportJson(out, 'harness/host/progress.json');
+  assert.equal(progress.state, 'incomplete');
+  assert.ok(progress.percent < 100);
   const meta = readReportJson(out, 'meta.json');
   assert.equal(meta.crosscheckExits[QWEN.id], 1);
   assert.deepEqual(meta.providerFailures, {}, 'missing_report on crosscheck must not poison providerFailures');
