@@ -50,14 +50,21 @@ test('agreement skips the debate only when two vendors report the same defect on
 });
 
 test('claims that only sit close together are merged but still debated', () => {
-  // Nearby lines, no line in common: one cluster for the report, no agreement.
-  assert.deepEqual(statusOf([wide('alice', 'anthropic', 'Withdraw has no owner comparison', 10), wide('bob', 'openai', 'Withdraw has no owner comparison', 12)]), ['QUEUED', 'merged_only']);
+  // Adjacent lines with unrelated titles: merged for the report (cluster-findings sameSite), not an agreement.
+  assert.deepEqual(statusOf([wide('alice', 'anthropic', 'Payout races the balance update', 10, { surface: 'S3' }), wide('bob', 'openai', 'Destination account is caller supplied', 11, { surface: 'S2' })]), ['QUEUED', 'merged_only']);
   // The same statement, two different defects (different surface, unrelated titles).
   assert.deepEqual(statusOf([wide('alice', 'anthropic', 'Payout races the balance update', 10, { surface: 'S3' }), wide('bob', 'openai', 'Destination account is caller supplied', 10, { surface: 'S2' })]), ['QUEUED', 'merged_only']);
   // Two reviewers of one vendor agreeing with each other is not agreement.
   assert.deepEqual(statusOf([wide('alice', 'anthropic', 'Withdraw has no owner comparison', 10), wide('amy', 'anthropic', 'Withdraw has no owner comparison', 10)]), ['QUEUED', 'single_vendor']);
   // The same defect on a line that is not in the snapshot.
   assert.deepEqual(statusOf([wide('alice', 'anthropic', 'Withdraw has no owner comparison', 99), wide('bob', 'openai', 'Withdraw has no owner comparison', 99)]), ['QUEUED', 'same_claim']);
+});
+
+test('the same subject two lines apart is agreement; the same title three lines apart too; four lines apart is two clusters', () => {
+  assert.deepEqual(statusOf([wide('alice', 'anthropic', 'Withdraw has no owner comparison', 10), wide('bob', 'openai', 'Withdraw has no owner comparison', 12)]), ['AGREED', 'same_claim']);
+  assert.deepEqual(statusOf([wide('alice', 'anthropic', 'Withdraw has no owner comparison', 10), wide('bob', 'openai', 'No owner comparison in withdraw', 13)]), ['AGREED', 'same_claim']);
+  const far = buildClusters([wide('alice', 'anthropic', 'Withdraw has no owner comparison', 10), wide('bob', 'openai', 'Withdraw has no owner comparison', 40)], { reader: two });
+  assert.equal(far.clusters.length, 2);
 });
 
 test('sameDefect needs a shared line and a shared subject', () => {

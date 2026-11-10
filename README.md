@@ -257,7 +257,7 @@ Default debate rounds: 2. debate precision 1 beats union 0.76 and majority 0.92;
 | mode | recall | precision | decoy FP | dedup | conformity | cost USD |
 |---|---:|---:|---:|---:|---:|---:|
 | union | 1 | 0.76 | 1 | 1 | 0 | 0 |
-| majority | 0.86 | 0.92 | 0.25 | 1 | 0 | 0 |
+| majority | 0.87 | 0.92 | 0.25 | 1 | 0 | 0 |
 | debate-1 | 0.99 | 1 | 0 | 1 | 0 | 0 |
 | debate-2 | 0.99 | 1 | 0 | 1 | 0.09 | 0 |
 <!-- eval-table:end -->

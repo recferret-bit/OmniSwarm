@@ -18,7 +18,7 @@ import { callBridgeTool, resolveDockerBin } from './docker-mcp-bridge.mjs';
 import { readReportJson, writeReportFile } from './report-files.mjs';
 import { createSnapshot, disposeSnapshot } from './worker-isolation.mjs';
 import { HOST_DIR } from './sandbox-host-paths.mjs';
-import { createProgress } from './orchestrator-progress.mjs';
+import { createProgress, createSticky } from './orchestrator-progress.mjs';
 import { runReviewSession } from './agent-session.mjs';
 import { REVIEW_WORKFLOW, buildExistingTestCatalog } from './review-workflow.mjs';
 import { families } from './reviewer-families.mjs';
@@ -134,7 +134,11 @@ function createRun(request, output, sealed, planned, options) {
     resumeRoot: request.resumeFrom ? fs.realpathSync(request.resumeFrom) : null,
     session: null, sandboxFailure: null,
   };
-  run.progress = createProgress({ output, jobs: planned.jobs, budgets: request.budgets || null, print: options.quietProgress ? null : (line) => console.log(line) });
+  run.progress = createProgress({
+    output, jobs: planned.jobs, budgets: request.budgets || null, print: options.quietProgress ? null : (line) => console.log(line),
+    // On a terminal the status is one sticky last row; elsewhere (a log file, the intake worker) it is lines.
+    sticky: options.quietProgress ? null : createSticky(),
+  });
   run.saveWorkers = () => { run.progress.refresh(); return writeReportFile(output, 'workers.json', JSON.stringify({ version: 1, policy: 'docker_mcp_bridge', sourceDigest: run.sourceDigest, jobs: run.jobs }, null, 2)); };
   if (run.resumeRoot) {
     const neverStarted = assertResumable({ resumeRoot: run.resumeRoot, sourceDigest: run.sourceDigest, surfaceArg: run.surfaceArg, scope: run.scope, request, jobs: run.jobs });
@@ -222,17 +226,24 @@ export async function runOrchestratedAudit(request, options = {}) {
   const output = assertRequest(request);
   const sealed = sealSource(request, output);
   const run = createRun(request, output, sealed, planJobs(request), options);
-  for (const dir of ['sessions', HOST_DIR, 'harness/identities', 'harness/assignments']) fs.mkdirSync(path.join(output, dir), { recursive: true, mode: 0o700 });
-  writeInitialRecords(run);
-  const cleanupSignal = () => { run.cancellation.abort(); };
-  process.on('SIGINT', cleanupSignal);
-  process.on('SIGTERM', cleanupSignal);
-  const builtin = { prepare: () => preparePhase(run), tests: () => testsPhase(run), review: () => reviewPhase(run), crosscheck: () => crosscheckPhase(run), report: async () => reportPhase(run) };
-  const ctx = phaseContext(run, cleanupSignal);
-  const outcome = await runPhases(trackPhases(await loadPhases({ builtin, dir: options.phasesDir }), run.progress), ctx);
-  const cancelled = run.cancellation.signal.aborted && !run.sandboxFailure;
-  run.progress.finish(cancelled ? 'cancelled' : outcome.failed ? 'failed' : run.stageFailures.length ? 'incomplete' : 'finished');
-  return { stageFailures: run.stageFailures, output, cancelled };
+  // Whatever happens below, the status line is released and the snapshot records how the run ended.
+  let finished = false;
+  try {
+    for (const dir of ['sessions', HOST_DIR, 'harness/identities', 'harness/assignments']) fs.mkdirSync(path.join(output, dir), { recursive: true, mode: 0o700 });
+    writeInitialRecords(run);
+    const cleanupSignal = () => { run.cancellation.abort(); };
+    process.on('SIGINT', cleanupSignal);
+    process.on('SIGTERM', cleanupSignal);
+    const builtin = { prepare: () => preparePhase(run), tests: () => testsPhase(run), review: () => reviewPhase(run), crosscheck: () => crosscheckPhase(run), report: async () => reportPhase(run) };
+    const ctx = phaseContext(run, cleanupSignal);
+    const outcome = await runPhases(trackPhases(await loadPhases({ builtin, dir: options.phasesDir }), run.progress), ctx);
+    const cancelled = run.cancellation.signal.aborted && !run.sandboxFailure;
+    run.progress.finish(cancelled ? 'cancelled' : outcome.failed ? 'failed' : run.stageFailures.length ? 'incomplete' : 'finished');
+    finished = true;
+    return { stageFailures: run.stageFailures, output, cancelled };
+  } finally {
+    if (!finished) run.progress.finish('failed');
+  }
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

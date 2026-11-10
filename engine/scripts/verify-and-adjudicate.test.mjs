@@ -131,16 +131,24 @@ test('a review by a reviewer of the author\'s own vendor is ignored, whatever th
   assert.deepEqual(row.vendors, ['anthropic']);
 });
 
-test('two vendors whose claims only merged on nearby lines are not MODEL_AGREEMENT', async (t) => {
-  // Structural merge: both cite two files within three lines of each other, with no line in common.
+test('two vendors whose claims only merged on adjacent lines are not MODEL_AGREEMENT', async (t) => {
+  // Same file, neighbouring lines, unrelated titles: one cluster for the report (sameSite), no agreement.
   const f = fixture(t, ['claude', 'codex']);
-  f.save('claude', [finding({ title: 'Payout races the balance update', location: ['src/pay.ts:10', 'src/ledger.ts:20'] }), controls()]);
-  f.save('codex', [finding({ title: 'Payout races the balance update', location: ['src/pay.ts:12', 'src/ledger.ts:22'] }), controls()]);
+  f.save('claude', [finding({ title: 'Payout races the balance update', location: ['src/pay.ts:10'] }), controls()]);
+  f.save('codex', [finding({ title: 'Destination account is caller supplied', location: ['src/pay.ts:11'] }), controls()]);
   f.cross(() => 'upheld');
   const [row, ...rest] = (await adjudicate(f.dir)).scoredFindings;
   assert.equal(rest.length, 0, 'one merged cluster');
   assert.deepEqual(row.vendors.sort(), ['anthropic', 'openai']);
   assert.notEqual(row.status, 'MODEL_AGREEMENT');
+});
+
+test('two vendors on one subject two lines apart are one cluster and MODEL_AGREEMENT', async (t) => {
+  const f = fixture(t, ['claude', 'codex']);
+  f.save('claude', [finding({ title: 'Payout races the balance update', location: ['src/pay.ts:10'] }), controls()]);
+  f.save('codex', [finding({ title: 'Balance update races the payout', location: ['src/pay.ts:12'] }), controls()]);
+  const rows = (await adjudicate(f.dir)).scoredFindings;
+  assert.deepEqual(rows.map((row) => row.status), ['MODEL_AGREEMENT']);
 });
 
 test('two vendors on the same line and surface are MODEL_AGREEMENT whatever their wording', async (t) => {

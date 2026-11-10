@@ -101,6 +101,7 @@ export function createExecute(run) {
       return { ...recordExit(run.output, name, result), identity, ...(plan.restartedFrom ? { restartedFrom: plan.restartedFrom } : {}) };
     } finally {
       linked.stop();
+      run.progress?.sessionEnd(name);
     }
   };
 }

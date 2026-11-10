@@ -45,7 +45,9 @@ export async function debateStage(plan) {
     return result.debated.has(row.id) ? { ...row, rounds: result.debated.get(row.id).rounds } : row;
   });
   // Phase-clock or threshold skips are coverage gaps. They stay out of `gaps`, which is the missing-answer list.
-  const coverageGaps = [...built.coverageGaps, ...result.skipped.map((clusterId) => ({ clusterId, reason: result.skippedReasons?.get(clusterId) || 'debate_time' }))];
+  // Advisory turns that never arrived (devil's advocate) are coverage gaps, one per cluster and reason.
+  const advisory = [...new Map(result.advisory.map((gap) => [`${gap.clusterId}:${gap.reason}`, { clusterId: gap.clusterId, reason: gap.reason }])).values()];
+  const coverageGaps = [...built.coverageGaps, ...advisory, ...result.skipped.map((clusterId) => ({ clusterId, reason: result.skippedReasons?.get(clusterId) || 'debate_time' }))];
   writeJson(plan.out, 'debate/clusters.json', { clusters, coverageGaps });
   writeJson(plan.out, 'debate/anonymization.json', result.anonymization);
   writeJson(plan.out, 'debate/citations.json', result.citations);

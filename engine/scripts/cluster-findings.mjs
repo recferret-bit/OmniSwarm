@@ -7,13 +7,28 @@
  *    with lines within LINE_TOLERANCE of each other. Surface is ignored: public endpoints and
  *    error messages are reachable from several surfaces, so independent auditors report them twice.
  *
- * One shared file is deliberately not enough. Controllers, error mappers and config files are
- * touched by unrelated claims, and single-link merging on them chains separate issues together.
+ *  - same site: different auditors whose first (sink) locations are in one file on adjacent lines (SITE_ADJACENT),
+ *    or within LINE_TOLERANCE when their titles share at least SITE_MIN_WORDS significant words (see sameSite). Models are told to cite one
+ *    `file:line` per finding, so the same defect from three models arrives as three single-location claims with
+ *    different titles; without this rule they never meet. Measured on a live three-model run of the golden
+ *    fullstack fixture (160 claims, 52 seeded bugs): the exact and two-file rules alone left 160 clusters, 2.6 per
+ *    bug; with this rule 69 clusters, 48 of 52 bugs in one cluster and none mixing two seeded bugs. One run on one
+ *    fixture: re-measure after changing it (engine/eval/live.mjs score prints rows per reported bug and rows that cite more than one seeded bug).
+ *
+ * A single shared file is otherwise not enough. Controllers, error mappers and config files are touched by
+ * unrelated claims, and single-link merging on them chains separate issues together.
  * Same-auditor claims never merge structurally: an auditor that split two findings meant them apart.
  */
 
 export const LINE_TOLERANCE = 3;
 export const STRUCTURAL_MIN_FILES = 2;
+export const SITE_ADJACENT = 1;
+export const SITE_MIN_WORDS = 2;
+
+// Words that say little about which defect a title names.
+const TITLE_NOISE = new Set(['missing', 'check', 'checks', 'checked', 'without', 'with', 'from', 'into', 'does', 'that', 'this', 'there', 'when', 'have', 'lacks', 'allows', 'allow', 'unsafe', 'insecure', 'issue', 'vulnerability', 'validation', 'should', 'never', 'always', 'before', 'after', 'being', 'every', 'route', 'endpoint', 'handler', 'function', 'contract', 'request', 'user', 'users', 'caller', 'callers', 'data', 'state', 'value']);
+export const titleWords = (title) => new Set(String(title || '').toLowerCase().split(/[^a-z0-9_]+/).filter((word) => word.length >= 4 && !TITLE_NOISE.has(word)));
+export const sharedTitleWords = (a, b) => { const words = titleWords(a); return [...titleWords(b)].filter((word) => words.has(word)).length; };
 
 const SEVERITY_RANK = { critical: 4, high: 3, medium: 2, low: 1, info: 0 };
 const rank = (s) => SEVERITY_RANK[s] ?? 2;
@@ -48,6 +63,25 @@ function structuralMatch(a, b) {
 }
 
 /**
+ * Two claims of different auditors at the same place: the files of their first (sink) locations are the same and
+ * the lines adjacent, or near with a shared subject. Only the first location is compared, because the rest are
+ * context (the entry point, the caller) that unrelated claims share. Two claims that each cite other files, none
+ * in common, are different issues in a shared file (an error mapper, a config) and never merge here.
+ */
+export function sameSite(a, b) {
+  if (a.auditor === b.auditor) return false;
+  const [x] = parseAnchors(a.location);
+  const [y] = parseAnchors(b.location);
+  if (!x || !y || x.file !== y.file) return false;
+  const others = (claim, primary) => parseAnchors(claim.location).map((anchor) => anchor.file).filter((file) => file !== primary);
+  const ra = others(a, x.file);
+  const rb = others(b, y.file);
+  if (ra.length && rb.length && !ra.some((file) => rb.includes(file))) return false;
+  const gap = Math.abs(x.line - y.line);
+  return gap <= SITE_ADJACENT || (gap <= LINE_TOLERANCE && sharedTitleWords(a.title, b.title) >= SITE_MIN_WORDS);
+}
+
+/**
  * @param {Array<{title:string,surface:string,severity?:string,confidence?:string,location?:string[],auditor:string,claimId?:string}>} findings
  * @returns clusters in first-member order; each cluster's `findings`/`claimIds` start with its highest-severity claim.
  */
@@ -56,7 +90,7 @@ export function clusterFindings(findings) {
   const find = (i) => { while (parent[i] !== i) { parent[i] = parent[parent[i]]; i = parent[i]; } return i; };
   for (let i = 0; i < findings.length; i++) {
     for (let j = i + 1; j < findings.length; j++) {
-      if (find(i) !== find(j) && (exactMatch(findings[i], findings[j]) || structuralMatch(findings[i], findings[j]))) {
+      if (find(i) !== find(j) && (exactMatch(findings[i], findings[j]) || structuralMatch(findings[i], findings[j]) || sameSite(findings[i], findings[j]))) {
         parent[find(j)] = find(i);
       }
     }

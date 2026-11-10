@@ -11,6 +11,7 @@ import { validate } from '../../packages/schemas/index.mjs';
 import { writeJson } from './report-util-files.mjs';
 import { DEFAULTS } from './run-config.mjs';
 
+const DEVIL_MAX_MISSES = 2;
 const TEMPLATE = { challenge: 'challenge', devil: 'devil-advocate', defend: 'defend', rebut: 'rebut' };
 const DEFAULT_MAX_UNANSWERED = 6;
 const publicTurn = (turn) => ({
@@ -48,10 +49,19 @@ async function debateCluster(cluster, participants, ctx, seed) {
     return null;
   };
   // An expected turn that never arrives (or does not validate) is a gap and a `missing` trace row.
+  // The devil's advocate turn is advisory: it is never tallied (debate-rules.mjs), so one that does not arrive
+  // changes no status. It is a coverage gap (the judge had one counter-argument fewer), not a missing answer, so
+  // it does not fail the debate stage and leave the whole run INCOMPLETE. A successful challenge resets the speaker's
+  // general counter (a cross-check reuse counts), so devil misses are counted on their own: a provider whose devil
+  // turns keep timing out is not given the role again (DEVIL_MAX_MISSES), instead of costing a full turn clock per cluster.
   const missing = (speaker, round, role, reason) => {
-    ctx.unanswered += 1;
     ctx.speakerUnanswered.set(speaker, (ctx.speakerUnanswered.get(speaker) || 0) + 1);
-    ctx.record.gaps.push({ clusterId: cluster.id, anonId: map[speaker], round, reason });
+    if (role === 'devil') ctx.devilMisses.set(speaker, (ctx.devilMisses.get(speaker) || 0) + 1);
+    if (role === 'devil') ctx.record.advisory.push({ clusterId: cluster.id, anonId: map[speaker], round, reason: 'devil_turn_missing', detail: reason });
+    else {
+      ctx.unanswered += 1;
+      ctx.record.gaps.push({ clusterId: cluster.id, anonId: map[speaker], round, reason });
+    }
     ctx.record.trace.push({ phase: 'debate', template: TEMPLATE[role], clusterId: cluster.id, round, anonId: map[speaker], stop: 'missing', reason });
   };
   // A round-1 challenger that already answered in the cross-check phase is not asked twice (debate-crosscheck.mjs).
@@ -77,6 +87,7 @@ async function debateCluster(cluster, participants, ctx, seed) {
     if (!check.ok) return missing(speaker, round, role, 'invalid_turn');
     ctx.unanswered = 0;
     ctx.speakerUnanswered.set(speaker, 0);
+    if (role === 'devil') ctx.devilMisses.set(speaker, 0);
     turns.push({ ...turn, speaker, speakerVendor: ctx.vendors.get(speaker) || speaker });
     writeJson(ctx.out, `debate/round-${round}/${map[speaker]}-${cluster.id}${role === 'devil' ? '-devil' : ''}.json`, body);
     citations.forEach((row) => ctx.record.citations.push({ ...row, clusterId: cluster.id, anonId: map[speaker], round }));
@@ -88,7 +99,7 @@ async function debateCluster(cluster, participants, ctx, seed) {
   for (const id of challengers) await speak(id, 1, 'challenge');
   // The devil is the first-labelled challenger whose own turn arrived: a reviewer that did not answer is not asked twice.
   const answered = new Set(turns.filter((turn) => turn.round === 1).map((turn) => turn.speaker));
-  const devil = [...challengers].filter((id) => answered.has(id)).sort((a, b) => map[a].localeCompare(map[b]))[0] || null;
+  const devil = [...challengers].filter((id) => answered.has(id) && (ctx.devilMisses.get(id) || 0) < DEVIL_MAX_MISSES).sort((a, b) => map[a].localeCompare(map[b]))[0] || null;
   // The devil speaks only when nobody argued against the finding in their own turn: that is where agreement may be
   // conformity. A counted refutation already gives the judge the counter-argument, so a second one is not bought.
   const opposed = turns.some((turn) => turn.round === 1 && !turn.discarded && turn.verdict === 'refuted');
@@ -108,10 +119,10 @@ async function debateCluster(cluster, participants, ctx, seed) {
 // prior(cluster, reviewerId): that reviewer's cross-check answer as a raw round-1 turn, or null.
 // Clusters still QUEUED when the phase clock expires or threshold is reached are returned as `skipped` and are not spoken.
 export async function runRounds({ out, clusters, voices, vendors, reader, rounds = 2, seed = 1, names = [], turnMs = DEFAULTS.debate.turnMs, phaseMs = DEFAULTS.debate.phaseMs, maxUnanswered = DEFAULT_MAX_UNANSWERED, maxSpeakerUnanswered = Math.min(3, maxUnanswered), now = Date.now, signal, judgeOf = null, prior = null, onCluster = null } = {}) {
-  const record = { citations: [], trace: [], gaps: [] };
+  const record = { citations: [], trace: [], gaps: [], advisory: [] };
   const participants = [...voices.keys()];
   const started = now();
-  const ctx = { out, reader, voices, vendors, rounds, names, record, turnMs, phaseMs, started, now, signal, maxUnanswered, maxSpeakerUnanswered, unanswered: 0, speakerUnanswered: new Map(), judgeOf, prior };
+  const ctx = { out, reader, voices, vendors, rounds, names, record, turnMs, phaseMs, started, now, signal, maxUnanswered, maxSpeakerUnanswered, unanswered: 0, speakerUnanswered: new Map(), devilMisses: new Map(), judgeOf, prior };
   const skipped = [];
   const skippedReasons = new Map();
   const debated = new Map();

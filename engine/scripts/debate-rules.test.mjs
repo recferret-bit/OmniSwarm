@@ -292,3 +292,35 @@ test('the devil does not speak when a challenger already refuted the finding wit
   assert.deepEqual(shape(await roundOne({ b: refutedTurn, c: upheldTurn })), [2, 0]);
   assert.deepEqual(await roundOne({ b: refutedTurn }), ['b:challenge']);
 });
+
+test('a devil\'s advocate turn that never arrives is a coverage gap, not a missing answer; a missing challenger still is', async () => {
+  const run = async (voices) => {
+    const names = [...voices.keys()];
+    const vendors = new Map(names.map((id, i) => [id, `v${i + 1}`]));
+    return runRounds({ out: tempDir('debate-advisory-'), clusters: [payCluster], voices, vendors, reader: payReader(), rounds: 1 });
+  };
+  // The challenger answers its own turn, then its devil turn fails.
+  const devilDown = await run(new Map([['author', quiet('upheld')], ['peer', async ({ role }) => (role === 'devil' ? { unavailable: 'debate_turn_timeout' } : quiet('upheld')())]]));
+  assert.deepEqual(devilDown.gaps, [], 'no missing answer, so the debate stage does not fail');
+  assert.deepEqual(devilDown.advisory.map((gap) => [gap.clusterId, gap.reason, gap.detail]), [['CLUSTER-1', 'devil_turn_missing', 'debate_turn_timeout']]);
+  assert.equal(devilDown.trace.some((row) => row.template === 'devil-advocate' && row.stop === 'missing'), true, 'it is still traced');
+  assert.equal(rulesVerdict(payCluster, devilDown.debated.get('CLUSTER-1').turns), 'CONFIRMED', 'and changes no status: the other vendor\'s upheld turn stands');
+  // The challenger's own turn missing is a missing answer, as before.
+  const challengerDown = await run(new Map([['author', quiet('upheld')], ['peer', async () => ({ unavailable: 'nothing_committed' })]]));
+  assert.deepEqual(challengerDown.gaps.map((gap) => gap.reason), ['nothing_committed']);
+  assert.deepEqual(challengerDown.advisory, []);
+});
+
+test('a devil that keeps timing out is not given the role again, whatever its challenges do', async () => {
+  const clusters = ['CLUSTER-1', 'CLUSTER-2', 'CLUSTER-3', 'CLUSTER-4'].map((id) => ({ ...payCluster, id }));
+  const asked = [];
+  const voices = new Map([['author', quiet('upheld')], ['peer', async ({ role, cluster }) => {
+    if (role === 'devil') { asked.push(cluster.id); return { unavailable: 'debate_turn_timeout' }; }
+    return quiet('upheld')();
+  }]]);
+  const result = await runRounds({ out: tempDir('debate-devil-misses-'), clusters, voices, vendors: new Map([['author', 'v1'], ['peer', 'v2']]), reader: payReader(), rounds: 1 });
+  // Every challenge succeeds, which resets the general counter; only the devil's own misses count.
+  assert.deepEqual(asked, ['CLUSTER-1', 'CLUSTER-2'], 'asked twice, then not again');
+  assert.deepEqual(result.gaps, []);
+  assert.equal(result.advisory.length, 2);
+});

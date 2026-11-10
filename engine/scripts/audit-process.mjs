@@ -32,7 +32,8 @@ export const FAILURE_MESSAGES = {
 
 const RPC_ERROR_REASONS = [
   ['provider_policy', /flagged for possible cybersecurity risk|apply for Daybreak access/i],
-  ['usage_limit', /you.ve hit your (?:session|usage|weekly) limit|usage limit (?:reached|exceeded)|quota exceeded|RESOURCE_EXHAUSTED/i],
+  // "You've hit your session limit", "...your weekly limit", "...your 5-hour limit" (Claude subscriptions name the window).
+  ['usage_limit', /you.ve hit your (?:[\w-]+ ){0,2}limit|usage limit (?:reached|exceeded)|quota exceeded|RESOURCE_EXHAUSTED/i],
   ['auth_required', /authentication required|auth required|subscription_login_required|not logged in|please (?:log|sign) in/i],
   ['mcp_unavailable', /audit (?:MCP|tool).*?(?:not (?:show up|attached)|empty)|audit_docker.*?(?:unavailable|not attached)|project MCP server (?:never attached|is not attached)|folder untrusted/i],
 ];

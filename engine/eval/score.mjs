@@ -108,6 +108,10 @@ export function scoreReport(rows, expected) {
       // Precision against the key: open rows on a seeded bug over open rows on a bug or a decoy. Unlisted rows are left out.
       precisionOnKey: ratio(openTrue.length, openTrue.length + openDecoy.length),
       lostInDebate: lost.length, layerMismatch,
+      // Grouping: rows per reported seeded bug (1 is ideal; many means one defect is still debated as several), and rows
+      // whose cited places touch more than one seeded bug (an upper bound: a row also lists its context locations).
+      rowsPerBug: found.length ? Number((found.reduce((sum, bug) => sum + bugRows.get(key(bug)).length, 0) / found.length).toFixed(2)) : null,
+      multiBugRows: rows.filter((row) => [...hits.get(row)].filter((item) => item.bug).length > 1).length,
     },
     layers: Object.fromEntries(LAYERS.map((name) => [name, layer(name)])),
     reviewers,
@@ -128,6 +132,7 @@ export function renderScore(score, { title = 'Live eval' } = {}) {
     `# ${title}`, '',
     `Seeded bugs kept after review and debate: **${t.kept} of ${t.bugs}** (recall ${pct(t.recall)}; ${t.found} were reported, ${t.lostInDebate} lost in the debate).`,
     `Decoys still open: **${t.decoysKept} of ${t.decoys}** (${t.decoysReported} were reported). Precision on the answer key: ${pct(t.precisionOnKey)}.`,
+    `Grouping: ${t.rowsPerBug ?? 'n/a'} rows per reported seeded bug; ${t.multiBugRows} row(s) cite places of more than one seeded bug (upper bound: context locations count).`,
     `Rows: ${t.rows} clusters, ${t.openRows} open. ${t.unlisted} match neither a seeded bug nor a decoy (${t.unlistedOpen} open): read them, the key is not complete.`,
     `Severity of kept bugs: ${score.severity.exact} exact, ${score.severity.within1} within one step, ${score.severity.under} under-rated by two or more, ${score.severity.over} over-rated by two or more. Layer tag differs from the key on ${t.layerMismatch} row(s).`,
     '', '## By layer', '', '| Layer | Seeded | Reported | Kept | Recall | Decoys reported | Decoys kept |', '|---|---:|---:|---:|---:|---:|---:|',

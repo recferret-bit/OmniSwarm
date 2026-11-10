@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { PHASES, STALL_MS, createProgress, readProgress, statusLine } from './orchestrator-progress.mjs';
+import { PHASES, STALL_MS, createProgress, createSticky, readProgress, statusLine } from './orchestrator-progress.mjs';
 import { trackPhases } from './docker-agent-orchestrator.mjs';
 import { heartbeatReporter } from './orchestrator-session.mjs';
 import { writeJson } from './report-util-files.mjs';
@@ -191,4 +191,73 @@ test('with the status line on, a healthy session prints no heartbeat line and a 
   heartbeatReporter(out, 'grok-s3-logic')({ phase: 'running', elapsedMs: 30_000, agentIdleMs: 1_000 });
   assert.equal(printed.length, 2);
   assert.equal(JSON.parse(fs.readFileSync(path.join(out, 'harness', 'heartbeat-grok-s3-logic.json'), 'utf8')).state, 'running');
+});
+
+test('non-reviewer sessions are tracked while they run, shown when stalled, and dropped when they end', () => {
+  const out = temp();
+  const c = clock();
+  const p = createProgress({ output: out, jobs: [job('claude')], budgets, now: c.now });
+  p.phaseStart('crosscheck');
+  p.activity('crosscheck-claude', { agentIdleMs: 4_000 });
+  p.activity('codex-debate-cluster-3-r1-devil', { agentIdleMs: STALL_MS + 30_000 });
+  p.activity('claude-s3-logic', { agentIdleMs: 1_000 });
+  let snap = p.refresh();
+  assert.deepEqual(snap.sessions, [{ id: 'crosscheck-claude', idleMs: 4_000 }, { id: 'codex-debate-cluster-3-r1-devil', idleMs: STALL_MS + 30_000 }], 'a reviewer\'s own job is not a session');
+  assert.match(statusLine(snap), /codex-debate-cluster-3-r1-devil no activity 2m30s/);
+  assert.doesNotMatch(statusLine(snap), /crosscheck-claude no activity/);
+  p.sessionEnd('codex-debate-cluster-3-r1-devil');
+  snap = p.refresh();
+  assert.deepEqual(snap.sessions.map((row) => row.id), ['crosscheck-claude']);
+  // A session that stopped sending heartbeats without ending drops out after three intervals.
+  c.advance(91_000);
+  assert.equal('sessions' in p.refresh(), false);
+  p.sessionEnd('crosscheck-claude');
+});
+
+test('on a terminal the status is one sticky last row and other lines scroll above it', (t) => {
+  const written = [];
+  const stream = { isTTY: true, columns: 60, write: (text) => written.push(text) };
+  const logged = [];
+  const original = { log: console.log, error: console.error };
+  t.mock.method(console, 'log', (...args) => logged.push(args.join(' ')));
+  const sticky = createSticky({ stream, env: {} });
+  try {
+    sticky.set('progress 10% · Review');
+    assert.deepEqual(written, ['progress 10% · Review']);
+    console.log('  -> [claude-s3] auditing S3');
+    // The sticky row is cleared, the line is logged, the row is drawn again underneath.
+    assert.deepEqual(written.slice(1), ['\r\x1b[2K', 'progress 10% · Review']);
+    assert.deepEqual(logged, ['  -> [claude-s3] auditing S3']);
+    sticky.set('x'.repeat(200));
+    assert.equal(written.at(-1).length, 59, 'a long line is cut to the terminal width');
+    assert.ok(written.at(-1).endsWith('…'));
+  } finally {
+    sticky.end();
+  }
+  assert.equal(written.at(-1), '\r\x1b[2K', 'the row is cleared when the run ends');
+  assert.notEqual(console.log, original.log, 'the mock stays in place (restored by t.mock)');
+  const before = written.length;
+  console.log('after');
+  assert.equal(written.length, before, 'no drawing after end()');
+});
+
+test('the sticky line is only for a terminal, replaces status lines, and the final status stays in the scrollback', (t) => {
+  assert.equal(createSticky({ stream: { isTTY: false, write() {} } }), null);
+  const tty = { isTTY: true, columns: 80, write() {} };
+  for (const env of [{ TERM: 'dumb' }, { CI: 'true' }, { OMNISWARM_NO_STICKY: '1' }]) assert.equal(createSticky({ stream: tty, env }), null, JSON.stringify(env));
+  const lines = [];
+  const rows = [];
+  const sticky = { set: (line) => rows.push(line), end: () => rows.push('END') };
+  const c = clock();
+  const out = temp();
+  const p = createProgress({ output: out, jobs: [job('claude', 'running')], budgets, print: (line) => lines.push(line), sticky, now: c.now });
+  p.phaseStart('review');
+  c.advance(2_000);
+  spend(out, 'claude', 's3:1', 5);
+  p.refresh();
+  assert.ok(rows.length >= 2, 'the sticky row follows every change');
+  assert.deepEqual(lines, ['  == Review · 10% · 0s'], 'only the banner is printed while running');
+  p.finish('finished');
+  assert.equal(rows.at(-1), 'END');
+  assert.match(lines.at(-1), /^  progress 100% · finished/);
 });

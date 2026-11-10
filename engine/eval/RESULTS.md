@@ -1,6 +1,6 @@
 # Golden eval
 
-Command: `npm run eval:golden` · date 2026-11-10 · commit e67139b
+Command: `npm run eval:golden` · date 2026-11-10 · commit 1f54def
 
 Reviewers: scripted:baseline, scripted:paranoid, scripted:wrong, scripted:lazy; judge scripted:judge. Cost: none (no model was called).
 
@@ -24,10 +24,10 @@ cap), so the table measures the protocol and not the cap. Totals are micro-avera
 | near-client | majority | 1 | 0.67 | 0.5 | 1 | 0 | 0 |
 | near-client | debate-1 | 1 | 1 | 0 | 1 | 0 | 0 |
 | near-client | debate-2 | 1 | 1 | 0 | 1 | 0.21 | 0 |
-| near-escrow | union | 1 | 0.5 | 1 | 1 | 0 | 0 |
-| near-escrow | majority | 0.5 | 0.5 | 0.5 | 1 | 0 | 0 |
+| near-escrow | union | 1 | 0.33 | 1 | 1 | 0 | 0 |
+| near-escrow | majority | 1 | 0.5 | 0.5 | 1 | 0 | 0 |
 | near-escrow | debate-1 | 1 | 1 | 0 | 1 | 0 | 0 |
-| near-escrow | debate-2 | 1 | 1 | 0 | 1 | 0.2 | 0 |
+| near-escrow | debate-2 | 1 | 1 | 0 | 1 | 0.27 | 0 |
 | py-fastapi | union | 1 | 0.5 | 1 | 1 | 0 | 0 |
 | py-fastapi | majority | 0.5 | 0.5 | 0.5 | 1 | 0 | 0 |
 | py-fastapi | debate-1 | 1 | 1 | 0 | 1 | 0 | 0 |
@@ -45,6 +45,6 @@ cap), so the table measures the protocol and not the cap. Totals are micro-avera
 | ts-api | debate-1 | 1 | 1 | 0 | 1 | 0 | 0 |
 | ts-api | debate-2 | 1 | 1 | 0 | 1 | 0.21 | 0 |
 | **total** | union | 1 | 0.76 | 1 | 1 | 0 | 0 |
-| **total** | majority | 0.86 | 0.92 | 0.25 | 1 | 0 | 0 |
+| **total** | majority | 0.87 | 0.92 | 0.25 | 1 | 0 | 0 |
 | **total** | debate-1 | 0.99 | 1 | 0 | 1 | 0 | 0 |
 | **total** | debate-2 | 0.99 | 1 | 0 | 1 | 0.09 | 0 |

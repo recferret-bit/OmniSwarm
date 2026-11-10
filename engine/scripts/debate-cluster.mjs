@@ -2,26 +2,29 @@
 // in which two vendors reported the same defect (sameDefect), with every cited line present in the snapshot, is
 // AGREED and skips the rounds. A cluster that only merged two vendors' nearby claims is debated like any other. The rest queue by severity, then by severity disagreement, and are capped; overflow is a coverage gap
 // and is still adjudicated from its citations (debate-run.mjs), so a capped finding stays in the risk posture.
-import { clusterFindings } from './cluster-findings.mjs';
+import { LINE_TOLERANCE, SITE_MIN_WORDS, clusterFindings, sharedTitleWords } from './cluster-findings.mjs';
 import { anchorEvidence, parseLocation } from './debate-citations.mjs';
 
 export const SEVERITY_WEIGHT = { critical: 5, high: 4, medium: 3, low: 2, info: 1 };
 const unique = (rows) => [...new Set(rows.filter(Boolean))];
 
-const TITLE_NOISE = new Set(['missing', 'check', 'checks', 'checked', 'without', 'with', 'from', 'into', 'does', 'that', 'this', 'there', 'when', 'have', 'lacks', 'allows', 'allow', 'unsafe', 'insecure', 'issue', 'vulnerability', 'validation', 'should', 'never', 'always', 'before', 'after', 'being', 'every']);
-const titleWords = (title) => new Set(String(title || '').toLowerCase().split(/[^a-z0-9_]+/).filter((word) => word.length >= 4 && !TITLE_NOISE.has(word)));
 const surfaceOf = (finding) => String(finding.surface || '').toUpperCase().slice(0, 2);
+const anchorsOf = (finding) => (finding.location || []).map((loc) => /^(.+):(\d+)$/.exec(String(loc))).filter(Boolean).map((m) => ({ file: m[1], line: Number(m[2]) }));
 
-// Two claims are the same defect, for the purpose of skipping the debate, only when they cite the same line and
-// also agree on what it is: the same surface, or at least two significant title words in common. Clustering
-// (cluster-findings.mjs) merges on nearby lines alone, which is right for de-duplication but is not agreement:
-// two reviewers can report different defects in the same statement.
+// Two claims are the same defect, for the purpose of skipping the debate, only when they cite the same place and
+// also agree on what it is. The place: one line (and then the same surface or two shared subject words suffice) or
+// lines within LINE_TOLERANCE (and then two shared subject words are required). Clustering (cluster-findings.mjs)
+// also merges adjacent lines with no shared words, which is right for de-duplication but is not agreement: two
+// reviewers can report different defects in neighbouring statements.
 export function sameDefect(a, b) {
-  const lines = new Set(a.location || []);
-  if (!(b.location || []).some((loc) => lines.has(loc))) return false;
-  if (surfaceOf(a) && surfaceOf(a) === surfaceOf(b)) return true;
-  const words = titleWords(a.title);
-  return [...titleWords(b.title)].filter((word) => words.has(word)).length >= 2;
+  const words = sharedTitleWords(a.title, b.title);
+  const bAnchors = anchorsOf(b);
+  return anchorsOf(a).some((x) => bAnchors.some((y) => {
+    if (x.file !== y.file) return false;
+    const gap = Math.abs(x.line - y.line);
+    if (gap === 0) return (surfaceOf(a) !== '' && surfaceOf(a) === surfaceOf(b)) || words >= SITE_MIN_WORDS;
+    return gap <= LINE_TOLERANCE && words >= SITE_MIN_WORDS;
+  }));
 }
 
 // True when two claims of different vendors are the same defect. vendorOf(finding) names a claim's vendor.

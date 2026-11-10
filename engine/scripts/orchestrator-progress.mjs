@@ -73,8 +73,32 @@ function reviewerRows(output, jobs, budgets, activity, now) {
   });
 }
 
-// tracker = createProgress({output, jobs, budgets, print, now}). Every method rewrites the snapshot.
-export function createProgress({ output, jobs = [], budgets = null, print = null, now = Date.now, intervalMs = 60_000 } = {}) {
+// A status line that stays on the last row of a terminal. While it is set, every console.log and console.error
+// first clears it and redraws it underneath, so the run's other lines scroll above it and it never lands in the
+// middle of one. Only for a TTY; `end()` clears the line and restores console. Returns null for anything else.
+export function createSticky({ stream = process.stdout, errors = process.stderr, env = process.env } = {}) {
+  // No redraw on a dumb terminal, in CI, or when asked (OMNISWARM_NO_STICKY=1): banners and status lines scroll as before.
+  if (!stream.isTTY || env.TERM === 'dumb' || env.CI || env.OMNISWARM_NO_STICKY) return null;
+  const original = { log: console.log, error: console.error };
+  let text = '';
+  const fit = (line) => (stream.columns > 8 && line.length > stream.columns - 1 ? `${line.slice(0, stream.columns - 2)}…` : line);
+  const clear = () => { if (text) stream.write('\r\x1b[2K'); };
+  const draw = () => { if (text) stream.write(text); };
+  const wrap = (method) => (...args) => { clear(); original[method](...args); draw(); };
+  console.log = wrap('log');
+  console.error = wrap('error');
+  void errors;
+  return {
+    set(line) { clear(); text = fit(String(line)); draw(); },
+    end() { clear(); text = ''; console.log = original.log; console.error = original.error; },
+  };
+}
+
+// tracker = createProgress({output, jobs, budgets, print, sticky, now}). Every method rewrites the snapshot.
+// print(line): banners and, without a sticky line, status lines. sticky: createSticky(); the status line is set
+// there on every change instead of being printed.
+export function createProgress({ output, jobs = [], budgets = null, print = null, sticky = null, now = Date.now, intervalMs = 60_000 } = {}) {
+  const jobNames = new Set(jobs.map((row) => row.name));
   const started = now();
   const phases = new Map(PHASES.map((row) => [row.name, { name: row.name, state: 'pending' }]));
   const activity = new Map();
@@ -83,6 +107,7 @@ export function createProgress({ output, jobs = [], budgets = null, print = null
   let percent = 0;
   let lastLine = '';
   let lastPrinted = 0;
+  let lastSticky = 0;
 
   const current = () => [...phases.values()].find((row) => row.state === 'running') || null;
   // The phase the headline names: the running one; after a failure the phase that failed; between two phases
@@ -101,6 +126,12 @@ export function createProgress({ output, jobs = [], budgets = null, print = null
     const at = now();
     const reviewers = reviewerRows(output, jobs, budgets, activity, at);
     const running = current();
+    // Sessions that are not a reviewer's own job (cross-check, debate turns, judgements, the general review) and
+    // are still alive: a heartbeat in the last three intervals, and not ended.
+    const sessions = [...activity.values()]
+      .filter((row) => !jobNames.has(row.job) && at - row.at < 90_000)
+      .slice(0, 32)
+      .map((row) => ({ id: row.job, idleMs: Math.max(0, Math.round(row.agentIdleMs ?? 0)) }));
     let computed = 0;
     for (const row of PHASES) {
       const phase = phases.get(row.name);
@@ -120,6 +151,7 @@ export function createProgress({ output, jobs = [], budgets = null, print = null
       reviewers: reviewers.map(({ share: _, ...row }) => row),
       ...(counters.crosscheck ? { crosscheck: { done: counters.crosscheck.done, total: counters.crosscheck.total } } : {}),
       ...(debate ? { debate } : {}),
+      ...(sessions.length ? { sessions } : {}),
     };
   }
 
@@ -129,17 +161,24 @@ export function createProgress({ output, jobs = [], budgets = null, print = null
       fs.mkdirSync(path.dirname(path.join(output, PROGRESS_FILE)), { recursive: true, mode: 0o700 });
       writeReportFile(output, PROGRESS_FILE, `${JSON.stringify(snapshot, null, 2)}\n`);
     } catch { /* display only: a failed write never stops the run */ }
+    // On a terminal the status line is one sticky row, updated at most once a second; banners scroll above it.
+    if (sticky && state === 'running') {
+      const at = now();
+      if (at - lastSticky >= 1_000 || force) { sticky.set(statusLine(snapshot)); lastSticky = at; }
+    }
     if (print) {
       // A change worth a line: phase, a reviewer starting, finishing, changing pass or stalling, a debate count.
       // Call counts and the percent they move are left to the once-a-minute line, so an active review is not
       // a line every few seconds.
-      const key = JSON.stringify([snapshot.state, snapshot.phase, snapshot.debate, snapshot.crosscheck, snapshot.reviewers.map((row) => [row.id, row.state, row.pass, row.idleMs >= STALL_MS])]);
+      const key = JSON.stringify([snapshot.state, snapshot.phase, snapshot.debate, snapshot.crosscheck, snapshot.reviewers.map((row) => [row.id, row.state, row.pass, row.idleMs >= STALL_MS]), (snapshot.sessions || []).filter((row) => row.idleMs >= STALL_MS).map((row) => row.id)]);
       const at = now();
       if (banner) {
         // A phase start is its own line, with the percent, so it is not followed by a duplicate status line.
         print(`  == ${banner} · ${snapshot.percent}% · ${minutes(snapshot.elapsedMs)}`);
         lastLine = key;
         lastPrinted = at;
+      } else if (sticky) {
+        lastLine = key;
       } else if (force || (key !== lastLine && at - lastPrinted >= 5_000) || at - lastPrinted >= intervalMs) {
         print(statusLine(snapshot));
         lastLine = key;
@@ -173,12 +212,16 @@ export function createProgress({ output, jobs = [], budgets = null, print = null
       activity.set(jobName, { job: jobName, at: now(), agentIdleMs: status?.agentIdleMs ?? null });
       write();
     },
+    sessionEnd(name) { activity.delete(name); write(); },
     refresh() { return write(); },
     // outcome: 'finished' | 'incomplete' | 'failed' | 'cancelled'. Phases that never started are skipped.
     finish(outcome) {
       for (const row of phases.values()) if (row.state === 'pending' || row.state === 'running') row.state = row.state === 'running' ? 'failed' : 'skipped';
       state = outcome;
-      return write(true);
+      const snapshot = write(true);
+      // The last status line stays in the scrollback as an ordinary line.
+      if (sticky) { sticky.end(); if (print) print(statusLine(snapshot)); }
+      return snapshot;
     },
     snapshot: build,
   };
@@ -198,7 +241,9 @@ export function statusLine(snapshot) {
   const jobs = snapshot.reviewers?.length ? ` · reviewers done ${done}/${snapshot.reviewers.length}` : '';
   const debate = snapshot.debate?.clusters ? ` · clusters heard ${snapshot.debate.heard}/${snapshot.debate.clusters}` : '';
   const judged = snapshot.debate?.toJudge ? ` · judged ${snapshot.debate.judged}/${snapshot.debate.toJudge}` : '';
-  return `${head}${jobs}${debate}${judged}${rows.length ? ` · ${rows.join('; ')}` : ''}`;
+  const stalled = (snapshot.sessions || []).filter((row) => row.idleMs >= STALL_MS).map((row) => `${row.id} no activity ${minutes(row.idleMs)}`);
+  const active = [...rows, ...stalled];
+  return `${head}${jobs}${debate}${judged}${active.length ? ` · ${active.join('; ')}` : ''}`;
 }
 
 export function readProgress(output) {
