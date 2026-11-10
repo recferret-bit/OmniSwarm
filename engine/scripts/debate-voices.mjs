@@ -33,7 +33,7 @@ async function session(ctx, { name, agent, role, prompt, assignment, kind, signa
 
 export function bridgeVoice(ctx, reviewer, budget = DEBATE_TOOL_BUDGET) {
   return async ({ role, round, cluster, turns, anonId, signal }) => {
-    const name = `${reviewer.id}-debate-${cluster.id.toLowerCase()}-r${round}`;
+    const name = `${reviewer.id}-debate-${cluster.id.toLowerCase()}-r${round}${role === 'devil' ? '-devil' : ''}`;
     const assignment = { kind: 'debate-turn', clusterId: cluster.id, round, role, anonId, budget };
     const prompt = renderDebateBrief(TEMPLATE[role], { cluster, turns: turns.filter((t) => !t.discarded).map(publicTurn), anonId, round, budget });
     const { body, reason } = await session(ctx, { name, agent: reviewer.id, role: 'debater', prompt, assignment, kind: 'debate-turn', signal });
@@ -54,7 +54,8 @@ export function bridgeJudge(ctx, reviewer, budget = DEBATE_TOOL_BUDGET) {
 export function bridgeSummary(ctx, reviewer, budget = DEBATE_TOOL_BUDGET) {
   return async ({ clusters, signal }) => {
     const name = `${reviewer.id}-general-review`;
-    const assignment = { kind: 'general-review', clusterIds: clusters.map((row) => row.clusterId), budget };
+    // files: what the adjudicated clusters cite; the submit refuses a summary that cites any other file:line.
+    const assignment = { kind: 'general-review', clusterIds: clusters.map((row) => row.clusterId), files: [...new Set(clusters.flatMap((row) => row.files || []))].sort(), budget };
     const prompt = renderDebateBrief('general-review', { clusters });
     const { body, reason } = await session(ctx, { name, agent: reviewer.id, role: 'orchestrator', prompt, assignment, kind: 'general-review', signal });
     return body || { unavailable: reason };

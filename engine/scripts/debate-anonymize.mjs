@@ -17,6 +17,8 @@ export function anonymize(ids, seed = 1, clusterId = '') {
 // Free-text scrub for arguments: model, vendor and reviewer names become "a reviewer".
 export function stripIdentity(text, names = []) {
   const extra = names.filter(Boolean).map((name) => String(name).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-  const pattern = new RegExp(['claude', 'codex', 'grok', 'glm', 'qwen', 'gemini', 'anthropic', 'openai', 'alibaba', 'xai', 'zai', 'scripted-[a-z]+', ...extra].join('|'), 'gi');
+  // Model-family words are matched as whole words so ordinary text survives ("SOL" the token is not scrubbed).
+  const families = ['opus', 'sonnet', 'haiku', 'chatgpt', 'gpt-?\\d[\\w.-]*', 'deepseek', 'mistral', 'llama', 'kimi', 'antigravity'].map((word) => `\\b${word}\\b`);
+  const pattern = new RegExp(['claude', 'codex', 'grok', 'glm', 'qwen', 'gemini', 'anthropic', 'openai', 'alibaba', 'xai', 'zai', 'scripted-[a-z]+', ...families, ...extra].join('|'), 'gi');
   return String(text || '').replace(pattern, 'a reviewer');
 }

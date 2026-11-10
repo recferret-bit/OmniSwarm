@@ -33,13 +33,15 @@ test('a confident wrong control assertion refutes a real single-source bug; the 
   assert.equal(status(misjudged), 'REFUTED');
 });
 
-test('rounds: one devil per cluster, bad quotes discarded, a copied flip is suspect, round 3 only after a change', async () => {
+test('rounds: a devil only on unopposed clusters, bad quotes discarded, a copied flip is suspect, round 3 only after a counted defence', async () => {
   const { out, result } = await debateGolden('near-escrow', 3);
   for (const [id, row] of result.debated) {
     const devils = row.turns.filter((turn) => turn.round === 1 && turn.role === 'devil');
-    assert.equal(devils.length, 1, id);
-    const changed = row.turns.some((turn) => turn.round === 2 && turn.verdictChanged);
-    assert.equal(row.turns.some((turn) => turn.round === 3), changed, id);
+    // One devil turn where no challenger refuted the finding itself, none where one did.
+    const opposed = row.turns.some((turn) => turn.round === 1 && turn.role === 'challenge' && !turn.discarded && turn.verdict === 'refuted');
+    assert.equal(devils.length, opposed ? 0 : 1, id);
+    const defended = row.turns.some((turn) => turn.round === 2 && !turn.discarded && !turn.conformitySuspect && ['upheld', 'partial'].includes(turn.verdict));
+    assert.equal(row.turns.some((turn) => turn.round === 3), defended, id);
   }
   const citations = JSON.parse(fs.readFileSync(path.join(out, 'debate', 'citations.json'), 'utf8'));
   assert.ok(citations.some((row) => row.reason === 'quote_not_found'));

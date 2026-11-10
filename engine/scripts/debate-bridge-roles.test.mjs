@@ -82,3 +82,37 @@ test('the orchestrator commits a schema-valid judgement and a general review wit
   assert.equal(readInbox(review.reportDir, review.submissionIdentity.name, 'general-review').executiveSummary, 'One likely issue.');
   assert.throws(() => acceptGeneralReview({ topFindings: [{ clusterId: 'NOPE' }] }, ['CLUSTER-1']), /new_finding_in_general_review/);
 });
+
+test('the general review text may describe adjudicated clusters, their files and the gaps', () => {
+  const ok = (executiveSummary, openDisagreements = []) => acceptGeneralReview({ executiveSummary, openDisagreements }, ['CLUSTER-1', 'CLUSTER-2'], ['src/lib.rs', 'programs/vault/src/lib.rs']);
+  assert.doesNotThrow(() => ok('Two clusters were adjudicated. CLUSTER-1 (src/lib.rs:2) is confirmed; cluster-2 stays disputed.'));
+  assert.doesNotThrow(() => ok('Summary.', [{ clusterId: 'CLUSTER-2', summary: 'Reviewers disagree whether programs/vault/src/lib.rs:40 is reachable.' }]));
+  // Saying something is not secure, or that tests were not run, is reporting, not certifying.
+  assert.doesNotThrow(() => ok('The withdraw path is not secure against a non-owner caller. Existing tests were not run; this is not a security pass.'));
+  // A statement about one control is not a verdict on the target.
+  assert.doesNotThrow(() => ok('Summary.', [{ clusterId: 'CLUSTER-2', summary: 'Reviewers disagree whether the narrowing cast is safe.' }]));
+  assert.doesNotThrow(() => ok('Version 1.2.3 pins near-sdk 5.1.0; the ratio 3:1 is unaffected.'));
+  // Without a file list (older assignments) file mentions are not checked, cluster ids still are.
+  assert.doesNotThrow(() => acceptGeneralReview({ executiveSummary: 'See other/file.rs:9.', openDisagreements: [] }, ['CLUSTER-1']));
+});
+
+test('the general review text cannot smuggle a new finding or certify the target', async () => {
+  const known = ['CLUSTER-1'];
+  const files = ['src/lib.rs'];
+  const refused = (executiveSummary, openDisagreements = []) => { try { acceptGeneralReview({ executiveSummary, openDisagreements }, known, files); return null; } catch (error) { return error.code; } };
+  assert.equal(refused('CLUSTER-1 holds, and CLUSTER-7 shows a second drain path.'), 'new_finding_in_general_review');
+  assert.equal(refused('Also note the unchecked admin route at src/admin.rs:14.'), 'new_finding_in_general_review');
+  assert.equal(refused('Summary.', [{ clusterId: 'CLUSTER-1', summary: 'Related to cluster-9.' }]), 'new_finding_in_general_review');
+  assert.equal(refused('See other/file.rs:9.', []), 'new_finding_in_general_review');
+  for (const text of ['The contract is secure.', 'Overall the code appears to be safe.', 'It is safe to deploy after the fix.', 'The program is mainnet-ready.', 'We certify the vault.', 'The repository passed the audit.']) {
+    assert.equal(refused(text), 'certification_in_general_review', text);
+  }
+  // Through the bridge: the refusal reaches the model as an error and nothing is committed, so it can resubmit.
+  const review = session('orchestrator', 'cli-codex-gpt-5-5-general-review', { kind: 'general-review', clusterIds: known, files });
+  const submit = bridgeRole('orchestrator').handlers.submit_general_review;
+  await assert.rejects(submit(review, { executiveSummary: 'The target is secure.', openDisagreements: [] }), /certification_in_general_review/);
+  await assert.rejects(submit(review, { executiveSummary: 'A new issue sits at src/other.rs:3.', openDisagreements: [] }), /new_finding_in_general_review/);
+  assert.equal(readInbox(review.reportDir, review.submissionIdentity.name, 'general-review'), null);
+  await submit(review, { executiveSummary: 'CLUSTER-1 at src/lib.rs:2 is likely; nothing else was adjudicated.', openDisagreements: [] });
+  assert.match(readInbox(review.reportDir, review.submissionIdentity.name, 'general-review').executiveSummary, /CLUSTER-1/);
+});

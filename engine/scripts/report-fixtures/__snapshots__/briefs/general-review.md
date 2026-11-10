@@ -1,7 +1,7 @@
 # general-review
 
 ## Objective
-Write the executive summary of the adjudicated clusters listed below and name the disagreements that stayed open. Do not add a finding that was not adjudicated.
+Write the executive summary of the adjudicated clusters listed below and name the disagreements that stayed open. Do not add a finding that was not adjudicated: name only the cluster ids listed here and cite only files they cite. Report findings and gaps; do not state that the target is secure, safe to ship or certified.
 
 ## Adjudicated clusters
 - CLUSTER-2: LIKELY (high) withdraw has no owner check

@@ -75,7 +75,13 @@ test('debate turns, the judge and the general review launch through the bridge; 
   assert.deepEqual(result.stageFailures, []);
   const out = f.request.out;
   const names = f.calls.filter((c) => ['debater', 'orchestrator'].includes(c.identity.role)).map((c) => c.identity.name);
-  assert.deepEqual(names, [`${QWEN.id}-debate-cluster-1-r1`, `${JUDGE.id}-judge-cluster-1`, `${JUDGE.id}-general-review`]);
+  // The challenger already upheld the claim in the cross-check phase with a citable line, so its round-1 turn is
+  // that verdict and no second session asks for it. The devil's advocate turn, the judge and the review do launch.
+  assert.deepEqual(names, [`${QWEN.id}-debate-cluster-1-r1-devil`, `${JUDGE.id}-judge-cluster-1`, `${JUDGE.id}-general-review`]);
+  const trace = fs.readFileSync(path.join(out, 'debate', 'trace.jsonl'), 'utf8').trim().split('\n').map((line) => JSON.parse(line));
+  assert.deepEqual(trace.filter((row) => row.template === 'challenge').map((row) => [row.verdict, row.stop, row.source]), [['upheld', 'kept', 'crosscheck']]);
+  const roundOne = fs.readdirSync(path.join(out, 'debate', 'round-1')).map((name) => readReportJson(out, `debate/round-1/${name}`));
+  assert.deepEqual(roundOne.find((turn) => turn.role === 'challenge').citations, [CITE], 'the quote is the cited line read from the snapshot');
   const judgeCall = f.calls.find((c) => c.identity.name === `${JUDGE.id}-judge-cluster-1`);
   assert.equal(arg(judgeCall.bridgeArgs, '--auditor'), judgeCall.identity.name);
   assert.equal(judgeCall.identity.model, JUDGE.model);

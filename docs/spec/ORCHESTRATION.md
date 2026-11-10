@@ -97,18 +97,20 @@ Every pass writes raw usage to `harness/usage/<reviewer>/<surface>-pass-<k>.json
 
 ### 4.1 Triage
 - Clusters from `cluster-findings.mjs` (exact title+citation or ≥ 2 shared files within ±3 lines). The orchestrator may propose extra merges; each proposal needs a one-line reason and is applied only if both members cite the same file.
-- **Skip debate** (status `AGREED`) when ≥ 2 vendors reported it **and** every citation passed the checker.
-- **Debate queue:** everything else, ordered by `severityWeight × (1 + disagreement)`, capped at `--debate-max-clusters` (default 25; overflow keeps today's peer-review status and is listed as a coverage gap).
+- **Skip debate** (status `AGREED`) when ≥ 2 vendors reported the same defect (a shared `file:line` plus the same surface or two significant title words) **and** every citation passed the checker. A cluster that only merged nearby claims is debated.
+- **Debate queue:** everything else, ordered by severity weight, then severity disagreement (`severityWeight + disagreement / 2`), capped at `--debate-max-clusters` (default 25; overflow is listed as a coverage gap and is adjudicated from the citation rules alone, so it stays in the risk posture).
 
 ### 4.2 Rounds
 - **Anonymization:** each cluster's participants are relabelled `Reviewer A/B/C…` per cluster with a fixed seed (recorded), order shuffled, model names and vote counts removed, text normalized to the schema (no prose style leakage).
-- **Round 1 — challenge** (extends today's crosscheck): every non-author reviewer returns `upheld | partial | refuted | insufficient_evidence` with citations. One non-author is assigned **devil's advocate** per cluster and must argue the strongest false-positive case.
+- **Round 1 — challenge** (extends today's crosscheck): every non-author reviewer returns `upheld | partial | refuted | insufficient_evidence` with citations. Round-1 turns are independent (no challenger sees another). One non-author then speaks a second, separate **devil's advocate** turn and must argue the strongest false-positive case; that turn is an argument for the judge and is never tallied (`docs/RULES.md` rules 8 and 15).
 - **Round 2 — defend:** authors see the challenges (anonymized) and either defend with **new** citations or concede.
 - **Round 3 — rebut** (only if a verdict changed in round 2).
 - **Early stop:** a round with zero verdict changes ends the debate for that cluster. The speaking phase also stops at `--debate-phase-ms` (default 15 minutes). Clusters not started are a `debate_time` coverage gap and are not a missing-answer failure.
 - **Turn clock:** each debate turn stops at `--debate-turn-ms` (default 3 minutes). The harness aborts the session. A started turn that times out is a `debate_turn_timeout` gap.
 - **Citation checker** (code, no LLM): each argument's `{file, startLine, endLine, quote}` is checked against the read-only source (`/src`, W02); whitespace-normalized substring match. Arguments with no valid citation are **discarded** and logged.
 - **Conformity flag:** a verdict change without a new valid citation is kept but marked `conformity_suspect: true` and down-weighted to zero for the judge.
+- **Who speaks** (`debate-rounds.mjs`, `debate-crosscheck.mjs`): challengers are of another vendor than the authors; the reviewer that will judge the cluster is reserved and does not challenge it; a cross-check verdict with a citable line is that reviewer's round-1 turn, so it is not asked twice; the devil's advocate speaks only on clusters nobody refuted; round 3 follows a defence with new evidence, not a concession.
+- **Evidence floor details** (`debate-rules.mjs`, `debate-citations.mjs`; the current rules are in `docs/RULES.md`): freshness is by line overlap; an unchanged defence needs a fresh citation to count; each speaker counts once with its last counted verdict; relevance is measured on the lines the quote occupies; a quote under six non-space characters is refused; a real target without `source-manifest.json` does not start the debate.
 
 ### 4.3 Adjudication
 - The judge sees per cluster: the claim, the verified quotes, the valid arguments (anonymized), never vendors, model names or vote tallies.

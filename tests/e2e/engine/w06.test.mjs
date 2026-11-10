@@ -60,13 +60,15 @@ test('an orchestrated scripted run debates its own clusters in priority order an
   for (const id of ['scripted-baseline', 'scripted-paranoid', 'scripted-wrong', 'scripted-lazy']) assert.ok(fs.existsSync(path.join(out, 'reviewers', id, 'report.html')), id);
 });
 
-test('three rounds rebut only after a change and flag copied flips', async () => {
-  const { out } = await orchestrated(3);
-  const round3 = fs.readdirSync(path.join(out, 'debate', 'round-3')).map((name) => json(out, `debate/round-3/${name}`));
-  assert.ok(round3.length > 0);
-  const changed = new Set(fs.readdirSync(path.join(out, 'debate', 'round-2')).map((name) => json(out, `debate/round-2/${name}`)).filter((t) => t.verdict !== 'upheld').map((t) => t.clusterId));
-  assert.ok(round3.every((turn) => changed.has(turn.clusterId)));
-  assert.ok(round3.some((turn) => turn.conformitySuspect));
+test('with three rounds allowed, a cluster whose author only conceded is not rebutted', async () => {
+  const { out, ctx } = await orchestrated(3);
+  assert.deepEqual(ctx.stageFailures, []);
+  // The scripted authors concede or repeat their own line; neither is new evidence, so no challenger rebuts.
+  // The positive case (a defence with a fresh citation opens round 3) is in engine/scripts/debate-rules.test.mjs.
+  const round2 = fs.readdirSync(path.join(out, 'debate', 'round-2')).map((name) => json(out, `debate/round-2/${name}`));
+  assert.ok(round2.length > 0);
+  assert.ok(round2.some((turn) => turn.conformitySuspect), 'a concession that cites only known lines is flagged');
+  assert.equal(fs.existsSync(path.join(out, 'debate', 'round-3')), false);
 });
 
 test('a debate-round-2 fault marks the run INCOMPLETE and keeps every per-model finding', async (t) => {

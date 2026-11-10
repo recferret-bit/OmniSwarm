@@ -11,7 +11,7 @@ const TEMPLATES = {
     schema: 'debate-round', submit: 'submit_debate_turn',
   },
   'devil-advocate': {
-    objective: 'You are the devil\'s advocate for this cluster. Argue the strongest case that it is a false positive, citing the control that stops it. If no such control exists in source, answer insufficient_evidence.',
+    objective: 'You are the devil\'s advocate for this cluster. Argue the strongest case that it is a false positive, citing the control that stops it. If no such control exists in source, answer insufficient_evidence. This turn is separate from your own verdict and is not counted as a vote.',
     schema: 'debate-round', submit: 'submit_debate_turn',
   },
   defend: {
@@ -27,7 +27,7 @@ const TEMPLATES = {
     schema: 'adjudication', submit: 'submit_adjudication',
   },
   'general-review': {
-    objective: 'Write the executive summary of the adjudicated clusters listed below and name the disagreements that stayed open. Do not add a finding that was not adjudicated.',
+    objective: 'Write the executive summary of the adjudicated clusters listed below and name the disagreements that stayed open. Do not add a finding that was not adjudicated: name only the cluster ids listed here and cite only files they cite. Report findings and gaps; do not state that the target is secure, safe to ship or certified.',
     schema: 'general-review', submit: 'submit_general_review',
   },
 };

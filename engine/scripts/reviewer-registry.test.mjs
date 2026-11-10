@@ -76,3 +76,29 @@ test('--agents style input maps to cli specs with defaults and overrides', () =>
   assert.deepEqual(cliSpecsFromAgents(['claude', 'codex'], { claude: 'sonnet' }), ['cli:claude:sonnet', 'cli:codex:gpt-6.1-sol']);
   assert.throws(() => cliSpecsFromAgents(['nope']), { code: 'REVIEWER_SPEC_INVALID' });
 });
+
+test('a hosted or resold model keeps the vendor that trained it', () => {
+  // The same family through four routes is one vendor, so it cannot agree with itself or judge itself.
+  for (const spec of ['cli:claude:opus', 'key:anthropic:claude-opus-5-5', 'openrouter:anthropic/claude-opus-5.5', 'openrouter:somehost/claude-opus-5.5', 'nearai:anthropic/claude-sonnet-5']) assert.equal(vendorOf(spec), 'anthropic', spec);
+  assert.equal(vendorOf('openrouter:fireworks/qwen3-coder-next'), vendorOf('openrouter:qwen/qwen3.8-max-0902'));
+  assert.equal(vendorOf('openrouter:zai-org/glm-5.3'), vendorOf('key:zai:glm-5.3'));
+  assert.equal(vendorOf('nearai:deepseek-ai/DeepSeek-V4'), vendorOf('openrouter:deepseek/deepseek-chat'));
+  assert.equal(vendorOf('openrouter:meta-llama/llama-5-70b'), 'meta');
+  assert.equal(vendorOf('openrouter:openai/o3-pro'), 'openai');
+});
+
+test('different families stay different vendors and unknown models are not guessed', () => {
+  const panel = ['cli:claude:opus', 'cli:codex:gpt-6.1-sol', 'cli:grok:grok-4.7', 'cli:agy:gemini-4-argon-high', 'openrouter:qwen/qwen3.8-max-0902', 'key:zai:glm-5.3'].map((spec) => vendorOf(spec));
+  assert.equal(new Set(panel).size, panel.length);
+  // No family in the name: the org is the vendor; no org either: the host.
+  assert.equal(vendorOf('openrouter:somelab/model'), 'somelab');
+  assert.equal(vendorOf('openrouter:somelab/other-model'), 'somelab');
+  assert.equal(vendorOf('nearai:tee-model'), 'nearai');
+  assert.equal(vendorOf('openrouter:auto'), 'openrouter');
+  // A family word inside another word is not a match ("regrok", "o3" inside a longer token).
+  assert.equal(vendorOf('openrouter:somelab/regrokker-1'), 'somelab');
+  assert.equal(vendorOf('openrouter:somelab/turbo300'), 'somelab');
+  // The CLI and key families name their provider; a model name does not override it.
+  assert.equal(vendorOf('cli:claude-zai:glm-5.3'), 'zai');
+  assert.equal(vendorOf('key:zai:claude-compatible'), 'zai');
+});

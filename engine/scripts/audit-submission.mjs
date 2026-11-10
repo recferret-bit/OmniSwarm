@@ -13,7 +13,8 @@ const fingerprint = value => sha256Hex(JSON.stringify(stable(value)));
 const ROLE_NAME = {
   auditor: (id) => `${id}-s[1-6]-(?:auth|input|logic|config|deps|client)`,
   crosscheck: (id) => `crosscheck-${id}`,
-  debater: (id) => `${id}-debate-cluster-[1-9][0-9]{0,3}-r[1-3]`,
+  // `-devil` marks the devil's advocate turn, a second session of the same reviewer in round 1.
+  debater: (id) => `${id}-debate-cluster-[1-9][0-9]{0,3}-r(?:[1-3]|1-devil)`,
   orchestrator: (id) => `${id}-(?:judge-cluster-[1-9][0-9]{0,3}|general-review)`,
 };
 const SUBMISSION_ROLES = new Set(['auditor', 'crosscheck']);

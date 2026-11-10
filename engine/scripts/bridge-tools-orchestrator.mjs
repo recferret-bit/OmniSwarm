@@ -28,14 +28,37 @@ export function toolDefinitions() {
   ];
 }
 
-export function acceptGeneralReview(body, knownClusters) {
-  const known = new Set(knownClusters || []);
+// A verdict on the whole target ("the contract is secure"), not a statement about one control ("the cast is safe").
+const CERTIFIES = /\b(?:target|repository|repo|project|code\s?base|code|application|app|system|protocol|platform|contracts?|programs?)\s+(?:is|are|appears?|looks?|seems?)\s+(?:to\s+be\s+)?(?:fully\s+|completely\s+|now\s+)?(?:secure|safe)\b|\bsafe\s+to\s+(?:deploy|ship|launch|release)\b|\b(?:production|mainnet|launch)[- ]ready\b|\bcertif(?:y|ies|ied|ication)\b|\b(?:passed|passes)\s+the\s+(?:audit|review)\b/i;
+const FILE_LINE = /(?:^|[\s`'"(\[])((?:[\w.-]+\/)*[\w.-]+\.[A-Za-z][A-Za-z0-9]{0,5}):\d+/g;
+
+function refuse(code, message) {
+  const error = new Error(`${code}: ${message}`);
+  error.code = code;
+  return error;
+}
+
+// The general review may only talk about what was adjudicated. Structured rows name known clusters; the free
+// text (the executive summary and each disagreement summary) is checked too, because a summary that cites a
+// cluster id or a file:line nobody adjudicated is a new finding by another route, and one that calls the target
+// secure is a certification this suite never gives. knownFiles: the files the adjudicated clusters cite, or
+// null when the caller has no list (then file mentions are not checked).
+export function acceptGeneralReview(body, knownClusters, knownFiles = null) {
+  const known = new Set((knownClusters || []).map((id) => String(id).toUpperCase()));
   for (const row of [...(body?.topFindings || []), ...(body?.openDisagreements || [])]) {
-    if (!known.has(row.clusterId)) {
-      const error = new Error('new_finding_in_general_review: only adjudicated clusters may be named');
-      error.code = 'new_finding_in_general_review';
-      throw error;
+    if (!known.has(String(row.clusterId).toUpperCase())) throw refuse('new_finding_in_general_review', 'only adjudicated clusters may be named');
+  }
+  const files = knownFiles ? new Set(knownFiles) : null;
+  for (const text of [body?.executiveSummary, ...(body?.openDisagreements || []).map((row) => row.summary)].filter((t) => typeof t === 'string')) {
+    for (const [id] of text.matchAll(/\bCLUSTER-\d+\b/gi)) {
+      if (!known.has(id.toUpperCase())) throw refuse('new_finding_in_general_review', `the text names ${id.toUpperCase()}, which was not adjudicated`);
     }
+    if (files) {
+      for (const match of text.matchAll(FILE_LINE)) {
+        if (!files.has(match[1])) throw refuse('new_finding_in_general_review', `the text cites ${match[1]}, which no adjudicated cluster cites; describe only adjudicated findings`);
+      }
+    }
+    if (CERTIFIES.test(text)) throw refuse('certification_in_general_review', 'the review reports adjudicated findings and gaps; it does not state that the target is secure, safe to ship or certified');
   }
   return body;
 }
@@ -64,7 +87,7 @@ async function submitGeneralReview(ctx, raw) {
   if (typeof args.executiveSummary !== 'string' || !args.executiveSummary.trim() || args.executiveSummary.length > 8000) throw new Error('executiveSummary is required (up to 8000 characters)');
   const openDisagreements = Array.isArray(args.openDisagreements) ? args.openDisagreements : [];
   if (!openDisagreements.every((row) => typeof row?.clusterId === 'string' && typeof row.summary === 'string' && row.summary.trim())) throw new Error('openDisagreements rows need clusterId and summary');
-  const body = acceptGeneralReview({ executiveSummary: args.executiveSummary.trim(), openDisagreements, ...(args.topFindings ? { topFindings: args.topFindings } : {}) }, task.clusterIds);
+  const body = acceptGeneralReview({ executiveSummary: args.executiveSummary.trim(), openDisagreements, ...(args.topFindings ? { topFindings: args.topFindings } : {}) }, task.clusterIds, Array.isArray(task.files) ? task.files : null);
   const hash = commitInbox(ctx.reportDir, identity.name, 'general-review', { executiveSummary: body.executiveSummary, openDisagreements });
   return `General review committed. Hash: ${hash}. Finish with a short acknowledgement.`;
 }

@@ -19,7 +19,23 @@ export const CLI_DEFAULT_MODELS = Object.freeze({
 });
 
 const CLI_VENDORS = { claude: 'anthropic', 'claude-zai': 'zai', codex: 'openai', grok: 'xai', agy: 'google' };
-const ORG_VENDORS = { anthropic: 'anthropic', openai: 'openai', 'x-ai': 'xai', xai: 'xai', google: 'google', qwen: 'alibaba', 'z-ai': 'zai' };
+const ORG_VENDORS = {
+  anthropic: 'anthropic', openai: 'openai', 'x-ai': 'xai', xai: 'xai', google: 'google', qwen: 'alibaba', alibaba: 'alibaba', 'z-ai': 'zai', zai: 'zai', 'zai-org': 'zai', zhipuai: 'zai', thudm: 'zai',
+  meta: 'meta', 'meta-llama': 'meta', mistral: 'mistral', mistralai: 'mistral', deepseek: 'deepseek', 'deepseek-ai': 'deepseek', moonshot: 'moonshot', moonshotai: 'moonshot',
+};
+// The model family named in a hosted model's own name. A host or reseller org in front of it does not change who
+// trained the model, and the peer, challenger, agreement and judge rules are about who trained it.
+const MODEL_FAMILIES = [
+  [/(?:^|[^a-z])claude/, 'anthropic'], [/(?:^|[^a-z])(?:gpt|chatgpt|codex|o[134](?:-|$))/, 'openai'], [/(?:^|[^a-z])grok/, 'xai'],
+  [/(?:^|[^a-z])(?:gemini|gemma)/, 'google'], [/(?:^|[^a-z])qwen/, 'alibaba'], [/(?:^|[^a-z])glm/, 'zai'], [/(?:^|[^a-z])llama/, 'meta'],
+  [/(?:^|[^a-z])(?:mistral|mixtral|codestral|devstral)/, 'mistral'], [/(?:^|[^a-z])deepseek/, 'deepseek'], [/(?:^|[^a-z])kimi/, 'moonshot'],
+];
+
+function vendorOfModelName(name) {
+  const text = String(name || '').toLowerCase();
+  for (const [re, vendor] of MODEL_FAMILIES) if (re.test(text)) return vendor;
+  return null;
+}
 
 const MAX_ID = 64;
 
@@ -37,7 +53,8 @@ export function vendorOf(reviewer) {
   const r = typeof reviewer === 'string' ? splitSpec(reviewer) : reviewer;
   if (r.family === 'cli') return CLI_VENDORS[r.provider] || r.provider;
   if (r.family === 'key') return r.provider;
-  if (r.family === 'nearai') return 'nearai';
+  // NEAR AI Cloud hosts other vendors' models; the vendor is the model's, or 'nearai' when the name does not say.
+  if (r.family === 'nearai') return vendorOfHostedModel(r.model, 'nearai');
   if (r.family === 'scripted') return 'scripted';
   if (r.family === 'openrouter') {
     return vendorOfOpenRouterModel(r.model);
@@ -45,10 +62,18 @@ export function vendorOf(reviewer) {
   return r.provider;
 }
 
-// OpenRouter slugs are <org>/<model>; the org names the vendor. A slug without an org is 'openrouter'.
+// OpenRouter slugs are <org>/<model>. The model's own name decides the vendor when it names a known family
+// (somehost/claude-opus-5.5 is anthropic); otherwise the org does. A slug without an org is 'openrouter'.
 export function vendorOfOpenRouterModel(model) {
+  return vendorOfHostedModel(model, 'openrouter');
+}
+
+function vendorOfHostedModel(model, host) {
   const text = String(model || '');
-  if (!text.includes('/')) return 'openrouter';
+  const slash = text.lastIndexOf('/');
+  const byName = vendorOfModelName(slash >= 0 ? text.slice(slash + 1) : text);
+  if (byName) return byName;
+  if (slash < 0) return host;
   const org = text.split('/')[0].toLowerCase();
   return ORG_VENDORS[org] || org.replace(/[^a-z0-9-]+/g, '-');
 }

@@ -90,8 +90,11 @@ test('model debaters answer through the bridge handlers and the judge must be an
   assert.notEqual(row.judge.vendor, 'anthropic');
   assert.ok(calls.some((c) => c.role === 'orchestrator' && c.assignment.kind === 'judge' && c.agent === row.judge.reviewerId));
   const roundOne = fs.readdirSync(path.join(out, 'debate', 'round-1'));
+  // Of the two non-authors one is reserved as the judge; the other challenges and then speaks the devil's turn.
   assert.equal(roundOne.length, 2);
-  assert.ok(roundOne.every((name) => /^Reviewer [A-Z]-CLUSTER-1\.json$/.test(name)));
+  assert.equal(calls.some((c) => c.role === 'debater' && c.agent === row.judge.reviewerId), false, 'the judge did not argue on its own cluster');
+  assert.ok(roundOne.every((name) => /^Reviewer [A-Z]-CLUSTER-1(?:-devil)?\.json$/.test(name)));
+  assert.equal(roundOne.filter((name) => name.endsWith('-devil.json')).length, 1);
   const general = JSON.parse(fs.readFileSync(path.join(out, 'general-review.json'), 'utf8'));
   assert.equal(general.executiveSummary, 'One confirmed injection.');
   assert.deepEqual(general.topFindings.map((f) => f.finalStatus), ['CONFIRMED']);

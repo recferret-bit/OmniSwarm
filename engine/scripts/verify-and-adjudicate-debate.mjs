@@ -7,7 +7,9 @@ const FINAL_MULTIPLIER = { AGREED: 0.9, CONFIRMED: 0.9, LIKELY: 0.7, DISPUTED: 0
 
 function outcomeOf(cluster, judged) {
   if (cluster.status === 'AGREED') return { finalStatus: 'AGREED', debateRounds: 0, judge: judged?.judge || null, severityReason: judged?.severityReason || null };
-  if (cluster.status === 'CAPPED' || !judged) return { debateGap: cluster.status === 'CAPPED' ? 'debate_cap' : 'not_adjudicated', debateRounds: 0 };
+  // A capped cluster was not debated; its status comes from the citation rules alone and the gap stays on the row.
+  if (cluster.status === 'CAPPED') return { debateGap: 'debate_cap', debateRounds: 0, ...(judged ? { finalStatus: judged.finalStatus, judge: judged.judge, severityReason: judged.severityReason || null } : {}) };
+  if (!judged) return { debateGap: 'not_adjudicated', debateRounds: 0 };
   return { finalStatus: judged.finalStatus, debateRounds: cluster.rounds || 0, judge: judged.judge, severityReason: judged.severityReason || null, severity: judged.severity };
 }
 

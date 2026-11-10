@@ -35,6 +35,8 @@ export async function debateStage(plan) {
     ...(plan.maxUnanswered != null ? { maxUnanswered: plan.maxUnanswered } : {}),
     ...(plan.maxSpeakerUnanswered != null ? { maxSpeakerUnanswered: plan.maxSpeakerUnanswered } : {}),
     now: plan.now, signal: plan.signal,
+    prior: plan.prior || null,
+    judgeOf: (cluster) => { const choice = pickJudge(cluster, plan); return choice && !choice.rules ? choice.reviewer.id : null; },
   });
   const unheard = new Set(result.skipped);
   const clusters = built.clusters.map((row) => {
@@ -56,7 +58,15 @@ export async function adjudicateStage(plan, state) {
   const maxUnavailable = plan.maxJudgeUnavailable ?? DEFAULT_MAX_JUDGE_UNAVAILABLE;
   let consecutiveUnavailable = 0;
   for (const cluster of state.clusters) {
-    if (cluster.status === 'CAPPED') continue;
+    if (cluster.status === 'CAPPED') {
+      // Not debated, but not dropped: the citation rules give it a status so the risk posture still counts it.
+      const row = unheardAdjudication(cluster, 'debate_cap');
+      const check = validate('adjudication', row);
+      if (!check.ok) throw stageError('adjudication_invalid', `adjudication for ${cluster.id} failed its schema: ${check.errors[0]}`);
+      rows.push(row);
+      state.trace.push({ phase: 'adjudicate', template: 'rules', clusterId: cluster.id, stop: row.finalStatus, reason: 'debate_cap' });
+      continue;
+    }
     if (cluster.status === 'AGREED') { rows.push(agreedAdjudication(cluster)); continue; }
     if (state.unheard?.includes(cluster.id)) {
       const reason = state.unheardReasons?.get(cluster.id) || 'debate_time';
@@ -101,7 +111,7 @@ export function missingAnswersError(missing) {
 }
 
 export async function generalReviewStage(plan, state) {
-  const listed = state.rows.map((row) => ({ clusterId: row.clusterId, finalStatus: row.finalStatus, severity: row.severity, title: state.clusters.find((c) => c.id === row.clusterId)?.primaryTitle || row.clusterId }));
+  const listed = state.rows.map((row) => ({ clusterId: row.clusterId, finalStatus: row.finalStatus, severity: row.severity, title: state.clusters.find((c) => c.id === row.clusterId)?.primaryTitle || row.clusterId, files: [...new Set((state.clusters.find((c) => c.id === row.clusterId)?.anchors || []).map((anchor) => anchor.file))] }));
   const rawSummary = state.rows.length
     ? await boundedCall(plan.turnMs ?? DEFAULTS.debate.turnMs, plan.signal, (signal) => plan.summaryVoice({ rows: state.rows, clusters: listed, signal }))
     : rulesSummary(state.rows);

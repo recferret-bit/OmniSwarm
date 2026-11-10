@@ -6,6 +6,7 @@ import path from 'node:path';
 import { sha256Json as digest } from './hash-util.mjs';
 import { parseReviewerSpec } from './reviewer-registry.mjs';
 import { bridgeRole } from './bridge-tools-registry.mjs';
+import { digestTree } from './bridge-reads.mjs';
 import { writeJson, writeText } from './report-util-files.mjs';
 
 export const SCRIPTS = path.dirname(new URL(import.meta.url).pathname);
@@ -75,6 +76,12 @@ export function runFromPanel(panel) {
 }
 
 export function phaseContext({ out, reviewers, target, orchestrator = null, alternateJudge = null, execute, rounds = 2 }) {
+  // A real run seals the snapshot before any phase starts (docker-agent-orchestrator.mjs); the debate refuses a
+  // non-fixture target without that manifest.
+  if (!fs.existsSync(path.join(out, 'source-manifest.json'))) {
+    const seen = digestTree(target);
+    writeJson(out, 'source-manifest.json', { version: 1, digest: seen.digest, files: seen.files });
+  }
   return {
     request: { target, orchestrator: typeof orchestrator === 'string' && orchestrator !== 'recommended' ? parseReviewerSpec(orchestrator) : orchestrator, alternateJudge },
     output: out, reviewers, surfaceArg: 's1', jobs: [], stageFailures: [],

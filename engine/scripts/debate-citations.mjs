@@ -7,6 +7,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { LINE_TOLERANCE } from './cluster-findings.mjs';
 
+const MAX_RANGE_LINES = 400;
+// A quote shorter than this (a brace, `;`, `Ok`) matches almost any range and proves nothing.
+const MIN_QUOTE_CHARS = 6;
+
 function normalizeQuote(text) {
   return String(text || '').replace(/\s+/g, ' ').trim();
 }
@@ -40,7 +44,7 @@ export function sourceReader(root, manifest = null) {
 function range(citation) {
   const start = Number(citation?.startLine);
   const end = Number(citation?.endLine ?? start);
-  return Number.isInteger(start) && Number.isInteger(end) && start >= 1 && end >= start && end - start <= 400 ? { start, end } : null;
+  return Number.isInteger(start) && Number.isInteger(end) && start >= 1 && end >= start && end - start < MAX_RANGE_LINES ? { start, end } : null;
 }
 
 export function checkCitation(reader, citation) {
@@ -51,7 +55,28 @@ export function checkCitation(reader, citation) {
   const slice = normalizeQuote(read.lines.slice(span.start - 1, span.end).join('\n'));
   const quote = normalizeQuote(citation.quote);
   if (!quote || !slice.includes(quote)) return { ...citation, valid: false, reason: 'quote_not_found' };
+  if (quote.replace(/\s/g, '').length < MIN_QUOTE_CHARS) return { ...citation, valid: false, reason: 'quote_too_short' };
   return { ...citation, valid: true };
+}
+
+// The lines the quote actually occupies inside its cited range: the tightest window that still contains it.
+// Relevance is judged on these lines, so a wide range that merely touches the cluster cannot carry a quote
+// from somewhere else in the file.
+export function quoteSpan(reader, citation) {
+  const read = reader.lines(citation?.file);
+  const span = range(citation);
+  const quote = normalizeQuote(citation?.quote);
+  if (read.error || !span || !quote) return null;
+  for (let start = span.start; start <= span.end; start++) {
+    for (let end = start; end <= span.end; end++) {
+      if (normalizeQuote(read.lines.slice(start - 1, end).join('\n')).includes(quote)) {
+        let tight = start;
+        while (tight < end && normalizeQuote(read.lines.slice(tight, end).join('\n')).includes(quote)) tight += 1;
+        return { start: tight, end };
+      }
+    }
+  }
+  return null;
 }
 
 // The source line behind a finding's `file:line` location, checked like any citation. A blank line or a lone
@@ -67,6 +92,7 @@ export function anchorEvidence(reader, { file, line }) {
 }
 
 const FUNCTION_SPAN = 80;
+const HAS_FUNCTIONS = /\.(?:rs|[cm]?[jt]sx?|py|go|sol|java|kt|rb|php|c|cc|cpp|h|cs|swift|move|vy|cairo|vue|svelte)$/i;
 const DECLARATION_BOUNDARY = /^\s*(?:export\s+)?(?:default\s+)?(?:pub(?:\([^)]*\))?\s+)?(?:async\s+)?(?:fn|def|function|class|struct|enum|impl|trait|mod|interface)\b/;
 const ARROW_BOUNDARY = /^\s*(?:export\s+)?(?:const|let|var)\s+[A-Za-z_$][\w$]*\s*(?::[^=]+)?=\s*(?:async\s*)?(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*(?::[^=]+)?=>/;
 const METHOD_CONTROL = new Set(['if', 'for', 'while', 'switch', 'catch', 'with', 'function', 'return', 'throw', 'new', 'super', 'import', 'export', 'match', 'loop']);
@@ -100,14 +126,34 @@ function sameFunctionSpan(lines, span, anchorLine, maxDistance = FUNCTION_SPAN) 
   return true;
 }
 
+const indentOf = (text) => /^\s*/.exec(text)[0].replace(/\t/g, '    ').length;
+
+// True when a non-blank line strictly between the two lines is indented less than both of them: the block
+// that holds one of the lines closed, or a new one opened, before the other line.
+function blockEndsBetween(lines, a, b) {
+  const [from, to] = a < b ? [a, b] : [b, a];
+  const floor = Math.min(indentOf(lines[from - 1] ?? ''), indentOf(lines[to - 1] ?? ''));
+  for (let i = from + 1; i < to; i++) {
+    const text = lines[i - 1] ?? '';
+    if (text.trim() && indentOf(text) < floor) return true;
+  }
+  return false;
+}
+
 export function relevantTo(citation, anchors, tolerance = LINE_TOLERANCE, reader = null) {
-  const span = range(citation);
+  const span = (reader && quoteSpan(reader, citation)) || range(citation);
   if (!span) return false;
   const lines = reader ? reader.lines(citation.file)?.lines : null;
   return anchors.some((anchor) => {
     if (anchor.file !== citation.file) return false;
-    if (anchor.line >= span.start - tolerance && anchor.line <= span.end + tolerance) return true;
-    return lines ? sameFunctionSpan(lines, span, anchor.line) : false;
+    if (anchor.line >= span.start - tolerance && anchor.line <= span.end + tolerance) {
+      // Near is not enough when a block ends in between: the next service of a compose file, the next
+      // function or the next location block is a different subject three lines away.
+      const edge = anchor.line < span.start ? span.start : anchor.line > span.end ? span.end : anchor.line;
+      if (!lines || !blockEndsBetween(lines, anchor.line, edge)) return true;
+    }
+    // The same-function widening needs functions: configuration files (YAML, TOML, proxy and Docker files) have none.
+    return lines && HAS_FUNCTIONS.test(citation.file) ? sameFunctionSpan(lines, span, anchor.line) : false;
   });
 }
 

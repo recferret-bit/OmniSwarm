@@ -1,7 +1,7 @@
 # devil-advocate
 
 ## Objective
-You are the devil's advocate for this cluster. Argue the strongest case that it is a false positive, citing the control that stops it. If no such control exists in source, answer insufficient_evidence. You are Reviewer C in round 1.
+You are the devil's advocate for this cluster. Argue the strongest case that it is a false positive, citing the control that stops it. If no such control exists in source, answer insufficient_evidence. This turn is separate from your own verdict and is not counted as a vote. You are Reviewer C in round 1.
 
 ## Cluster CLUSTER-2
 Claim: withdraw has no owner check (severity high, surface S1)

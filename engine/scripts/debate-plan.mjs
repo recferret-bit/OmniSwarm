@@ -4,6 +4,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { loadClaims } from './debate-claims.mjs';
+import { crosscheckPrior } from './debate-crosscheck.mjs';
 import { sourceReader } from './debate-citations.mjs';
 import { isFixtureTarget, SCRIPTED_JUDGE_REFUSAL } from './debate-fixtures.mjs';
 import { scriptedVoice } from './debate-scripted.mjs';
@@ -81,13 +82,13 @@ function partialSurfacesOf(ctx) {
 
 // A plan with no bridge: scripted reviewers and the scripted judge only, on an OmniSwarm fixture. Used by the
 // host demo (claims loaded from its report dir) and the golden eval (claims passed in).
-export function offlinePlan({ out, sourceRoot, claims, controls, reviewers, rounds = DEBATE_DEFAULTS.rounds, scope = ['S1'], manifest = null }) {
+export function offlinePlan({ out, sourceRoot, claims, controls, reviewers, rounds = DEBATE_DEFAULTS.rounds, scope = ['S1'], manifest = null, maxClusters = DEBATE_DEFAULTS.maxClusters }) {
   if (!isFixtureTarget(sourceRoot)) throw stageError(SCRIPTED_JUDGE_REFUSAL, `${SCRIPTED_JUDGE_REFUSAL}: the offline debate runs only on OmniSwarm fixtures`);
   if (!claims) ({ claims, controls, reviewers } = loadClaims(out));
   const orchestrator = { id: 'scripted-judge', family: 'scripted', provider: 'judge', vendor: 'scripted', model: 'judge' };
   const reader = sourceReader(sourceRoot, manifest);
   return {
-    out, reader, claims, reviewers, orchestrator, alternate: null, rounds, maxClusters: DEBATE_DEFAULTS.maxClusters,
+    out, reader, claims, reviewers, orchestrator, alternate: null, rounds, maxClusters,
     turnMs: DEBATE_DEFAULTS.turnMs, phaseMs: DEBATE_DEFAULTS.phaseMs, seed: 1,
     vendors: new Map(reviewers.map((r) => [r.id, r.vendor])),
     voices: voicesFor(reviewers, { claims, controls, reader, bridge: null }),
@@ -104,13 +105,18 @@ export function debatePlan(ctx, env = process.env) {
   if (!orchestrator) return null;
   if (orchestrator.family === 'scripted' && !isFixtureTarget(ctx.request?.target)) throw stageError(SCRIPTED_JUDGE_REFUSAL, `${SCRIPTED_JUDGE_REFUSAL}: the scripted judge runs only on OmniSwarm fixtures`);
   const debate = { ...DEBATE_DEFAULTS, ...(ctx.budgets?.debate || {}) };
-  const reader = sourceReader(ctx.request.target, readJsonOr(ctx.output, 'source-manifest.json', null));
+  // Citations are checked against the sealed snapshot. Without its manifest the checker would read whatever is
+  // on disk now, so a real target with no manifest stops here instead of debating unsealed source.
+  const manifest = readJsonOr(ctx.output, 'source-manifest.json', null);
+  if (!manifest && !isFixtureTarget(ctx.request?.target)) throw stageError('source_manifest_missing', 'source_manifest_missing: the debate needs source-manifest.json to check citations against the sealed snapshot');
+  const reader = sourceReader(ctx.request.target, manifest);
   const { claims, controls, reviewers: metaReviewers } = loadClaims(ctx.output);
   const reviewers = ctx.reviewers?.length ? ctx.reviewers : metaReviewers;
   return {
     out: ctx.output, reader, claims, reviewers, orchestrator, alternate: ctx.request.alternateJudge || null,
     rounds: debate.rounds, maxClusters: debate.maxClusters, turnMs: debate.turnMs, phaseMs: debate.phaseMs,
     signal: ctx.cancellation?.signal, seed: 1,
+    prior: crosscheckPrior(ctx.output, reader),
     vendors: new Map(reviewers.map((r) => [r.id, r.vendor])),
     voices: voicesFor(reviewers, { claims, controls, reader, bridge: ctx, budget: debate.toolBudget }),
     judgeVoice: (choice) => bridgeJudge(ctx, choice.reviewer, debate.toolBudget),

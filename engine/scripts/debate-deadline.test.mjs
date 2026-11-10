@@ -312,7 +312,7 @@ test('per-speaker threshold isolates one failing reviewer while healthy reviewer
   ]);
   const res = await runRounds({ out, clusters, voices, vendors: new Map([['alice', 'anthropic'], ['broken', 'xai'], ['healthy', 'openai']]), reader, rounds: 1, maxUnanswered: 6, maxSpeakerUnanswered: 2 });
   assert.equal(brokenCalls, 2, 'broken speaker stops being called after maxSpeakerUnanswered (2) consecutive failures');
-  assert.equal(healthyCalls, 4, 'healthy speaker still debates all 4 clusters');
+  assert.equal(healthyCalls, 8, 'healthy speaker still debates all 4 clusters: its own turn and the devil\'s advocate turn on each');
   assert.deepEqual(res.skipped, []);
   assert.ok(res.gaps.some((g) => g.reason === 'speaker_threshold'));
 
