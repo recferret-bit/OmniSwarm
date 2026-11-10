@@ -6,3 +6,24 @@ jobs:
       - uses: actions/setup-node@8ade3b6b7e0a1c2d3e4f50617890abcdef12345678
         with:
           node-version: 24
+services:
+  db:
+    image: postgres:16.4@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "127.0.0.1:5432:5432"
+    securityContext:
+      allowPrivilegeEscalation: false
+      runAsUser: 10001
+JWT_SECRET=${JWT_SECRET}
+permissions:
+  contents: read
+      - run: ./deploy.sh "$TITLE"
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+    listen 443 ssl;
+    autoindex off;
+    add_header Access-Control-Allow-Origin https://app.example;
+    proxy_set_header X-Forwarded-For $remote_addr;
+    cidr_blocks = ["10.0.0.0/8"]

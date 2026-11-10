@@ -19,7 +19,8 @@
 import path from 'node:path';
 import { detectEcosystems, isProductionPath } from './stack-detect.mjs';
 import { DOMAIN_SPECS, PYTHON_CHECKS, REVIEW_CHECKS } from './audit-plans-data-domains.mjs';
-import { NEAR_CLIENT_SURFACE, NEAR_CONTRACT_SURFACE, NODE_SURFACE, PYTHON_SURFACE, SOLANA_SURFACE, SURFACE_TITLES } from './audit-plans-data-surfaces.mjs';
+import { INFRA_SURFACE, NEAR_CLIENT_SURFACE, NEAR_CONTRACT_SURFACE, NODE_SURFACE, PYTHON_SURFACE, SOLANA_SURFACE, SURFACE_TITLES, WALLET_SURFACE } from './audit-plans-data-surfaces.mjs';
+import { LAYER_TITLES, buildLayerMap, renderLayerLines } from './harness-layers.mjs';
 import { SKIP_DIRS as WALK_SKIP_DIRS, matchLines, readText, rel as relPath, walk } from './harness-walk.mjs';
 
 // The harness skip list plus reports/, walked in name order so the plan is stable across file systems.
@@ -113,6 +114,7 @@ export function analyzeStackAndPlans(targetRoot) {
   return {
     scannedFiles,
     ecosystems: detectEcosystems(root),
+    layers: buildLayerMap(root),
     detectedStacks: domains.filter((d) => d.detected).map((d) => d.id),
     domains,
   };
@@ -144,6 +146,8 @@ export function renderReviewPlansMarkdown(profile, surfaceFilter = '') {
     '',
     ...renderEcosystemLines(profile),
     '',
+    ...renderLayerLines(profile.layers),
+    ...(profile.layers ? [''] : []),
     '## Stack & Risk Domain Matrix',
     '',
     '| Domain ID | Subsystem / Focus | Status | Leads | Primary Surfaces |',
@@ -203,11 +207,22 @@ export function renderSurfaceSkillGuidance(surfaceCode, profile) {
   const [title, domains] = SURFACE_TITLES[code];
   const lines = [`### ${code} Skill Focus — ${title} (${domains})`];
   if (eco) lines.push(`Detected stack: ${eco.primary.join(', ') || 'unknown'}${eco.python?.frameworks?.length ? ` (Python frameworks: ${eco.python.frameworks.join(', ')})` : ''}${eco.solana?.detected ? '; Solana program present' : ''}${eco.near?.detected ? `; NEAR (${eco.near.contracts ? 'contract' : 'no contract crate'}${eco.near.kinds?.length ? `: ${eco.near.kinds.join(', ')}` : ''})` : ''}. Do not apply checks for ecosystems that are absent.`);
-  if (want('python')) lines.push(...PYTHON_SURFACE[code]);
-  if (want('node')) lines.push(...NODE_SURFACE[code]);
-  if (want('solana')) lines.push(...(SOLANA_SURFACE[code] || []));
-  if (want('near') && nearContract) lines.push(...(NEAR_CONTRACT_SURFACE[code] || []));
-  if (want('near') && nearClient) lines.push(...(NEAR_CLIENT_SURFACE[code] || []));
+  // One block per layer, so application, on-chain and infrastructure checks are never read as one list.
+  const layers = profile?.layers;
+  const clientFiles = layers?.clientFiles?.length > 0;
+  const blocks = {
+    web2: [...(want('python') ? PYTHON_SURFACE[code] : []), ...(want('node') ? NODE_SURFACE[code] : [])],
+    web3: [
+      ...(want('solana') ? SOLANA_SURFACE[code] || [] : []),
+      ...(want('near') && nearContract ? NEAR_CONTRACT_SURFACE[code] || [] : []),
+      ...(want('near') && nearClient ? NEAR_CLIENT_SURFACE[code] || [] : []),
+      ...(!layers || clientFiles || eco?.solana?.detected || nearClient ? WALLET_SURFACE[code] || [] : []),
+    ],
+    infra: !layers || layers.counts?.infra > 0 ? INFRA_SURFACE[code] || [] : [],
+  };
+  for (const [layer, rows] of Object.entries(blocks)) {
+    if (rows.length) lines.push('', `#### ${LAYER_TITLES[layer]}`, ...rows);
+  }
   lines.push(
     '',
     '### Mandatory Cross-Cutting Skill Checks (Apply to Every Surface)',

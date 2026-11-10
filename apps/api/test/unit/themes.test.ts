@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { normalizeScopes, partition, partitionTree, shouldSplit, themeOf } from '../../src/worker/themes.ts';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { normalizeScopes, partition, partitionTree, rootFileThemes, shouldSplit, themeOf } from '../../src/worker/themes.ts';
+import { materialize } from '../../src/worker/theme-split.ts';
 
 test('top-level names land in one theme, and deps and docs are skipped', () => {
   assert.equal(themeOf('contracts'), 'web3');
@@ -42,4 +46,29 @@ test('a small full review stays one job; a large or scoped review is queued per 
   assert.equal(normalizeScopes(['web3']), 'web3');
   assert.equal(normalizeScopes(['full', 'web2']), 'full');
   assert.equal(normalizeScopes([]), 'full');
+});
+
+test('root files are not themes, and each slice receives only the root files of its own layer', () => {
+  const files = ['Anchor.toml', 'README.md', 'package.json', 'docker-compose.yml', '.env', 'Dockerfile', 'backend/src/index.ts', 'programs/vault/src/lib.rs', 'infra/nginx.conf'];
+  assert.deepEqual(partitionTree(files, 'full'), [{ theme: 'web3', dirs: ['programs'] }, { theme: 'apps', dirs: ['backend'] }, { theme: 'infra', dirs: ['infra'] }]);
+  assert.deepEqual(rootFileThemes('Anchor.toml'), ['web3']);
+  assert.deepEqual(rootFileThemes('.env.production'), ['infra']);
+  assert.deepEqual(rootFileThemes('Dockerfile'), ['apps', 'infra']);
+  assert.equal(rootFileThemes('package.json').length, 4);
+  // A repository with no directories is still one apps slice.
+  assert.deepEqual(partitionTree(['index.js', 'package.json'], 'web2'), [{ theme: 'apps', dirs: ['index.js', 'package.json'] }]);
+
+  const source = fs.mkdtempSync(path.join(os.tmpdir(), 'themes-src-'));
+  for (const file of files) {
+    fs.mkdirSync(path.dirname(path.join(source, file)), { recursive: true });
+    fs.writeFileSync(path.join(source, file), 'x\n');
+  }
+  const rootOf = (theme: 'web3' | 'apps' | 'infra') => {
+    const dest = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'themes-out-')), theme);
+    materialize(source, partitionTree(files, 'full').find((slice) => slice.theme === theme)!, dest);
+    return fs.readdirSync(dest).sort();
+  };
+  assert.deepEqual(rootOf('apps'), ['Dockerfile', 'README.md', 'backend', 'package.json']);
+  assert.deepEqual(rootOf('web3'), ['Anchor.toml', 'README.md', 'package.json', 'programs']);
+  assert.deepEqual(rootOf('infra'), ['.env', 'Dockerfile', 'README.md', 'docker-compose.yml', 'infra', 'package.json']);
 });

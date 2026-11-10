@@ -355,6 +355,7 @@ if ! docker run -d --name "$SBX" \
   -v "$SCRIPT_DIR/sandbox-artifacts.mjs:/opt/audit/sandbox-artifacts.mjs:ro" \
   -v "$SCRIPT_DIR/harness.mjs:/opt/audit/harness.mjs:ro" \
   -v "$SCRIPT_DIR/harness-leads.mjs:/opt/audit/harness-leads.mjs:ro" \
+  -v "$SCRIPT_DIR/harness-layers.mjs:/opt/audit/harness-layers.mjs:ro" \
   -v "$SCRIPT_DIR/harness-patterns-app.mjs:/opt/audit/harness-patterns-app.mjs:ro" \
   -v "$SCRIPT_DIR/harness-patterns-chain.mjs:/opt/audit/harness-patterns-chain.mjs:ro" \
   -v "$SCRIPT_DIR/harness-scanners.mjs:/opt/audit/harness-scanners.mjs:ro" \

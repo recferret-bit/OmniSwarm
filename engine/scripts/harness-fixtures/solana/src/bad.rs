@@ -46,3 +46,8 @@ pub struct Grow {}
 
 /// CHECK: supplied by the caller
 pub struct Loose {}
+
+pub fn pay(vault: &mut Vault, amount: u64, fee_bps: u64) {
+    let fee = amount * fee_bps;
+    vault.total += amount;
+}

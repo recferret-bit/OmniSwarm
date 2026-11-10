@@ -14,7 +14,7 @@ import type { Clock } from '../shared/clock.ts';
 import type { Pool } from '../db/pool.ts';
 import type { Config } from '../config/load.ts';
 import { publishReport } from './publish.ts';
-import { partitionTree, shouldSplit, type ReviewScope, type ThemeSlice } from './themes.ts';
+import { partitionTree, rootFileThemes, shouldSplit, type ReviewScope, type ThemeSlice } from './themes.ts';
 
 function git(args: string[], cwd?: string): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -56,7 +56,7 @@ export function materialize(source: string, slice: ThemeSlice, dest: string): vo
   };
   for (const name of fs.readdirSync(source)) {
     const from = path.join(source, name);
-    if (fs.statSync(from).isFile()) fs.copyFileSync(from, path.join(dest, name));
+    if (fs.statSync(from).isFile() && rootFileThemes(name).includes(slice.theme)) fs.copyFileSync(from, path.join(dest, name));
   }
   for (const dir of slice.dirs) {
     const from = path.join(source, dir);

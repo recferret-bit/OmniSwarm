@@ -260,11 +260,11 @@ td { overflow-wrap: anywhere; }
   <section id="findings" aria-label="Findings"><div class="section-heading"><h2><span class="section-num">02</span>Findings</h2><span class="meta-label">4 prioritized model claims</span></div>
     <div class="toolbar"><div class="filter-group" role="group" aria-label="Filter by severity">
       <button type="button" class="filter-btn active" data-filter="all" aria-pressed="true">All<span>4</span></button><button type="button" class="filter-btn" data-filter="high" aria-pressed="false">High+<span>1</span></button><button type="button" class="filter-btn" data-filter="medium" aria-pressed="false">Medium<span>1</span></button><button type="button" class="filter-btn" data-filter="low" aria-pressed="false">Low + info<span>2</span></button>
-    </div><div class="filter-group" role="group" aria-label="Filter by final status"><button type="button" class="filter-btn" data-status-filter="AGREED" aria-pressed="false">AGREED</button><button type="button" class="filter-btn" data-status-filter="CONFIRMED" aria-pressed="false">CONFIRMED</button><button type="button" class="filter-btn" data-status-filter="LIKELY" aria-pressed="false">LIKELY</button><button type="button" class="filter-btn" data-status-filter="DISPUTED" aria-pressed="false">DISPUTED</button><button type="button" class="filter-btn" data-status-filter="REFUTED" aria-pressed="false">REFUTED</button><button type="button" class="filter-btn" data-status-filter="INSUFFICIENT_EVIDENCE" aria-pressed="false">INSUFFICIENT_EVIDENCE</button></div><label class="search-wrap">Reviewer<select data-reviewer-filter aria-label="Filter by reviewer"><option value="">All reviewers</option><option value="cli-claude-opus">cli-claude-opus</option><option value="key-zai-glm-5-3">key-zai-glm-5-3</option><option value="openrouter-qwen-qwen3-8-max-0902">openrouter-qwen-qwen3-8-max-0902</option><option value="openrouter-anthropic-claude-opus-5-5">openrouter-anthropic-claude-opus-5-5</option><option value="scripted-baseline">scripted-baseline</option></select></label><label class="search-wrap"><span aria-hidden="true">⌕</span><input type="search" id="search-box" aria-label="Search findings, files, fixes and evidence" placeholder="Search findings, files, fixes…"></label></div>
+    </div><div class="filter-group" role="group" aria-label="Filter by layer"><button type="button" class="filter-btn" data-layer-filter="web2" aria-pressed="false">web2</button><button type="button" class="filter-btn" data-layer-filter="web3" aria-pressed="false">web3</button><button type="button" class="filter-btn" data-layer-filter="infra" aria-pressed="false">infra</button></div><div class="filter-group" role="group" aria-label="Filter by final status"><button type="button" class="filter-btn" data-status-filter="AGREED" aria-pressed="false">AGREED</button><button type="button" class="filter-btn" data-status-filter="CONFIRMED" aria-pressed="false">CONFIRMED</button><button type="button" class="filter-btn" data-status-filter="LIKELY" aria-pressed="false">LIKELY</button><button type="button" class="filter-btn" data-status-filter="DISPUTED" aria-pressed="false">DISPUTED</button><button type="button" class="filter-btn" data-status-filter="REFUTED" aria-pressed="false">REFUTED</button><button type="button" class="filter-btn" data-status-filter="INSUFFICIENT_EVIDENCE" aria-pressed="false">INSUFFICIENT_EVIDENCE</button></div><label class="search-wrap">Reviewer<select data-reviewer-filter aria-label="Filter by reviewer"><option value="">All reviewers</option><option value="cli-claude-opus">cli-claude-opus</option><option value="key-zai-glm-5-3">key-zai-glm-5-3</option><option value="openrouter-qwen-qwen3-8-max-0902">openrouter-qwen-qwen3-8-max-0902</option><option value="openrouter-anthropic-claude-opus-5-5">openrouter-anthropic-claude-opus-5-5</option><option value="scripted-baseline">scripted-baseline</option></select></label><label class="search-wrap"><span aria-hidden="true">⌕</span><input type="search" id="search-box" aria-label="Search findings, files, fixes and evidence" placeholder="Search findings, files, fixes…"></label></div>
     <div class="list-caption"><span id="results-count" role="status" aria-live="polite">4 / 4 findings</span><button type="button" id="reset-filters" class="text-button" hidden>Clear filters</button><button type="button" id="expand-all" class="text-button">Expand findings</button></div>
-    <div id="findings-container"><details id="finding-CLUSTER-1" data-reviewers="cli-claude-opus-s1-auth" data-status="DISPUTED" class="finding red" data-severity="high" data-surface="S1">
+    <div id="findings-container"><details id="finding-CLUSTER-1" data-reviewers="cli-claude-opus-s1-auth" data-status="DISPUTED" class="finding red" data-severity="high" data-surface="S1" data-layer="web2">
     <summary><span class="finding-index">01</span><div>
-      <div class="finding-tags"><span class="pill red">high</span><span class="meta-label">S1</span><span class="pill orange" data-status="DISPUTED">DISPUTED</span></div>
+      <div class="finding-tags"><span class="pill red">high</span><span class="meta-label">S1</span><span class="meta-label">web2</span><span class="pill orange" data-status="DISPUTED">DISPUTED</span></div>
       <h3>Missing owner check</h3><p class="finding-preview">Missing owner check.</p>
     </div><span class="expand-icon" aria-hidden="true"></span></summary>
     <div class="finding-body">
@@ -274,9 +274,9 @@ td { overflow-wrap: anywhere; }
       <details class="disclosure"><summary>Affected files · 1</summary><div class="citations"><code>src/lib.rs:16</code></div></details>
       <details class="disclosure"><summary>Peer reviews · 3</summary><p class="note">Model statements; no independent reproduction evidence.</p><div class="review"><span class="pill green">key-zai-glm-5-3 · upheld</span><div class="prose"><p>Read the cited line.</p></div><div class="citations"><code>src/lib.rs:16</code></div></div><div class="review"><span class="pill green">openrouter-qwen-qwen3-8-max-0902 · upheld</span><div class="prose"><p>Read the cited line.</p></div><div class="citations"><code>src/lib.rs:16</code></div></div><div class="review"><span class="pill green">scripted-baseline · upheld</span><div class="prose"><p>Read the cited line.</p></div><div class="citations"><code>src/lib.rs:16</code></div></div></details>
       
-    <details class="disclosure debate"><summary>Debate</summary><div><p><b>Reviewer A</b> round 1 refuted <span class="pill">devil's advocate</span> </p><p>The guard sits in the caller.</p><code class="citation-chip">src/lib.rs:16 ✓</code><p><b>Reviewer B</b> round 1 refuted  </p><p>A bad quote.</p><code class="citation-chip">src/lib.rs:16 ✗ quote_not_found</code><p><b>Reviewer C</b> round 1 upheld  </p><p>A quote the checker never saw.</p><code class="citation-chip">src/lib.rs:16 ✗ unchecked</code><p><b>Reviewer D</b> round 2 refuted  <span class="pill">conformity suspect</span></p><p>I concede.</p><code class="citation-chip">src/lib.rs:16 ✓</code><p>Verified quotes disagree.</p><p>Left as reported.</p><span class="pill orange" data-status="DISPUTED">DISPUTED</span></div></details></div></details><details id="finding-CLUSTER-4" data-reviewers="openrouter-anthropic-claude-opus-5-5-s1-auth" data-status="LIKELY" class="finding orange" data-severity="medium" data-surface="S1">
+    <details class="disclosure debate"><summary>Debate</summary><div><p><b>Reviewer A</b> round 1 refuted <span class="pill">devil's advocate</span> </p><p>The guard sits in the caller.</p><code class="citation-chip">src/lib.rs:16 ✓</code><p><b>Reviewer B</b> round 1 refuted  </p><p>A bad quote.</p><code class="citation-chip">src/lib.rs:16 ✗ quote_not_found</code><p><b>Reviewer C</b> round 1 upheld  </p><p>A quote the checker never saw.</p><code class="citation-chip">src/lib.rs:16 ✗ unchecked</code><p><b>Reviewer D</b> round 2 refuted  <span class="pill">conformity suspect</span></p><p>I concede.</p><code class="citation-chip">src/lib.rs:16 ✓</code><p>Verified quotes disagree.</p><p>Left as reported.</p><span class="pill orange" data-status="DISPUTED">DISPUTED</span></div></details></div></details><details id="finding-CLUSTER-4" data-reviewers="openrouter-anthropic-claude-opus-5-5-s1-auth" data-status="LIKELY" class="finding orange" data-severity="medium" data-surface="S1" data-layer="web2">
     <summary><span class="finding-index">02</span><div>
-      <div class="finding-tags"><span class="pill orange">medium</span><span class="meta-label">S1</span><span class="pill blue" data-status="LIKELY">LIKELY</span></div>
+      <div class="finding-tags"><span class="pill orange">medium</span><span class="meta-label">S1</span><span class="meta-label">web2</span><span class="pill blue" data-status="LIKELY">LIKELY</span></div>
       <h3>Logged secret</h3><p class="finding-preview">Logged secret.</p>
     </div><span class="expand-icon" aria-hidden="true"></span></summary>
     <div class="finding-body">
@@ -286,9 +286,9 @@ td { overflow-wrap: anywhere; }
       <details class="disclosure"><summary>Affected files · 1</summary><div class="citations"><code>src/log.ts:3</code></div></details>
       <details class="disclosure"><summary>Peer reviews · 3</summary><p class="note">Model statements; no independent reproduction evidence.</p><div class="review"><span class="pill green">key-zai-glm-5-3 · upheld</span><div class="prose"><p>Read the cited line.</p></div><div class="citations"><code>src/log.ts:3</code></div></div><div class="review"><span class="pill green">openrouter-qwen-qwen3-8-max-0902 · upheld</span><div class="prose"><p>Read the cited line.</p></div><div class="citations"><code>src/log.ts:3</code></div></div><div class="review"><span class="pill green">scripted-baseline · upheld</span><div class="prose"><p>Read the cited line.</p></div><div class="citations"><code>src/log.ts:3</code></div></div></details>
       
-    <details class="disclosure debate"><summary>Debate</summary><div><p>Single source, not refuted.</p><p>Left as reported.</p><span class="pill blue" data-status="LIKELY">LIKELY</span></div></details></div></details><details id="finding-CLUSTER-2" data-reviewers="key-zai-glm-5-3-s1-auth openrouter-qwen-qwen3-8-max-0902-s1-auth" data-status="AGREED" class="finding blue" data-severity="low" data-surface="S1">
+    <details class="disclosure debate"><summary>Debate</summary><div><p>Single source, not refuted.</p><p>Left as reported.</p><span class="pill blue" data-status="LIKELY">LIKELY</span></div></details></div></details><details id="finding-CLUSTER-2" data-reviewers="key-zai-glm-5-3-s1-auth openrouter-qwen-qwen3-8-max-0902-s1-auth" data-status="AGREED" class="finding blue" data-severity="low" data-surface="S1" data-layer="web2">
     <summary><span class="finding-index">03</span><div>
-      <div class="finding-tags"><span class="pill blue">low</span><span class="meta-label">S1</span><span class="pill green" data-status="AGREED">AGREED</span><span class="pill" title="Claims merged by shared root cause">2 claims · 2 auditors</span></div>
+      <div class="finding-tags"><span class="pill blue">low</span><span class="meta-label">S1</span><span class="meta-label">web2</span><span class="pill green" data-status="AGREED">AGREED</span><span class="pill" title="Claims merged by shared root cause">2 claims · 2 auditors</span></div>
       <h3>Agreed check</h3><p class="finding-preview">Agreed check.</p>
     </div><span class="expand-icon" aria-hidden="true"></span></summary>
     <div class="finding-body">
@@ -298,9 +298,9 @@ td { overflow-wrap: anywhere; }
       <details class="disclosure"><summary>Affected files · 1</summary><div class="citations"><code>src/lib.rs:30</code></div></details>
       <details class="disclosure"><summary>Peer reviews · 8</summary><p class="note">Model statements; no independent reproduction evidence.</p><div class="review"><span class="pill green">cli-claude-opus · upheld</span><div class="prose"><p>Read the cited line.</p></div><div class="citations"><code>src/lib.rs:30</code></div></div><div class="review"><span class="pill green">openrouter-anthropic-claude-opus-5-5 · upheld</span><div class="prose"><p>Read the cited line.</p></div><div class="citations"><code>src/lib.rs:30</code></div></div><div class="review"><span class="pill green">openrouter-qwen-qwen3-8-max-0902 · upheld</span><div class="prose"><p>Read the cited line.</p></div><div class="citations"><code>src/lib.rs:30</code></div></div><div class="review"><span class="pill green">scripted-baseline · upheld</span><div class="prose"><p>Read the cited line.</p></div><div class="citations"><code>src/lib.rs:30</code></div></div><div class="review"><span class="pill green">cli-claude-opus · upheld</span><div class="prose"><p>Read the cited line.</p></div><div class="citations"><code>src/lib.rs:30</code></div></div><div class="review"><span class="pill green">key-zai-glm-5-3 · upheld</span><div class="prose"><p>Read the cited line.</p></div><div class="citations"><code>src/lib.rs:30</code></div></div><div class="review"><span class="pill green">openrouter-anthropic-claude-opus-5-5 · upheld</span><div class="prose"><p>Read the cited line.</p></div><div class="citations"><code>src/lib.rs:30</code></div></div><div class="review"><span class="pill green">scripted-baseline · upheld</span><div class="prose"><p>Read the cited line.</p></div><div class="citations"><code>src/lib.rs:30</code></div></div></details>
       
-    <details class="disclosure debate"><summary>Debate</summary><div><p>AGREED at triage.</p><p>Left at the reported severity.</p><span class="pill green" data-status="CONFIRMED">CONFIRMED</span></div></details></div></details><details id="finding-CLUSTER-3" data-reviewers="cli-claude-opus-s1-auth" data-status="PARTIAL_REVIEW" class="finding blue" data-severity="low" data-surface="S1">
+    <details class="disclosure debate"><summary>Debate</summary><div><p>AGREED at triage.</p><p>Left at the reported severity.</p><span class="pill green" data-status="CONFIRMED">CONFIRMED</span></div></details></div></details><details id="finding-CLUSTER-3" data-reviewers="cli-claude-opus-s1-auth" data-status="PARTIAL_REVIEW" class="finding blue" data-severity="low" data-surface="S1" data-layer="web2">
     <summary><span class="finding-index">04</span><div>
-      <div class="finding-tags"><span class="pill blue">low</span><span class="meta-label">S1</span><span class="pill">partial review</span></div>
+      <div class="finding-tags"><span class="pill blue">low</span><span class="meta-label">S1</span><span class="meta-label">web2</span><span class="pill">partial review</span></div>
       <h3>Unchecked arithmetic</h3><p class="finding-preview">Unchecked arithmetic.</p>
     </div><span class="expand-icon" aria-hidden="true"></span></summary>
     <div class="finding-body">
@@ -331,10 +331,10 @@ td { overflow-wrap: anywhere; }
   const cards = all('.finding');
   const search = doc.querySelector('#search-box');
   const reviewerSelect = doc.querySelector('[data-reviewer-filter]');
-  const state = { severity: 'all', surface: 'all', status: '', reviewer: '', query: '' };
+  const state = { severity: 'all', surface: 'all', layer: '', status: '', reviewer: '', query: '' };
   const press = (buttons, active) => buttons.forEach((item) => { item.classList?.toggle('active', item === active); item.setAttribute('aria-pressed', String(item === active)); });
   const view = (card) => ({
-    severity: card.dataset.severity, surface: card.dataset.surface, status: card.dataset.status || '',
+    severity: card.dataset.severity, surface: card.dataset.surface, layer: card.dataset.layer || '', status: card.dataset.status || '',
     reviewers: (card.dataset.reviewers || '').split(/\s+/).filter(Boolean), text: card.textContent.toLowerCase(),
   });
   const label = () => {
@@ -351,7 +351,7 @@ td { overflow-wrap: anywhere; }
     const empty = doc.querySelector('#empty-results');
     if (empty) empty.hidden = shown !== 0;
     const reset = doc.querySelector('#reset-filters');
-    if (reset) reset.hidden = state.severity === 'all' && state.surface === 'all' && !state.status && !state.reviewer && !state.query;
+    if (reset) reset.hidden = state.severity === 'all' && state.surface === 'all' && !state.layer && !state.status && !state.reviewer && !state.query;
     label();
   };
   const severityButtons = all('[data-filter]');
@@ -369,14 +369,20 @@ td { overflow-wrap: anywhere; }
     statusButtons.forEach((item) => item.setAttribute('aria-pressed', String(item.dataset.statusFilter === state.status)));
     apply();
   }));
+  const layerButtons = all('[data-layer-filter]');
+  layerButtons.forEach((button) => button.addEventListener('click', () => {
+    state.layer = state.layer === button.dataset.layerFilter ? '' : button.dataset.layerFilter;
+    layerButtons.forEach((item) => item.setAttribute('aria-pressed', String(item.dataset.layerFilter === state.layer)));
+    apply();
+  }));
   reviewerSelect?.addEventListener('change', () => { state.reviewer = reviewerSelect.value; apply(); });
   search?.addEventListener('input', apply);
   doc.querySelector('#reset-filters')?.addEventListener('click', () => {
-    Object.assign(state, { severity: 'all', surface: 'all', status: '', reviewer: '' });
+    Object.assign(state, { severity: 'all', surface: 'all', layer: '', status: '', reviewer: '' });
     if (search) search.value = '';
     if (reviewerSelect) reviewerSelect.value = '';
     press(severityButtons, severityButtons.find((item) => item.dataset.filter === 'all'));
-    [...surfaceButtons, ...statusButtons].forEach((item) => item.setAttribute('aria-pressed', 'false'));
+    [...surfaceButtons, ...layerButtons, ...statusButtons].forEach((item) => item.setAttribute('aria-pressed', 'false'));
     apply();
   });
   doc.querySelector('#expand-all')?.addEventListener('click', () => {
@@ -391,11 +397,12 @@ td { overflow-wrap: anywhere; }
 })(document, function cardMatches(card, state) {
   const severity = state.severity === 'all' || card.severity === state.severity || (state.severity === 'low' && card.severity === 'info');
   const surface = state.surface === 'all' || card.surface === state.surface;
+  const layer = !state.layer || card.layer === state.layer;
   const status = !state.status || card.status === state.status;
   // Cards list auditor stems (<reviewer id>-s<n>-<slug>); a reviewer id may itself contain hyphens.
   const reviewer = !state.reviewer || card.reviewers.some((id) => id === state.reviewer || (id.startsWith(`${state.reviewer}-s`) && /^\d/.test(id.slice(state.reviewer.length + 2))));
   const query = !state.query || card.text.includes(state.query);
-  return severity && surface && status && reviewer && query;
+  return severity && surface && layer && status && reviewer && query;
 });(function installPage(doc, win) {
   const all = (selector) => [...doc.querySelectorAll(selector)];
   const crossButtons = all('[data-cross-filter]');

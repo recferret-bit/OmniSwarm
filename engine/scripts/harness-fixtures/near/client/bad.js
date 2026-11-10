@@ -6,3 +6,4 @@ const agent = 'https://api.demo.agentsonintents.com';
 const mpc = 'v1.signer';
 import '@neardefi/shade-agent-js';
 const jobs = 'https://outlayer.fastnear.com';
+wallet.requestSignIn({ contractId, methodNames: [] });

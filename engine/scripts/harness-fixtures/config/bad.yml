@@ -7,3 +7,23 @@ jobs:
       - privileged: true
         volume: /var/run/docker.sock
         node-version: 18
+services:
+  db:
+    image: postgres:latest
+    environment:
+      POSTGRES_PASSWORD: hunter2
+    ports:
+      - "0.0.0.0:5432:5432"
+      - "9229:9229"
+    securityContext:
+      allowPrivilegeEscalation: true
+ENV NODE_TLS_REJECT_UNAUTHORIZED=0
+JWT_SECRET=not-a-real-secret
+permissions: write-all
+      - run: echo "token ${{ secrets.DEPLOY_TOKEN }}"
+      - run: ./deploy.sh "${{ github.event.pull_request.title }}"
+    listen 80;
+    autoindex on;
+    add_header Access-Control-Allow-Origin *;
+    proxy_set_header X-Forwarded-For $http_x_forwarded_for;
+    cidr_blocks = ["0.0.0.0/0"]

@@ -1,4 +1,5 @@
-// Lead patterns for application code: OWASP web sinks, Python, Node/TypeScript, and CI/container config. A hit is a lead.
+// Lead patterns for application code (OWASP web sinks, Python, Node/TypeScript) and for the infra layer
+// (CONFIG_PATTERNS: containers, CI, proxy, orchestration, committed environment files). A hit is a lead.
 
 export const WEB_PATTERNS = [
   { id: 'xss-html', surface: 'S6', re: /\.innerHTML\s*=|\.outerHTML\s*=|\binsertAdjacentHTML\s*\(|\bdocument\.write\s*\(/g,
@@ -25,6 +26,12 @@ export const WEB_PATTERNS = [
     note: 'Confirm event.origin is checked before the payload is trusted.' },
   { id: 'postmessage', surface: 'S6', re: /\bpostMessage\s*\(/g,
     note: 'Confirm the target origin is not *.' },
+  { id: 'wallet-sign', surface: 'S6', re: /\b(?:signTransaction|signAllTransactions|signAndSendTransactions?|signMessage|personal_sign|eth_sendTransaction|eth_signTypedData\w*)\b/g,
+    note: 'Wallet signing request. Confirm who chose what is signed (not a URL parameter, a postMessage or an unchecked API response) and that the user sees the recipient and amount.' },
+  { id: 'tx-deserialize', surface: 'S6', re: /\b(?:Versioned)?Transaction\.(?:from|deserialize)\s*\(/g,
+    note: 'A serialized transaction built elsewhere. Confirm its instructions are inspected before it is signed.' },
+  { id: 'skip-preflight', surface: 'S6', re: /\bskipPreflight\s*:\s*true\b/g,
+    note: 'Simulation is skipped. A transaction that would fail or do something else is sent anyway.' },
   { id: 'private-key', surface: 'S4', re: /-----BEGIN (?:RSA |OPENSSH |EC |PGP )?PRIVATE KEY-----/g,
     note: 'Private key material in the tree.' },
   { id: 'aws-key', surface: 'S4', re: /\bAKIA[0-9A-Z]{16}\b/g,
@@ -131,6 +138,36 @@ export const CONFIG_PATTERNS = [
     note: 'Privileged container. Confirm it is not reachable from untrusted input.' },
   { id: 'docker-sock', cls: 'S4 container', re: /docker\.sock\b/g,
     note: 'Docker socket mounted. That is root on the host.' },
+  { id: 'image-latest', cls: 'S5 container', re: /\b(?:FROM|image:)\s+[\w./-]+:latest\b/g,
+    note: 'Moving image tag. Pin a version and a digest so the build is repeatable.' },
+  { id: 'debug-port', cls: 'S4 container', re: /--inspect(?:-brk)?=0\.0\.0\.0|\b9229:9229\b/g,
+    note: 'Node inspector reachable from outside the container. The inspector runs code.' },
+  { id: 'db-bind-all', cls: 'S4 container', re: /0\.0\.0\.0:(?:5432|3306|6379|27017|9200)\b/g,
+    note: 'Database port published on every interface. Confirm it is not reachable from outside the host.' },
+  { id: 'default-password', cls: 'S4 secrets', re: /\b(?:POSTGRES_PASSWORD|MYSQL_ROOT_PASSWORD|MYSQL_PASSWORD|REDIS_PASSWORD|MONGO_INITDB_ROOT_PASSWORD)\s*[:=]\s*['"]?[^\s'"$]/g,
+    note: 'Literal database password in configuration. A finding when a deployed environment uses it.' },
+  { id: 'env-secret', cls: 'S4 secrets', re: /^(?:export\s+)?\w*(?:SECRET|PRIVATE_KEY|PASSWORD|TOKEN|API_KEY)\w*=[^\s$<]{4,}/gm,
+    note: 'Secret-named variable with a literal value in a committed file. Report the file and line; do not copy the value.' },
+  { id: 'tls-verify-env', cls: 'S4 container', re: /NODE_TLS_REJECT_UNAUTHORIZED[=\s:]+['"]?0\b|PYTHONHTTPSVERIFY[=\s:]+['"]?0\b|GIT_SSL_NO_VERIFY[=\s:]+['"]?(?:1|true)\b/g,
+    note: 'TLS verification disabled for the whole process by environment.' },
+  { id: 'ci-write-all', cls: 'S5 CI', re: /\bpermissions:\s*write-all\b/g,
+    note: 'Workflow token can write to everything. Grant the scopes each job needs.' },
+  { id: 'ci-secret-echo', cls: 'S5 CI', re: /\b(?:echo|printf)\b[^\n]*\$\{\{\s*secrets\./g,
+    note: 'A secret is printed by a step. Log masking does not cover transformed values.' },
+  { id: 'ci-script-injection', cls: 'S5 CI', re: /\brun:[^\n]*\$\{\{\s*github\.(?:head_ref|event\.[\w.]*(?:title|body|message|name|label|ref)\b)/g,
+    note: 'Event text interpolated into a shell step. Pass it through an environment variable instead.' },
+  { id: 'proxy-plain-http', cls: 'S4 proxy', re: /^\s*listen\s+(?:\[::\]:)?80\s*(?:default_server)?\s*;/gm,
+    note: 'Plain-HTTP listener. Confirm it only redirects to TLS.' },
+  { id: 'proxy-autoindex', cls: 'S4 proxy', re: /\bautoindex\s+on\b/g,
+    note: 'Directory listing enabled.' },
+  { id: 'proxy-cors-star', cls: 'S4 proxy', re: /add_header\s+['"]?Access-Control-Allow-Origin['"]?\s+['"]?\*/g,
+    note: 'Wildcard CORS added at the proxy, whatever the application decides.' },
+  { id: 'proxy-forwarded-passthrough', cls: 'S4 proxy', re: /proxy_set_header\s+X-(?:Forwarded-For|Real-IP)\s+\$http_x_/g,
+    note: 'Client-supplied forwarding header passed upstream. Rate limits and IP rules behind it can be spoofed.' },
+  { id: 'k8s-privilege', cls: 'S4 orchestration', re: /\b(?:hostNetwork|hostPID|hostIPC|allowPrivilegeEscalation)\s*:\s*true\b|\brunAsUser\s*:\s*0\b/g,
+    note: 'Pod shares a host namespace, may escalate, or runs as root.' },
+  { id: 'open-ingress', cls: 'S4 cloud', re: /cidr_blocks\s*=\s*\[\s*"0\.0\.0\.0\/0"/g,
+    note: 'Ingress from every address. Confirm the port is meant to be public.' },
 ];
 
 export const WEB_EXT = new Set(['.js', '.mjs', '.cjs', '.ts', '.tsx', '.py', '.go', '.php', '.rb', '.java', '.kt']);

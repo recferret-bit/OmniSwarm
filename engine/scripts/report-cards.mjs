@@ -64,9 +64,9 @@ export function findingCard(f, index, { originalClaims = new Map(), v2 = null } 
   const reviews = Array.isArray(f.reviews) ? f.reviews : [];
   const technical = originals.length ? originals : [primary];
   const anchor = v2 ? ` id="finding-${esc(f.debateClusterId || f.clusterId || '')}" data-reviewers="${esc((f.auditors || []).join(' '))}" data-status="${esc(f.finalStatus || f.status || '')}"` : '';
-  return `<details${anchor} class="finding ${toneOf(f.severity)}" data-severity="${esc(severityLevel(f.severity))}" data-surface="${esc(String(f.surface).toUpperCase().slice(0, 2))}">
+  return `<details${anchor} class="finding ${toneOf(f.severity)}" data-severity="${esc(severityLevel(f.severity))}" data-surface="${esc(String(f.surface).toUpperCase().slice(0, 2))}"${f.layer ? ` data-layer="${esc(f.layer)}"` : ''}>
     <summary><span class="finding-index">${String(index + 1).padStart(2, '0')}</span><div>
-      <div class="finding-tags"><span class="pill ${toneOf(f.severity)}">${esc(f.severity)}</span><span class="meta-label">${esc(f.surface)}</span>${statusTag(f, v2?.statusPill)}${mergeBadges(f)}</div>
+      <div class="finding-tags"><span class="pill ${toneOf(f.severity)}">${esc(f.severity)}</span><span class="meta-label">${esc(f.surface)}</span>${f.layer ? `<span class="meta-label">${esc(f.layer)}</span>` : ''}${statusTag(f, v2?.statusPill)}${mergeBadges(f)}</div>
       <h3>${esc(f.title)}</h3><p class="finding-preview">${esc(impact)}</p>
     </div><span class="expand-icon" aria-hidden="true"></span></summary>
     <div class="finding-body">

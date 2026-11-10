@@ -23,6 +23,7 @@
  * without printing or exiting; the CLI wrapper at the bottom prints and sets the exit code.
  */
 
+import { layerOfPath } from './harness-layers.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -120,10 +121,17 @@ function applyReview(status, cluster, { reviewsByClaim, claimAuthors, reviewers 
   return { status: next, reviews };
 }
 
+// The layer map the harness wrote; without it the path rules alone decide.
+function readLayers(reportDir) {
+  try { return JSON.parse(fs.readFileSync(path.join(reportDir, 'harness', 'stack-profile.json'), 'utf8')).layers || null; } catch { return null; }
+}
+
 function scoreCluster(c, context) {
   const vendorSet = new Set(c.auditors.map(context.authorVendor).filter(Boolean));
   const reviewed = applyReview(vendorSet.size >= 2 ? 'MODEL_AGREEMENT' : 'MODEL_ASSERTION', c, context);
   const status = reviewed.status;
+  const locations = Array.from(new Set(c.findings.flatMap((f) => f.location || [])));
+  const layers = [...new Set(locations.map((loc) => layerOfPath(loc, context.layers)))];
   const finalScore = Number(((SEVERITY_WEIGHT[c.severity] || 5.0) * (QUORUM_MULTIPLIER[status] ?? 0.6)).toFixed(1));
   return {
     clusterId: c.id,
@@ -142,7 +150,10 @@ function scoreCluster(c, context) {
     auditors: c.auditors,
     claimIds: c.claimIds,
     reviews: reviewed.reviews,
-    locations: Array.from(new Set(c.findings.flatMap((f) => f.location || []))),
+    locations,
+    // web2 | web3 | infra, from the first cited file (harness-layers.mjs); `layers` lists every layer the citations touch.
+    layer: layers[0] || null,
+    layers,
     pocs: c.findings.map((f) => f.poc).filter(Boolean),
     remediation: c.findings[0]?.fix || null,
     // the HTML report reads findings[0] for the harm / attack sections
@@ -158,7 +169,7 @@ export async function adjudicate(reportDir) {
   const { allFindings, allVerifiedSafe } = collectClaims(reports);
   const clusters = clusterFindings(allFindings);
   const dedup = { rawClaims: allFindings.length, clusters: clusters.length, merged: clusters.filter((c) => c.findings.length > 1).length, candidates: dedupCandidates(clusters), compoundClaims: allFindings.filter((f) => isCompoundTitle(f.title)).map((f) => f.claimId) };
-  const context = { reviewsByClaim: collectReviews(reportDir, assignments, health), claimAuthors: new Map(allFindings.map((f) => [f.claimId, authorVendor(f.auditor)])), reviewers, authorVendor };
+  const context = { layers: readLayers(reportDir), reviewsByClaim: collectReviews(reportDir, assignments, health), claimAuthors: new Map(allFindings.map((f) => [f.claimId, authorVendor(f.auditor)])), reviewers, authorVendor };
   const scored = clusters.map((c) => scoreCluster(c, context)).sort((a, b) => b.score - a.score);
   const scoredFindings = mergeDebateOutcome(reportDir, scored, SEVERITY_WEIGHT);
 

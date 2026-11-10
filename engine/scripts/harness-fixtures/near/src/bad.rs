@@ -34,3 +34,11 @@ pub fn draw() -> Vec<u8> {
 pub fn callback(#[callback_result] result: Result<U128, PromiseError>) {
     let _ = env::promise_result_checked(0, 4096);
 }
+
+pub fn tip(&mut self, amount: u128) {
+    self.fees += amount;
+    let net = amount - self.fee;
+    self.a = LookupMap::new(b"a");
+}
+
+pub fn on_withdraw(&mut self) {}

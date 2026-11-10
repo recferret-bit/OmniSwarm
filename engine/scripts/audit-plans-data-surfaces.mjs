@@ -1,5 +1,7 @@
 // Per-surface reviewer guidance tables of audit-plans.mjs renderSurfaceSkillGuidance: the surface titles and the
-// stack-specific lines (Node, Python, Solana, NEAR contract and client). Data only; imports nothing.
+// stack-specific lines (Node, Python, Solana, NEAR contract and client, wallet flows, infrastructure). The renderer
+// groups them by review layer (harness-layers.mjs): Python and Node are web2; Solana, NEAR and wallet flows are web3;
+// INFRA_SURFACE is infra. Data only; imports nothing.
 
 export const SURFACE_TITLES = {
   S1: ['Identity, Scopes, Roles & Auth Planes', 'http, grpc, websockets, crypto, scopes_roles, api_dto_abuse'],
@@ -14,7 +16,7 @@ export const NODE_SURFACE = {
   S1: ['- Node: audit guards/middleware (`@UseGuards`, Express middleware order), session cookies (`__Host-`, `httpOnly`, `SameSite`, `Secure`), CSRF/Origin checks and gRPC/WebSocket auth.'],
   S2: ['- Node: audit `@ZodBody/@ZodQuery/@ZodParams`/schema validators, prototype pollution, `child_process.exec`, `eval`/`new Function`, template-string SQL, SSRF and `path.join(req.*)` sinks.'],
   S3: ['- Node: audit single-transaction execution under `FOR UPDATE` row locks (Prisma `$transaction`, TypeORM) in canonical lock order and check-then-act gaps.'],
-  S4: ['- Node: audit `.env` handling, helmet/CSP/nginx headers, Dockerfiles and leaked internal fields in controller DTOs.'],
+  S4: ['- Node: audit how the app loads secrets (`.env`, literal fallbacks, public build-time variables), security headers the app sets itself (helmet/CSP), error responses, and leaked internal fields in controller DTOs.'],
   S5: ['- Node: audit `package-lock.json`/`yarn.lock`/`pnpm-lock.yaml` advisories, lifecycle (`postinstall`) scripts and reachability.'],
   S6: ['- Node/browser: audit DOM XSS sinks, `postMessage` origin checks, CSP/SRI, CORS (`*` vs credentials) and WebSocket CSWSH.'],
 };
@@ -61,4 +63,27 @@ export const NEAR_CLIENT_SURFACE = {
   S3: ['- NEAR Intents: `@defuse-protocol/one-click-sdk-typescript`, `@defuse-protocol/intents-sdk`, and `@near-intents-agent-api/sdk` are recognition only. Do not request a quote, submit a deposit, or call the agent API.'],
   S5: ['- NEAR AI: `@neardefi/shade-agent-js` is an unaudited published library, not a deprecated package to remove. Do not install it. Do not run `npx skills add` or `npm install` of NEAR SDKs during the review.'],
   S6: ['- NEAR client: `@hot-labs/near-connect` and `near-api-js` sign and broadcast. Review how the wallet is asked to sign. `v1.signer` is a lead, not a mainnet read. Do not call `cloud-api.near.ai`, `1click.chaindefuser.com`, `agentsonintents.com`, OutLayer, or NEAR MCP.'],
+};
+
+// Chain-neutral wallet flow checks, shown when production code imports a chain SDK or calls an injected wallet.
+export const WALLET_SURFACE = {
+  S1: ['- Wallet sign-in: the signed text is the exact server-issued challenge (domain, account, nonce, expiry), the nonce is single-use, and the verified public key is bound to the account the session is issued for.'],
+  S3: ['- Off-chain ledger vs chain: a balance, credit or payout recorded by the backend must follow a transaction the server verified itself (hash, recipient, amount, finality), never a client report; payouts are idempotent and debited before they are sent.'],
+  S4: ['- Key custody: signing keys held by a server or a script (environment, file, literal fallback, logs). Report where the key lives and who can read it. Do not read or use the key.'],
+  S6: ['- Wallet signing intent: what the user is asked to sign and who chose it. Flag transactions or messages built from URL parameters, `postMessage` data or API responses and signed without showing the user the recipient and amount; access keys or approvals wider than the flow needs; `skipPreflight`; and hard-coded RPC endpoints without failover.'],
+};
+
+// Infrastructure checks, shown when the target has container, CI, proxy, deploy or environment files.
+export const INFRA_SURFACE = {
+  S1: ['- Infra: network-level access control (proxy `allow`/`deny`, internal-only locations, admin planes) must not be the only guard, and must cover every path that reaches the upstream.'],
+  S4: [
+    '- Containers: base image tag and digest, `USER` (root by default), `--privileged`, added capabilities, host mounts and the Docker socket, published ports and bind addresses, debug or inspector ports, secrets copied into an image layer.',
+    '- Proxy and TLS: plain-HTTP listeners, missing HSTS and security headers, wildcard CORS added at the proxy, directory listing, version banners, and `X-Forwarded-*` headers passed through from the client instead of being set.',
+    '- Secrets in configuration: committed `.env` files, compose `environment:` literals, default database passwords, and secrets written to logs or build output.',
+    '- Orchestration and cloud: Kubernetes `securityContext` (`runAsNonRoot`, `allowPrivilegeEscalation`, `hostNetwork`, `hostPath`), Terraform ingress from `0.0.0.0/0`, public buckets and unencrypted storage.',
+  ],
+  S5: [
+    '- CI: `pull_request_target` or `workflow_run` with a checkout of the PR head, workflow `permissions`, actions pinned to a commit, secrets in the environment of steps that run repository code, `${{ github.event.* }}` interpolated into `run:`, and secrets echoed to the log.',
+    '- Build supply chain: piped installers, unpinned base images and tool downloads, `npm install` instead of `npm ci`, missing lockfiles, and build steps that fetch code at image build time.',
+  ],
 };

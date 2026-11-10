@@ -42,7 +42,7 @@ async function scan(target, outDir, noDeps) {
   const near = writeNear(root, nearEco);
   const python = writePython(root, stackProfile.ecosystems);
   const node = writeNode(root, stackProfile.ecosystems);
-  const attackPlansMd = renderReviewPlansMarkdown(stackProfile);
+  const reviewPlansMd = renderReviewPlansMarkdown(stackProfile);
   const deps = noDeps ? '# Dependency leads\n\nSkipped (--no-deps).\n' : await depScan(root);
   if (noDeps) for (const tool of ['gitleaks', 'semgrep', 'osv-scanner', 'cargo-audit', 'npm-audit', 'python-deps', 'node-deps']) missingScanner(tool, 'Skipped (--no-deps)');
   const tools = noDeps ? '# Scanner leads\n\nSkipped (--no-deps).\n' : await writeTools(root, outDir);
@@ -55,7 +55,7 @@ async function scan(target, outDir, noDeps) {
   fs.writeFileSync(path.join(outDir, 'config.md'), config.body);
   fs.writeFileSync(path.join(outDir, 'deps.md'), deps);
   fs.writeFileSync(path.join(outDir, 'tools.md'), tools);
-  fs.writeFileSync(path.join(outDir, 'review-plans.md'), attackPlansMd);
+  fs.writeFileSync(path.join(outDir, 'review-plans.md'), reviewPlansMd);
   fs.writeFileSync(path.join(outDir, 'stack-profile.json'), `${JSON.stringify(stackProfile, null, 2)}\n`);
   const summary = [
     '# Harness',
@@ -68,8 +68,9 @@ async function scan(target, outDir, noDeps) {
     `stacks by production source: ${stackProfile.ecosystems.primary.join(', ') || 'none'}`,
     `node: ${stackProfile.ecosystems.node.detected ? 'yes' : 'no'} (${node.leads} leads, ${node.files} production files; frameworks: ${stackProfile.ecosystems.node.frameworks.join(', ') || 'none'})`,
     `web: ${web.files} source files, ${web.leads} leads`,
-    `config: ${config.files} files, ${config.leads} leads`,
-    `attack plans: review-plans.md (${stackProfile.domains.map((d) => d.id).join(', ')})`,
+    `infra: ${config.files} files, ${config.leads} leads (config.md)`,
+    `layers: ${['web2', 'web3', 'infra'].map((layer) => `${layer} ${stackProfile.layers.counts[layer]} files`).join(', ')}`,
+    `review plans: review-plans.md (${stackProfile.domains.map((d) => d.id).join(', ')})`,
     `deps: ${noDeps ? 'skipped' : 'deps.md'}`,
     `scanners: ${noDeps ? 'skipped' : 'tools.md'}`,
     '',
@@ -103,11 +104,14 @@ function selfTest() {
     ['pickle-loads', web.body], ['tls-verify-off', web.body], ['cors-star', web.body], ['jwt-none', web.body],
     ['cookie-no-httponly', web.body], ['message-listener', web.body], ['postmessage', web.body], ['private-key', web.body],
     ['ssrf-fetch', web.body], ['path-from-request', web.body], ['open-redirect', web.body],
+    ['wallet-sign', web.body], ['tx-deserialize', web.body], ['skip-preflight', web.body],
     ...PY_PATTERNS.map((p) => [p.id, python.body]),
     ...NODE_PATTERNS.map((p) => [p.id, nodeLeads.body]),
     ['eol-runtime', config.body],
     ['pr-target', config.body], ['unpinned-action', config.body], ['curl-pipe-sh', config.body],
     ['docker-privileged', config.body], ['docker-sock', config.body],
+    ...['image-latest', 'debug-port', 'db-bind-all', 'default-password', 'env-secret', 'tls-verify-env', 'ci-write-all', 'ci-secret-echo',
+      'ci-script-injection', 'proxy-plain-http', 'proxy-autoindex', 'proxy-cors-star', 'proxy-forwarded-passthrough', 'k8s-privilege', 'open-ingress'].map((id) => [id, config.body]),
   ];
   const bad = [];
   for (const [id, body] of must) {

@@ -13,7 +13,7 @@ const LEAD_FILES = [
   ['python.md', 'Python Leads', 'Python surface absent', 4000, ['S1', 'S2', 'S3', 'S4']],
   ['node.md', 'Node Leads', 'Node surface absent', 4000, ['S1', 'S2', 'S4', 'S6']],
   ['web.md', 'Web Leads', 'Web surface absent', 2500, ['S1', 'S2', 'S6']],
-  ['config.md', 'Config Leads', null, 2500, ['S4']],
+  ['config.md', 'Infra Leads', 'surface absent', 3500, ['S4', 'S5']],
   ['deps.md', 'Dependency Leads', null, 2500, ['S5']],
 ];
 

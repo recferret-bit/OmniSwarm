@@ -32,6 +32,23 @@ export function themeOf(name: string): ThemeName | null {
 
 export interface ThemeSlice { theme: ThemeName; dirs: string[]; exclude?: string[] }
 
+const INFRA_ROOT_FILE = /^(?:(?:docker-)?compose[^/]*\.ya?ml|\.env(?:\..+)?|.+\.env|.+\.tf|.+\.tfvars|.*nginx.*\.conf|Caddyfile|Procfile|Jenkinsfile|\.gitlab-ci\.yml)$/i;
+const DOCKERFILE = /^(?:Dockerfile.*|.+\.dockerfile)$/i;
+
+/**
+ * Which theme slices a file at the repository root is copied into. Deploy configuration and committed
+ * environment files belong to infra only, and a root Anchor.toml to web3 only, so a web2 slice is not
+ * routed as a Solana project and infra findings are not repeated in every theme. A Dockerfile also stays
+ * with apps: the engine reads the declared Python version from it. Everything else (manifests, lockfiles,
+ * README) is shared.
+ */
+export function rootFileThemes(name: string): readonly ThemeName[] {
+  if (INFRA_ROOT_FILE.test(name)) return ['infra'];
+  if (DOCKERFILE.test(name)) return ['apps', 'infra'];
+  if (name === 'Anchor.toml') return ['web3'];
+  return THEME_ORDER;
+}
+
 const CHAIN_DIR = /^(programs?|contracts?|anchor)$/i;
 
 /** A chain project nested under an app, such as backend/programs, is its own web3 root. */
@@ -53,7 +70,10 @@ export function web3Roots(files: readonly string[]): string[] {
  */
 export function partitionTree(files: readonly string[], scope: ReviewScope): ThemeSlice[] {
   const roots = web3Roots(files);
-  const top = [...new Set(files.map((file) => file.split('/')[0] ?? '').filter(Boolean))];
+  // Themes are directories. Files at the root are copied per rootFileThemes when a slice is materialized; only a
+  // repository with no directories at all is partitioned by its file names.
+  const dirNames = [...new Set(files.filter((file) => file.includes('/')).map((file) => file.split('/')[0] ?? '').filter(Boolean))];
+  const top = dirNames.length ? dirNames : [...new Set(files.filter(Boolean))];
   const grouped = new Map<ThemeName, { dirs: string[]; exclude: string[] }>();
   const add = (theme: ThemeName, dir: string, exclude: string[] = []) => {
     const current = grouped.get(theme) ?? { dirs: [], exclude: [] };

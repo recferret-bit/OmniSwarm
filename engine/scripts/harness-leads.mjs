@@ -19,20 +19,24 @@ export function solanaStack(root) {
   return marks.slice(0, 20);
 }
 
+// Infra layer files: CI and compose YAML, Dockerfiles, proxy configuration, Terraform and committed environment files.
 function configFile(file) {
   const base = path.basename(file);
   const ext = path.extname(file);
-  return ext === '.yml' || ext === '.yaml' || base === 'Dockerfile' || base.startsWith('Dockerfile.') || base.endsWith('.dockerfile');
+  return ext === '.yml' || ext === '.yaml' || ext === '.conf' || ext === '.tf' || ext === '.env' || base === '.env' || base.startsWith('.env.')
+    || base === 'Dockerfile' || base.startsWith('Dockerfile.') || base.endsWith('.dockerfile');
 }
 
 export function writeConfig(root) {
   const { files, found } = collect(root, (file) => configFile(file), CONFIG_PATTERNS);
   const { total, body } = section(CONFIG_PATTERNS, found);
-  if (!files) return { leads: 0, files: 0, body: '# Config leads\n\nNo Dockerfile or YAML. CI and container surface absent.\n' };
+  if (!files) return { leads: 0, files: 0, body: '# Infra leads\n\nNo Dockerfile, YAML, proxy, Terraform or environment file. Infra surface absent.\n' };
   const header = [
-    '# Config leads',
+    '# Infra leads',
     '',
-    'Regex leads for CI and containers. Not findings. OWASP WSTG configuration and GitHub Actions hardening.',
+    'Regex leads for the infra layer: containers, CI, proxy, orchestration and committed environment files. Not findings.',
+    'Grep cannot close: a missing `USER`, missing security headers, network exposure, or who can read a secret store. Those are a source read.',
+    'Sources: OWASP WSTG configuration, Docker and Kubernetes hardening guides, GitHub Actions security hardening.',
     `Files scanned: ${files}. Leads listed: ${total}.`,
     '',
     body,

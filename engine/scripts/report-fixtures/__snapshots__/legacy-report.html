@@ -262,9 +262,9 @@ td { overflow-wrap: anywhere; }
       <button type="button" class="filter-btn active" data-filter="all" aria-pressed="true">All<span>1</span></button><button type="button" class="filter-btn" data-filter="high" aria-pressed="false">High+<span>1</span></button><button type="button" class="filter-btn" data-filter="medium" aria-pressed="false">Medium<span>0</span></button><button type="button" class="filter-btn" data-filter="low" aria-pressed="false">Low + info<span>0</span></button>
     </div><label class="search-wrap"><span aria-hidden="true">⌕</span><input type="search" id="search-box" aria-label="Search findings, files, fixes and evidence" placeholder="Search findings, files, fixes…"></label></div>
     <div class="list-caption"><span id="results-count" role="status" aria-live="polite">1 / 1 findings</span><button type="button" id="reset-filters" class="text-button" hidden>Clear filters</button><button type="button" id="expand-all" class="text-button">Expand findings</button></div>
-    <div id="findings-container"><details class="finding red" data-severity="high" data-surface="S1">
+    <div id="findings-container"><details class="finding red" data-severity="high" data-surface="S1" data-layer="web2">
     <summary><span class="finding-index">01</span><div>
-      <div class="finding-tags"><span class="pill red">high</span><span class="meta-label">S1</span><span class="pill">model assertion</span></div>
+      <div class="finding-tags"><span class="pill red">high</span><span class="meta-label">S1</span><span class="meta-label">web2</span><span class="pill">model assertion</span></div>
       <h3>Missing owner check</h3><p class="finding-preview">Any caller can withdraw.</p>
     </div><span class="expand-icon" aria-hidden="true"></span></summary>
     <div class="finding-body">
@@ -295,10 +295,10 @@ td { overflow-wrap: anywhere; }
   const cards = all('.finding');
   const search = doc.querySelector('#search-box');
   const reviewerSelect = doc.querySelector('[data-reviewer-filter]');
-  const state = { severity: 'all', surface: 'all', status: '', reviewer: '', query: '' };
+  const state = { severity: 'all', surface: 'all', layer: '', status: '', reviewer: '', query: '' };
   const press = (buttons, active) => buttons.forEach((item) => { item.classList?.toggle('active', item === active); item.setAttribute('aria-pressed', String(item === active)); });
   const view = (card) => ({
-    severity: card.dataset.severity, surface: card.dataset.surface, status: card.dataset.status || '',
+    severity: card.dataset.severity, surface: card.dataset.surface, layer: card.dataset.layer || '', status: card.dataset.status || '',
     reviewers: (card.dataset.reviewers || '').split(/\s+/).filter(Boolean), text: card.textContent.toLowerCase(),
   });
   const label = () => {
@@ -315,7 +315,7 @@ td { overflow-wrap: anywhere; }
     const empty = doc.querySelector('#empty-results');
     if (empty) empty.hidden = shown !== 0;
     const reset = doc.querySelector('#reset-filters');
-    if (reset) reset.hidden = state.severity === 'all' && state.surface === 'all' && !state.status && !state.reviewer && !state.query;
+    if (reset) reset.hidden = state.severity === 'all' && state.surface === 'all' && !state.layer && !state.status && !state.reviewer && !state.query;
     label();
   };
   const severityButtons = all('[data-filter]');
@@ -333,14 +333,20 @@ td { overflow-wrap: anywhere; }
     statusButtons.forEach((item) => item.setAttribute('aria-pressed', String(item.dataset.statusFilter === state.status)));
     apply();
   }));
+  const layerButtons = all('[data-layer-filter]');
+  layerButtons.forEach((button) => button.addEventListener('click', () => {
+    state.layer = state.layer === button.dataset.layerFilter ? '' : button.dataset.layerFilter;
+    layerButtons.forEach((item) => item.setAttribute('aria-pressed', String(item.dataset.layerFilter === state.layer)));
+    apply();
+  }));
   reviewerSelect?.addEventListener('change', () => { state.reviewer = reviewerSelect.value; apply(); });
   search?.addEventListener('input', apply);
   doc.querySelector('#reset-filters')?.addEventListener('click', () => {
-    Object.assign(state, { severity: 'all', surface: 'all', status: '', reviewer: '' });
+    Object.assign(state, { severity: 'all', surface: 'all', layer: '', status: '', reviewer: '' });
     if (search) search.value = '';
     if (reviewerSelect) reviewerSelect.value = '';
     press(severityButtons, severityButtons.find((item) => item.dataset.filter === 'all'));
-    [...surfaceButtons, ...statusButtons].forEach((item) => item.setAttribute('aria-pressed', 'false'));
+    [...surfaceButtons, ...layerButtons, ...statusButtons].forEach((item) => item.setAttribute('aria-pressed', 'false'));
     apply();
   });
   doc.querySelector('#expand-all')?.addEventListener('click', () => {
@@ -355,11 +361,12 @@ td { overflow-wrap: anywhere; }
 })(document, function cardMatches(card, state) {
   const severity = state.severity === 'all' || card.severity === state.severity || (state.severity === 'low' && card.severity === 'info');
   const surface = state.surface === 'all' || card.surface === state.surface;
+  const layer = !state.layer || card.layer === state.layer;
   const status = !state.status || card.status === state.status;
   // Cards list auditor stems (<reviewer id>-s<n>-<slug>); a reviewer id may itself contain hyphens.
   const reviewer = !state.reviewer || card.reviewers.some((id) => id === state.reviewer || (id.startsWith(`${state.reviewer}-s`) && /^\d/.test(id.slice(state.reviewer.length + 2))));
   const query = !state.query || card.text.includes(state.query);
-  return severity && surface && status && reviewer && query;
+  return severity && surface && layer && status && reviewer && query;
 });(function installPage(doc, win) {
   const all = (selector) => [...doc.querySelectorAll(selector)];
   const crossButtons = all('[data-cross-filter]');

@@ -9,7 +9,11 @@ const LEAD_FILES = [
   ['near.md', 'NEAR Leads', 'NEAR surface absent'],
   ['python.md', 'Python Leads', 'Python surface absent'],
   ['node.md', 'Node Leads', 'Node surface absent'],
+  ['web.md', 'Web Leads', 'Web surface absent', ['S1', 'S2', 'S6']],
+  ['config.md', 'Infra Leads', 'surface absent', ['S4', 'S5']],
 ];
+// A lead file with a surface list is shown to those surfaces only (and to roles that span every surface).
+const leadApplies = (surfaces, surface) => !surfaces || !/^S[1-6]$/i.test(String(surface || '')) || surfaces.includes(String(surface).toUpperCase());
 
 const harnessFile = (ctx, name) => (ctx.reportDir ? path.join(ctx.reportDir, 'harness', name) : null);
 
@@ -42,7 +46,8 @@ export async function getAuditContext(ctx) {
   const summary = readHarness(ctx, 'summary.md');
   if (summary != null) parts.push('## Harness Summary', summary);
   parts.push(...planSection(ctx, profile));
-  for (const [file, title, absent] of LEAD_FILES) {
+  for (const [file, title, absent, surfaces] of LEAD_FILES) {
+    if (!leadApplies(surfaces, ctx.surface)) continue;
     const text = readHarness(ctx, file);
     if (text != null && !text.includes(absent)) parts.push(`## ${title}`, text.slice(0, 6000));
   }

@@ -1,17 +1,18 @@
 // The report's only script, embedded with a CSP nonce so reports stay usable offline with no external assets.
-// One filter state drives every control: severity buttons, surface tiles, final-status chips, the reviewer select
+// One filter state drives every control: severity buttons, surface tiles, layer and final-status chips, the reviewer select
 // and the search box all combine through cardMatches. The cross-check table has its own status chips.
 // The functions below are serialized into the page, so they must not reference anything outside themselves.
 
-// card: {severity, surface, status, reviewers: string[], text}. state: {severity, surface, status, reviewer, query}.
+// card: {severity, surface, layer, status, reviewers: string[], text}. state: {severity, surface, layer, status, reviewer, query}.
 export function cardMatches(card, state) {
   const severity = state.severity === 'all' || card.severity === state.severity || (state.severity === 'low' && card.severity === 'info');
   const surface = state.surface === 'all' || card.surface === state.surface;
+  const layer = !state.layer || card.layer === state.layer;
   const status = !state.status || card.status === state.status;
   // Cards list auditor stems (<reviewer id>-s<n>-<slug>); a reviewer id may itself contain hyphens.
   const reviewer = !state.reviewer || card.reviewers.some((id) => id === state.reviewer || (id.startsWith(`${state.reviewer}-s`) && /^\d/.test(id.slice(state.reviewer.length + 2))));
   const query = !state.query || card.text.includes(state.query);
-  return severity && surface && status && reviewer && query;
+  return severity && surface && layer && status && reviewer && query;
 }
 
 export function installReport(doc, matches) {
@@ -19,10 +20,10 @@ export function installReport(doc, matches) {
   const cards = all('.finding');
   const search = doc.querySelector('#search-box');
   const reviewerSelect = doc.querySelector('[data-reviewer-filter]');
-  const state = { severity: 'all', surface: 'all', status: '', reviewer: '', query: '' };
+  const state = { severity: 'all', surface: 'all', layer: '', status: '', reviewer: '', query: '' };
   const press = (buttons, active) => buttons.forEach((item) => { item.classList?.toggle('active', item === active); item.setAttribute('aria-pressed', String(item === active)); });
   const view = (card) => ({
-    severity: card.dataset.severity, surface: card.dataset.surface, status: card.dataset.status || '',
+    severity: card.dataset.severity, surface: card.dataset.surface, layer: card.dataset.layer || '', status: card.dataset.status || '',
     reviewers: (card.dataset.reviewers || '').split(/\s+/).filter(Boolean), text: card.textContent.toLowerCase(),
   });
   const label = () => {
@@ -39,7 +40,7 @@ export function installReport(doc, matches) {
     const empty = doc.querySelector('#empty-results');
     if (empty) empty.hidden = shown !== 0;
     const reset = doc.querySelector('#reset-filters');
-    if (reset) reset.hidden = state.severity === 'all' && state.surface === 'all' && !state.status && !state.reviewer && !state.query;
+    if (reset) reset.hidden = state.severity === 'all' && state.surface === 'all' && !state.layer && !state.status && !state.reviewer && !state.query;
     label();
   };
   const severityButtons = all('[data-filter]');
@@ -57,14 +58,20 @@ export function installReport(doc, matches) {
     statusButtons.forEach((item) => item.setAttribute('aria-pressed', String(item.dataset.statusFilter === state.status)));
     apply();
   }));
+  const layerButtons = all('[data-layer-filter]');
+  layerButtons.forEach((button) => button.addEventListener('click', () => {
+    state.layer = state.layer === button.dataset.layerFilter ? '' : button.dataset.layerFilter;
+    layerButtons.forEach((item) => item.setAttribute('aria-pressed', String(item.dataset.layerFilter === state.layer)));
+    apply();
+  }));
   reviewerSelect?.addEventListener('change', () => { state.reviewer = reviewerSelect.value; apply(); });
   search?.addEventListener('input', apply);
   doc.querySelector('#reset-filters')?.addEventListener('click', () => {
-    Object.assign(state, { severity: 'all', surface: 'all', status: '', reviewer: '' });
+    Object.assign(state, { severity: 'all', surface: 'all', layer: '', status: '', reviewer: '' });
     if (search) search.value = '';
     if (reviewerSelect) reviewerSelect.value = '';
     press(severityButtons, severityButtons.find((item) => item.dataset.filter === 'all'));
-    [...surfaceButtons, ...statusButtons].forEach((item) => item.setAttribute('aria-pressed', 'false'));
+    [...surfaceButtons, ...layerButtons, ...statusButtons].forEach((item) => item.setAttribute('aria-pressed', 'false'));
     apply();
   });
   doc.querySelector('#expand-all')?.addEventListener('click', () => {

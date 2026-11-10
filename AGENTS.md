@@ -77,6 +77,8 @@ When you change detection or leads, update the matching pieces together:
 - `engine/scripts/docker-mcp-bridge.mjs` and `engine/scripts/docker-agent-orchestrator.mjs` if a new lead file must reach the reviewer
 - both skill copies, which must stay byte-identical
 
+Every file of a target also belongs to one review layer: `web2` (application), `web3` (contracts, programs and code that imports a chain SDK or signs) or `infra` (containers, CI, proxy, Terraform, committed environment files). `engine/scripts/harness-layers.mjs` decides it; the layer map is in `harness/stack-profile.json`, the plan (`## Review Layers`), the per-surface guidance (one block per layer), and on every row of `findings-and-scores.json` (`layer`). Layers say where a file is; the surfaces S1 to S6 and the risk domains say what to look for. Keep a new guidance line in the table of its own layer (`audit-plans-data-surfaces.mjs`), and a new infra lead in `CONFIG_PATTERNS`.
+
 Run `node engine/scripts/harness.mjs --self-test` after a lead-pattern change. A pattern that matches `good.rs` or `good.js` fails that test.
 
 ## The reviewer skill
@@ -158,7 +160,7 @@ Source: `docs/spec/ORCHESTRATION.md` section 1.1.
 | `apps/web/` | Landing and review app (`@omniswarm/web`: Next.js 16, Zustand). Track F |
 | `infra/` | Compose, nginx, systemd, deploy scripts. Track I |
 | `packages/guard/` | `@omniswarm/guard`, attack demo in `demo/attack/`. Track S |
-| `engine/eval/` | Golden fixture repos and the eval runner. Track E |
+| `engine/eval/` | Golden fixture repos and the eval runner. `golden/fullstack-dapp/` is the vulnerable frontend, backend, wallet, contracts and infra tree behind `npm run check:fullstack`. Track E |
 | `tests/e2e/` | Playwright and API e2e, one subfolder per track |
 | `tools/` | Dev tooling outside the engine (`worktree-env.mjs`, `gate.mjs`, `check-w00.mjs`). Lead only |
 | `docs/RULES.md` | The review round written as swarm rules |
