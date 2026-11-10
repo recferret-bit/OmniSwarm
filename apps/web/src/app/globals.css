@@ -104,12 +104,28 @@
 .timeline__phases li + li::before { content: "→ "; }
 progress { width: 100%; accent-color: var(--os-ember); }
 .reviewers { list-style: none; padding: 0; margin: 0; display: grid; gap: 4px; }
+.progress { display: grid; gap: 8px; margin: 8px 0; }
+.progress__head { margin: 0; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-weight: 600; }
+.progress__phases { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; padding: 0; margin: 0; }
+.progress__phases li { padding: 3px 8px; font-size: 0.875rem; background: var(--os-plate-3); color: var(--os-steel); }
+.progress__phases li.is-done { background: var(--os-attested-dim); color: var(--os-attested); }
+.progress__phases li.is-running { background: var(--os-cite-dim); color: var(--os-cite-text); font-weight: 700; }
+.progress__phases li.is-failed { outline: 1px solid var(--os-ember); color: var(--os-text); }
+.progress__phases li.is-skipped { text-decoration: line-through; opacity: 0.7; }
+.progress__reviewers { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+.progress__reviewers caption { text-align: left; font-weight: 600; padding-bottom: 4px; }
+.progress__reviewers th, .progress__reviewers td { text-align: left; padding: 6px 8px 6px 0; border-bottom: 1px solid var(--os-seam); vertical-align: top; }
+.progress__id { overflow-wrap: anywhere; }
+.progress__surface { color: var(--os-steel); font-weight: 400; }
+.progress__counts { margin: 0; color: var(--os-steel); font-size: 0.9rem; }
+@media (max-width: 560px) { .progress__reviewers thead { display: none; } .progress__reviewers tr { display: grid; grid-template-columns: 1fr 1fr; padding: 6px 0; border-bottom: 1px solid var(--os-seam); } .progress__reviewers th, .progress__reviewers td { border: 0; padding: 2px 0; } }
 .reviewers__row, .request-row {
   display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between;
   padding: 8px 0; border-bottom: 1px solid var(--os-seam);
 }
 .reviewers__id, .request-row__repo { font-weight: 600; overflow-wrap: anywhere; }
 .request-list { list-style: none; padding: 0; margin: 0; }
+.request-row__progress { flex-basis: 100%; }
 
 .attestation { display: grid; gap: 8px; }
 .attestation__verdict, .attestation__note { margin: 0; }
@@ -149,3 +165,4 @@ th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--os-s
   .wallet-slot { justify-items: stretch; width: 100%; }
   .report-frame__iframe { height: 24rem; }
 }
+

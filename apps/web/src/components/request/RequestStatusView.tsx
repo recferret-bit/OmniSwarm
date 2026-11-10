@@ -11,6 +11,7 @@ import { Alert } from '../ui/Alert';
 import { Button } from '../ui/Button';
 import { Panel } from '../ui/Panel';
 import { Pill } from '../ui/Pill';
+import { ProgressPanel } from './ProgressPanel';
 import { ReviewerRows } from './ReviewerRows';
 import { TerminalState } from './TerminalState';
 import { statusLabel, Timeline } from './Timeline';
@@ -33,9 +34,14 @@ export function RequestStatusView({ id }: { id: string }) {
     <>
       <Panel id="status" title={<>Request status <Pill tone={current.status === 'done' ? 'good' : current.status === 'refunded' || current.status === 'failed' ? 'bad' : 'info'}>{statusLabel(current.status)}</Pill></>}>
         {view.mode === 'polling' ? <Alert tone="info">Live updates paused — refreshing every 5 seconds.</Alert> : null}
-        <Timeline status={current.status} phases={phasesSeen(view.events)} />
-        {current.progress?.percent !== undefined ? <progress max={100} value={current.progress.percent} aria-label="Review progress" /> : null}
-        <ReviewerRows rows={reviewerRows(view.events)} />
+        {/* With the engine's snapshot the phases and reviewers come from it; otherwise from the events seen since load. */}
+        <Timeline status={current.status} phases={current.progress?.detail ? [] : phasesSeen(view.events)} />
+        {current.progress?.detail ? <ProgressPanel progress={current.progress} status={current.status} /> : (
+          <>
+            {current.progress?.percent !== undefined ? <progress max={100} value={current.progress.percent} aria-label="Review progress" /> : null}
+            <ReviewerRows rows={reviewerRows(view.events)} />
+          </>
+        )}
         <TerminalState status={current} />
         {current.status === 'done' || current.status === 'refunded' ? <ReceiptSection id={id} /> : null}
         {current.status === 'done' ? (

@@ -88,6 +88,7 @@ export interface IntakeApi {
   'payment-request'?: PaymentRequest;
   'payment-response'?: PaymentResponse;
   progress?: Progress;
+  'progress-detail'?: ProgressDetail;
   'request-status-response'?: RequestStatusResponse;
   'progress-event'?: ProgressEvent;
   'request-list-response'?: RequestListResponse;
@@ -162,6 +163,59 @@ export interface Progress {
   reviewer?: string;
   pass?: number;
   percent?: number;
+  detail?: ProgressDetail;
+}
+/**
+ * The engine's live snapshot (harness/host/progress.json), passed through by the worker. Counts, phase states and reviewer ids only; no finding text. A parent request split into themes carries themes instead of reviewers.
+ */
+export interface ProgressDetail {
+  state: 'running' | 'finished' | 'incomplete' | 'failed' | 'cancelled';
+  startedAt?: Timestamp;
+  updatedAt?: Timestamp;
+  elapsedMs?: number;
+  /**
+   * @maxItems 32
+   */
+  phases: {
+    name: 'prepare' | 'tests' | 'review' | 'crosscheck' | 'debate' | 'adjudicate' | 'general-review' | 'report';
+    state: 'pending' | 'running' | 'done' | 'failed' | 'skipped';
+    startedAt?: Timestamp;
+    endedAt?: Timestamp;
+  }[];
+  /**
+   * @maxItems 32
+   */
+  reviewers?: {
+    id: string;
+    state: 'pending' | 'running' | 'done' | 'failed';
+    jobsDone: number;
+    jobs: number;
+    passes: number;
+    pass?: number;
+    calls?: number;
+    budget?: number;
+    surface?: string;
+    idleMs?: number;
+  }[];
+  crosscheck?: {
+    done: number;
+    total: number;
+  };
+  debate?: {
+    clusters?: number;
+    heard?: number;
+    judged?: number;
+    toJudge?: number;
+  };
+  /**
+   * @maxItems 32
+   */
+  themes?: {
+    theme: 'web3' | 'apps' | 'infra' | 'scripts';
+    status: Status;
+    phase?: string;
+    percent?: number;
+  }[];
 }
 export interface RequestStatusResponse {
   status: Status;
@@ -200,7 +254,18 @@ export interface RequestListResponse {
     status: Status;
     createdAt: Timestamp;
     theme?: string;
+    progress?: Progress1;
   }[];
+}
+/**
+ * Latest phase and percent while running, without detail
+ */
+export interface Progress1 {
+  phase: string;
+  reviewer?: string;
+  pass?: number;
+  percent?: number;
+  detail?: ProgressDetail;
 }
 /**
  * What was bought for one request, from the payment row, each reviewers/<id>/usage.json, findings-and-scores.json and the chain tx ids. A refunded request has refund and no attestation.

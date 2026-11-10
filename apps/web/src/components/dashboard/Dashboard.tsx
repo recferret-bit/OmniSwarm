@@ -13,6 +13,7 @@ import { Field } from '../ui/Field';
 import { Panel } from '../ui/Panel';
 import { Pill } from '../ui/Pill';
 import { ScopeChecks } from '../flow/ScopeChecks';
+import { phaseLabel } from '../request/ProgressPanel';
 
 type Pending = 'login' | 'logout' | 'submit' | null;
 
@@ -22,6 +23,7 @@ function Row({ row }: { row: MyRequest }) {
     <li className="request-row">
       <Link href={`/r/${row.requestId}`} className="request-row__repo">{row.theme ? `${row.repo} · ${row.theme}` : row.repo}</Link>
       <Pill tone={tone}>{statusLabel(row.status)}</Pill>
+      {row.status === 'running' && row.progress ? <span className="muted">{phaseLabel(row.progress.phase)} · {Math.round(row.progress.percent ?? 0)}%</span> : null}
       <time className="muted" dateTime={row.createdAt}>{new Date(row.createdAt).toLocaleString()}</time>
       {row.status === 'done' ? <a href={requestReportHref(row.requestId)}>Download PDF</a> : null}
     </li>

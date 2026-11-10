@@ -11,6 +11,7 @@ import type {
   HealthResponse,
   PaymentRequest,
   PaymentResponse,
+  Progress,
   QuoteRequest,
   QuoteResponse,
   ReportIndexResponse,
@@ -94,6 +95,8 @@ export interface LocalJobDetail extends LocalJobSummary {
   commitSha: string | null;
   error: string | null;
   pdfReady: boolean;
+  /** The engine's live snapshot, as on a hosted request. Absent while queued or for an engine that writes none. */
+  progress?: Progress;
 }
 
 export function requestReportHref(requestId: string): string {

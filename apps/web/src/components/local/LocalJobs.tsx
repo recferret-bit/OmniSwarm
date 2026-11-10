@@ -5,6 +5,7 @@ import { api, localReportHref, type LocalJobDetail, type LocalJobRequest } from 
 import { messageFor, toAppError, type AppErrorCode } from '@/lib/api/errors';
 import type { Status } from '@/lib/api/schema.gen';
 import { parseRepoInput } from '@/lib/repo';
+import { ProgressPanel } from '../request/ProgressPanel';
 import { statusLabel } from '../request/Timeline';
 import { Alert } from '../ui/Alert';
 import { Button } from '../ui/Button';
@@ -143,6 +144,8 @@ export function LocalJobs() {
               <Pill tone={toneOf(job.status)}>{isKnown(job.status) ? statusLabel(job.status) : job.status}</Pill>
               <time className="muted" dateTime={job.createdAt}>{new Date(job.createdAt).toLocaleString()}</time>
               {job.status === 'done' && job.pdfReady ? <a href={localReportHref(job.id)}>Download PDF</a> : null}
+              {/* Live while running; kept after a failure so it shows where the run stopped. */}
+              {job.progress && (job.status === 'running' || job.status === 'failed') ? <div className="request-row__progress"><ProgressPanel progress={job.progress} status={job.status} /></div> : null}
             </li>
           ))}
         </ul>

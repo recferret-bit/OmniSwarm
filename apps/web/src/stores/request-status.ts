@@ -68,7 +68,8 @@ export function createRequestStatusStore(deps: StatusDeps) {
         const onEvent = (message: MessageEvent<string>) => {
           const event = JSON.parse(message.data) as ProgressEvent;
           const view = get().byId[id] ?? EMPTY;
-          const status = view.status ? { ...view.status, status: event.status, progress: event.progress } : null;
+          // A status-only event (sent on every connect, after the replayed rows) keeps the progress already shown.
+          const status = view.status ? { ...view.status, status: event.status, progress: event.progress ?? view.status.progress } : null;
           patch(id, { mode: 'live', events: [...view.events, event], ...(status ? { status } : {}) });
           // The terminal GET carries reportUrl, reportSha256 and the tx hashes.
           if (TERMINAL.includes(event.status)) void refresh();

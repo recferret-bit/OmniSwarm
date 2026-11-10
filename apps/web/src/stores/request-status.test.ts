@@ -43,6 +43,20 @@ describe('request status store', () => {
     stop();
   });
 
+  it('a status-only event keeps the progress already shown, and a new progress event replaces it', async () => {
+    const detail = { state: 'running' as const, phases: [{ name: 'review' as const, state: 'running' as const }] };
+    const { store, stream } = setup([{ ...running, progress: { phase: 'review', percent: 40, detail } }]);
+    const stop = store.getState().watch('id-3');
+    await vi.waitFor(() => expect(store.getState().byId['id-3']?.status?.progress?.percent).toBe(40));
+    // What every fresh connection ends with: the replayed row, then the status on its own.
+    stream.emit({ status: 'running', progress: { phase: 'review', percent: 41, detail }, at });
+    stream.emit({ status: 'running', at });
+    expect(store.getState().byId['id-3']?.status?.progress).toEqual({ phase: 'review', percent: 41, detail });
+    stream.emit({ status: 'running', progress: { phase: 'crosscheck', percent: 71 }, at });
+    expect(store.getState().byId['id-3']?.status?.progress).toEqual({ phase: 'crosscheck', percent: 71 });
+    stop();
+  });
+
   it('falls back to polling every 5 s when the stream errors, keeps going past failed, stops at refunded', async () => {
     const failed = { status: 'failed' as const, createdAt: running.createdAt };
     const { store, stream, tick, polling } = setup([running, failed, { status: 'refunded', createdAt: running.createdAt, refundTx: 'tx' }]);

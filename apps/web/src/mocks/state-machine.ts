@@ -22,18 +22,45 @@ export interface Snapshot {
   progress?: Progress;
 }
 
+// The engine's phase names (orchestrator-progress.mjs) for the mock's display names.
+const ENGINE_PHASE: Record<string, NonNullable<Progress['detail']>['phases'][number]['name']> = {
+  prepare: 'prepare', tests: 'tests', review: 'review', 'cross-check': 'crosscheck', debate: 'debate',
+  adjudicate: 'adjudicate', 'general review': 'general-review', publish: 'report',
+};
+
+// The live snapshot the real worker passes through: phase states, and each reviewer's pass and calls.
+function detailAt(phase: string, elapsed: number, reviewing: { reviewer: string; pass: number } | null): NonNullable<Progress['detail']> {
+  const at = PHASES.indexOf(phase as (typeof PHASES)[number]);
+  const reviewIndex = PHASES.indexOf('review');
+  const order = REVIEWERS.indexOf(reviewing?.reviewer as (typeof REVIEWERS)[number]);
+  return {
+    state: 'running', elapsedMs: elapsed,
+    phases: PHASES.map((name, index) => ({ name: ENGINE_PHASE[name]!, state: index < at ? 'done' : index === at ? 'running' : 'pending' })),
+    reviewers: REVIEWERS.map((id, index) => {
+      const behind = at > reviewIndex || (reviewing && (reviewing.pass === 2 || index < order));
+      if (at < reviewIndex) return { id, state: 'pending', jobsDone: 0, jobs: 1, passes: 2 };
+      if (behind && !(reviewing && reviewing.pass === 2 && index >= order)) return { id, state: 'done', jobsDone: 1, jobs: 1, passes: 2 };
+      const pass = reviewing && index === order ? reviewing.pass : reviewing && reviewing.pass === 2 ? 2 : 1;
+      return { id, state: 'running', jobsDone: 0, jobs: 1, passes: 2, pass, calls: index === order ? 18 : 4, budget: 40, surface: 'S1', idleMs: 4_000 };
+    }),
+    ...(at >= PHASES.indexOf('debate') ? { debate: { clusters: 3, heard: at > PHASES.indexOf('debate') ? 3 : 1 } } : {}),
+  };
+}
+
 function runningProgress(elapsed: number): Progress {
   let step = Math.min(RUN_STEPS - 1, Math.floor(elapsed / STEP_MS));
   const percent = Math.round(((step + 1) / RUN_STEPS) * 100);
   const reviewIndex = PHASES.indexOf('review');
-  if (step < reviewIndex) return { phase: PHASES[step]!, percent };
+  if (step < reviewIndex) return { phase: PHASES[step]!, percent, detail: detailAt(PHASES[step]!, elapsed, null) };
   step -= reviewIndex;
   if (step < REVIEWERS.length * 2) {
     const pass = step < REVIEWERS.length ? 1 : 2;
-    return { phase: 'review', reviewer: REVIEWERS[step % REVIEWERS.length]!, pass, percent };
+    const reviewer = REVIEWERS[step % REVIEWERS.length]!;
+    return { phase: 'review', reviewer, pass, percent, detail: detailAt('review', elapsed, { reviewer, pass }) };
   }
   const phase = PHASES[reviewIndex + 1 + step - REVIEWERS.length * 2]!;
-  return phase === 'debate' ? { phase, pass: 2, percent } : { phase, percent };
+  const detail = detailAt(phase, elapsed, null);
+  return phase === 'debate' ? { phase, pass: 2, percent, detail } : { phase, percent, detail };
 }
 
 export function snapshotAt(request: MockRequest, now: number): Snapshot {
