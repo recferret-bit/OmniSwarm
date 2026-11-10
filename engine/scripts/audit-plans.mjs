@@ -19,7 +19,8 @@
 import path from 'node:path';
 import { detectEcosystems, isProductionPath } from './stack-detect.mjs';
 import { DOMAIN_SPECS, PYTHON_CHECKS, REVIEW_CHECKS } from './audit-plans-data-domains.mjs';
-import { EVM_CONTRACT_SURFACE, INFRA_SURFACE, NEAR_CLIENT_SURFACE, NEAR_CONTRACT_SURFACE, NODE_SURFACE, PYTHON_SURFACE, SOLANA_SURFACE, SURFACE_TITLES, WALLET_SURFACE } from './audit-plans-data-surfaces.mjs';
+import { evmSurfaceLines } from './audit-plans-data-evm.mjs';
+import { INFRA_SURFACE, NEAR_CLIENT_SURFACE, NEAR_CONTRACT_SURFACE, NODE_SURFACE, PYTHON_SURFACE, SOLANA_SURFACE, SURFACE_TITLES, WALLET_SURFACE } from './audit-plans-data-surfaces.mjs';
 import { LAYERS, LAYER_TITLES, buildLayerMap, renderLayerLines, scopeNote } from './harness-layers.mjs';
 import { SKIP_DIRS as WALK_SKIP_DIRS, matchLines, readText, rel as relPath, walk } from './harness-walk.mjs';
 
@@ -218,7 +219,7 @@ export function renderSurfaceSkillGuidance(surfaceCode, profile, scope = '') {
       ...(want('solana') ? SOLANA_SURFACE[code] || [] : []),
       ...(want('near') && nearContract ? NEAR_CONTRACT_SURFACE[code] || [] : []),
       ...(want('near') && nearClient ? NEAR_CLIENT_SURFACE[code] || [] : []),
-      ...(!eco || eco.evm?.contracts ? EVM_CONTRACT_SURFACE[code] || [] : []),
+      ...(!eco ? evmSurfaceLines(code) : eco.evm?.detected ? evmSurfaceLines(code, [...(eco.evm.contracts ? ['contract'] : []), ...((eco.evm.kinds || []).includes('client') ? ['client'] : [])]) : []),
       ...(!layers || clientFiles || eco?.solana?.detected || nearClient || eco?.evm?.detected ? WALLET_SURFACE[code] || [] : []),
     ],
     infra: !layers || layers.counts?.infra > 0 ? INFRA_SURFACE[code] || [] : [],

@@ -1,5 +1,6 @@
 // Per-surface reviewer guidance tables of audit-plans.mjs renderSurfaceSkillGuidance: the surface titles and the
-// stack-specific lines (Node, Python, Solana, NEAR contract and client, EVM contract, wallet flows, infrastructure). The renderer
+// stack-specific lines (Node, Python, Solana, NEAR contract and client, wallet flows, infrastructure). The EVM checklist is in
+// audit-plans-data-evm.mjs. The renderer
 // groups them by review layer (harness-layers.mjs): Python and Node are web2; Solana, NEAR, EVM and wallet flows are web3;
 // INFRA_SURFACE is infra. Data only; imports nothing.
 
@@ -65,15 +66,6 @@ export const NEAR_CLIENT_SURFACE = {
   S3: ['- NEAR Intents: `@defuse-protocol/one-click-sdk-typescript`, `@defuse-protocol/intents-sdk`, and `@near-intents-agent-api/sdk` are recognition only. Do not request a quote, submit a deposit, or call the agent API.'],
   S5: ['- NEAR AI: `@neardefi/shade-agent-js` is an unaudited published library, not a deprecated package to remove. Do not install it. Do not run `npx skills add` or `npm install` of NEAR SDKs during the review.'],
   S6: ['- NEAR client: `@hot-labs/near-connect` and `near-api-js` sign and broadcast. Review how the wallet is asked to sign. `v1.signer` is a lead, not a mainnet read. Do not call `cloud-api.near.ai`, `1click.chaindefuser.com`, `agentsonintents.com`, OutLayer, or NEAR MCP.'],
-};
-
-// EVM contracts (Solidity, Vyper). Shown when the target has production contract source.
-export const EVM_CONTRACT_SURFACE = {
-  S1: ['- EVM contract: every `external`/`public` state-changing function has the access modifier it needs; authorization uses `msg.sender`, never `tx.origin`; ownership transfer is two-step; initializers run once and the implementation behind a proxy disables them; signature-authorized calls check the recovered signer against zero and bind a nonce, a deadline and an EIP-712 domain with the chain id.'],
-  S2: ['- EVM contract: bound array lengths and loops fed by callers, validate addresses and amounts (zero address, zero amount, self-transfer), and treat every token and callback target a caller names as untrusted code.'],
-  S3: ['- EVM contract: state is updated before any external call (checks-effects-interactions) or a reentrancy guard covers every path that shares the state, including cross-function and read-only reentrancy; low-level call results are checked; ERC-20 calls use SafeERC20 and measure the amount received; arithmetic is checked (Solidity >= 0.8, no `unchecked` on caller-influenced values) and division happens after multiplication; share and fee math cannot be rounded to the caller\'s advantage or inflated by a first deposit; prices do not come from a spot balance that a flash loan can move; `delegatecall` targets and `selfdestruct` are fixed and authorized. In `markdown_summary` add an EVM paragraph: files reviewed, controls verified, and that contract tests were not run.'],
-  S4: ['- EVM contract: who holds the owner, admin and upgrade keys (an EOA, a multisig, a timelock), what a single key can do, whether privileged setters are bounded, and what events and public getters expose.'],
-  S5: ['- EVM contract: the compiler version is pinned (no floating `pragma`), dependencies under `lib/` or `node_modules` are pinned to a release and not edited in place, and the build settings (optimizer, EVM version) are committed. `forge`, `hardhat` and `solc` are not in the sandbox image: do not install them; contract tests stay a coverage gap.'],
 };
 
 // Chain-neutral wallet flow checks, shown when production code imports a chain SDK or calls an injected wallet.

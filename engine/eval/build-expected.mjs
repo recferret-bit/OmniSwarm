@@ -16,6 +16,7 @@ const NEAR = 'contracts/tipjar/src/lib.rs';
 const SOL = 'programs/tip_vault/src/lib.rs';
 const EVM = 'contracts/evm/src/TipVault.sol';
 const EVMJS = 'frontend/src/evm.js';
+const SHARES = 'contracts/evm/src/TipShares.sol';
 const CI = '.github/workflows/deploy.yml';
 
 // [file, needle, class, title, severity, layer, extra]
@@ -70,6 +71,18 @@ const BUGS = [
   [EVMJS, "new Wallet('0x1111", 'key-custody', 'a relayer private key is embedded in the browser bundle', 'high', 'web3'],
   [EVMJS, 'await erc20.approve(VAULT, MaxUint256);', 'unlimited-approval', 'token tip approves the vault for the whole balance', 'medium', 'web3'],
   [EVMJS, "method: 'eth_sign'", 'blind-signing', 'login uses eth_sign on a server-supplied message', 'high', 'web3'],
+  [SHARES, 'require(msg.sender == tx.origin, "no contracts");', 'eoa-check', 'onlyHuman treats tx.origin == msg.sender as proof the caller has no code', 'medium', 'web3', { missedBy: ['baseline'] }],
+  [SHARES, 'return asset.balanceOf(address(this));', 'donation', 'totalAssets reads the live token balance, which anyone can raise by a transfer', 'high', 'web3'],
+  [SHARES, 'minted = totalShares == 0 ? assets : assets * totalShares / totalAssets();', 'share-inflation', 'the first depositor can inflate the share price so later deposits mint zero shares', 'critical', 'web3'],
+  [SHARES, '(, int256 answer, , , ) = feed.latestRoundData();', 'oracle-staleness', 'the feed answer is used with no sign, freshness or sequencer check', 'high', 'web3'],
+  [SHARES, 'return uint256(reserve1) * 1e18 / reserve0;', 'spot-price', 'the borrow limit is priced from pool reserves a flash loan can move', 'critical', 'web3'],
+  [SHARES, 'return amount / 10000 * bps;', 'precision', 'the fee divides before it multiplies and rounds small amounts to zero', 'low', 'web3', { missedBy: ['paranoid'] }],
+  [SHARES, 'rewards[creator] += uint96(amount);', 'narrowing-cast', 'a recorded tip is truncated to 96 bits', 'medium', 'web3'],
+  [SHARES, 'for (uint256 i = 0; i < creators.length; i++) {', 'denial-of-service', 'payAll loops over every creator and one failing transfer blocks all payouts', 'medium', 'web3'],
+  [SHARES, 'function upgradeTo(address next) external {', 'unprotected-upgrade', 'anyone can set the implementation the fallback delegatecalls', 'critical', 'web3'],
+  [EVMJS, 'return nft.setApprovalForAll(VAULT, true);', 'unlimited-approval', 'the vault is approved for the whole NFT collection', 'medium', 'web3'],
+  [EVMJS, 'return walletClient.signAuthorization({ contractAddress: delegate, chainId: 0 });', 'eip7702-delegation', 'an EIP-7702 delegation is signed for a contract taken from the URL, valid on every chain', 'critical', 'web3'],
+  [EVMJS, "method: 'wallet_addEthereumChain', params: [chain]", 'untrusted-chain', 'the wallet is asked to add a network whose RPC URL comes from an API response', 'medium', 'web3'],
   ['infra/Dockerfile', 'FROM node:18', 'container-base', 'end-of-life unpinned base image running as root', 'medium', 'infra'],
   ['infra/Dockerfile', 'curl -fsSL', 'curl-pipe-shell', 'image build pipes a remote script into bash', 'high', 'infra'],
   ['infra/Dockerfile', 'COPY infra/production.env', 'secret-in-image', 'production secrets are copied into the image', 'high', 'infra'],
@@ -101,6 +114,8 @@ const DECOYS = [
   [SOL, '#[account(mut, close = authority, has_one = authority', 'close requires has_one and a signing authority', 'anyone can close the vault', 'web3'],
   [EVM, 'function withdrawToken(address token, uint256 amount) external nonReentrant {', 'the guard is set and the balance is debited before the token call', 'token withdraw is reentrant', 'web3'],
   [EVM, 'require(msg.sender == pendingOwner, "not pending owner");', 'ownership transfer is two-step and only the pending owner can accept', 'anyone can accept ownership', 'web3'],
+  [SHARES, 'require(!initialized, "already initialized");', 'the initializer runs once and is guarded by a flag', 'initialize can be called again to take ownership', 'web3'],
+  [SHARES, 'require(signer != address(0) && signer == owner, "bad signature");', 'the claim is EIP-712 typed data with the chain id, a consumed nonce, a deadline and a zero-address check', 'the claim signature can be replayed', 'web3'],
   ['infra/nginx.conf', 'allow 10.0.0.0/8;', 'the internal location is limited to the private range and denies the rest', 'internal location is public', 'infra'],
   ['infra/docker-compose.yml', 'image: nginx:1.27.2@sha256:', 'the proxy image is pinned by digest and read-only', 'proxy image follows a moving tag', 'infra'],
   [CI, 'actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a', 'the action is pinned to a commit', 'setup-node action is unpinned', 'infra'],

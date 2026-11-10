@@ -475,6 +475,120 @@
       "layer": "web3"
     },
     {
+      "file": "contracts/evm/src/TipShares.sol",
+      "startLine": 41,
+      "endLine": 41,
+      "class": "eoa-check",
+      "title": "onlyHuman treats tx.origin == msg.sender as proof the caller has no code",
+      "severity": "medium",
+      "layer": "web3",
+      "missedBy": [
+        "baseline"
+      ]
+    },
+    {
+      "file": "contracts/evm/src/TipShares.sol",
+      "startLine": 59,
+      "endLine": 59,
+      "class": "donation",
+      "title": "totalAssets reads the live token balance, which anyone can raise by a transfer",
+      "severity": "high",
+      "layer": "web3"
+    },
+    {
+      "file": "contracts/evm/src/TipShares.sol",
+      "startLine": 63,
+      "endLine": 63,
+      "class": "share-inflation",
+      "title": "the first depositor can inflate the share price so later deposits mint zero shares",
+      "severity": "critical",
+      "layer": "web3"
+    },
+    {
+      "file": "contracts/evm/src/TipShares.sol",
+      "startLine": 77,
+      "endLine": 77,
+      "class": "oracle-staleness",
+      "title": "the feed answer is used with no sign, freshness or sequencer check",
+      "severity": "high",
+      "layer": "web3"
+    },
+    {
+      "file": "contracts/evm/src/TipShares.sol",
+      "startLine": 83,
+      "endLine": 83,
+      "class": "spot-price",
+      "title": "the borrow limit is priced from pool reserves a flash loan can move",
+      "severity": "critical",
+      "layer": "web3"
+    },
+    {
+      "file": "contracts/evm/src/TipShares.sol",
+      "startLine": 91,
+      "endLine": 91,
+      "class": "precision",
+      "title": "the fee divides before it multiplies and rounds small amounts to zero",
+      "severity": "low",
+      "layer": "web3",
+      "missedBy": [
+        "paranoid"
+      ]
+    },
+    {
+      "file": "contracts/evm/src/TipShares.sol",
+      "startLine": 96,
+      "endLine": 96,
+      "class": "narrowing-cast",
+      "title": "a recorded tip is truncated to 96 bits",
+      "severity": "medium",
+      "layer": "web3"
+    },
+    {
+      "file": "contracts/evm/src/TipShares.sol",
+      "startLine": 100,
+      "endLine": 100,
+      "class": "denial-of-service",
+      "title": "payAll loops over every creator and one failing transfer blocks all payouts",
+      "severity": "medium",
+      "layer": "web3"
+    },
+    {
+      "file": "contracts/evm/src/TipShares.sol",
+      "startLine": 117,
+      "endLine": 117,
+      "class": "unprotected-upgrade",
+      "title": "anyone can set the implementation the fallback delegatecalls",
+      "severity": "critical",
+      "layer": "web3"
+    },
+    {
+      "file": "frontend/src/evm.js",
+      "startLine": 41,
+      "endLine": 41,
+      "class": "unlimited-approval",
+      "title": "the vault is approved for the whole NFT collection",
+      "severity": "medium",
+      "layer": "web3"
+    },
+    {
+      "file": "frontend/src/evm.js",
+      "startLine": 46,
+      "endLine": 46,
+      "class": "eip7702-delegation",
+      "title": "an EIP-7702 delegation is signed for a contract taken from the URL, valid on every chain",
+      "severity": "critical",
+      "layer": "web3"
+    },
+    {
+      "file": "frontend/src/evm.js",
+      "startLine": 51,
+      "endLine": 51,
+      "class": "untrusted-chain",
+      "title": "the wallet is asked to add a network whose RPC URL comes from an API response",
+      "severity": "medium",
+      "layer": "web3"
+    },
+    {
       "file": "infra/Dockerfile",
       "startLine": 1,
       "endLine": 1,
@@ -709,6 +823,22 @@
       "endLine": 100,
       "reason": "ownership transfer is two-step and only the pending owner can accept",
       "claim": "anyone can accept ownership",
+      "layer": "web3"
+    },
+    {
+      "file": "contracts/evm/src/TipShares.sol",
+      "startLine": 46,
+      "endLine": 46,
+      "reason": "the initializer runs once and is guarded by a flag",
+      "claim": "initialize can be called again to take ownership",
+      "layer": "web3"
+    },
+    {
+      "file": "contracts/evm/src/TipShares.sol",
+      "startLine": 112,
+      "endLine": 112,
+      "reason": "the claim is EIP-712 typed data with the chain id, a consumed nonce, a deadline and a zero-address check",
+      "claim": "the claim signature can be replayed",
       "layer": "web3"
     },
     {

@@ -142,10 +142,15 @@ test('EVM guidance and the EVM lead file appear only for an EVM target', (t) => 
   const evm = analyzeStackAndPlans(tree(t, { 'foundry.toml': '', 'src/Vault.sol': 'pragma solidity ^0.8.0;\ncontract Vault { function f() external { require(tx.origin == msg.sender); } }\n' }));
   const plain = analyzeStackAndPlans(tree(t, { 'src/server.js': "require('express')().get('/x', (req, res) => res.end());\n", 'package.json': '{"dependencies":{"express":"^4"}}' }));
   for (const code of ['S1', 'S2', 'S3', 'S4', 'S5']) {
-    assert.match(renderSurfaceSkillGuidance(code, evm), /- EVM contract:/, code);
+    assert.match(renderSurfaceSkillGuidance(code, evm), /- EVM \[/, code);
     assert.doesNotMatch(renderSurfaceSkillGuidance(code, plain), /EVM/, code);
   }
   assert.doesNotMatch(renderSurfaceSkillGuidance('S3', evm), /Solana\/Anchor|NEAR contract|Python:/);
+  // Contract source only: no wallet-client rows. A client-only dApp: wallet rows and no contract rows.
+  assert.doesNotMatch(renderSurfaceSkillGuidance('S6', evm), /\[Wallet client\]/);
+  const dapp = analyzeStackAndPlans(tree(t, { 'package.json': '{"dependencies":{"viem":"^2.0.0"}}', 'src/app.ts': "import { createWalletClient } from 'viem';\n" }));
+  assert.match(renderSurfaceSkillGuidance('S6', dapp), /- EVM \[Wallet client\]/);
+  assert.doesNotMatch(renderSurfaceSkillGuidance('S3', dapp), /- EVM \[SC0/);
   assert.equal(evm.layers.counts.web3, 2);
   assert.deepEqual(evm.layers.present, ['web3']);
 });

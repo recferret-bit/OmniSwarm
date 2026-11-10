@@ -418,8 +418,8 @@ test('both skill copies stay identical and describe incomplete reviews', () => {
   assert.match(a, /Normal permissions and prompt instructions are not containment/);
   const evals = JSON.parse(fs.readFileSync(path.join(ENGINE_ROOT, 'skills/security-audit/evals.json')));
   assert.equal(evals.mode, 'classification_only');
-  assert.equal(evals.evals.length, 6);
-  assert.deepEqual(evals.evals.map((e) => e.name).slice(3), ['audit-not-pentest', 'layer-separation', 'hold-position-on-evidence']);
+  assert.equal(evals.evals.length, 7);
+  assert.deepEqual(evals.evals.map((e) => e.name).slice(3), ['audit-not-pentest', 'layer-separation', 'hold-position-on-evidence', 'evm-coverage-and-eoa']);
   assert.ok(evals.evals.every((e) => e.prompt.includes('do not run commands')));
 });
 

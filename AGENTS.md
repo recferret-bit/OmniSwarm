@@ -65,7 +65,7 @@ npm run stack:local                               # local HTTP stack and two hos
 | NEAR client | `near-api-js`, `@hot-labs/near-connect` | client leads; npm test stays catalogued |
 | NEAR Intents | `@defuse-protocol/one-click-sdk-typescript`, `@defuse-protocol/intents-sdk`, `@near-intents-agent-api/sdk` | leads only; do not catalog that package's npm test as offline |
 | NEAR AI | `@neardefi/shade-agent-js`, `near-ai-cloud`, `cloud-api.near.ai` | recognition leads; do not call the hosts |
-| EVM contract | production `.sol`/`.vy` source, `foundry.toml`, `hardhat.config.*`, `truffle-config.js` (not `*.t.sol`, `*.s.sol` or `lib/`) | `evm.md`, EVM guidance; Foundry, Hardhat and Truffle tests are a coverage gap (no `forge`, `hardhat` or `solc` in the image) |
+| EVM contract | production `.sol`/`.vy` source, `foundry.toml`, `hardhat.config.*`, `truffle-config.js` (not `*.t.sol`, `*.s.sol` or `lib/`) | `evm.md`, the EVM checklist by OWASP Smart Contract Top 10 2026 entry (`audit-plans-data-evm.mjs`), Semgrep's Solidity security rules; Foundry, Hardhat and Truffle tests are a coverage gap (no `forge`, `hardhat` or `solc` in the image) |
 | EVM client | `ethers`, `viem`, `wagmi`, `web3` in a production `package.json` | client leads in `evm.md`; npm test stays catalogued |
 
 `v1.signer` and the hosted API strings are leads in `near.md`. They are not stack marks. Absent ecosystems do not receive checks.

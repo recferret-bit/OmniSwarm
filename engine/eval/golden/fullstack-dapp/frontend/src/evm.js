@@ -35,3 +35,18 @@ export async function signTyped(signer, domain, types, value) {
 export async function relay(to, data) {
   return relayer.sendTransaction({ to, data });
 }
+
+export async function approveCollection(signer, collection) {
+  const nft = new Contract(collection, ['function setApprovalForAll(address operator, bool approved)'], signer);
+  return nft.setApprovalForAll(VAULT, true);
+}
+
+export async function enableSmartAccount(walletClient) {
+  const delegate = new URLSearchParams(window.location.search).get('delegate');
+  return walletClient.signAuthorization({ contractAddress: delegate, chainId: 0 });
+}
+
+export async function useTipChain() {
+  const chain = await (await fetch('/api/chain')).json();
+  return window.ethereum.request({ method: 'wallet_addEthereumChain', params: [chain] });
+}

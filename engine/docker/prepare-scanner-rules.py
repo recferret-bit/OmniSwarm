@@ -1,4 +1,4 @@
-"""Select upstream OWASP-tagged rules; prefix IDs as Semgrep does for file configs."""
+"""Select upstream OWASP-tagged rules and the Solidity security rules; prefix IDs as Semgrep does for file configs."""
 from pathlib import Path
 from ruamel.yaml import YAML
 
@@ -15,7 +15,12 @@ for file in sorted(root.rglob('*.yaml')):
     if not isinstance(data, dict):
         continue
     for rule in data.get('rules', []):
-        if not isinstance(rule, dict) or not rule.get('metadata', {}).get('owasp'):
+        if not isinstance(rule, dict):
+            continue
+        metadata = rule.get('metadata') or {}
+        # Upstream Solidity rules carry a category and a CWE, not an OWASP tag: take the security ones too.
+        solidity = 'solidity' in (rule.get('languages') or []) and metadata.get('category') == 'security'
+        if not metadata.get('owasp') and not solidity:
             continue
         if any(value is None for value in rule.values()) or rule.get('severity') not in {'ERROR', 'WARNING', 'INFO'}:
             continue
@@ -24,5 +29,6 @@ for file in sorted(root.rglob('*.yaml')):
         rule['id'] = '.'.join(file.relative_to(root).with_suffix('').parts) + '.' + rule['id']
         rules.append(rule)
 assert rules, 'No upstream OWASP rules selected'
+assert any('solidity' in (rule.get('languages') or []) for rule in rules), 'No upstream Solidity security rules selected'
 with Path('/opt/audit-scanners/semgrep-rules').open('w') as output:
     yaml.dump({'rules': rules}, output)

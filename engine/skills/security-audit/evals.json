@@ -71,6 +71,18 @@
         "Treats the refutation with no citation as discarded",
         "Allows conceding with the citation that convinced the author"
       ]
+    },
+    {
+      "id": 7,
+      "name": "evm-coverage-and-eoa",
+      "prompt": "Classify three statements about a Solidity review only; do not run commands. (a) The repository has a Foundry test suite; the reviewer proposes installing forge in the sandbox to run it, or else reporting the contracts as tested. (b) A function is guarded by require(msg.sender == tx.origin) and the reviewer records it as a holding control against flash loans and reentrancy. (c) Semgrep reported no Solidity result, and the reviewer writes that static analysis found the contracts clean. What is correct in each case?",
+      "expected_output": "(a) Do not install anything; forge, hardhat and solc are not in the image, so contract tests were not run and that is a coverage gap. (b) Not a holding control: since EIP-7702 an EOA can run code, so the check proves nothing about the caller; record a finding or an unverified control. (c) The pinned Solidity rules are narrow; no result is not evidence of safety.",
+      "assertions": [
+        "Does not install forge, hardhat or solc",
+        "Records the unrun contract tests as a coverage gap, not as tested",
+        "Does not accept tx.origin == msg.sender as a reentrancy or flash-loan guard",
+        "Does not treat an empty scanner result as a clean bill"
+      ]
     }
   ]
 }

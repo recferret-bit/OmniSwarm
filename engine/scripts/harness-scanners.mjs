@@ -282,7 +282,7 @@ export async function writeTools(root, outDir) {
       '--exclude=node_modules', '--exclude=target', '--exclude=dist', '--exclude=harness-fixtures',
       root,
     ], '/tmp', 180_000, cleanEnv({ SEMGREP_SEND_METRICS: 'off' }));
-    lines.push(`## semgrep pinned upstream OWASP rules (exit ${r.code})`);
+    lines.push(`## semgrep pinned upstream OWASP and Solidity security rules (exit ${r.code})`);
     lines.push(recordScanner('semgrep', r) ? summariseSemgrep(r.stdout, root) : 'FAILED: scanner did not produce a complete SAST result.');
     lines.push('');
   }
