@@ -119,9 +119,9 @@ test('state, phase and reviewer changes are written at once, call counts at most
   now += 1_000;
   await tailer.tick();
   assert.equal(appended.length, 2, 'the same snapshot is never written twice');
-  // A new pass, a stall, a phase and a run state each go out at once.
+  // A new pass with a stall, the stall clearing, a phase and a run state each go out at once.
   for (const patch of [{ ...grok({ pass: 2, calls: 0, idleMs: 200_000 }), percent: 47 }, { ...grok({ pass: 2, calls: 0, idleMs: 1_000 }), percent: 47 }, { ...grok({ pass: 2, calls: 0, idleMs: 200_000 }), percent: 71, phase: 'crosscheck' }, { ...grok({ pass: 2, calls: 0, idleMs: 200_000 }), percent: 71, phase: 'crosscheck', state: 'incomplete' }]) {
-    const before = appended.length;
+    const before: number = appended.length;
     write(patch);
     now += 1_000;
     await tailer.tick();
