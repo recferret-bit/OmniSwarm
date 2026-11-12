@@ -8,6 +8,8 @@ Plan only (2026-11-02, hackathon day D2). Start with [`PRODUCT_WAVES.md`](./PROD
 | [`PRODUCT_WAVES.md`](./PRODUCT_WAVES.md) | **The plan:** 15 waves on 6 tracks, layout, parallel rules, issue format, branch/worktree pipeline |
 | [`HACKATHON_CUT.md`](./HACKATHON_CUT.md) | What ships by 2026-11-14, calendar D2–D14, D10 gate, agent allocation, drop order |
 | [`FINAL_SPRINT.md`](./FINAL_SPRINT.md) | **Current (2026-11-09):** cut and calendar for waves W15–W19 (local NEAR, green gates, provenance, agent economy, submission v2), issue DoR/DoD, owner lane, drop order |
+| [`DEBATE_V2.md`](./DEBATE_V2.md) | **Debate and orchestrator v2 (2026-11-11):** waves W20–W30, gates, thresholds, shared-file hand-offs, analytics, proof tiers, coverage contract, owner lane and decisions. Opens after the submission |
+| [`DEBATE_V2_EVIDENCE.md`](./DEBATE_V2_EVIDENCE.md) | What two live runs measured and what the literature says, each source tagged by how well it was checked |
 | [`waves/`](./waves/) | One file per wave with its issue table (`WNN-XX`) |
 | [`checks/`](./checks/) | Owner check guides, one per landed wave |
 | [`../spec/ORCHESTRATION.md`](../spec/ORCHESTRATION.md) | Reviewer families (CLI subscriptions, API keys, OpenRouter, scripted), iteration budget, debate, orchestrator, report v2, golden eval |

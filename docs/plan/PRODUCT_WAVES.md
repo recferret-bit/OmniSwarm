@@ -56,8 +56,21 @@
 | **W17** | Code provenance | Chain | `reproducible-wasm` with NEP-330 metadata, `near-local verify`, guard `SOURCE_METADATA_MISMATCH`, NearBlocks verified | W10, W13 (soft W15) |
 | **W18** | Agent economy (`H+`) | Security | Per-request receipt on `/r/<id>`; guard MCP server | W16 (soft W15) |
 | **W19** | Submission pack v2 | Ops | README passes `tools/readme-claims.mjs` and the screener; live links; submitted | W16 (soft W15, W17, W18) |
+| **W20** | Spine: execute seam, telemetry, gates | Engine + Lead | `events.jsonl` beside a demo run; reserved flags in `--plan`; a coverage gate and a plan linter | — |
+| **W21** | Measure: scorecard, replay bundles, fixed twin | Engine (eval) | `npm run eval:replay` reproduces the two live runs' numbers offline; baseline protocol | W20 |
+| **W22** | Submit contract and judge reliability | Engine + Lead | A failed submit is noticed and nudged; refused judge submits accepted or answered; no judge call when nothing can change; a judge chain | W20 |
+| **W23** | Scheduler and provider health | Engine + Lead | Chaos table: lanes at half the serial wall time; a parked provider; retry budget; straggler cut | W20 |
+| **W24** | Budget, anytime results and resume | Engine + Lead | `--max-minutes 2` still ends in a report; kill and resume to the same result; pause on a quota reset | W20, W23 |
+| **W25** | Verification ladder I | Engine + Lead | `--verify ladder`: every cluster verified blind by an independent tier; agreement is a prior | W20, W21, W22, W23 (soft W24) |
+| **W26** | Verification ladder II | Engine + Lead | Anchored refutations; one exchange; a judge panel; refuted findings kept in an appendix | W25, W23 (soft W24, W27) |
+| **W27** | Roles, pool and presets | Engine + Lead | Role cards; a pool judge; effort per role; `quick`, `standard`, `deep` | W21, W24 (soft W25, W26) |
+| **W28** | Discovery lenses and extra attempts | Engine + Lead | Per-reviewer lens passes; budget-gated resampling | W21, W22, W23, W24 (soft W27) |
+| **W29** | Report and live progress surfaces | Engine + Intake + Front | Terminal row, API detail and web panel show depth, budget, a parked provider; report depth badges | W25, W26 (soft W23, W24, W27) |
+| **W30** | Proof campaign and decision | Lead + owner | A pre-registered, interleaved, repeated campaign; the default flips only on a pass | W20–W29 |
 
 W15–W19 are the final sprint (2026-11-09 → 11-14). Their cut, calendar, DoR/DoD and owner lane are in [`FINAL_SPRINT.md`](./FINAL_SPRINT.md).
+
+W20–W30 are the debate and orchestrator v2 series. They open after the submission. Their plan, evidence, gates, thresholds, shared-file hand-offs and the method additions (analytics, proof tiers, the coverage contract) are in [`DEBATE_V2.md`](./DEBATE_V2.md) and [`DEBATE_V2_EVIDENCE.md`](./DEBATE_V2_EVIDENCE.md).
 
 ```mermaid
 flowchart LR
@@ -128,6 +141,8 @@ From W15 on, every wave file also has:
 - a **Parallel groups** line under the table
 
 The issue-level DoR and DoD are in [`FINAL_SPRINT.md`](./FINAL_SPRINT.md) §5.
+
+From W20 on, every wave file also has **Test plan**, **Analytics**, **Proof** and **Risks and rollback** sections, and every issue names a positive and a negative case ([`DEBATE_V2.md`](./DEBATE_V2.md) §7).
 
 ## 6. Hackathon
 
