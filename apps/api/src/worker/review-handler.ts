@@ -24,7 +24,10 @@ import { publishReport, readPublished } from './publish.ts';
 import { maxSeverity } from './report.ts';
 import { ensureReportPdf } from '../shared/report-pdf.ts';
 import { readProviderEnv } from '../modules/providers/secrets.ts';
-import { isPanelPreset, panelConfigDocument } from './panel.ts';
+import { accountPresetProvider, envForSpec, providerById } from '@omniswarm/schemas/providers';
+import { readAccountKey } from '../modules/providers/account-keys.ts';
+import { accountConfigDocument, isPanelPreset, jobSpecs, panelConfigDocument } from './panel.ts';
+import { resolvePreset } from './preset.ts';
 import { chainReportUri } from './report-uri.ts';
 
 export interface HandlerDeps { config: Config; pool: Pool; clock: Clock; chain: ChainPort; engine: EngineRunner; log: Logger }
@@ -88,6 +91,40 @@ async function refund(deps: HandlerDeps, row: RequestRow, cause: string): Promis
   return { status: 'refunded', reason: cause };
 }
 
+interface Prepared { configFile?: string; providerEnv: Record<string, string>; providerScope?: string[] }
+
+/**
+ * Keys and config for one run, per the provider catalog. An `account-<provider>` job runs on the requesting
+ * account's own key and the models snapshotted on its row; a panel job runs on the operator's admin-page keys.
+ * Either way the spawn carries only the provider variables its own specs need (providerScope).
+ */
+export async function prepareProviders(deps: Pick<HandlerDeps, 'config' | 'pool'>, row: RequestRow, root: string): Promise<Prepared | { failed: string }> {
+  const accountProvider = accountPresetProvider(row.preset);
+  const write = (doc: Record<string, unknown>) => {
+    const file = path.join(root, 'panel.config.json');
+    fs.writeFileSync(file, `${JSON.stringify(doc)}\n`, { mode: 0o600 });
+    return file;
+  };
+  if (accountProvider) {
+    const provider = providerById(accountProvider);
+    const key = await readAccountKey(deps.pool, deps.config.accountKeysSecret, row.account, accountProvider);
+    if (!provider?.keyEnv || !key || !row.models?.length) return { failed: `${accountProvider}_account_key_or_models_missing` };
+    const configFile = write(accountConfigDocument(row.preset, row.models));
+    return { configFile, providerEnv: { [provider.keyEnv]: key }, providerScope: [...provider.envAllowlist] };
+  }
+  const providerEnv = readProviderEnv(deps.config.providerSecretsFile ?? '', deps.config.http.sessionSecret);
+  if (isPanelPreset(row.preset)) {
+    const providerScope = [...new Set(jobSpecs(row.preset, null).flatMap(envForSpec))];
+    return { configFile: write(panelConfigDocument(row.preset)), providerEnv, providerScope };
+  }
+  // A configured hosted preset (omniswarm.config.json): its own specs decide the scope too.
+  try {
+    return { providerEnv, providerScope: resolvePreset(deps.config.engine.configPath, row.preset).envNames };
+  } catch {
+    return { providerEnv };
+  }
+}
+
 async function runEngine(deps: HandlerDeps, row: RequestRow, attempt: number, signal: AbortSignal): Promise<{ outcome: Outcome; out: string }> {
   const dirs = attemptDirs(deps.config.storage.runsRoot, row.id, attempt);
   const abort = new AbortController();
@@ -98,14 +135,11 @@ async function runEngine(deps: HandlerDeps, row: RequestRow, attempt: number, si
   const tailer = new ProgressTailer(deps, row.id, dirs.out, onStop);
   tailer.start(deps.config.progressPollMs);
   try {
-    let configFile: string | undefined;
-    if (isPanelPreset(row.preset)) {
-      configFile = path.join(dirs.root, 'panel.config.json');
-      fs.writeFileSync(configFile, `${JSON.stringify(panelConfigDocument(row.preset))}\n`, { mode: 0o600 });
-    }
-    const providerEnv = readProviderEnv(deps.config.providerSecretsFile ?? '', deps.config.http.sessionSecret);
+    const prepared = await prepareProviders(deps, row, dirs.root);
+    if ('failed' in prepared) return { outcome: { kind: 'infra_failed', cause: prepared.failed }, out: dirs.out };
+    const { configFile, providerEnv, providerScope } = prepared;
     const result = await deps.engine.run({
-      repo: row.repo, commitSha: row.commit_sha, preset: row.preset, outDir: dirs.out, logPath: dirs.log, configFile, providerEnv,
+      repo: row.repo, commitSha: row.commit_sha, preset: row.preset, outDir: dirs.out, logPath: dirs.log, configFile, providerEnv, providerScope,
       ...(row.slice_path ? { sourceDir: row.slice_path } : {}),
     }, abort.signal);
     recordResult(dirs, result);

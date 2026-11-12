@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { MyRequests } from '@/components/request/MyRequests';
+import { AccountKeys } from '@/components/account/AccountKeys';
 
 export const metadata: Metadata = { title: 'My requests', robots: { index: false } };
 
@@ -8,6 +9,7 @@ export default function MyRequestsPage() {
     <>
       <h1>My requests</h1>
       <MyRequests />
+      <AccountKeys />
     </>
   );
 }

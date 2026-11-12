@@ -15,6 +15,7 @@ import { refundRequest } from '../modules/payments/settlement.service.ts';
 import { isAppError } from '../shared/errors.ts';
 import { runMaintenance } from './maintenance.ts';
 import { findRequest, transition } from '../db/repositories/requests.ts';
+import { accountPresetProvider } from '@omniswarm/schemas/providers';
 import { isPanelPreset } from './panel.ts';
 import { finalReportDir, splitLargeReview } from './theme-split.ts';
 import { beginPublishing, attestRequest } from '../modules/payments/settlement.service.ts';
@@ -38,7 +39,7 @@ async function workReviews(boss: PgBoss, deps: WorkerDeps, shutdown: AbortSignal
     log.info('review job started');
     try {
       const existing = await findRequest(deps.pool, data.requestId);
-      if (existing && !existing.theme && !existing.parent_id && deps.engine.kind === 'cli' && isPanelPreset(existing.preset)) {
+      if (existing && !existing.theme && !existing.parent_id && deps.engine.kind === 'cli' && (isPanelPreset(existing.preset) || accountPresetProvider(existing.preset))) {
         const split = await splitLargeReview({ pool: deps.pool, boss, clock: deps.clock, config: deps.config, row: existing });
         if (split === 'split') {
           log.info('large review queued as one job per theme');

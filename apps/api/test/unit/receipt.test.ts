@@ -28,7 +28,7 @@ function row(status: RequestRow['status'], extra: Partial<RequestRow> = {}): Req
     id: ID, account: 'alice.test.near', repo: 'near/example', commit_sha: 'd'.repeat(40), network: 'sandbox', preset: 'panel',
     deployed: 'vault.test.near', request_hash: REQUEST_HASH, price_yocto: YOCTO, status, attempts: 1, failure_cause: null,
     report_sha256: status === 'done' ? HASH : null, report_url: status === 'done' ? `https://reports.example/${ID}/report.html` : null,
-    max_severity: 'high', scope: 'full', theme: null, parent_id: null, slice_path: null, incomplete: false,
+    max_severity: 'high', scope: 'full', theme: null, parent_id: null, slice_path: null, models: null, incomplete: false,
     attest_tx: status === 'done' ? 'AttestTx111' : null, refund_tx: status === 'refunded' ? 'RefundTx111' : null,
     queued_at: new Date('2026-11-09T00:00:00.000Z'), created_at: new Date('2026-11-09T00:00:00.000Z'), updated_at: new Date('2026-11-09T00:00:00.000Z'),
     ...extra,

@@ -24,6 +24,17 @@ async function signedStore(overrides: Partial<FlowDeps> = {}) {
 }
 
 describe('request flow store', () => {
+  it('signs the quoted hosted preset by default and an account- preset when one is chosen', async () => {
+    const store = flowStore();
+    await store.getState().requestQuote('https://github.com/near-examples/guest-book-examples');
+    const create = vi.spyOn(api, 'createRequest');
+    await store.getState().sign('alice.testnet', 'account-nearai');
+    const sent = create.mock.calls[0]![0] as { message: string };
+    expect(JSON.parse(sent.message)).toMatchObject({ preset: 'account-nearai' });
+    const plain = await signedStore();
+    expect(JSON.parse(plain.getState().signed!.message)).toMatchObject({ preset: 'scripted' });
+  });
+
   it('quotes, signs the challenge nonce, creates, pays and confirms to queued', async () => {
     const challenge = vi.spyOn(api, 'challenge');
     const store = await signedStore();

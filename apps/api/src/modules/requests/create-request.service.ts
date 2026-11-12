@@ -15,6 +15,8 @@ import { AppError, fail, isAppError } from '../../shared/errors.ts';
 import { decodePublicKey, decodeSignature, verifyNep413 } from '../auth/nep413.ts';
 import { parseSignedMessage, type SignedMessage } from '../auth/signed-message.ts';
 import { checkRepo, priceFor } from '../quote/quote.service.ts';
+import { accountPreset } from '../providers/account-keys.ts';
+import { accountPresetProvider } from '@omniswarm/schemas/providers';
 
 export interface CreateDeps { config: Config; pool: Pool; clock: Clock; chain: ChainPort; github: GitHubPort }
 export interface CreateBody { accountId: string; publicKey: string; signature: string; message: string; nonce: string }
@@ -32,8 +34,11 @@ function checkFields(config: Config, body: CreateBody, message: SignedMessage): 
   if (message.account !== body.accountId) fail('ACCOUNT_MISMATCH', 'The signed account does not match accountId');
   if (message.nonce !== body.nonce) fail('MESSAGE_INVALID', 'The signed nonce does not match the challenge');
   priceFor(config, message.network);
-  if (message.preset !== config.intake.hostedPreset || !config.intake.allowedPresets.includes(message.preset)) {
-    fail('PRESET_NOT_ALLOWED', `Preset must be ${config.intake.hostedPreset}`);
+  // The hosted panel, or (when the operator lists it in ALLOWED_PRESETS) a review on the account's own key.
+  const ownKey = accountPresetProvider(message.preset) !== null;
+  if ((message.preset !== config.intake.hostedPreset && !ownKey) || !config.intake.allowedPresets.includes(message.preset)) {
+    const allowed = config.intake.allowedPresets.filter((preset) => preset === config.intake.hostedPreset || accountPresetProvider(preset));
+    fail('PRESET_NOT_ALLOWED', `Preset must be ${allowed.join(' or ')}`);
   }
 }
 
@@ -82,6 +87,9 @@ export async function createRequest(deps: CreateDeps, body: CreateBody): Promise
   });
   if (checked.commitSha !== message.commit) fail('REF_CHANGED', 'The signed commit no longer resolves');
   await checkAccount(deps, message.account, now);
+  // An account- preset runs on the key and models this account saved (signed in once with this account).
+  const provider = accountPresetProvider(message.preset);
+  const own = provider ? await accountPreset(deps, message.account, provider) : null;
   const hash = await requestHash(body.message);
   const id = crypto.randomUUID();
   const priceYocto = priceFor(deps.config, message.network);
@@ -89,7 +97,7 @@ export async function createRequest(deps: CreateDeps, body: CreateBody): Promise
     refuseNonce(await consumeNonce(client, body.nonce, now));
     await insertRequest(client, {
       id, account: message.account, repo: checked.repo, commitSha: message.commit, network: message.network,
-      preset: message.preset, deployed: message.deployed, requestHash: hash, priceYocto, now,
+      preset: message.preset, deployed: message.deployed, requestHash: hash, priceYocto, now, models: own?.models ?? null,
     });
   });
   return { requestId: id, requestHash: hash, priceYocto, contractId: deps.config.intake.contractId };

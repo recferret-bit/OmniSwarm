@@ -3,6 +3,7 @@
 // sends SIGTERM to the whole process group, then SIGKILL after a grace period.
 import { spawn } from 'node:child_process';
 import path from 'node:path';
+import { providerEnvNames } from '@omniswarm/schemas/providers';
 import type { EngineRunInput, EngineRunResult, EngineRunner } from '../port.ts';
 import { AUDIT_BIN, auditArgv } from './argv.ts';
 import { CappedLog } from './log-sink.ts';
@@ -44,8 +45,13 @@ export class CliEngineRunner implements EngineRunner {
       const bin = path.join(this.#options.root, AUDIT_BIN);
       const env = { ...this.#options.env };
       if (input.configFile) env.OMNI_RUN_CONFIG = input.configFile;
+      const providerNames = new Set(providerEnvNames());
       for (const [name, value] of Object.entries(input.providerEnv ?? {})) {
-        if ((name === 'ZAI_API_KEY' || name === 'OPENROUTER_API_KEY' || name === 'ZAI_BASE_URL') && value) env[name] = value;
+        if (providerNames.has(name) && value) env[name] = value;
+      }
+      if (input.providerScope) {
+        const scope = new Set(input.providerScope);
+        for (const name of providerNames) if (!scope.has(name)) delete env[name];
       }
       const child = spawn(bin, argv, {
         cwd: this.#options.root, shell: false, env, detached: true, stdio: ['ignore', 'pipe', 'pipe'],

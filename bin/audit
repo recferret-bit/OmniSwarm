@@ -165,8 +165,9 @@ Pick exactly ONE target:
                      accepts https://github.com/<owner>/<repo>[.git], git@github.com:<owner>/<repo>.git, <owner>/<repo>
 
 Usage:
-  audit local [--repo <directory> | --github <owner/repo or url>]
+  audit local [--repo <directory> | --github <owner/repo or url>] [--provider <zai|openrouter|nearai> --models <model,...> | --nearai <model,...>] [--with-clis]
       One command. Uses every installed CLI (claude, codex, grok, agy). Opus is the orchestrator when Claude is installed. With only one CLI, that model is both orchestrator and reviewer. Defaults to the current directory.
+      --provider <id> --models <model,...>: review with one API provider from the provider catalog instead (the first model orchestrates). Needs that provider's key variable in your environment (ZAI_API_KEY, OPENROUTER_API_KEY or NEARAI_API_KEY); source is sent to that provider. --nearai <model,...> is shorthand for --provider nearai --models. --with-clis adds the installed CLIs.
   audit run   (--repo <path> | --github <url>) [options]
       Review supplied source/configuration/dependencies through restricted MCP tools and persistent ACP sessions. Only catalogued existing tests run in the offline Docker sandbox; no arbitrary commands, PoCs or deployed probes. Save validated peer-reviewed reports and remove owned resources.
   audit setup-agents

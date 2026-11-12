@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { localAuditArgs, selectLocalPanel } from './local-cli.mjs';
+import { localAuditArgs, parseLocalArgs, selectLocalPanel, selectProviderPanel } from './local-cli.mjs';
 
 test('opus orchestrates when claude is installed, and every installed CLI reviews', () => {
   const panel = selectLocalPanel(['agy', 'claude', 'grok']);
@@ -27,4 +27,41 @@ test('the local command reviews the current directory unless a target is passed'
   const panel = { reviewers: ['cli:agy:gemini-4-argon-high'], orchestrator: 'cli:agy:gemini-4-argon-high' };
   assert.deepEqual(localAuditArgs(panel, { repo: '', github: '' }).slice(0, 4), ['run', '--repo', '.', '--reviewers']);
   assert.deepEqual(localAuditArgs(panel, { repo: '', github: 'near/near-sdk-rs' }).slice(0, 3), ['run', '--github', 'near/near-sdk-rs']);
+});
+
+test('--nearai makes the first NEAR AI model the orchestrator and every model a reviewer', () => {
+  const target = parseLocalArgs(['--nearai', 'deepseek-ai/DeepSeek-V4, zai-org/GLM-5.3,deepseek-ai/DeepSeek-V4', '--scope', 'web3']);
+  assert.equal(target.provider, 'nearai');
+  assert.deepEqual(target.models, ['deepseek-ai/DeepSeek-V4', 'zai-org/GLM-5.3']);
+  const panel = selectProviderPanel('nearai', target.models, { installed: ['claude'] });
+  assert.deepEqual(panel, { reviewers: ['nearai:deepseek-ai/DeepSeek-V4', 'nearai:zai-org/GLM-5.3'], orchestrator: 'nearai:deepseek-ai/DeepSeek-V4' });
+  const args = localAuditArgs(panel, target);
+  assert.equal(args[args.indexOf('--orchestrator') + 1], 'nearai:deepseek-ai/DeepSeek-V4');
+  assert.equal(args.join(' ').includes('KEY'), false);
+});
+
+test('--with-clis adds installed CLIs after the NEAR AI models and keeps NEAR AI orchestrating', () => {
+  const panel = selectProviderPanel('nearai', ['m1'], { installed: ['claude', 'grok'], withClis: true });
+  assert.deepEqual(panel, { reviewers: ['nearai:m1', 'cli:claude:opus', 'cli:grok:grok-4.7'], orchestrator: 'nearai:m1' });
+});
+
+test('--nearai rejects a missing or malformed model and --with-clis needs --nearai', () => {
+  assert.throws(() => parseLocalArgs(['--nearai']), /needs a model/);
+  assert.throws(() => parseLocalArgs(['--nearai', '--repo', 'x']), /needs a model/);
+  assert.throws(() => parseLocalArgs(['--nearai', 'a b']), /invalid model/);
+  assert.throws(() => parseLocalArgs(['--nearai', 'a;rm']), /invalid model/);
+  assert.throws(() => parseLocalArgs(['--with-clis']), /only applies with --provider or --nearai/);
+  assert.equal(parseLocalArgs([]).provider, '');
+});
+
+test('--provider picks any API provider in the catalog; each gets its own spec prefix', () => {
+  const zai = parseLocalArgs(['--provider', 'zai', '--models', 'glm-5.3']);
+  assert.deepEqual(selectProviderPanel(zai.provider, zai.models), { reviewers: ['key:zai:glm-5.3'], orchestrator: 'key:zai:glm-5.3' });
+  const or = parseLocalArgs(['--models', 'qwen/qwen3.8-max-0902,x-ai/grok-4.7', '--provider', 'openrouter']);
+  assert.deepEqual(selectProviderPanel(or.provider, or.models).reviewers, ['openrouter:qwen/qwen3.8-max-0902', 'openrouter:x-ai/grok-4.7']);
+  assert.throws(() => parseLocalArgs(['--provider', 'local', '--models', 'm']), /unknown API provider/);
+  assert.throws(() => parseLocalArgs(['--provider', 'anthropic', '--models', 'm']), /unknown API provider/);
+  assert.throws(() => parseLocalArgs(['--provider', 'zai']), /needs --models/);
+  assert.throws(() => parseLocalArgs(['--models', 'm']), /needs --provider/);
+  assert.throws(() => parseLocalArgs(['--provider', 'zai', '--nearai', 'm']), /cannot be combined/);
 });

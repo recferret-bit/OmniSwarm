@@ -35,7 +35,8 @@ export interface FlowData {
 
 export interface FlowState extends FlowData {
   requestQuote(input: string, deployed?: string): Promise<void>;
-  sign(accountId: string): Promise<void>;
+  /** `preset` overrides the quote's hosted preset, for example `account-nearai` (the account's own provider key). */
+  sign(accountId: string, preset?: string): Promise<void>;
   pay(): Promise<void>;
   confirm(): Promise<void>;
   reset(): void;

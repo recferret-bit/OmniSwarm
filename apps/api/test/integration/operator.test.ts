@@ -143,4 +143,51 @@ describe('operator dashboard and local jobs', NEEDS_DB, () => {
     assert.notEqual(again.body?.error?.code, 'PRESET_NOT_ALLOWED', JSON.stringify(again.body));
     assert.ok([201, 409].includes(again.status), JSON.stringify(again.body));
   });
+  test('a NEAR AI review runs on the account\'s own key and models, with no operator keys, and never echoes the key', async () => {
+    const secret = t.env.SESSION_SECRET!;
+    const cookieFor = (account: string) => `sid=${api.app.signCookie(Buffer.from(JSON.stringify({ a: account, e: Date.now() + 3_600_000 })).toString('base64url'))}`;
+    const carol = cookieFor('carol.mock');
+    const route = '/api/account/providers/nearai';
+    assert.equal((await call(api.base, route)).status, 401);
+    assert.equal((await call(api.base, route, { method: 'PUT', body: { key: 'x' } })).status, 401);
+    assert.equal((await call(api.base, '/api/account/providers/zai', { cookie: carol })).status, 400, 'zai takes operator keys only');
+    const empty = await call(api.base, route, { cookie: carol });
+    assert.equal(empty.body.set, false);
+    assert.deepEqual(empty.body.models, []);
+    assert.equal(empty.body.label, 'NEAR AI Cloud');
+    const all = await call(api.base, '/api/account/providers', { cookie: carol });
+    assert.deepEqual(all.body.providers.map((p: { provider: string }) => p.provider), ['nearai']);
+    const body = { repo: 'near/near-sdk-rs', source: 'nearai' };
+    const noKey = await call(api.base, '/api/dashboard/jobs', { method: 'POST', body, cookie: carol });
+    assert.equal(noKey.body.error.code, 'PRESET_NOT_ALLOWED', JSON.stringify(noKey.body));
+    assert.equal((await call(api.base, '/api/dashboard/jobs', { method: 'POST', body: { ...body, source: 'zai' }, cookie: carol })).status, 400);
+    const bad = await call(api.base, route, { method: 'PUT', body: { key: 'near-test-key-not-real-0000', models: ['not a model'] }, cookie: carol });
+    assert.equal(bad.status, 400, JSON.stringify(bad.body));
+    const saved = await call(api.base, route, { method: 'PUT', body: { key: 'near-test-key-not-real-0000', models: ['deepseek-ai/DeepSeek-V4'] }, cookie: carol });
+    assert.equal(saved.status, 200, JSON.stringify(saved.body));
+    assert.equal(saved.body.set, true);
+    assert.deepEqual(saved.body.models, ['deepseek-ai/DeepSeek-V4']);
+    assert.ok(!JSON.stringify(saved.body).includes('near-test-key-not-real-0000'));
+    const stored = await api.deps.pool.query<{ data: string }>('SELECT data FROM account_provider_key WHERE account = $1', ['carol.mock']);
+    assert.ok(stored.rows[0] && !stored.rows[0].data.includes('near-test-key'), 'sealed at rest');
+    assert.equal((await call(api.base, route, { cookie: cookieFor('erin.mock') })).body.set, false, 'another account sees none');
+    const mixed = await call(api.base, '/api/dashboard/jobs', { method: 'POST', body: { ...body, models: ['opus'] }, cookie: carol });
+    assert.equal(mixed.status, 400, JSON.stringify(mixed.body));
+    // The operator's Z.AI and OpenRouter keys are not needed for a NEAR AI review.
+    writeProviderSecrets(secretsFile, secret, { zai: '', openrouter: '' });
+    try {
+      const created = await call(api.base, '/api/dashboard/jobs', { method: 'POST', body, cookie: carol });
+      assert.equal(created.status, 201, JSON.stringify(created.body));
+      const row = await api.deps.pool.query<{ preset: string; models: string[] }>('SELECT preset, models FROM request WHERE id = $1', [created.body.requestId]);
+      assert.deepEqual(row.rows[0], { preset: 'account-nearai', models: ['deepseek-ai/DeepSeek-V4'] });
+      // The panel path still needs the operator keys.
+      const panel = await call(api.base, '/api/dashboard/jobs', { method: 'POST', body: { repo: 'near/near-sdk-rs' }, cookie: cookieFor('erin.mock') });
+      assert.equal(panel.body.error.code, 'PRESET_NOT_ALLOWED');
+    } finally {
+      writeProviderSecrets(secretsFile, secret, { zai: 'zai-test-key-not-a-real-key-000000', openrouter: 'or-test-key-not-a-real-key-000000' });
+    }
+    const cleared = await call(api.base, route, { method: 'PUT', body: { key: '' }, cookie: carol });
+    assert.equal(cleared.body.set, false);
+    assert.equal((await call(api.base, `${route}/models`, { cookie: carol })).status, 404);
+  });
 });

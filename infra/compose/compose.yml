@@ -115,6 +115,10 @@ services:
       PRICE_YOCTO: ${PRICE_YOCTO:?set PRICE_YOCTO in the stack env file}
       MAX_REPO_KB: ${MAX_REPO_KB:?set MAX_REPO_KB in the stack env file}
       HOSTED_PRESET: ${HOSTED_PRESET:?set HOSTED_PRESET in the stack env file}
+      # Empty = HOSTED_PRESET only. Add account-nearai to let signed-in accounts review on their own NEAR AI key.
+      ALLOWED_PRESETS: ${ALLOWED_PRESETS:-}
+      # Seals accounts' own provider keys (Postgres account_provider_key); the workers need the same value.
+      ACCOUNT_KEYS_SECRET: ${ACCOUNT_KEYS_SECRET:-}
       # GET /api/reports/:id reads the published index (reviewers, general
       # review); the worker writes it, the api only reads it.
       REPORTS_ROOT: /srv/omniswarm/reports

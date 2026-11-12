@@ -26,7 +26,7 @@ Owner-only steps are marked **[OWNER]**.
 
 **Pitch:** a guard on its own is a commodity this round. Ours bases its verdict on an **attested multi-model source review of the code the counterparty runs**, and it drops to `warn` when that code changes.
 
-**Tracks:** 06 security (primary), 07 agents (secondary), 13 open (companion). The 03 privacy stretch is **dropped**: the `nearai:` reviewer is not built.
+**Tracks:** 06 security (primary), 07 agents (secondary), 13 open (companion). The 03 privacy stretch stays **dropped**: the `nearai:` reviewer family is built (2026-11-12: `audit local --provider nearai`, accounts' own NEAR AI keys), but the TEE attestation check and "Verified" panel (W03-22, W07-22) are not, and reports are stored server-side, so track 03's ask is not met.
 
 ## 2. Findings (2026-11-09)
 
@@ -71,7 +71,7 @@ There are 11 stale lines in total; `tools/readme-claims.mjs` (W19-02) will enfor
 - dogfood
 - a live golden eval
 - a reproducible build / NEP-330
-- the `nearai:` reviewer
+- the `nearai:` TEE attestation check and "Verified" panel (W03-22, W07-22)
 - a receipt page
 - the `hackathon-submission` tag
 
@@ -92,7 +92,8 @@ There are 11 stale lines in total; `tools/readme-claims.mjs` (W19-02) will enfor
 | NEAR MCP (`nearai/near-mcp`) | **Add** our own guard MCP server next to it | W18 (H+) |
 | market.near.ai | List OmniSwarm **[OWNER]** | lane O |
 | `near/agent-skills`, `docs.near.org/llms.txt` | Point to them from AGENTS.md | W19 |
-| NEAR AI Cloud TEE, NEAR Intents / 1Click, PingPay, Shade Agents (deprecated), Chain Signatures, OutLayer | **Skip** this sprint. Say why in the README | — |
+| NEAR AI Cloud (OpenAI-compatible reviewer provider) | **Built** 2026-11-12: `nearai:` family, `--provider nearai`, accounts' own keys. No TEE attestation | docs/providers.md |
+| NEAR AI Cloud TEE attestation, NEAR Intents / 1Click, PingPay, Shade Agents (deprecated), Chain Signatures, OutLayer | **Skip** this sprint. Say why in the README | — |
 
 ## 4. Waves
 

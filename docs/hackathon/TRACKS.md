@@ -14,7 +14,7 @@
 | Past criteria | technical implementation, design, impact, originality, sustainability |
 | Baseline | Code from 2026-10-19 counts; earlier commits are baseline (Q-001). Reused repo: tags `pre-hackathon` / `hackathon-submission` + README section linking the diff (Q-003). Only the NEAR integration built in the window is judged for a product that exists elsewhere (Q-002) |
 | OmniSwarm baseline | `293208a`, `94551b9` dated 2026-10-17 → baseline. Everything from `d6c514e` (2026-10-27) is in the window. Tag `pre-hackathon` = `94551b9` (OD-11) |
-| Submission | one per repo, not editable; `tracks[]` = ids; `nearAddress` = mainnet payout account the team creates; `demoUrl` = the X post (built at NEAR HACKATHON, @NEARProtocol, #NEARHackathon, video); `idea` 20–2000 chars; never fill the `website` spam-trap field |
+| Submission | one per repo, not editable (changes only through https://nearhackathon.com/request-changes); `tracks[]` = ids; `nearAddress` = mainnet payout account the team creates; `demoUrl` = the X post (built at NEAR HACKATHON, @NEARProtocol, #NEARHackathon, video); `idea` 20–2000 chars; never fill the `website` spam-trap field |
 | Owner-only | make the repo public, post on X, submit the form, sign anything on mainnet, create the payout account |
 
 ## 2. All tracks
@@ -23,7 +23,7 @@
 |---|---|---|---|
 | 01 | defi | Unstoppable DeFi | no |
 | 02 | thesis | Investment Thesis | no |
-| 03 | privacy | Privacy & Private AI | **stretch (`H+`, OD-15 owner-confirmed):** one `nearai:` TEE reviewer with an attestation "Verified" panel (W03-22, W07-22, W14-25); enter only if the checks are green by D12 |
+| 03 | privacy | Privacy & Private AI | **stretch (`H+`, OD-15 owner-confirmed), not entered:** the `nearai:` reviewer is built (2026-11-12), the attestation "Verified" panel (W03-22, W07-22, W14-25) is not, so the gate is not met |
 | 04 | business | Autonomous Business | optional add-on (paid service: caps, ledger, kill switch) |
 | 05 | swarms | AI Swarms | partial (OD-02) |
 | **06** | **security** | **AI Security & Defense** | **primary** |

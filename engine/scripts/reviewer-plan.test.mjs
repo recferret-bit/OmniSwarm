@@ -26,10 +26,13 @@ test('plan prints the reviewer table, a 4 x 6 matrix and budgets', () => {
 });
 
 test('an uninstalled family is a plan problem that names the wave', () => {
-  const r = resolveRunConfig({ flags: { reviewers: 'nearai:tee-model' }, root: '/nonexistent' });
+  const r = resolveRunConfig({ flags: { reviewers: 'key:anthropic:claude-opus-5-5' }, root: '/nonexistent' });
   const { text, problems } = renderPlan({ ...r });
-  assert.match(problems[0], /family `nearai` not installed yet \(W03 \(H\+\)\)/);
-  assert.match(text, /nearai-tee-model/);
+  assert.match(problems[0], /provider `key:anthropic` not installed yet \(W03-11\)/);
+  assert.match(text, /key-anthropic-claude-opus-5-5/);
+  const near = renderPlan({ ...resolveRunConfig({ flags: { reviewers: 'nearai:deepseek-ai/DeepSeek-V4' }, root: '/nonexistent' }) });
+  assert.deepEqual(near.problems, []);
+  assert.match(near.text, /env NEARAI_API_KEY\s+transport api-acp/);
   const openrouter = renderPlan({ ...resolveRunConfig({ flags: { reviewers: 'openrouter:qwen/qwen3.8-max-0902,key:zai:glm-5.3' }, root: '/nonexistent' }) });
   assert.deepEqual(openrouter.problems, []);
   assert.match(openrouter.text, /openrouter-qwen-qwen3-8-max-0902\s+openrouter\s+alibaba/);

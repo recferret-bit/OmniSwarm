@@ -2,22 +2,19 @@
 // worker reads the same file to learn which provider keys the preset's reviewers need, and refuses a
 // preset that would run a personal CLI subscription (`cli:*`) or an orchestrator it cannot vet.
 import fs from 'node:fs';
+import { envForSpec, providerOfSpec } from '@omniswarm/schemas/providers';
 import { AppError } from '../shared/errors.ts';
 import { isPanelPreset, panelSpecs } from './panel.ts';
 
 /**
- * Provider variables per reviewer family (scripts/provider-openai-compat.mjs envAllowlist). `scripted`
- * is not here: scripted reviewers and the scripted judge run only on OmniSwarm's own fixtures
- * (engine debate-plan.mjs `scripted_judge_demo_only`), never on a requester's repository.
+ * Provider variables per reviewer spec come from the provider catalog (packages/schemas/providers.mjs). Only
+ * API providers run hosted: `cli:*` (a personal CLI subscription) and `scripted` (OmniSwarm's own fixtures
+ * only, engine debate-plan.mjs `scripted_judge_demo_only`) are refused on a requester's repository.
  */
-const FAMILY_ENV: Record<string, string[]> = {
-  'key:zai': ['ZAI_API_KEY', 'ZAI_BASE_URL'],
-  openrouter: ['OPENROUTER_API_KEY'],
-};
-
-function family(spec: string): string {
-  if (spec.startsWith('key:')) return spec.split(':').slice(0, 2).join(':');
-  return spec.split(':')[0] ?? spec;
+function hostedEnv(spec: string): string[] | null {
+  const provider = providerOfSpec(spec);
+  if (!provider || provider === 'local') return null;
+  return envForSpec(spec);
 }
 
 function refuse(message: string): never {
@@ -31,8 +28,8 @@ export function presetEnv(name: string, specs: string[]): ResolvedPreset {
   const names = new Set<string>();
   for (const spec of specs) {
     if (typeof spec !== 'string' || spec === '') refuse(`preset ${name} has an empty reviewer`);
-    const env = FAMILY_ENV[family(spec)];
-    if (!env) refuse(`preset ${name} uses ${family(spec)}, which the hosted service does not run`);
+    const env = hostedEnv(spec);
+    if (!env) refuse(`preset ${name} uses ${spec.split(':')[0]}, which the hosted service does not run`);
     env.forEach((variable) => names.add(variable));
   }
   return { name, envNames: [...names].sort() };

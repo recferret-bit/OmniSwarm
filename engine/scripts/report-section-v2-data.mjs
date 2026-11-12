@@ -3,7 +3,7 @@
 import { listJsonFiles, readJsonOr } from './report-util-files.mjs';
 import { readReportText } from './report-files.mjs';
 
-export const FAMILY_ORDER = ['cli', 'key', 'openrouter', 'scripted', 'nearai'];
+export const FAMILY_ORDER = ['cli', 'key', 'openrouter', 'nearai', 'scripted'];
 const familyRank = (family) => (FAMILY_ORDER.includes(family) ? FAMILY_ORDER.indexOf(family) : FAMILY_ORDER.length);
 
 function sortedGroups(index) {

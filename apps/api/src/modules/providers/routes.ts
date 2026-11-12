@@ -7,15 +7,13 @@ import { passwordsMatch } from '../dashboard/credentials.ts';
 import { fail } from '../../shared/errors.ts';
 import { listRecent } from '../../db/repositories/requests.ts';
 import { iso } from '../../shared/clock.ts';
-import { providerStatus, writeProviderSecrets, type ProviderStatus } from './secrets.ts';
+import { PROVIDERS, providerStatus, writeProviderSecrets, type ProviderStatus } from './secrets.ts';
 import { readReviewSettings, settingsPath, writeReviewSettings } from './settings.ts';
 
+// One field per provider whose catalog entry has keySources 'admin-page' (today zai and openrouter).
 const view = z.strictObject({ set: z.boolean(), fingerprint: z.string().nullable() });
-const statusSchema = z.strictObject({ zai: view, openrouter: view });
-const bodySchema = z.strictObject({
-  zai: z.string().max(400).optional(),
-  openrouter: z.string().max(400).optional(),
-});
+const statusSchema = z.strictObject(Object.fromEntries(PROVIDERS.map((name) => [name, view])));
+const bodySchema = z.strictObject(Object.fromEntries(PROVIDERS.map((name) => [name, z.string().max(400).optional()])));
 const settingsSchema = z.strictObject({ freeChecks: z.boolean() });
 const jobSchema = z.strictObject({
   id: z.uuid(), account: z.string(), repo: z.string(), status: z.string(), scope: z.string(),
@@ -76,7 +74,7 @@ export const providerRoutes: FastifyPluginAsyncZod<{ deps: ApiDeps }> = async (a
   });
 
   app.get('/api/operator/providers', {
-    schema: { summary: 'Whether the Z.AI and OpenRouter keys are set', response: { 200: statusSchema, 401: errorResponse } },
+    schema: { summary: 'Whether each admin-page provider key (Z.AI, OpenRouter) is set', response: { 200: statusSchema, 401: errorResponse } },
   }, async (request): Promise<ProviderStatus> => {
     requireAdmin(deps, request.headers.authorization);
     return providerStatus(deps.config.providerSecretsFile ?? '');
@@ -84,13 +82,13 @@ export const providerRoutes: FastifyPluginAsyncZod<{ deps: ApiDeps }> = async (a
 
   app.put('/api/operator/providers', {
     schema: {
-      summary: 'Set or clear the Z.AI and OpenRouter keys. Empty string clears. The key is not returned.',
+      summary: 'Set or clear the admin-page provider keys (Z.AI, OpenRouter). Empty string clears. The key is not returned.',
       body: bodySchema, response: { 200: statusSchema, 401: errorResponse },
     },
   }, async (request): Promise<ProviderStatus> => {
     requireAdmin(deps, request.headers.authorization);
     const file = deps.config.providerSecretsFile;
     if (!file) fail('FORBIDDEN', 'PROVIDER_SECRETS_FILE is not set');
-    return writeProviderSecrets(file, deps.config.http.sessionSecret, request.body);
+    return writeProviderSecrets(file, deps.config.http.sessionSecret, request.body as Record<string, string | undefined>);
   });
 };

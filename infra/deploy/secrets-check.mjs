@@ -14,8 +14,9 @@ const INFRA = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const ENV_FILES = ['stack.env', 'worker.env', 'providers.env', 'ops.env'];
 export const OPTIONAL = new Set(['ops.env', 'operator-key.json', 'omniswarm.config.json']);
 // May stay empty: unauthenticated GitHub API, no alert hook, no heartbeat.
-const MAY_BE_EMPTY = new Set(['GITHUB_TOKEN', 'OMNI_ALERT_WEBHOOK_URL', 'OMNI_HEARTBEAT_URL']);
-const MIN_LENGTH = { SESSION_SECRET: 32, ADMIN_TOKEN: 32, POSTGRES_PASSWORD: 16 };
+// ALLOWED_PRESETS empty = HOSTED_PRESET only; ACCOUNT_KEYS_SECRET is needed only with an account- preset (checked below).
+const MAY_BE_EMPTY = new Set(['GITHUB_TOKEN', 'OMNI_ALERT_WEBHOOK_URL', 'OMNI_HEARTBEAT_URL', 'ALLOWED_PRESETS', 'ACCOUNT_KEYS_SECRET']);
+const MIN_LENGTH = { SESSION_SECRET: 32, ADMIN_TOKEN: 32, POSTGRES_PASSWORD: 16, ACCOUNT_KEYS_SECRET: 32 };
 const PLACEHOLDER_CONTRACT = /(\.mock$|^review-registry\.owner\.testnet$|example)/;
 
 export const fingerprint = (value) => `sha256:${crypto.createHash('sha256').update(value).digest('hex').slice(0, 12)}`;
@@ -51,7 +52,14 @@ function checkConsistency(stack, worker, errors, warnings) {
   same(errors, s('NEXT_PUBLIC_CONTRACT_ID'), s('CONTRACT_ID'), 'otherwise every payment stops at CONTRACT_MISMATCH');
   same(errors, s('NEXT_PUBLIC_INTAKE_RECIPIENT'), s('INTAKE_RECIPIENT'), 'the wallet signs for this recipient');
   same(errors, s('NEXT_PUBLIC_NETWORK'), s('NETWORK'));
-  for (const name of ['CONTRACT_ID', 'NETWORK', 'RPC_URLS', 'HOSTED_PRESET']) same(errors, w(name), s(name));
+  for (const name of ['CONTRACT_ID', 'NETWORK', 'RPC_URLS', 'HOSTED_PRESET', 'ALLOWED_PRESETS', 'ACCOUNT_KEYS_SECRET']) same(errors, w(name), s(name));
+  // An account- preset decrypts accounts' own provider keys in the API and the worker.
+  if ((stack.get('ALLOWED_PRESETS') || '').split(',').some((preset) => preset.trim().startsWith('account-')) && !stack.get('ACCOUNT_KEYS_SECRET')) {
+    errors.push('stack.env ACCOUNT_KEYS_SECRET is empty but ALLOWED_PRESETS has an account- preset');
+  }
+  if (stack.get('ACCOUNT_KEYS_SECRET') && stack.get('ACCOUNT_KEYS_SECRET') === stack.get('SESSION_SECRET')) {
+    errors.push('stack.env ACCOUNT_KEYS_SECRET must differ from SESSION_SECRET (the workers receive it)');
+  }
   const contract = stack.get('CONTRACT_ID') || '';
   const network = stack.get('NETWORK') || 'testnet';
   if (PLACEHOLDER_CONTRACT.test(contract)) errors.push(`stack.env CONTRACT_ID ${contract} is a placeholder; use the id deploy-testnet.sh created`);

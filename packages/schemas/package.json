@@ -10,6 +10,8 @@
     "./canonical-message": "./canonical-message.mjs",
     "./canonical-json": "./canonical-json.mjs",
     "./nep413": "./nep413.mjs",
+    "./providers": "./providers.mjs",
+    "./providers-public": "./providers-public.mjs",
     "./*.schema.json": "./*.schema.json"
   },
   "license": "MIT"

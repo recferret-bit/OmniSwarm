@@ -16,9 +16,11 @@ import { assertAccountCapacity } from '../requests/create-request.service.ts';
 import { markPaid } from '../payments/payment.service.ts';
 import { checkRepo, priceFor } from '../quote/quote.service.ts';
 import { parseGitHubInput } from '../quote/repo-url.ts';
-import { panelPresetName } from '../../worker/panel.ts';
+import { providerById, providerOfSpec } from '@omniswarm/schemas/providers';
+import { jobSpecs, panelPresetName } from '../../worker/panel.ts';
 import { normalizeScopes, type ReviewScope } from '../../worker/themes.ts';
 import { providerStatus } from '../providers/secrets.ts';
+import { accountPreset } from '../providers/account-keys.ts';
 import { requestReviewOnSandbox } from './sandbox-payer.ts';
 
 export interface DashboardDeps { config: Config; pool: Pool; clock: Clock; chain: ChainPort; github: GitHubPort; boss: PgBoss }
@@ -36,11 +38,23 @@ function reportFile(config: Config, id: string): string {
   return file;
 }
 
-export async function createDashboardJob(deps: DashboardDeps, account: string, repoInput: string, models: readonly string[] = [], scopes: readonly string[] = []) {
+export async function createDashboardJob(deps: DashboardDeps, account: string, repoInput: string, models: readonly string[] = [], scopes: readonly string[] = [], source = 'panel') {
   assertDashboardChain(deps.config);
-  const keys = providerStatus(deps.config.providerSecretsFile ?? '');
-  if (!keys.zai.set || !keys.openrouter.set) fail('PRESET_NOT_ALLOWED', 'Set the Z.AI and OpenRouter keys on the admin page before queueing a review');
-  const preset = panelPresetName(models);
+  let preset: string;
+  let accountModels: string[] | null = null;
+  if (source !== 'panel') {
+    // The account's own provider key and models replace the operator's Z.AI and OpenRouter panel.
+    if (models.length) fail('VALIDATION_ERROR', 'Panel models cannot be combined with a review on your own key');
+    ({ preset, models: accountModels } = await accountPreset(deps, account, source));
+  } else {
+    preset = panelPresetName(models);
+    // Every provider the panel runs on needs its operator key on the admin page.
+    const keys = providerStatus(deps.config.providerSecretsFile ?? '');
+    const needed = [...new Set(jobSpecs(preset, null).map(providerOfSpec))].map((id) => providerById(id ?? ''));
+    if (needed.some((provider) => !provider || !keys[provider.id]?.set)) {
+      fail('PRESET_NOT_ALLOWED', `Set the ${needed.map((provider) => provider?.label).join(' and ')} keys on the admin page before queueing a review`);
+    }
+  }
   const scope: ReviewScope = normalizeScopes(scopes);
   const parsed = parseGitHubInput(repoInput);
   const depth = await queueDepth(deps.pool);
@@ -54,7 +68,7 @@ export async function createDashboardJob(deps: DashboardDeps, account: string, r
   const priceYocto = onSandbox ? priceFor(deps.config, 'sandbox') : '0';
   await insertRequest(deps.pool, {
     id, account, repo: checked.repo, commitSha: checked.commitSha, network: deps.config.intake.network,
-    preset, deployed: null, requestHash, priceYocto, now, scope,
+    preset, deployed: null, requestHash, priceYocto, now, scope, models: accountModels,
   });
   let txHash: string;
   if (onSandbox) {

@@ -14,7 +14,7 @@ import { FAMILY_ORDER } from './report-section-v2-data.mjs';
 import { indexPageHtml, reviewerPageHtml, usageLine } from './reviewer-reports-pages.mjs';
 import { loadUsage } from './reviewer-reports-usage.mjs';
 
-const FAMILY_LABELS = { cli: 'Local subscriptions', key: 'API keys', openrouter: 'OpenRouter', scripted: 'Demo (no LLM)', nearai: 'NEAR AI' };
+const FAMILY_LABELS = { cli: 'Local subscriptions', key: 'API keys', openrouter: 'OpenRouter', nearai: 'NEAR AI Cloud', scripted: 'Demo (no LLM)' };
 const SURFACE_SLUG = { S1: 's1-auth', S2: 's2-input', S3: 's3-logic', S4: 's4-config', S5: 's5-deps', S6: 's6-client' };
 const SEVERITIES = ['critical', 'high', 'medium', 'low', 'info'];
 

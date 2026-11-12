@@ -1,3 +1,5 @@
+import { accountPresetProvider, specFor } from '@omniswarm/schemas/providers';
+
 // The production review panel. GLM on Z.AI is the orchestrator. Qwen on
 // OpenRouter reviews with it. Opus 5.5, Sol 6.1, Argon 4 and Grok 4.7 are
 // optional OpenRouter reviewers the account can add.
@@ -47,4 +49,38 @@ export function panelConfigDocument(name: string): Record<string, unknown> {
       [name]: { reviewers, orchestrator, alternateJudge, assign: 'matrix', passes: 2, toolBudget: 30, maxCostUsd: 25 },
     },
   };
+}
+
+/**
+ * Config for a review on an account's own provider key (preset `account-<provider>`, today `account-nearai`).
+ * The first model orchestrates and every model reviews. A second model is the alternate judge; with one model
+ * there is none. `maxCostUsd` only binds when the provider reports usage.cost or omniswarm.config.json has
+ * prices.<provider>.<model> (engine applyPrice); otherwise spend is not bounded by it.
+ */
+export function accountConfigDocument(preset: string, models: readonly string[]): Record<string, unknown> {
+  const provider = accountPresetProvider(preset);
+  if (!provider) throw new Error(`preset ${preset} is not an account preset`);
+  if (models.length === 0) throw new Error('an account review needs at least one model');
+  const reviewers = models.map((model) => specFor(provider, model));
+  const orchestrator = reviewers[0] as string;
+  const alternateJudge = reviewers[1];
+  return {
+    reviewers,
+    orchestrator,
+    presets: {
+      [preset]: {
+        reviewers, orchestrator, ...(alternateJudge ? { alternateJudge } : {}), assign: 'matrix', passes: 2, toolBudget: 30, maxCostUsd: 25,
+      },
+    },
+  };
+}
+
+/** Every reviewer spec a panel or account job runs (orchestrator and alternate judge included). */
+export function jobSpecs(preset: string, models: readonly string[] | null): string[] {
+  if (isPanelPreset(preset)) {
+    const panel = panelSpecs(preset);
+    return [panel.orchestrator, panel.alternateJudge, ...panel.reviewers];
+  }
+  if (accountPresetProvider(preset)) return (models ?? []).map((model) => specFor(accountPresetProvider(preset) as string, model));
+  return [];
 }

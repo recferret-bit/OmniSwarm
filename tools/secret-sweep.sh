@@ -10,6 +10,10 @@ GITLEAKS_ALLOW=(
   "20913d67d6d9d76a95fbc11f1ee9c70b7fff3610:tests/e2e/intake/w09.spec.ts:generic-api-key:16"
   # NodeSource apt signing-key fingerprint (public), renamed in a later commit.
   "36a2c7e9b48fc7a386f0cdd18c91c97a4d892813:infra/deploy/provision.sh:generic-api-key:26"
+  # Planted golden-eval fixture: the deliberately leaked JWT_SECRET of the vulnerable fullstack-dapp and its
+  # fixed twin (engine/eval/golden/fullstack-dapp/expected.json lists infra/production.env as a finding).
+  "26b99e0478278c37e9fed65c94a6a6b9f2035e69:engine/eval/golden/fullstack-dapp/infra/production.env:generic-api-key:3"
+  "92743c636ae2b8fb9cd36642457629b7559eae93:engine/eval/twins/fullstack-dapp-fixed/infra/production.env:generic-api-key:3"
 )
 
 tracked="$(git ls-files)"

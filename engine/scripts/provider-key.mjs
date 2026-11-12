@@ -1,10 +1,12 @@
-// The `key` family: one direct provider key, OmniSwarm's tool loop, the same MCP bridge as a CLI reviewer.
+// The `key` family (`key:<provider>:<model>`): one direct provider key, OmniSwarm's tool loop, the same MCP bridge as a CLI reviewer.
 import { SessionError } from './agent-rpc.mjs';
 import { buildApiLaunch } from './provider-api-launch.mjs';
 import { presetFor } from './provider-openai-compat.mjs';
+import { apiProviders } from '../../packages/schemas/providers.mjs';
 
+// Installed `key:` providers are the catalog's API providers of family `key` (today: zai).
 const KNOWN = {
-  zai: { installed: () => true },
+  ...Object.fromEntries(apiProviders().filter((provider) => provider.family === 'key').map((provider) => [provider.id, { installed: () => true }])),
   // Messages API and the other compat presets are H+ (W03-11, W03-05). Specs parse; launch waits.
   anthropic: { installed: () => false, wave: 'W03-11' },
   openai: { installed: () => false, wave: 'W03-05' },

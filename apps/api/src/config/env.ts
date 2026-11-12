@@ -47,6 +47,9 @@ export const envSchema = z.object({
   ADMIN_BASIC_USER: z.string().min(1).optional(),
   ADMIN_BASIC_PASSWORD: z.string().min(8).optional(),
   PROVIDER_SECRETS_FILE: absPath.optional(),
+  // Seals accounts' own provider keys (account_provider_key). The API and the workers both need it; unset
+  // outside production falls back to SESSION_SECRET. Production requires it once an account- preset is allowed.
+  ACCOUNT_KEYS_SECRET: z.string().min(32, 'must be at least 32 characters').optional(),
 
   NETWORK: z.enum(['testnet', 'mainnet', 'sandbox']).default('testnet'),
   // Local near-sandbox switch. `sandbox` outside production is applied in load.ts.

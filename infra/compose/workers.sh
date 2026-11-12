@@ -50,8 +50,11 @@ for n in 1 2; do
     # still attests on the sandbox registry. The host worker uses 127.0.0.1:3030
     # and the operator key. Do not pass host.docker.internal; that name is for
     # the API container only.
+    # LOCAL_ENGINE_RUNNER=cli keeps the sandbox chain but runs the real engine, so a dashboard review on
+    # the operator panel or an account's own NEAR AI key is paid by bob.test.near, reviewed by real models
+    # and attested on the sandbox registry. The home-page quote (scripted preset) is then refused.
     if [ "${NEAR_LOCAL:-0}" = 1 ]; then
-      export ENGINE_RUNNER=mock
+      export ENGINE_RUNNER="${LOCAL_ENGINE_RUNNER:-mock}"
       export NEAR_NETWORK=sandbox NETWORK=sandbox CHAIN_ADAPTER=near
       export CONTRACT_ID=registry.test.near INTAKE_RECIPIENT=treasury.test.near
       unset RPC_URLS

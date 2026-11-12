@@ -1,33 +1,30 @@
-// One non-streaming chat-completions tool loop shared by key: and openrouter: reviewers.
+// One non-streaming chat-completions tool loop shared by every API provider (key:zai, openrouter, nearai).
 // ORCHESTRATION sections 1 and 1.1. The loop never opens a socket unless the caller passes fetch
 // or OMNI_LIVE=1; replay and tests inject fetch.
 import fs from 'node:fs';
 import path from 'node:path';
 import { resetReplayTurns, selectFetch } from './http-replay.mjs';
 import { parseToolCall } from './api-tool-schema.mjs';
+import { apiProviders } from '../../packages/schemas/providers.mjs';
 
 export const RETRY_STATUSES = new Set([429, 500, 502, 503, 504]);
 export const MAX_ATTEMPTS = 4;
 const SUBMIT_TOOLS = new Set(['submit_audit_report', 'submit_crosscheck_report']);
 
-export const PRESETS = {
-  zai: {
-    provider: 'zai',
-    baseUrl: (env) => String(env.ZAI_BASE_URL || 'https://api.z.ai/api/paas/v4').replace(/\/+$/, ''),
-    keyEnv: 'ZAI_API_KEY',
-    envAllowlist: ['ZAI_API_KEY', 'ZAI_BASE_URL'],
-    extraBody: { reasoning_effort: 'high' },
-    headers: () => ({}),
-  },
-  openrouter: {
-    provider: 'openrouter',
-    baseUrl: () => 'https://openrouter.ai/api/v1',
-    keyEnv: 'OPENROUTER_API_KEY',
-    envAllowlist: ['OPENROUTER_API_KEY'],
-    extraBody: { provider: { require_parameters: true, data_collection: 'deny' } },
-    headers: () => ({ 'HTTP-Referer': 'https://omniswarm.dev', 'X-OpenRouter-Title': 'OmniSwarm' }),
-  },
-};
+// One preset per API provider, built from the provider catalog (packages/schemas/providers.mjs). A provider's
+// base URL is fixed unless the catalog names an operator override (baseUrlEnv).
+function presetOf(provider) {
+  return Object.freeze({
+    provider: provider.id,
+    baseUrl: (env = {}) => String((provider.baseUrlEnv && env[provider.baseUrlEnv]) || provider.baseUrl).replace(/\/+$/, ''),
+    keyEnv: provider.keyEnv,
+    envAllowlist: [...provider.envAllowlist],
+    extraBody: provider.extraBody,
+    headers: () => ({ ...provider.headers }),
+  });
+}
+
+export const PRESETS = Object.freeze(Object.fromEntries(apiProviders().map((provider) => [provider.id, presetOf(provider)])));
 
 export function presetFor(provider) {
   const preset = PRESETS[provider];

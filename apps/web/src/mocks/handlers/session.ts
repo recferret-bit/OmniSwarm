@@ -54,4 +54,27 @@ const requestPdf = http.get<{ id: string }>('/api/requests/:id/report.pdf', ({ p
   return pdfResponse();
 });
 
-export const sessionHandlers = [login, logout, session, dashboardJob, requestPdf];
+// One own key per mock session and provider (catalog providers that take account keys). The key itself is dropped.
+const own: Record<string, { set: boolean; fingerprint: string | null; models: string[] }> = {};
+const view = (provider: string) => ({
+  provider, label: provider === 'nearai' ? 'NEAR AI Cloud' : provider, set: false, fingerprint: null, models: [] as string[],
+  dataPolicy: 'Reviewed source is sent to this provider.', signedRequests: false, ...own[provider],
+});
+const ownList = http.get('/api/account/providers', () => (readState().session ? HttpResponse.json({ providers: [view('nearai')] }) : apiError('UNAUTHORIZED', 401, 'Sign in required')));
+const ownPut = http.put('/api/account/providers/:provider', async ({ request, params }) => {
+  if (!readState().session) return apiError('UNAUTHORIZED', 401, 'Sign in required');
+  const provider = String(params.provider);
+  const body = (await request.json()) as { key?: string; models?: string[] };
+  const current = view(provider);
+  own[provider] = {
+    set: body.key === undefined ? current.set : body.key !== '',
+    fingerprint: body.key === undefined ? current.fingerprint : body.key ? 'mock0000' : null,
+    models: body.models ?? current.models,
+  };
+  return HttpResponse.json(view(provider));
+});
+const ownModels = http.get('/api/account/providers/:provider/models', ({ params }) => (view(String(params.provider)).set
+  ? HttpResponse.json({ source: 'live', models: ['deepseek-ai/DeepSeek-V4', 'zai-org/GLM-5.3'] })
+  : apiError('NOT_FOUND', 404, 'Save your key first')));
+
+export const sessionHandlers = [login, logout, session, dashboardJob, requestPdf, ownList, ownPut, ownModels];

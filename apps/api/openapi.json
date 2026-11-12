@@ -3646,6 +3646,13 @@
                         "web3"
                       ]
                     }
+                  },
+                  "source": {
+                    "type": "string",
+                    "enum": [
+                      "panel",
+                      "nearai"
+                    ]
                   }
                 },
                 "required": [
@@ -4111,6 +4118,13 @@
                         "web3"
                       ]
                     }
+                  },
+                  "source": {
+                    "type": "string",
+                    "enum": [
+                      "panel",
+                      "nearai"
+                    ]
                   }
                 },
                 "required": [
@@ -6303,7 +6317,7 @@
     },
     "/api/operator/providers": {
       "get": {
-        "summary": "Whether the Z.AI and OpenRouter keys are set",
+        "summary": "Whether each admin-page provider key (Z.AI, OpenRouter) is set",
         "responses": {
           "200": {
             "description": "Default Response",
@@ -6434,7 +6448,7 @@
         }
       },
       "put": {
-        "summary": "Set or clear the Z.AI and OpenRouter keys. Empty string clears. The key is not returned.",
+        "summary": "Set or clear the admin-page provider keys (Z.AI, OpenRouter). Empty string clears. The key is not returned.",
         "requestBody": {
           "required": true,
           "content": {
@@ -6509,6 +6523,805 @@
             }
           },
           "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "VALIDATION_ERROR",
+                            "MESSAGE_INVALID",
+                            "REPO_INVALID",
+                            "REPO_PRIVATE",
+                            "REPO_ARCHIVED",
+                            "REPO_TOO_LARGE",
+                            "REPO_DENIED",
+                            "REPO_NOT_FOUND",
+                            "REF_NOT_FOUND",
+                            "REF_CHANGED",
+                            "NETWORK_DISABLED",
+                            "PRESET_NOT_ALLOWED",
+                            "PAYLOAD_TOO_LARGE",
+                            "QUEUE_FULL",
+                            "NONCE_EXPIRED",
+                            "NONCE_USED",
+                            "NONCE_UNKNOWN",
+                            "SIG_INVALID",
+                            "KEY_NOT_FULL_ACCESS",
+                            "ACCOUNT_MISMATCH",
+                            "UNAUTHORIZED",
+                            "FORBIDDEN",
+                            "PAYMENT_NOT_FOUND",
+                            "PAYMENT_MISMATCH",
+                            "PAYMENT_SIGNER_MISMATCH",
+                            "TX_ALREADY_USED",
+                            "ACTIVE_REQUEST_EXISTS",
+                            "INVALID_TRANSITION",
+                            "REFUND_NOT_ALLOWED",
+                            "RATE_LIMITED",
+                            "NOT_FOUND",
+                            "REQUEST_NOT_FOUND",
+                            "CHAIN_UNAVAILABLE",
+                            "GITHUB_UNAVAILABLE",
+                            "INTERNAL"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 2000
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "retryable"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/account/providers": {
+      "get": {
+        "summary": "This account's own keys for every provider that takes one (fingerprints only) and its chosen models",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "providers": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "provider": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "set": {
+                            "type": "boolean"
+                          },
+                          "fingerprint": {
+                            "nullable": true,
+                            "type": "string"
+                          },
+                          "models": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "dataPolicy": {
+                            "type": "string"
+                          },
+                          "signedRequests": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "provider",
+                          "label",
+                          "set",
+                          "fingerprint",
+                          "models",
+                          "dataPolicy",
+                          "signedRequests"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "providers"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "VALIDATION_ERROR",
+                            "MESSAGE_INVALID",
+                            "REPO_INVALID",
+                            "REPO_PRIVATE",
+                            "REPO_ARCHIVED",
+                            "REPO_TOO_LARGE",
+                            "REPO_DENIED",
+                            "REPO_NOT_FOUND",
+                            "REF_NOT_FOUND",
+                            "REF_CHANGED",
+                            "NETWORK_DISABLED",
+                            "PRESET_NOT_ALLOWED",
+                            "PAYLOAD_TOO_LARGE",
+                            "QUEUE_FULL",
+                            "NONCE_EXPIRED",
+                            "NONCE_USED",
+                            "NONCE_UNKNOWN",
+                            "SIG_INVALID",
+                            "KEY_NOT_FULL_ACCESS",
+                            "ACCOUNT_MISMATCH",
+                            "UNAUTHORIZED",
+                            "FORBIDDEN",
+                            "PAYMENT_NOT_FOUND",
+                            "PAYMENT_MISMATCH",
+                            "PAYMENT_SIGNER_MISMATCH",
+                            "TX_ALREADY_USED",
+                            "ACTIVE_REQUEST_EXISTS",
+                            "INVALID_TRANSITION",
+                            "REFUND_NOT_ALLOWED",
+                            "RATE_LIMITED",
+                            "NOT_FOUND",
+                            "REQUEST_NOT_FOUND",
+                            "CHAIN_UNAVAILABLE",
+                            "GITHUB_UNAVAILABLE",
+                            "INTERNAL"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 2000
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "retryable"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/account/providers/{provider}": {
+      "get": {
+        "summary": "This account's key status and models for one provider",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "nearai"
+              ]
+            },
+            "in": "path",
+            "name": "provider",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "provider": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "set": {
+                      "type": "boolean"
+                    },
+                    "fingerprint": {
+                      "nullable": true,
+                      "type": "string"
+                    },
+                    "models": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "dataPolicy": {
+                      "type": "string"
+                    },
+                    "signedRequests": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "provider",
+                    "label",
+                    "set",
+                    "fingerprint",
+                    "models",
+                    "dataPolicy",
+                    "signedRequests"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "VALIDATION_ERROR",
+                            "MESSAGE_INVALID",
+                            "REPO_INVALID",
+                            "REPO_PRIVATE",
+                            "REPO_ARCHIVED",
+                            "REPO_TOO_LARGE",
+                            "REPO_DENIED",
+                            "REPO_NOT_FOUND",
+                            "REF_NOT_FOUND",
+                            "REF_CHANGED",
+                            "NETWORK_DISABLED",
+                            "PRESET_NOT_ALLOWED",
+                            "PAYLOAD_TOO_LARGE",
+                            "QUEUE_FULL",
+                            "NONCE_EXPIRED",
+                            "NONCE_USED",
+                            "NONCE_UNKNOWN",
+                            "SIG_INVALID",
+                            "KEY_NOT_FULL_ACCESS",
+                            "ACCOUNT_MISMATCH",
+                            "UNAUTHORIZED",
+                            "FORBIDDEN",
+                            "PAYMENT_NOT_FOUND",
+                            "PAYMENT_MISMATCH",
+                            "PAYMENT_SIGNER_MISMATCH",
+                            "TX_ALREADY_USED",
+                            "ACTIVE_REQUEST_EXISTS",
+                            "INVALID_TRANSITION",
+                            "REFUND_NOT_ALLOWED",
+                            "RATE_LIMITED",
+                            "NOT_FOUND",
+                            "REQUEST_NOT_FOUND",
+                            "CHAIN_UNAVAILABLE",
+                            "GITHUB_UNAVAILABLE",
+                            "INTERNAL"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 2000
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "retryable"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Set or clear this account's key for one provider (empty string clears) and choose its models. The key is not returned.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "key": {
+                    "type": "string",
+                    "maxLength": 400,
+                    "pattern": "^[^\\s\\x00-\\x1f]*$"
+                  },
+                  "models": {
+                    "maxItems": 6,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "maxLength": 128
+                    }
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "nearai"
+              ]
+            },
+            "in": "path",
+            "name": "provider",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "provider": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "set": {
+                      "type": "boolean"
+                    },
+                    "fingerprint": {
+                      "nullable": true,
+                      "type": "string"
+                    },
+                    "models": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "dataPolicy": {
+                      "type": "string"
+                    },
+                    "signedRequests": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "provider",
+                    "label",
+                    "set",
+                    "fingerprint",
+                    "models",
+                    "dataPolicy",
+                    "signedRequests"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "VALIDATION_ERROR",
+                            "MESSAGE_INVALID",
+                            "REPO_INVALID",
+                            "REPO_PRIVATE",
+                            "REPO_ARCHIVED",
+                            "REPO_TOO_LARGE",
+                            "REPO_DENIED",
+                            "REPO_NOT_FOUND",
+                            "REF_NOT_FOUND",
+                            "REF_CHANGED",
+                            "NETWORK_DISABLED",
+                            "PRESET_NOT_ALLOWED",
+                            "PAYLOAD_TOO_LARGE",
+                            "QUEUE_FULL",
+                            "NONCE_EXPIRED",
+                            "NONCE_USED",
+                            "NONCE_UNKNOWN",
+                            "SIG_INVALID",
+                            "KEY_NOT_FULL_ACCESS",
+                            "ACCOUNT_MISMATCH",
+                            "UNAUTHORIZED",
+                            "FORBIDDEN",
+                            "PAYMENT_NOT_FOUND",
+                            "PAYMENT_MISMATCH",
+                            "PAYMENT_SIGNER_MISMATCH",
+                            "TX_ALREADY_USED",
+                            "ACTIVE_REQUEST_EXISTS",
+                            "INVALID_TRANSITION",
+                            "REFUND_NOT_ALLOWED",
+                            "RATE_LIMITED",
+                            "NOT_FOUND",
+                            "REQUEST_NOT_FOUND",
+                            "CHAIN_UNAVAILABLE",
+                            "GITHUB_UNAVAILABLE",
+                            "INTERNAL"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 2000
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "retryable"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "VALIDATION_ERROR",
+                            "MESSAGE_INVALID",
+                            "REPO_INVALID",
+                            "REPO_PRIVATE",
+                            "REPO_ARCHIVED",
+                            "REPO_TOO_LARGE",
+                            "REPO_DENIED",
+                            "REPO_NOT_FOUND",
+                            "REF_NOT_FOUND",
+                            "REF_CHANGED",
+                            "NETWORK_DISABLED",
+                            "PRESET_NOT_ALLOWED",
+                            "PAYLOAD_TOO_LARGE",
+                            "QUEUE_FULL",
+                            "NONCE_EXPIRED",
+                            "NONCE_USED",
+                            "NONCE_UNKNOWN",
+                            "SIG_INVALID",
+                            "KEY_NOT_FULL_ACCESS",
+                            "ACCOUNT_MISMATCH",
+                            "UNAUTHORIZED",
+                            "FORBIDDEN",
+                            "PAYMENT_NOT_FOUND",
+                            "PAYMENT_MISMATCH",
+                            "PAYMENT_SIGNER_MISMATCH",
+                            "TX_ALREADY_USED",
+                            "ACTIVE_REQUEST_EXISTS",
+                            "INVALID_TRANSITION",
+                            "REFUND_NOT_ALLOWED",
+                            "RATE_LIMITED",
+                            "NOT_FOUND",
+                            "REQUEST_NOT_FOUND",
+                            "CHAIN_UNAVAILABLE",
+                            "GITHUB_UNAVAILABLE",
+                            "INTERNAL"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 2000
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "retryable"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "VALIDATION_ERROR",
+                            "MESSAGE_INVALID",
+                            "REPO_INVALID",
+                            "REPO_PRIVATE",
+                            "REPO_ARCHIVED",
+                            "REPO_TOO_LARGE",
+                            "REPO_DENIED",
+                            "REPO_NOT_FOUND",
+                            "REF_NOT_FOUND",
+                            "REF_CHANGED",
+                            "NETWORK_DISABLED",
+                            "PRESET_NOT_ALLOWED",
+                            "PAYLOAD_TOO_LARGE",
+                            "QUEUE_FULL",
+                            "NONCE_EXPIRED",
+                            "NONCE_USED",
+                            "NONCE_UNKNOWN",
+                            "SIG_INVALID",
+                            "KEY_NOT_FULL_ACCESS",
+                            "ACCOUNT_MISMATCH",
+                            "UNAUTHORIZED",
+                            "FORBIDDEN",
+                            "PAYMENT_NOT_FOUND",
+                            "PAYMENT_MISMATCH",
+                            "PAYMENT_SIGNER_MISMATCH",
+                            "TX_ALREADY_USED",
+                            "ACTIVE_REQUEST_EXISTS",
+                            "INVALID_TRANSITION",
+                            "REFUND_NOT_ALLOWED",
+                            "RATE_LIMITED",
+                            "NOT_FOUND",
+                            "REQUEST_NOT_FOUND",
+                            "CHAIN_UNAVAILABLE",
+                            "GITHUB_UNAVAILABLE",
+                            "INTERNAL"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 2000
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "retryable"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/account/providers/{provider}/models": {
+      "get": {
+        "summary": "Models the provider serves this account's saved key",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "nearai"
+              ]
+            },
+            "in": "path",
+            "name": "provider",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "source": {
+                      "type": "string",
+                      "enum": [
+                        "live",
+                        "unavailable"
+                      ]
+                    },
+                    "models": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "source",
+                    "models"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "VALIDATION_ERROR",
+                            "MESSAGE_INVALID",
+                            "REPO_INVALID",
+                            "REPO_PRIVATE",
+                            "REPO_ARCHIVED",
+                            "REPO_TOO_LARGE",
+                            "REPO_DENIED",
+                            "REPO_NOT_FOUND",
+                            "REF_NOT_FOUND",
+                            "REF_CHANGED",
+                            "NETWORK_DISABLED",
+                            "PRESET_NOT_ALLOWED",
+                            "PAYLOAD_TOO_LARGE",
+                            "QUEUE_FULL",
+                            "NONCE_EXPIRED",
+                            "NONCE_USED",
+                            "NONCE_UNKNOWN",
+                            "SIG_INVALID",
+                            "KEY_NOT_FULL_ACCESS",
+                            "ACCOUNT_MISMATCH",
+                            "UNAUTHORIZED",
+                            "FORBIDDEN",
+                            "PAYMENT_NOT_FOUND",
+                            "PAYMENT_MISMATCH",
+                            "PAYMENT_SIGNER_MISMATCH",
+                            "TX_ALREADY_USED",
+                            "ACTIVE_REQUEST_EXISTS",
+                            "INVALID_TRANSITION",
+                            "REFUND_NOT_ALLOWED",
+                            "RATE_LIMITED",
+                            "NOT_FOUND",
+                            "REQUEST_NOT_FOUND",
+                            "CHAIN_UNAVAILABLE",
+                            "GITHUB_UNAVAILABLE",
+                            "INTERNAL"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 2000
+                        },
+                        "retryable": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "retryable"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
             "description": "Default Response",
             "content": {
               "application/json": {

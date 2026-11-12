@@ -11,9 +11,12 @@ import { Field } from '@/components/ui/Field';
 import { Panel } from '@/components/ui/Panel';
 import { Pill, type Tone } from '@/components/ui/Pill';
 import { Stat, StatGrid } from '@/components/ui/Stat';
+import { publicAdminProviders } from '@omniswarm/schemas/providers-public';
 
 interface StatusView { set: boolean; fingerprint: string | null }
-interface Keys { zai: StatusView; openrouter: StatusView }
+// One entry per provider whose catalog entry takes an operator key on this page (packages/schemas/providers-public.mjs).
+const ADMIN_PROVIDERS = publicAdminProviders();
+type Keys = Record<string, StatusView>;
 interface Job {
   id: string; account: string; repo: string; status: string; scope: string;
   theme: string | null; parentId: string | null; failureCause: string | null; createdAt: string;
@@ -141,8 +144,7 @@ function KeyLine({ name, view }: { name: string; view: StatusView | null }) {
 export default function AdminPage() {
   const [keys, setKeys] = useState<Keys | null>(null);
   const [activity, setActivity] = useState<Activity | null>(null);
-  const [zai, setZai] = useState('');
-  const [openrouter, setOpenrouter] = useState('');
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -169,12 +171,11 @@ export default function AdminPage() {
         method: 'PUT',
         credentials: 'include',
         headers: { accept: 'application/json', 'content-type': 'application/json' },
-        body: JSON.stringify({ ...(zai ? { zai } : {}), ...(openrouter ? { openrouter } : {}) }),
+        body: JSON.stringify(Object.fromEntries(Object.entries(drafts).filter(([, value]) => value))),
       });
       if (!response.ok) throw new Error('The keys were not saved');
       setKeys(await response.json() as Keys);
-      setZai('');
-      setOpenrouter('');
+      setDrafts({});
       setNotice('Keys saved. A blank field kept the key already stored.');
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'The keys were not saved');
@@ -235,12 +236,21 @@ export default function AdminPage() {
                   <section className="admin-stack">
                     <h2 className="panel__title">Provider keys</h2>
                     <StatGrid label="Provider keys">
-                      <KeyLine name="Z.AI" view={keys?.zai ?? null} />
-                      <KeyLine name="OpenRouter" view={keys?.openrouter ?? null} />
+                      {ADMIN_PROVIDERS.map((provider) => <KeyLine key={provider.id} name={provider.label} view={keys?.[provider.id] ?? null} />)}
                     </StatGrid>
                     <form className="quote-form" onSubmit={(event) => void save(event)}>
-                      <Field label="Z.AI API key" name="zai" type="password" autoComplete="off" value={zai} onChange={(event) => setZai(event.target.value)} hint="Leave blank to keep the saved key." />
-                      <Field label="OpenRouter API key" name="openrouter" type="password" autoComplete="off" value={openrouter} onChange={(event) => setOpenrouter(event.target.value)} hint="Leave blank to keep the saved key." />
+                      {ADMIN_PROVIDERS.map((provider) => (
+                        <Field
+                          key={provider.id}
+                          label={`${provider.label} API key`}
+                          name={provider.id}
+                          type="password"
+                          autoComplete="off"
+                          value={drafts[provider.id] ?? ''}
+                          onChange={(event) => setDrafts((current) => ({ ...current, [provider.id]: event.target.value }))}
+                          hint="Leave blank to keep the saved key."
+                        />
+                      ))}
                       <Button type="submit" busy={pending} disabled={!keys}>Save keys</Button>
                     </form>
                   </section>

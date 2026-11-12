@@ -18,11 +18,11 @@ export const INITIAL_FLOW: FlowData = {
 };
 
 // Challenge -> canonical message -> wallet signMessage -> POST /api/requests.
-async function signAndCreate(deps: FlowDeps, quote: QuoteResponse, accountId: string, deployed: string | null) {
+async function signAndCreate(deps: FlowDeps, quote: QuoteResponse, accountId: string, deployed: string | null, preset?: string) {
   const challenge = await deps.api.challenge();
   const built = await buildSignedRequest({
     account: accountId, commit: quote.commitSha, deployed, network: env.network,
-    nonce: challenge.nonce, preset: quote.preset, repo: quote.normalizedRepo,
+    nonce: challenge.nonce, preset: preset ?? quote.preset, repo: quote.normalizedRepo,
   });
   const wallet = await deps.connector();
   const signed = await wallet.signMessage({ message: built.message, recipient: env.intakeRecipient, nonce: built.nonceBytes })
@@ -51,13 +51,13 @@ export function flowActions(deps: FlowDeps, set: Set, get: Get): Omit<FlowState,
         fail('quote', error, 'idle');
       }
     },
-    async sign(accountId) {
+    async sign(accountId, preset) {
       const { quote, deployed } = get();
       if (!quote) return;
       set({ step: 'signing', error: null });
       for (let attempt = 0; ; attempt += 1) {
         try {
-          return set({ step: 'created', ...(await signAndCreate(deps, quote, accountId, deployed)) });
+          return set({ step: 'created', ...(await signAndCreate(deps, quote, accountId, deployed, preset)) });
         } catch (error) {
           // An expired challenge restarts once with a fresh nonce (W11-12).
           if (attempt === 0 && toAppError(error).code === 'NONCE_EXPIRED') continue;

@@ -142,3 +142,16 @@ test('the guard account-age signal is off unless GUARD_ACCOUNT_AGE=nearblocks; h
   const { storage } = loadConfig('worker', { ...BASE });
   assert.deepEqual([storage.keepRuns, storage.orphanReportRetentionH], [20, 168]);
 });
+
+test('account- presets: only for account providers, never the hosted preset, and production needs ACCOUNT_KEYS_SECRET', () => {
+  assert.equal(issue('api', { ...BASE, HOSTED_PRESET: 'hosted', ALLOWED_PRESETS: 'hosted,account-nearai' }), '');
+  assert.match(issue('api', { ...BASE, HOSTED_PRESET: 'hosted', ALLOWED_PRESETS: 'hosted,account-zai' }), /ALLOWED_PRESETS names an account- preset/);
+  assert.match(issue('api', { ...BASE, HOSTED_PRESET: 'account-nearai', ALLOWED_PRESETS: 'account-nearai' }), /HOSTED_PRESET cannot be an account- preset/);
+  const prod = { ...PROD, ALLOWED_PRESETS: 'hosted,account-nearai' };
+  assert.match(issue('api', prod), /ACCOUNT_KEYS_SECRET is required in production/);
+  assert.match(issue('worker', prod), /ACCOUNT_KEYS_SECRET is required in production/);
+  assert.equal(issue('worker', { ...prod, ACCOUNT_KEYS_SECRET: 'a'.repeat(40) }), '');
+  // Outside production the session secret seals account keys; in production only ACCOUNT_KEYS_SECRET does.
+  assert.equal(loadConfig('api', BASE as NodeJS.ProcessEnv).accountKeysSecret, BASE.SESSION_SECRET);
+  assert.equal(loadConfig('api', PROD as NodeJS.ProcessEnv).accountKeysSecret, '');
+});

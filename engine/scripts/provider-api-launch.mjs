@@ -1,4 +1,4 @@
-// Shared launch for key: and openrouter: reviewers. The reviewer process receives its allow-listed
+// Shared launch for every API-provider reviewer (key:zai, openrouter, nearai). The reviewer process receives its allow-listed
 // variables; the bridge process receives the base session environment and nothing else.
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -6,6 +6,7 @@ import { SessionError } from './agent-rpc.mjs';
 import { apiAcpInvocation } from './api-acp-agent.mjs';
 import { budgetedRole } from './bridge-budget.mjs';
 import { bridgeProcessEnv, reviewerProcessEnv } from './reviewer-env.mjs';
+import { presetFor } from './provider-openai-compat.mjs';
 
 const BRIDGE = path.join(path.dirname(fileURLToPath(import.meta.url)), 'docker-mcp-bridge.mjs');
 
@@ -47,4 +48,20 @@ export function buildApiLaunch(reviewer, ctx, preset) {
     },
   };
   return apiAcpInvocation(ctx.workDir, config, reviewerProcessEnv(env, preset.envAllowlist));
+}
+
+// A family that is exactly one catalog API provider (openrouter, nearai). The family file is then one line;
+// everything provider-specific (base URL, key variable, body, headers) lives in the provider catalog.
+export function singleProviderFamily(providerId) {
+  const preset = presetFor(providerId);
+  return {
+    name: providerId,
+    transport: 'api-acp',
+    providers: { [providerId]: { installed: () => true } },
+    installed: () => true,
+    available: (_reviewer, env = process.env) => Boolean(env[preset.keyEnv]),
+    launch: (reviewer, ctx) => buildApiLaunch(reviewer, ctx, preset),
+    envAllowlist: () => [...preset.envAllowlist],
+    fingerprintEnv: () => preset.keyEnv,
+  };
 }

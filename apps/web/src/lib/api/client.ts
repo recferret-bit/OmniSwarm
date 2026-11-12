@@ -34,7 +34,7 @@ async function parseError(response: Response): Promise<AppError> {
   return new AppError(code, message, { retryable: error?.retryable === true, status: response.status });
 }
 
-async function call<T>(method: 'GET' | 'POST', path: string, body?: unknown): Promise<T> {
+async function call<T>(method: 'GET' | 'POST' | 'PUT', path: string, body?: unknown): Promise<T> {
   let response: Response;
   try {
     response = await fetch(`${BASE}${path}`, {
@@ -71,6 +71,26 @@ export interface DashboardJobCreated {
   repo: string;
   commitSha: string;
   status: 'queued';
+}
+
+/**
+ * This account's own key for one provider whose catalog entry takes account keys (packages/schemas/providers.mjs;
+ * today NEAR AI Cloud). The key is never returned, only its fingerprint.
+ */
+export interface AccountKeyView {
+  provider: string;
+  label: string;
+  set: boolean;
+  fingerprint: string | null;
+  models: string[];
+  dataPolicy: string;
+  /** The operator allows signed (wallet) requests on this key. */
+  signedRequests: boolean;
+}
+
+export interface ModelList {
+  source: 'live' | 'unavailable';
+  models: string[];
 }
 
 export type LocalJobRequest = { path: string } | { github: string };
@@ -119,7 +139,10 @@ export const api = {
   login: (body: LoginRequest) => call<SessionAccount>('POST', '/login', body),
   logout: () => call<void>('POST', '/logout'),
   session: () => call<SessionAccount>('GET', '/session'),
-  createDashboardJob: (body: { repo: string; models?: string[]; scopes?: string[] }) => call<DashboardJobCreated>('POST', '/dashboard/jobs', body),
+  createDashboardJob: (body: { repo: string; models?: string[]; scopes?: string[]; source?: string }) => call<DashboardJobCreated>('POST', '/dashboard/jobs', body),
+  listAccountKeys: () => call<{ providers: AccountKeyView[] }>('GET', '/account/providers'),
+  saveAccountKey: (provider: string, body: { key?: string; models?: string[] }) => call<AccountKeyView>('PUT', `/account/providers/${id(provider)}`, body),
+  listProviderModels: (provider: string) => call<ModelList>('GET', `/account/providers/${id(provider)}/models`),
   createLocalJob: (body: LocalJobRequest) => call<LocalJobCreated>('POST', '/local/jobs', body),
   listLocalJobs: () => call<{ jobs: LocalJobSummary[] }>('GET', '/local/jobs'),
   getLocalJob: (jobId: string) => call<LocalJobDetail>('GET', `/local/jobs/${id(jobId)}`),

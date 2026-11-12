@@ -21,6 +21,8 @@
 
 ## 1. Reviewer specs and families
 
+Providers (local CLIs, Z.AI, OpenRouter, NEAR AI Cloud) are described once, in the provider catalog `packages/schemas/providers.mjs` (base URL, key variable and allow-list, body, headers, models endpoint, key sources, data policy); see [`docs/providers.md`](../providers.md). A family is the spec syntax and transport; the catalog says what each provider sends. The harness, bridge, sandbox, debate and skill never depend on the provider.
+
 A **reviewer** is one model in one family. Its spec string:
 
 ```
@@ -32,7 +34,7 @@ A **reviewer** is one model in one family. Its spec string:
 | `cli` | 1 — local vendor subscriptions | `claude`, `codex`, `grok`, `agy`, `claude-zai` | existing ACP / native sessions (`agent-session.mjs`) | the CLI's own login; `claude-zai` maps `ZAI_API_KEY` (Coding Plan) to `ANTHROPIC_AUTH_TOKEN` + `ANTHROPIC_BASE_URL=https://api.z.ai/api/anthropic` | `cli:claude:opus`, `cli:claude-zai:glm-5.3` |
 | `key` | 2 — direct API keys | `zai`, `anthropic`, `openai`, `xai`, `google` | OmniSwarm tool loop (`provider-openai-compat.mjs`, `provider-anthropic.mjs`) wrapped as an ACP agent (`api-acp-agent.mjs`) | `ZAI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `XAI_API_KEY`, `GEMINI_API_KEY` | `key:zai:glm-5.3` |
 | `openrouter` | 3 — OpenRouter | any OpenRouter slug | same tool loop, base `https://openrouter.ai/api/v1` | `OPENROUTER_API_KEY` | `openrouter:qwen/qwen3.8-max-0902` |
-| `nearai` (`H+`, OD-15) | NEAR AI Cloud TEE models | `nearai` | same tool loop, base `https://cloud-api.near.ai/v1`, plus attestation check with a fresh nonce | `NEARAI_API_KEY` | `nearai:<tee-model>` |
+| `nearai` (OD-15) | 4 — NEAR AI Cloud | `nearai` | same tool loop, base `https://cloud-api.near.ai/v1` (fixed). The attestation check with a fresh nonce (W03-22) is **not built** | `NEARAI_API_KEY` (operator env, or a signed-in account's own key, preset `account-nearai`) | `nearai:deepseek-ai/DeepSeek-V4` |
 | `scripted` | demo / simulation, no LLM | `baseline`, `paranoid`, `lazy`, `wrong` (fixture strategies) | in-process scripted agent | none | `scripted:baseline` |
 
 - **Reviewer id** = slug of the spec (`key-zai-glm-5-3`, `openrouter-qwen-qwen3-8-max`), unique per run; `#label` overrides it. Slashes are allowed in the model part and never reach a path (fixes R-17a).
@@ -47,7 +49,7 @@ A **reviewer** is one model in one family. Its spec string:
 ### 1.1 Key policy (changes a documented rule)
 
 Today no key or endpoint enters any reviewer runtime (`agent-session-launch.mjs:12-20`, test `agent-session.test.mjs:190`). New rule, written into AGENTS.md in W00:
-- Keys are read from the operator's environment only, never from the target, a config file in the repo, or a report.
+- Keys are read from the operator's environment (or the local stack's admin page), never from the target, a config file in the repo, or a report. Exception: a catalog provider with key source `account` (today `nearai`) may use a signed-in account's own key, sealed in Postgres and used only for that account's `account-<provider>` reviews.
 - Each reviewer process gets **exactly one** allow-listed variable for its own provider (`zai` → `ZAI_API_KEY` [+ `ZAI_BASE_URL`]); `cli` reviewers still get none (except `claude-zai`, which gets its two mapped vars).
 - The MCP bridge and the Docker sandbox **never** receive a key. A unit test greps every spawned env.
 - Reports record `keyFingerprint` (first 4 + last 4 chars of sha256 of the key), never the key.

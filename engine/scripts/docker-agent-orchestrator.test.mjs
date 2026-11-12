@@ -364,9 +364,9 @@ test('reviewers of one vendor never cross-check each other', { timeout: 15_000 }
 });
 
 test('an uninstalled reviewer family stops the run before any session starts', async t => {
-  const extra = reviewerRequest(['nearai:tee-model']);
+  const extra = reviewerRequest(['key:anthropic:claude-opus-5-5']);
   const f = fixture(t, extra.agents, 'all', extra);
-  await assert.rejects(f.run, /family `nearai` not installed yet/);
+  await assert.rejects(f.run, /provider `key:anthropic` not installed yet/);
   assert.equal(f.started.size, 0);
 });
 

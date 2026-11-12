@@ -1,6 +1,6 @@
 # Submission draft
 
-Not submitted. The owner fills the `<OWNER: …>` slots, checks the rules against the live form, and submits once. Field rules come from [TRACKS.md](TRACKS.md) §1 and the W14-01 row of [the W14 wave](../plan/waves/W14-submission-pack.md) (both from nearhackathon.com `HACKATHON.md`, fetched 2026-11-02). Deadline: internal 2026-11-14 20:00 UTC; the form closes 2026-11-14T23:59Z.
+Not submitted. One submission per team (SUBMITTING.md: "you can't edit it after you send it"); a mistake in a saved submission goes through https://nearhackathon.com/request-changes, never a second submission (HACKATHON.md). The owner fills the `<OWNER: …>` slots, checks the rules against the live form, and submits once. Field rules come from [TRACKS.md](TRACKS.md) §1 and the W14-01 row of [the W14 wave](../plan/waves/W14-submission-pack.md) (both from nearhackathon.com `HACKATHON.md`, fetched 2026-11-02). Deadline: internal 2026-11-14 20:00 UTC; the form closes 2026-11-14T23:59Z.
 
 ## Form fields
 
@@ -22,7 +22,7 @@ Not submitted. The owner fills the `<OWNER: …>` slots, checks the rules agains
 
 ### `idea`
 
-Problem: an AI agent that pays a NEAR contract has no cheap way to know whether that contract's code was ever reviewed, and one model's security review is easy to fool or to over-trust. OmniSwarm runs several models (Claude, Codex, Grok, AGY through their CLIs, plus OpenRouter and Z.ai models) over a sealed snapshot of a repository inside an offline Docker sandbox. Reviewers can only read source through a restricted MCP bridge and run the repository's own tests; every finding cites file:line. Reviewers of other vendors cross-check each claim, then an anonymized debate with mechanical citation checks and a judge from another vendor gives each finding a status, and an orchestrator writes a general review. NEAR's role: a user signs the request with NEP-413, pays request_review on the review-registry contract, and an operator function-call key attests the report's sha256, the commit and the highest confirmed severity on chain. The deployed account can confirm the binding itself. The @omniswarm/guard wrapper reads that attestation and the live code hash before an agent signs, and blocks or warns. Everything runs offline without keys: ./bin/audit demo --no-docker and the guard attack demo. The testnet deployment is the owner's next step.
+Problem: an AI agent that pays a NEAR contract has no cheap way to know whether that contract's code was ever reviewed, and one model's security review is easy to fool or to over-trust. OmniSwarm runs several models (Claude, Codex, Grok, AGY through their CLIs, plus OpenRouter, Z.ai and NEAR AI Cloud models) over a sealed snapshot of a repository inside an offline Docker sandbox. Reviewers can only read source through a restricted MCP bridge and run the repository's own tests; every finding cites file:line. Reviewers of other vendors cross-check each claim, then an anonymized debate with mechanical citation checks and a judge from another vendor gives each finding a status, and an orchestrator writes a general review. NEAR's role: a user signs the request with NEP-413, pays request_review on the review-registry contract, and an operator function-call key attests the report's sha256, the commit and the highest confirmed severity on chain. The deployed account can confirm the binding itself. The @omniswarm/guard wrapper reads that attestation and the live code hash before an agent signs, and blocks or warns. Everything runs offline without keys: ./bin/audit demo --no-docker and the guard attack demo. The testnet deployment is the owner's next step.
 
 Update the last sentence once the testnet deploy and the dogfood attestation exist (replace it with the contract id and the explorer link), and recount (save the paragraph as `idea.txt` first): `node -e "console.log([...require('fs').readFileSync(0,'utf8').trim()].length)" < idea.txt`.
 
@@ -35,7 +35,7 @@ Update the last sentence once the testnet deploy and the dogfood attestation exi
 | `open` (13, companion) | yes | entered alongside the others |
 | `swarms` (05) | no, unless the owner decides otherwise | per-reviewer sub-accounts and Intents settlement are not built |
 | `business` (04) | no | the ledger page and `config.yaml` caps are not built |
-| `privacy` (03) | no | the NEAR AI Cloud TEE reviewer is not built |
+| `privacy` (03) | no | the `nearai:` reviewer is built, but there is no nonce-bound attestation check or "Verified" panel (W03-22, W07-22), and reports are stored server-side, so track 03's ask and the OD-15 gate are not met. Do not describe the NEAR AI reviewer as private, TEE or confidential |
 
 ## X post draft
 

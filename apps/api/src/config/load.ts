@@ -1,3 +1,4 @@
+import { ACCOUNT_PRESET_PREFIX, accountPresetProvider } from '@omniswarm/schemas/providers';
 import fs from 'node:fs';
 import path from 'node:path';
 import { z } from 'zod';
@@ -44,6 +45,8 @@ export interface Config {
   dashboard: { login: string | null; password: string | null };
   adminBasic: { user: string | null; password: string | null };
   providerSecretsFile: string | null;
+  /** Seals accounts' own provider keys. Empty when neither ACCOUNT_KEYS_SECRET nor (outside production) SESSION_SECRET is set. */
+  accountKeysSecret: string;
 }
 
 export class ConfigError extends Error {
@@ -83,6 +86,10 @@ function productionIssues(raw: RawEnv, role: Role): Issue[] {
   // The API cannot read the engine config, so the preset it accepts must be named, not defaulted.
   if (role !== 'migrate') need('HOSTED_PRESET', raw.HOSTED_PRESET !== undefined, 'must be set in production (a preset defined in omniswarm.config.json)');
   if (role === 'api') need('ADMIN_TOKEN', Boolean(raw.ADMIN_TOKEN), 'is required in production');
+  // An account- preset decrypts accounts' own keys in the worker; the worker never gets SESSION_SECRET.
+  if (role !== 'migrate' && raw.ALLOWED_PRESETS.some((preset) => accountPresetProvider(preset))) {
+    need('ACCOUNT_KEYS_SECRET', Boolean(raw.ACCOUNT_KEYS_SECRET), 'is required in production when ALLOWED_PRESETS has an account- preset');
+  }
   if (role === 'worker') {
     need('ENGINE_RUNNER', chosen.engine === 'cli', 'must be "cli" in production (mock is test-only)');
     need('REPORTS_BASE_URL', raw.REPORTS_BASE_URL !== 'https://reports.localhost', 'must name the public reports origin');
@@ -107,6 +114,10 @@ function adapterIssues(raw: RawEnv, role: Role): Issue[] {
   const presets = raw.ALLOWED_PRESETS.length ? raw.ALLOWED_PRESETS : [hosted];
   if (!presets.includes(hosted)) issues.push({ key: 'HOSTED_PRESET', message: 'must be one of ALLOWED_PRESETS' });
   if (presets.some((preset) => !/^[a-z0-9-]{1,40}$/.test(preset))) issues.push({ key: 'ALLOWED_PRESETS', message: 'has an invalid preset name' });
+  if (presets.some((preset) => preset.startsWith(ACCOUNT_PRESET_PREFIX) && !accountPresetProvider(preset))) {
+    issues.push({ key: 'ALLOWED_PRESETS', message: 'names an account- preset for a provider that does not take account keys' });
+  }
+  if (hosted.startsWith(ACCOUNT_PRESET_PREFIX)) issues.push({ key: 'HOSTED_PRESET', message: 'cannot be an account- preset (the hosted panel runs on operator keys)' });
   if (raw.ENGINE_TIMEOUT_S >= raw.QUEUE_EXPIRE_S) issues.push({ key: 'ENGINE_TIMEOUT_S', message: 'must be below QUEUE_EXPIRE_S' });
   return issues;
 }
@@ -188,6 +199,7 @@ function build(raw: RawEnv): Config {
     dashboard: { login: raw.DASHBOARD_LOGIN ?? null, password: raw.DASHBOARD_PASSWORD ?? null },
     adminBasic: { user: raw.ADMIN_BASIC_USER ?? null, password: raw.ADMIN_BASIC_PASSWORD ?? null },
     providerSecretsFile: raw.PROVIDER_SECRETS_FILE ?? null,
+    accountKeysSecret: raw.ACCOUNT_KEYS_SECRET ?? (raw.NODE_ENV === 'production' ? '' : raw.SESSION_SECRET ?? ''),
   };
 }
 

@@ -46,7 +46,7 @@ In scope:
 Out of scope:
 - Findings about third-party repositories in an OmniSwarm report. Reports are model output and are not verified exploits.
 - Volumetric denial of service, spam, social engineering, physical attacks.
-- Vulnerabilities in upstream services (OpenRouter, Z.ai, NEAR RPC providers, GitHub). Report those upstream.
+- Vulnerabilities in upstream services (OpenRouter, Z.ai, NEAR AI Cloud, NEAR RPC providers, GitHub). Report those upstream.
 - Loss of testnet tokens.
 - Anything that needs root, or membership in the `docker` group, on the host. That group is root-equivalent by design; see `infra/README.md`, "Docker access".
 - Missing headers or banner disclosure with no demonstrated impact, self-XSS, and clickjacking of pages with no state-changing action.
@@ -62,8 +62,8 @@ Research done in good faith within these rules will not be pursued:
 ## How keys are handled
 
 The full rule is in `AGENTS.md`, "Key policy". In short:
-- **Provider keys** come from the operator's environment only. Each reviewer process gets exactly one allow-listed variable, for its own provider. Keys never go to the MCP bridge or the sandbox. Reports record only a `keyFingerprint`. OpenRouter requests carry `data_collection: "deny"`, because target source code leaves the machine.
+- **Provider keys** come from the operator's environment or the local stack's admin page, except that a signed-in account may save its own key for a provider whose catalog entry allows it (today NEAR AI Cloud; sealed in Postgres under `ACCOUNT_KEYS_SECRET`, bound to the account and provider, used only for that account's reviews; see `docs/providers.md`). Each reviewer process gets exactly one allow-listed variable, for its own provider. Keys never go to the MCP bridge or the sandbox. Reports record only a `keyFingerprint`. OpenRouter requests carry `data_collection: "deny"`, because target source code leaves the machine.
 - **On the host**, keys live in `/etc/omniswarm/*.env` (`root:root 0600`), installed by `infra/deploy/secrets.sh`, which prints names and fingerprints only. Systemd hands provider keys to the worker units only. No container receives one, and the gate (`npm run check:infra`) fails if a compose service declares one.
 - **The operator key** is a NEAR function-call key limited to `mark_running`, `attest`, `refund` and `report_address` on the registry, with a 1 NEAR gas allowance. It reaches the worker only, as a systemd credential. The contract account's full-access key (the upgrade path) stays offline with the owner.
 - **The repository** never holds a filled env file or a key. `tools/secret-sweep.sh` checks the index and the whole git history. On the host, `omniswarm-log-hygiene.timer` checks the logs every day.
-- If a key leaks: revoke it at the provider first (OpenRouter and Z.ai dashboards, GitHub token settings, or `near account delete-keys` for the operator key), then install a new one with `secrets.sh` and restart the workers.
+- If a key leaks: revoke it at the provider first (OpenRouter, Z.ai and NEAR AI Cloud dashboards, GitHub token settings, or `near account delete-keys` for the operator key), then install a new one with `secrets.sh` and restart the workers. An account's own NEAR AI key is revoked at NEAR AI Cloud by its owner and cleared with `PUT /api/account/providers/nearai {"key": ""}`. Rotating `ACCOUNT_KEYS_SECRET` makes every saved account key unreadable (accounts save theirs again).

@@ -1,6 +1,7 @@
 // zod DTOs for every route (W08-01). They are the runtime form of
 // packages/schemas/intake-api.schema.json; test/unit/dto.test.ts runs that schema's examples through
 // them, and the integration tests validate live responses against the JSON Schema itself.
+import { accountProviders } from '@omniswarm/schemas/providers';
 import { z } from 'zod';
 import { GUARD_REPORT_STATUSES } from '../db/repositories/guard-reports.ts';
 import { STATUSES } from '../modules/requests/state.ts';
@@ -83,6 +84,12 @@ export const dashboardJobBody = z.strictObject({
   repo: z.string().min(1).max(300),
   models: z.array(z.enum(['opus', 'sol', 'argon', 'grok'])).max(4).optional(),
   scopes: z.array(z.enum(['full', 'web2', 'web3'])).max(3).optional(),
+  /**
+   * `panel` (default) runs the operator's Z.AI and OpenRouter panel. A provider id whose catalog entry takes
+   * account keys (today `nearai`) runs on the signed-in account's own key and saved models (preset
+   * `account-<provider>`); `models` extras are then not allowed.
+   */
+  source: z.enum(['panel', ...accountProviders().map((provider) => provider.id)] as [string, ...string[]]).optional(),
 });
 export const dashboardJobResponse = z.strictObject({ requestId: uuid, repo, commitSha, status: z.literal('queued') });
 

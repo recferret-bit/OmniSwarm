@@ -7,11 +7,15 @@ import { families, FamilyError } from './reviewer-families.mjs';
 import { parseReviewerSpec } from './reviewer-registry.mjs';
 import { buildSessionLaunch } from './agent-session-launch.mjs';
 
-test('W03 installs key, openrouter and scripted; nearai stays uninstalled', () => {
-  assert.deepEqual(families.list(), ['cli', 'key', 'openrouter', 'scripted']);
+test('key, openrouter, nearai and scripted are installed; a key provider without a preset is not', () => {
+  assert.deepEqual(families.list(), ['cli', 'key', 'openrouter', 'nearai', 'scripted']);
+  assert.equal(families.get('nearai').name, 'nearai');
+  assert.equal(families.check(parseReviewerSpec('nearai:deepseek-ai/DeepSeek-V4')).ok, true);
+  assert.equal(families.fingerprintEnv(parseReviewerSpec('nearai:x')), 'NEARAI_API_KEY');
+  assert.deepEqual(families.envAllowlist(parseReviewerSpec('nearai:x')), ['NEARAI_API_KEY']);
   assert.equal(families.get('openrouter').name, 'openrouter');
   assert.equal(families.get('key').transport, 'api-acp');
-  assert.throws(() => families.get('nearai'), (error) => error instanceof FamilyError && error.code === 'FAMILY_NOT_INSTALLED' && /W03/.test(error.message));
+  assert.equal(families.check(parseReviewerSpec('key:anthropic:claude-opus-5-5')).code, 'FAMILY_NOT_INSTALLED');
   assert.throws(() => families.get('nonsense'), { code: 'FAMILY_UNKNOWN' });
 });
 

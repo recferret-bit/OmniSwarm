@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useState, type FormEvent } from 'react';
-import { api, requestReportHref } from '@/lib/api/client';
+import { api, requestReportHref, type AccountKeyView } from '@/lib/api/client';
 import { messageFor, toAppError, type AppErrorCode } from '@/lib/api/errors';
 import { parseRepoInput } from '@/lib/repo';
 import { type MyRequest } from '@/stores/my-requests';
@@ -14,6 +14,7 @@ import { Panel } from '../ui/Panel';
 import { Pill } from '../ui/Pill';
 import { ScopeChecks } from '../flow/ScopeChecks';
 import { phaseLabel } from '../request/ProgressPanel';
+import { AccountKeyPanel, keyReady } from '../account/AccountKeyPanel';
 
 type Pending = 'login' | 'logout' | 'submit' | null;
 
@@ -43,12 +44,27 @@ export function Dashboard() {
   const [repoError, setRepoError] = useState<string | null>(null);
   const [models, setModels] = useState<string[]>([]);
   const [scopes, setScopes] = useState<string[]>(['full']);
+  // Providers that take the account's own key (provider catalog; today NEAR AI Cloud). `panel` is the operator's panel.
+  const [own, setOwn] = useState<AccountKeyView[]>([]);
+  const [source, setSource] = useState<string>('panel');
+  const chosen = own.find((view) => view.provider === source);
+  const replace = (next: AccountKeyView) => setOwn((current) => current.map((view) => (view.provider === next.provider ? next : view)));
   const extras = [
     ['opus', 'Opus 5.5'],
     ['sol', 'Sol 6.1'],
     ['argon', 'Argon 4'],
     ['grok', 'Grok 4.7'],
   ] as const;
+
+  const loadOwn = async () => {
+    try {
+      const { providers } = await api.listAccountKeys();
+      setOwn(providers);
+      // An account's own key is the main source: the first ready one becomes the default.
+      const ready = providers.find(keyReady);
+      if (ready) setSource(ready.provider);
+    } catch { /* the panels stay hidden; submitting the panel review still works */ }
+  };
 
   useEffect(() => {
     let live = true;
@@ -58,6 +74,7 @@ export function Dashboard() {
         if (!live) return;
         setAccount(session.account);
         setPhase('ready');
+        void loadOwn();
         try {
           const listed = await api.listMine();
           if (live) setRequests(listed.requests);
@@ -100,6 +117,7 @@ export function Dashboard() {
       const session = await api.login({ login, password });
       setAccount(session.account);
       setPhase('ready');
+      void loadOwn();
       setLogin('');
       setPassword('');
       const listed = await api.listMine();
@@ -121,6 +139,8 @@ export function Dashboard() {
       setRequests([]);
       setRepo('');
       setRepoError(null);
+      setOwn([]);
+      setSource('panel');
       setPhase('anonymous');
     } catch (caught) {
       setError(toAppError(caught).code);
@@ -142,7 +162,7 @@ export function Dashboard() {
     setDetail(null);
     setRepoError(null);
     try {
-      await api.createDashboardJob({ repo: repo.trim(), models, scopes });
+      await api.createDashboardJob(source !== 'panel' ? { repo: repo.trim(), scopes, source } : { repo: repo.trim(), models, scopes });
       setRepo('');
       const listed = await api.listMine();
       setRequests(listed.requests);
@@ -207,6 +227,19 @@ export function Dashboard() {
         />
         <ScopeChecks selected={scopes} onChange={setScopes} />
         <fieldset className="quote-form">
+          <legend>Review with</legend>
+          {own.map((view) => (
+            <label key={view.provider}>
+              <input type="radio" name="source" value={view.provider} checked={source === view.provider} onChange={() => setSource(view.provider)} />
+              {' '}{view.label} (your key){keyReady(view) ? ` · ${view.models.length} model${view.models.length === 1 ? '' : 's'}` : ' · save a key and a model below'}
+            </label>
+          ))}
+          <label>
+            <input type="radio" name="source" value="panel" checked={source === 'panel'} onChange={() => setSource('panel')} />
+            {' '}Hosted panel (Z.AI and OpenRouter)
+          </label>
+        </fieldset>
+        <fieldset className="quote-form" hidden={source !== 'panel'} disabled={source !== 'panel'}>
           <legend>Models</legend>
           <p className="muted">GLM 5.3 on Z.AI orchestrates. Qwen on OpenRouter reviews with it. Add any of these.</p>
           {extras.map(([id, label]) => (
@@ -222,8 +255,9 @@ export function Dashboard() {
             </label>
           ))}
         </fieldset>
-        <Button type="submit" busy={pending === 'submit'} disabled={pending !== null || scopes.length === 0}>Submit</Button>
+        <Button type="submit" busy={pending === 'submit'} disabled={pending !== null || scopes.length === 0 || (source !== 'panel' && !keyReady(chosen))}>Submit</Button>
       </form>
+      {own.map((view) => <AccountKeyPanel key={view.provider} view={view} onChange={replace} />)}
       {detail ? <Alert>{detail}</Alert> : error ? <Alert>{messageFor(error)}</Alert> : null}
       {requests.length === 0 ? <p>No reviews yet.</p> : (
         <ul className="request-list" aria-label="Your reviews">{requests.map((row) => <Row key={row.requestId} row={row} />)}</ul>

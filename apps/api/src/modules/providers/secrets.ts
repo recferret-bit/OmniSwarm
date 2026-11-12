@@ -1,16 +1,18 @@
-// Operator provider keys for the production panel. The admin page writes this
-// file; the worker reads it when a job starts. The key material is AES-256-GCM
-// under SESSION_SECRET. Responses and logs only ever see a fingerprint.
+// Operator provider keys for the hosted panel, one per provider whose catalog entry has keySources
+// 'admin-page' (packages/schemas/providers.mjs; today Z.AI and OpenRouter). The admin page writes this
+// file; the worker reads it when a job starts. The key material is AES-256-GCM under SESSION_SECRET.
+// Responses and logs only ever see a fingerprint.
 import crypto from 'node:crypto';
 import fs from 'node:fs';
+import { adminProviders } from '@omniswarm/schemas/providers';
 
-export const PROVIDERS = ['zai', 'openrouter'] as const;
-export type ProviderName = (typeof PROVIDERS)[number];
+export const PROVIDERS: readonly string[] = adminProviders().map((provider) => provider.id);
+export type ProviderName = string;
 
 export interface ProviderView { set: boolean; fingerprint: string | null }
-export interface ProviderStatus { zai: ProviderView; openrouter: ProviderView }
+export type ProviderStatus = Record<string, ProviderView>;
 
-interface Sealed { iv: string; tag: string; data: string; fingerprint: string }
+export interface Sealed { iv: string; tag: string; data: string; fingerprint: string }
 interface Store { v: 1; keys: Partial<Record<ProviderName, Sealed>> }
 
 function keyOf(secret: string): Buffer {
@@ -22,21 +24,24 @@ export function fingerprintOf(value: string): string {
   return `${hex.slice(0, 4)}${hex.slice(-4)}`;
 }
 
-function seal(secret: string, value: string): Sealed {
+/** `aad` binds the ciphertext to its owner (a per-account key cannot be moved to another account). */
+export function seal(secret: string, value: string, aad?: string): Sealed {
   const iv = crypto.randomBytes(12);
   const cipher = crypto.createCipheriv('aes-256-gcm', keyOf(secret), iv);
+  if (aad) cipher.setAAD(Buffer.from(aad, 'utf8'));
   const data = Buffer.concat([cipher.update(value, 'utf8'), cipher.final()]);
   return { iv: iv.toString('base64'), tag: cipher.getAuthTag().toString('base64'), data: data.toString('base64'), fingerprint: fingerprintOf(value) };
 }
 
-function open(secret: string, sealed: Sealed): string {
+export function open(secret: string, sealed: Sealed, aad?: string): string {
   const decipher = crypto.createDecipheriv('aes-256-gcm', keyOf(secret), Buffer.from(sealed.iv, 'base64'));
+  if (aad) decipher.setAAD(Buffer.from(aad, 'utf8'));
   decipher.setAuthTag(Buffer.from(sealed.tag, 'base64'));
   return Buffer.concat([decipher.update(Buffer.from(sealed.data, 'base64')), decipher.final()]).toString('utf8');
 }
 
 function empty(): ProviderStatus {
-  return { zai: { set: false, fingerprint: null }, openrouter: { set: false, fingerprint: null } };
+  return Object.fromEntries(PROVIDERS.map((name) => [name, { set: false, fingerprint: null }]));
 }
 
 function readStore(file: string): Store {
@@ -80,13 +85,12 @@ export function readProviderEnv(file: string, secret: string): Record<string, st
   if (!file || !secret || secret.length < 32) return {};
   const store = readStore(file);
   const env: Record<string, string> = {};
-  const zai = store.keys.zai;
-  const openrouter = store.keys.openrouter;
-  try {
-    if (zai) env.ZAI_API_KEY = open(secret, zai);
-  } catch { /* a rotated SESSION_SECRET leaves the old seal unreadable */ }
-  try {
-    if (openrouter) env.OPENROUTER_API_KEY = open(secret, openrouter);
-  } catch { /* same */ }
+  for (const provider of adminProviders()) {
+    const sealed = store.keys[provider.id];
+    if (!sealed || !provider.keyEnv) continue;
+    try {
+      env[provider.keyEnv] = open(secret, sealed);
+    } catch { /* a rotated SESSION_SECRET leaves the old seal unreadable */ }
+  }
   return env;
 }

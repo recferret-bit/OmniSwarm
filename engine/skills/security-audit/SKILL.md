@@ -1,6 +1,6 @@
 ---
 name: security-audit
-description: Source security audit of one authorized repository by a panel of models (Claude, Codex, Grok, AGY, API reviewers) through a read-only Docker MCP bridge. Use when reviewing a repository's source, configuration, dependencies and existing tests for security defects, when cross-checking or debating another reviewer's finding, or when operating `./bin/audit`. Covers three layers separately: web2 application code, web3 contracts and wallet flows, and infrastructure. This is an audit, not a penetration test: findings need `file:line` evidence and a defensive fix; exploits, PoCs, arbitrary execution and probing of deployed systems are out of scope and refused by the tools.
+description: Source security audit of one authorized repository by a panel of models (local CLI subscriptions and API providers such as Z.AI, OpenRouter and NEAR AI Cloud) through a read-only Docker MCP bridge. Use when reviewing a repository's source, configuration, dependencies and existing tests for security defects, when cross-checking or debating another reviewer's finding, or when operating `./bin/audit`. Covers three layers separately: web2 application code, web3 contracts and wallet flows, and infrastructure. This is an audit, not a penetration test: findings need `file:line` evidence and a defensive fix; exploits, PoCs, arbitrary execution and probing of deployed systems are out of scope and refused by the tools.
 ---
 
 # Source Security Audit
@@ -183,6 +183,7 @@ Interrupted, refused, missing or malformed reviews remain incomplete and are not
 ./bin/audit setup-agents
 ./bin/audit check-agents
 ./bin/audit local                                   # every installed CLI on the current directory
+./bin/audit local --provider nearai --models <m,...> # one API provider (zai, openrouter, nearai); its key from your shell
 ./bin/audit run --repo /path/to/repo
 ./bin/audit run --github owner/repo --surface s1
 ./bin/audit run --repo /path/to/repo --agents claude,codex --surface s4
@@ -192,7 +193,7 @@ Interrupted, refused, missing or malformed reviews remain incomplete and are not
 
 `--scope web2|web3|infra` reviews one layer (default `full`). The whole snapshot stays readable as context, guidance and leads are that layer's, a finding must cite a file of that layer first or the submit is refused, and the infra scope runs S1, S4, S5 and S6 only. `--plan` prints requested models without launching a review. `--blocked` writes an offline blocked record. `check-agents --live` explicitly makes provider requests against an inert fixture; it qualifies transport and session recovery only. It is not a security review or clearance of a provider-policy rejection.
 
-**Reviewer families.** `key` and `openrouter` reviewers use the same bridge as the CLIs. Each such process receives one allow-listed variable for its own provider (`ZAI_API_KEY`, optionally `ZAI_BASE_URL`, or `OPENROUTER_API_KEY`). The bridge and the sandbox never receive a key. Reports record `keyFingerprint` only. OpenRouter requests set `data_collection: deny` because source leaves the machine. `cli:claude-zai` maps `ZAI_API_KEY` onto Claude Code's Anthropic variables. `scripted` reviewers make no provider request.
+**Providers.** This skill and the review it describes are the same whichever provider runs a reviewer: every reviewer gets the same brief, tools, bridge, budgets and report contract. Providers (local CLIs, Z.AI, OpenRouter, NEAR AI Cloud) are listed in the provider catalog `packages/schemas/providers.mjs` (`docs/providers.md`). An API reviewer process receives only its own provider's allow-listed variables; the bridge and the sandbox never receive a key. Reports record `keyFingerprint` only. Every API provider receives the source it reads; the catalog's data-policy line says where it goes. A CLI that borrows an API provider's key (`cli:claude-zai`) maps it onto that CLI's own variables. `scripted` reviewers make no provider request.
 
 **Workflow.** `audit run` always uses `source_security_review_v1`. Target builds, install scripts, active scanners, local web-server startup and tests do not run during networked preparation. Trusted static scanners and lockfile advisory checks may run and retain their limitations. The harness first routes the stack: `harness/stack-profile.json` lists the detected ecosystems (Python, Node/TypeScript, Rust, Solana program, NEAR, EVM) from manifests and production source only, and the three layers with their files; tests, docs, scripts and fixtures never decide the stack. Guidance, leads (`python.md`, `node.md`, `solana.md`, `near.md`, `evm.md`, `web.md`, `config.md`, production code only), scanners and test runners follow that profile, and checks for an absent ecosystem are not applied.
 
