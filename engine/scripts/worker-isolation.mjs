@@ -20,7 +20,9 @@ const TEXT_EXT = new Set(['.js', '.mjs', '.cjs', '.ts', '.tsx', '.jsx', '.json',
 // can also be real source (docs, social, openapi) are anchored in SKIP_PATHS to the repository root.
 // Fixtures and public/ stay: existing tests read them at run or compile time. SVG is text, so site tests that
 // check for it exist; binary media (webp, mp4, fonts) stays out of the text-only snapshot.
-const SKIP_NAME = /^(readme|changelog|license|licence|notice|authors|contributors|code_of_conduct|security)(\..*)?$|^(swagger|openapi)[^/]*\.(json|ya?ml)$|\.(min\.js|min\.css|map|d\.ts|snap|log)$/i;
+// Project prose files (README, SECURITY, NOTICE, ...) are skipped only as prose: no extension or a document
+// extension. A module that shares the name (`security.py`, `notice.ts`, `Notice.tsx`) is source and is kept.
+const SKIP_NAME = /^(readme|changelog|license|licence|notice|authors|contributors|code_of_conduct|security)(\.(md|markdown|mdx|txt|rst|adoc|asciidoc|org|rdoc))?$|^(swagger|openapi)[^/]*\.(json|ya?ml)$|\.(min\.js|min\.css|map|d\.ts|snap|log)$/i;
 const OWNED = new Map();
 const CAPTURES = new WeakMap();
 export { hash };

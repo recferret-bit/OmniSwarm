@@ -35,8 +35,11 @@ test('snapshots record explicit omissions without copying named credentials or l
 test('snapshots keep what existing tests and dependency installs read, and drop only root-level non-source trees', (t) => {
   const source = fixture(t);
   const put = (rel, text = 'x\n') => { fs.mkdirSync(path.dirname(path.join(source, rel)), { recursive: true }); fs.writeFileSync(path.join(source, rel), text); };
-  const kept = ['.dockerignore', 'app/package-lock.json', 'app/test/fixtures/cases.json', 'app/public/robots.txt', 'app/public/media/logo.svg', 'app/src/style.css', 'app/src/social/feed.ts', 'app/src/http/openapi/schema.ts', 'app/test/docs/as-built.ts'];
-  const dropped = ['docs/spec.json', 'social/post.json', 'tests/audit/runtime/package.json', 'app/README.md', 'app/dist/bundle.js'];
+  const kept = ['.dockerignore', 'app/package-lock.json', 'app/test/fixtures/cases.json', 'app/public/robots.txt', 'app/public/media/logo.svg', 'app/src/style.css', 'app/src/social/feed.ts', 'app/src/http/openapi/schema.ts', 'app/test/docs/as-built.ts',
+    // Source modules named like project prose files are code (a partner-auth `security.py` was once dropped).
+    'app/integrations/security.py', 'app/src/notice.ts', 'app/src/console/Notice.tsx', 'app/authors.py', 'app/src/license.rs'];
+  const dropped = ['docs/spec.json', 'social/post.json', 'tests/audit/runtime/package.json', 'app/README.md', 'app/dist/bundle.js',
+    'SECURITY.md', 'NOTICE', 'LICENSE', 'CHANGELOG.md', 'app/vendor/LICENSE.txt', 'CODE_OF_CONDUCT.rst', 'app/src/vite-env.d.ts'];
   for (const rel of [...kept, ...dropped]) put(rel);
   const snapshot = createSnapshot(source);
   t.after(() => disposeSnapshot(snapshot));
