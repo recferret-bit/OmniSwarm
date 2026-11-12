@@ -70,14 +70,17 @@ async function debateCluster(cluster, participants, ctx, seed) {
     const prior = ctx.prior(cluster, speaker);
     return prior && checkTurnCitations(ctx.reader, prior.citations, cluster.anchors).some((row) => row.valid) ? prior : null;
   };
-  const speak = async (speaker, round, role) => {
+  // Asking a speaker only fetches its answer; recording it (below) is what changes the debate state.
+  const ask = async (speaker, round, role, shown) => {
     const prior = priorTurn(speaker, round, role);
     const speakerDown = (ctx.speakerUnanswered.get(speaker) || 0) >= ctx.maxSpeakerUnanswered ? 'speaker_threshold' : null;
     const preStop = turns.length > 0 ? (stoppedReason() || speakerDown) : (ctx.signal?.aborted ? 'cancelled' : (ctx.unanswered >= ctx.maxUnanswered ? 'debate_threshold' : speakerDown));
-    if (preStop && !prior) return missing(speaker, round, role, preStop);
-    // Round 1 is independent: a challenger and the devil see the claim and its evidence, not each other.
-    const shown = round === 1 ? [] : turns;
+    if (preStop && !prior) return { stop: preStop };
     const raw = prior || await boundedCall(ctx.turnMs, ctx.signal, (signal) => ctx.voices.get(speaker)({ role, round, cluster, turns: shown, anonId: map[speaker], signal }));
+    return { prior, raw };
+  };
+  const record = (speaker, round, role, { stop, prior, raw }) => {
+    if (stop) return missing(speaker, round, role, stop);
     if (raw?.unavailable === 'debate_turn_timeout') return missing(speaker, round, role, 'debate_turn_timeout');
     if (!raw || raw.unavailable || typeof raw.argument !== 'string') return missing(speaker, round, role, raw?.unavailable || 'invalid_turn');
     const citations = checkTurnCitations(ctx.reader, raw.citations, cluster.anchors);
@@ -96,21 +99,34 @@ async function debateCluster(cluster, participants, ctx, seed) {
     if (role !== 'devil') previous.set(speaker, raw.verdict);
     ctx.record.trace.push({ phase: 'debate', template: TEMPLATE[role], clusterId: cluster.id, round, anonId: map[speaker], verdict: turn.verdict, stop: turn.discarded ? 'discarded' : 'kept', conformitySuspect: Boolean(turn.conformitySuspect), ...(prior ? { source: 'crosscheck' } : {}) });
   };
-  for (const id of challengers) await speak(id, 1, 'challenge');
+  // The speakers of one round answer at the same time. Round 1 is independent by design (a challenger and the devil
+  // see the claim and its evidence, not each other), and a round-2 or round-3 speaker sees the turns of the rounds
+  // before its own, not a co-speaker's. Asked one after another, every slow voice cost the whole cluster a full turn
+  // clock; on a real run 3 of 25 clusters were heard in the phase. Answers are recorded in speaker order once all
+  // have settled, so the record is the same whichever answer arrives first, and no session is left running when
+  // one of them fails.
+  const speakRound = async (speakers, round, role) => {
+    const shown = round === 1 ? [] : [...turns];
+    const settled = await Promise.allSettled(speakers.map((speaker) => ask(speaker, round, role, shown)));
+    const failed = settled.find((row) => row.status === 'rejected');
+    if (failed) throw failed.reason;
+    speakers.forEach((speaker, i) => record(speaker, round, role, settled[i].value));
+  };
+  await speakRound(challengers, 1, 'challenge');
   // The devil is the first-labelled challenger whose own turn arrived: a reviewer that did not answer is not asked twice.
   const answered = new Set(turns.filter((turn) => turn.round === 1).map((turn) => turn.speaker));
   const devil = [...challengers].filter((id) => answered.has(id) && (ctx.devilMisses.get(id) || 0) < DEVIL_MAX_MISSES).sort((a, b) => map[a].localeCompare(map[b]))[0] || null;
   // The devil speaks only when nobody argued against the finding in their own turn: that is where agreement may be
   // conformity. A counted refutation already gives the judge the counter-argument, so a second one is not bought.
   const opposed = turns.some((turn) => turn.round === 1 && !turn.discarded && turn.verdict === 'refuted');
-  if (devil && !opposed && !stoppedReason()) await speak(devil, 1, 'devil');
+  if (devil && !opposed && !stoppedReason()) await speakRound([devil], 1, 'devil');
   const challenged = turns.some((turn) => !turn.discarded && ['refuted', 'partial'].includes(turn.verdict));
-  if (ctx.rounds >= 2 && challenged && !stoppedReason()) for (const id of authors) await speak(id, 2, 'defend');
+  if (ctx.rounds >= 2 && challenged && !stoppedReason()) await speakRound(authors, 2, 'defend');
   // Round 3 exists so a challenger can answer new evidence. It runs when a round-2 defence counts (it stands by
   // the finding with a fresh citation). A concession, a discarded defence or a flip with no new evidence gives
   // the challengers nothing to rebut.
   const defended = turns.some((turn) => turn.round === 2 && !turn.discarded && !turn.conformitySuspect && ['upheld', 'partial'].includes(turn.verdict));
-  if (ctx.rounds >= 3 && defended && !stoppedReason()) for (const id of challengers) await speak(id, 3, 'rebut');
+  if (ctx.rounds >= 3 && defended && !stoppedReason()) await speakRound(challengers, 3, 'rebut');
   return { turns, map, rounds: turns.reduce((n, turn) => Math.max(n, turn.round), 0) };
 }
 

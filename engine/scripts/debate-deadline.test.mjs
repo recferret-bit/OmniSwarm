@@ -328,3 +328,53 @@ test('per-speaker threshold isolates one failing reviewer while healthy reviewer
   assert.equal(second.unavailable, 'usage_limit');
   assert.equal(executeCalls, 1, 'second call short-circuits on recorded providerFailures[agent]');
 });
+
+test('the speakers of one round answer at the same time and are recorded in speaker order', async (t) => {
+  const root = sourceTree({ 'src/lib.rs': 'let a = 1;\n' });
+  const out = temp();
+  t.after(() => { fs.rmSync(root, { recursive: true, force: true }); fs.rmSync(out, { recursive: true, force: true }); });
+  const reader = sourceReader(root);
+  const row = {
+    id: 'CLUSTER-1', status: 'QUEUED', severity: 'high', authors: ['alice'], anchors: [{ file: 'src/lib.rs', line: 1 }],
+    evidence: [{ file: 'src/lib.rs', startLine: 1, endLine: 1, quote: 'let a = 1;', valid: true }], vendors: ['anthropic'], citationsOk: true,
+  };
+  // Three challengers that each take one turn clock's worth of time; the last-labelled one answers first.
+  let open = 0;
+  let peak = 0;
+  const challenger = (delayMs, verdict) => async () => {
+    open += 1;
+    peak = Math.max(peak, open);
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+    open -= 1;
+    return { verdict, argument: `${verdict} after ${delayMs} ms.`, citations: [{ file: 'src/lib.rs', startLine: 1, endLine: 1, quote: 'let a = 1;' }] };
+  };
+  const voices = new Map([
+    ['alice', async () => ({ verdict: 'upheld', argument: 'Author.', citations: [] })],
+    ['bob', challenger(120, 'refuted')],
+    ['carol', challenger(80, 'refuted')],
+    ['dave', challenger(40, 'refuted')],
+  ]);
+  const vendors = new Map([['alice', 'anthropic'], ['bob', 'openai'], ['carol', 'xai'], ['dave', 'google']]);
+  const started = Date.now();
+  const result = await runRounds({ out, clusters: [row], voices, vendors, reader, rounds: 1, turnMs: 5000, phaseMs: 60000 });
+  const elapsed = Date.now() - started;
+  assert.equal(peak, 3, 'all three round-1 challengers were asked together');
+  assert.ok(elapsed < 240, `one round took ${elapsed} ms, not the 240 ms of three turns in a row`);
+  const turns = result.debated.get('CLUSTER-1').turns;
+  assert.deepEqual(turns.map((turn) => turn.speaker), ['bob', 'carol', 'dave'], 'recorded in speaker order, not arrival order');
+  assert.deepEqual(result.trace.filter((row) => row.template === 'challenge').map((row) => row.anonId), turns.map((turn) => turn.anonId));
+});
+
+test('a voice that throws ends the stage only after the rest of its round has settled', async (t) => {
+  const out = temp();
+  t.after(() => fs.rmSync(out, { recursive: true, force: true }));
+  const row = { id: 'CLUSTER-1', status: 'QUEUED', severity: 'high', authors: ['alice'], anchors: [], evidence: [], vendors: ['anthropic'], citationsOk: true };
+  let slowDone = false;
+  const voices = new Map([
+    ['alice', async () => ({ verdict: 'upheld', argument: 'Author.', citations: [] })],
+    ['broken', async () => { throw new Error('voice crashed'); }],
+    ['slow', async () => { await new Promise((resolve) => setTimeout(resolve, 50)); slowDone = true; return { unavailable: 'stop' }; }],
+  ]);
+  await assert.rejects(runRounds({ out, clusters: [row], voices, vendors: new Map([['broken', 'openai'], ['slow', 'xai']]), reader: null, rounds: 1, turnMs: 5000, phaseMs: 60000 }), /voice crashed/);
+  assert.equal(slowDone, true, 'the other speaker of the round was not left running');
+});
