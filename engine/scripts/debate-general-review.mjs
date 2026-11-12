@@ -75,20 +75,38 @@ export function limitationClause(rows, { gaps = [], failedSurfaces = new Set(), 
   return limitations.length ? `Open questions and limitations: ${limitations.join('; ')}.` : '';
 }
 
+// The counts a reader checks first, computed from the adjudication. rows: [{finalStatus, severity, agreed}], where
+// agreed marks a cluster CONFIRMED by two vendors reporting the same defect (the report's AGREED) rather than by a
+// judge. A model once wrote "45 adjudicated clusters, 12 CONFIRMED (6 medium, 6 low)" over 43 rows with 7 medium
+// and 5 low confirmed; the summary now opens with this sentence and the brief tells the model not to recount.
+export function countSentence(rows) {
+  const parts = Object.keys(RANK).map((status) => {
+    const matching = rows.filter((row) => row.finalStatus === status);
+    if (!matching.length) return null;
+    const agreed = status === 'CONFIRMED' ? matching.filter((row) => row.agreed).length : 0;
+    const split = agreed ? ` (${agreed} by model agreement, ${matching.length - agreed} by a judge)` : '';
+    return `${matching.length} ${status}${split}`;
+  }).filter(Boolean);
+  const severities = Object.keys(SEVERITY).map((severity) => [severity, rows.filter((row) => row.severity === severity).length]).filter(([, n]) => n);
+  return `Adjudicated: ${rows.length} cluster${rows.length === 1 ? '' : 's'}${parts.length ? `, ${parts.join(', ')}` : ''}${severities.length ? `; by severity ${severities.map(([severity, n]) => `${n} ${severity}`).join(', ')}` : ''}.`;
+}
+
 // The summary when no model writes one (scripted orchestrator, nothing to adjudicate, or fallback when threshold/timeout reached): counts and limitations.
+// `computed` marks it as already carrying the counts; it is not part of the general review.
 export function rulesSummary(rows, options = {}) {
   const { gaps = [], failedSurfaces = new Set(), partialSurfaces = [], fallbackReason = null } = options || {};
-  if (!rows.length && !fallbackReason) return { executiveSummary: 'No committed finding reached adjudication.', openDisagreements: [] };
+  if (!rows.length && !fallbackReason) return { executiveSummary: 'No committed finding reached adjudication.', openDisagreements: [], computed: true };
   const counts = Object.keys(RANK).map((status) => [status, rows.filter((row) => row.finalStatus === status).length]).filter(([, n]) => n);
   const base = rows.length
     ? `${rows.length} clusters adjudicated from verified citations: ${counts.map(([s, n]) => `${n} ${s}`).join(', ')}.`
     : 'No committed finding reached adjudication.';
-  if (!fallbackReason && !partialSurfaces.length) return { executiveSummary: base, openDisagreements: [] };
+  if (!fallbackReason && !partialSurfaces.length) return { executiveSummary: base, openDisagreements: [], computed: true };
   const clause = limitationClause(rows, { gaps, failedSurfaces, partialSurfaces, fallbackReason });
   const disputed = rows.filter((row) => row.finalStatus === 'DISPUTED');
   return {
     executiveSummary: clause ? `${base} ${clause}` : base,
     openDisagreements: disputed.map((row) => ({ clusterId: row.clusterId, summary: row.rationale })),
+    computed: true,
   };
 }
 

@@ -13,7 +13,7 @@ Evidence:
 - Reviewer A, round 1 (challenge): refuted. The guard holds. Cites src/lib.rs:12.
 
 ## Output schema
-Call submit_adjudication once with fields of the adjudication schema. Cite file, startLine, endLine and an exact quote, or the argument is discarded.
+Call submit_adjudication once with these fields: finalStatus (CONFIRMED | LIKELY | DISPUTED | REFUTED | INSUFFICIENT_EVIDENCE), severity (critical | high | medium | low | info), rationale, and severityReason when you change the severity. Cite file, startLine, endLine and an exact quote, or the argument is discarded.
 
 ## Tools and sources
 Read the sealed source with read_file, search_code and list_files; get_audit_context gives the scope.

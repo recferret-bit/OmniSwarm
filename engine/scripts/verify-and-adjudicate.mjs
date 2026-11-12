@@ -127,12 +127,17 @@ function readLayers(reportDir) {
   try { return JSON.parse(fs.readFileSync(path.join(reportDir, 'harness', 'stack-profile.json'), 'utf8')).layers || null; } catch { return null; }
 }
 
-function scoreCluster(c, context) {
+// The cluster's peer-review status; a unanimous partial review also sets c.severity (applyReview).
+function peerReview(c, context) {
   const vendorSet = new Set(c.auditors.map(context.authorVendor).filter(Boolean));
   // Agreement is two vendors reporting the same defect on the same line (debate-cluster.sameDefect), not two
   // vendors whose nearby claims were merged into one cluster.
   const agreed = vendorSet.size >= 2 && vendorsAgree(c.findings, (finding) => context.authorVendor(finding.auditor));
-  const reviewed = applyReview(agreed ? 'MODEL_AGREEMENT' : 'MODEL_ASSERTION', c, context);
+  return { vendorSet, ...applyReview(agreed ? 'MODEL_AGREEMENT' : 'MODEL_ASSERTION', c, context) };
+}
+
+function scoreCluster(c, context) {
+  const { vendorSet, ...reviewed } = peerReview(c, context);
   const status = reviewed.status;
   const locations = Array.from(new Set(c.findings.flatMap((f) => f.location || [])));
   const layers = [...new Set(locations.map((loc) => layerOfPath(loc, context.layers)))];
@@ -163,6 +168,23 @@ function scoreCluster(c, context) {
     // the HTML report reads findings[0] for the harm / attack sections
     findings: c.findings.slice(0, 1).map(({ impact, preconditions, attack }) => ({ impact, preconditions, attack })),
   };
+}
+
+// The severity each cluster carries once its peer reviews are applied (applyReview), keyed by every claim id of
+// the cluster. The debate starts from it (debate-plan.mjs), so the judge, the adjudication, the general review and
+// findings-and-scores.json give one cluster one severity. Read-only: nothing is written and health is discarded.
+export function peerReviewedSeverities(reportDir) {
+  const { reports, health, assignments, meta } = loadAuditors(reportDir);
+  const reviewers = reviewersOfMeta(meta);
+  const authorVendor = (job) => vendorOfJob(job, reviewers);
+  const { allFindings } = collectClaims(reports);
+  const context = { reviewsByClaim: collectReviews(reportDir, assignments, health), claimAuthors: new Map(allFindings.map((f) => [f.claimId, authorVendor(f.auditor)])), reviewers, authorVendor };
+  const severities = new Map();
+  for (const cluster of clusterFindings(allFindings)) {
+    peerReview(cluster, context);
+    for (const id of cluster.claimIds || []) severities.set(id, cluster.severity);
+  }
+  return severities;
 }
 
 export async function adjudicate(reportDir) {

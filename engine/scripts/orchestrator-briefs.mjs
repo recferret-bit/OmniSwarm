@@ -2,6 +2,8 @@
 // Every brief has the same four headings so a reviewer cannot wander: Objective, Output schema,
 // Tools and sources, Boundaries. A brief carries one cluster only, its quoted evidence and the anonymized
 // arguments so far; it never names a vendor, a model or a vote count.
+import { countSentence } from './debate-general-review.mjs';
+
 export const BRIEF_HEADINGS = ['Objective', 'Output schema', 'Tools and sources', 'Boundaries'];
 
 const DEBATE_TOOLS = 'Read the sealed source with read_file, search_code and list_files; get_audit_context gives the scope.';
@@ -25,6 +27,8 @@ const TEMPLATES = {
   judge: {
     objective: 'Judge this cluster from the verified quotes and the valid arguments only: CONFIRMED, LIKELY, DISPUTED, REFUTED or INSUFFICIENT_EVIDENCE. You may re-calibrate severity with a reason.',
     schema: 'adjudication', submit: 'submit_adjudication',
+    // A judge that was only told "the adjudication schema" once sent `verdict` and lost its judgement.
+    fields: 'finalStatus (CONFIRMED | LIKELY | DISPUTED | REFUTED | INSUFFICIENT_EVIDENCE), severity (critical | high | medium | low | info), rationale, and severityReason when you change the severity',
   },
   'general-review': {
     objective: 'Write the executive summary of the adjudicated clusters listed below and name the disagreements that stayed open. Do not add a finding that was not adjudicated: name only the cluster ids listed here and cite only files they cite. Report findings and gaps; do not state that the target is secure, safe to ship or certified.',
@@ -44,7 +48,8 @@ function argumentLines(turns) {
 
 function subjectLines(id, { cluster, clusters }) {
   if (id === 'general-review') {
-    return ['## Adjudicated clusters', ...(clusters || []).map((row) => `- ${row.clusterId}: ${row.finalStatus} (${row.severity}) ${row.title}`), ''];
+    const rows = clusters || [];
+    return ['## Adjudicated clusters', `${countSentence(rows)} These counts are computed and printed before your summary: do not restate or recount them.`, ...rows.map((row) => `- ${row.clusterId}: ${row.finalStatus} (${row.severity}) ${row.title}`), ''];
   }
   return [`## Cluster ${cluster.id}`, `Claim: ${cluster.primaryTitle} (severity ${cluster.severity}, surface ${cluster.surface})`, 'Evidence:', ...evidenceLines(cluster), ''];
 }
@@ -60,7 +65,7 @@ export function renderDebateBrief(id, { cluster = null, clusters = [], turns = [
     ...subjectLines(id, { cluster, clusters }),
     ...(turns.length ? ['## Arguments so far', ...argumentLines(turns), ''] : []),
     '## Output schema',
-    `Call ${template.submit} once with fields of the ${template.schema} schema. Cite file, startLine, endLine and an exact quote, or the argument is discarded.`, '',
+    `Call ${template.submit} once with ${template.fields ? `these fields: ${template.fields}` : `fields of the ${template.schema} schema`}. Cite file, startLine, endLine and an exact quote, or the argument is discarded.`, '',
     '## Tools and sources', id === 'general-review' ? 'No source reads are needed; use the adjudication above.' : DEBATE_TOOLS, '',
     '## Boundaries',
     `${id === 'general-review' ? 'No new findings in this step.' : 'One cluster only; no new findings.'} insufficient_evidence is allowed. No exploits. Budget: ${budget} tool calls.`, '',

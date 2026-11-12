@@ -5,8 +5,10 @@ import path from 'node:path';
 import test from 'node:test';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { adjudicate } from './verify-and-adjudicate.mjs';
+import { adjudicate, peerReviewedSeverities } from './verify-and-adjudicate.mjs';
 import { loadAuditors } from './report-contract.mjs';
+import { buildClusters } from './debate-cluster.mjs';
+import { loadClaims } from './debate-claims.mjs';
 
 const scripts = path.dirname(fileURLToPath(import.meta.url));
 const finding = (extra = {}) => ({
@@ -160,4 +162,27 @@ test('two vendors on the same line and surface are MODEL_AGREEMENT whatever thei
   f.save('codex', [finding({ title: 'Double spend on withdraw', location: at }), controls()]);
   const rows = (await adjudicate(f.dir)).scoredFindings;
   assert.deepEqual(rows.map((row) => row.status), ['MODEL_AGREEMENT']);
+});
+
+test('the debate starts from the severity the report gives a cluster after peer review', async (t) => {
+  // A real run listed a cluster as medium in the general review and low in findings-and-scores.json: the report
+  // applied a unanimous partial review, the debate did not. Both now take the same peer-reviewed severity.
+  const f = fixture(t, ['claude', 'codex']);
+  f.save('claude', [finding({ title: 'Claude high claim', severity: 'high' }), controls()]);
+  f.save('codex', [finding({ title: 'Unrelated codex claim', severity: 'medium', location: ['src/other.ts:99'] }), controls()]);
+  const { assignments } = loadAuditors(f.dir);
+  for (const [adapter, ids] of Object.entries(assignments)) {
+    f.meta.crosscheckExits[adapter] = 0;
+    f.put(`auditors/crosscheck-${adapter}.json`, ids.map((id) => ({ id, verdict: 'partial', severity: 'low', reason: 'Narrower than claimed.', evidence: ['src/report.ts:12'] })));
+  }
+  f.put('meta.json', f.meta);
+  const severities = peerReviewedSeverities(f.dir);
+  const r = await adjudicate(f.dir);
+  assert.equal(r.exitCode, 0, r.health.errors.join('; '));
+  assert.deepEqual(r.scoredFindings.map((row) => row.severity), ['low', 'low']);
+  for (const row of r.scoredFindings) for (const id of row.claimIds) assert.equal(severities.get(id), row.severity, id);
+  const reader = { lines: () => ({ lines: ['x'.repeat(20)].concat(Array(200).fill('let checked = 1;')) }) };
+  const { claims } = loadClaims(f.dir);
+  assert.deepEqual(buildClusters(claims, { reader }).clusters.map((c) => c.severity).sort(), ['high', 'medium'], 'without the map the reported severity stays');
+  assert.deepEqual(buildClusters(claims, { reader, severities }).clusters.map((c) => c.severity), ['low', 'low']);
 });

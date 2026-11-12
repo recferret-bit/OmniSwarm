@@ -46,7 +46,15 @@ function agreementOf(findings) {
   return vendorsAgree(findings, vendorOf) ? 'same_claim' : 'merged_only';
 }
 
-function describe(cluster, reader) {
+// severities: claim id -> the cluster's severity after peer review (verify-and-adjudicate.peerReviewedSeverities),
+// so the debate, the judge and the report start from one severity. Without it the reported (highest) severity stays.
+function reviewedSeverity(cluster, severities) {
+  const id = (cluster.claimIds || []).find((claimId) => severities?.has(claimId));
+  return id ? severities.get(id) : cluster.severity;
+}
+
+function describe(cluster, reader, severities) {
+  const severity = reviewedSeverity(cluster, severities);
   const anchors = unique(cluster.findings.flatMap((finding) => finding.location || [])).map(parseLocation).filter(Boolean);
   const evidence = anchors.map((anchor) => anchorEvidence(reader, anchor));
   const vendors = unique(cluster.findings.map((finding) => finding.vendor || finding.reviewerId));
@@ -54,19 +62,19 @@ function describe(cluster, reader) {
   const disagreement = (cluster.severities || []).length > 1 ? 1 : 0;
   const agreement = agreementOf(cluster.findings);
   return {
-    id: cluster.id, primaryTitle: cluster.primaryTitle, surface: cluster.surface, severity: cluster.severity,
+    id: cluster.id, primaryTitle: cluster.primaryTitle, surface: cluster.surface, severity,
     severities: cluster.severities, claimIds: cluster.claimIds,
     authors: unique(cluster.findings.map((finding) => finding.reviewerId)), vendors, anchors, evidence, citationsOk,
     // Severity decides the order; a severity disagreement only moves a cluster ahead of its own severity class,
     // so a disputed medium never takes a debate slot from a critical.
-    priority: (SEVERITY_WEIGHT[cluster.severity] || 3) + disagreement / 2,
+    priority: (SEVERITY_WEIGHT[severity] || 3) + disagreement / 2,
     agreement,
     agreed: agreement === 'same_claim' && citationsOk,
   };
 }
 
-export function buildClusters(claims, { reader, maxClusters = 25 } = {}) {
-  const rows = clusterFindings(claims).map((cluster) => describe(cluster, reader));
+export function buildClusters(claims, { reader, maxClusters = 25, severities = null } = {}) {
+  const rows = clusterFindings(claims).map((cluster) => describe(cluster, reader, severities));
   const agreed = rows.filter((row) => row.agreed).map(({ agreed: _, ...row }) => ({ ...row, status: 'AGREED', rounds: 0 }));
   const queued = rows.filter((row) => !row.agreed).map(({ agreed: _, ...row }) => row)
     .sort((a, b) => b.priority - a.priority || a.id.localeCompare(b.id, 'en', { numeric: true }));

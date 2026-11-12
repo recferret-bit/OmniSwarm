@@ -96,6 +96,7 @@ test('model debaters answer through the bridge handlers and the judge must be an
   assert.ok(roundOne.every((name) => /^Reviewer [A-Z]-CLUSTER-1(?:-devil)?\.json$/.test(name)));
   assert.equal(roundOne.filter((name) => name.endsWith('-devil.json')).length, 1);
   const general = JSON.parse(fs.readFileSync(path.join(out, 'general-review.json'), 'utf8'));
-  assert.equal(general.executiveSummary, 'One confirmed injection.');
+  // The model's summary opens with the counts computed from the adjudication (debate-general-review.countSentence).
+  assert.equal(general.executiveSummary, 'Adjudicated: 1 cluster, 1 CONFIRMED; by severity 1 high. One confirmed injection.');
   assert.deepEqual(general.topFindings.map((f) => f.finalStatus), ['CONFIRMED']);
 });

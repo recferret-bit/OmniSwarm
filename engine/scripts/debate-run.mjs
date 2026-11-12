@@ -6,7 +6,7 @@ import { boundedCall } from './debate-clock.mjs';
 import { runRounds } from './debate-rounds.mjs';
 import { adjudicateWithRetry, agreedAdjudication, pickJudge, unheardAdjudication } from './debate-judge.mjs';
 import { judgeVisible, rulesVerdict } from './debate-rules.mjs';
-import { composeGeneralReview, generalReviewMarkdown, limitationClause, rulesSummary } from './debate-general-review.mjs';
+import { composeGeneralReview, countSentence, generalReviewMarkdown, limitationClause, rulesSummary } from './debate-general-review.mjs';
 import { offlinePlan, stageError } from './debate-plan.mjs';
 import { DEFAULTS } from './run-config.mjs';
 import { validate } from '../../packages/schemas/index.mjs';
@@ -27,7 +27,7 @@ function thresholdAdjudication(cluster, turns, choice, reason) {
 }
 
 export async function debateStage(plan) {
-  const built = buildClusters(plan.claims, { reader: plan.reader, maxClusters: plan.maxClusters });
+  const built = buildClusters(plan.claims, { reader: plan.reader, maxClusters: plan.maxClusters, severities: plan.severities || null });
   const names = [...plan.reviewers.flatMap((r) => [r.id, r.vendor, r.model])];
   const result = await runRounds({
     out: plan.out, clusters: built.clusters, voices: plan.voices, vendors: plan.vendors, reader: plan.reader,
@@ -118,7 +118,10 @@ export function missingAnswersError(missing) {
 }
 
 export async function generalReviewStage(plan, state) {
-  const listed = state.rows.map((row) => ({ clusterId: row.clusterId, finalStatus: row.finalStatus, severity: row.severity, title: state.clusters.find((c) => c.id === row.clusterId)?.primaryTitle || row.clusterId, files: [...new Set((state.clusters.find((c) => c.id === row.clusterId)?.anchors || []).map((anchor) => anchor.file))] }));
+  const listed = state.rows.map((row) => {
+    const cluster = state.clusters.find((c) => c.id === row.clusterId);
+    return { clusterId: row.clusterId, finalStatus: row.finalStatus, severity: row.severity, agreed: cluster?.status === 'AGREED', title: cluster?.primaryTitle || row.clusterId, files: [...new Set((cluster?.anchors || []).map((anchor) => anchor.file))] };
+  });
   const rawSummary = state.rows.length
     ? await boundedCall(plan.turnMs ?? DEFAULTS.debate.turnMs, plan.signal, (signal) => plan.summaryVoice({ rows: state.rows, clusters: listed, signal }))
     : rulesSummary(state.rows);
@@ -128,9 +131,13 @@ export async function generalReviewStage(plan, state) {
     ? rulesSummary(state.rows, { gaps: allGaps, failedSurfaces: plan.failedSurfaces, partialSurfaces: plan.partialSurfaces, fallbackReason: unavailable })
     : rawSummary;
   const extraLimitations = !unavailable ? limitationClause(state.rows, { gaps: allGaps, failedSurfaces: plan.failedSurfaces, partialSurfaces: plan.partialSurfaces }) : '';
-  const summary = extraLimitations && !String(baseSummary.executiveSummary || '').includes('Open questions and limitations:')
+  const limited = extraLimitations && !String(baseSummary.executiveSummary || '').includes('Open questions and limitations:')
     ? { ...baseSummary, executiveSummary: `${baseSummary.executiveSummary} ${extraLimitations}` }
     : baseSummary;
+  // A model's summary opens with the computed counts; a rules summary already carries them.
+  const summary = limited.computed || !state.rows.length
+    ? limited
+    : { ...limited, executiveSummary: `${countSentence(listed)} ${limited.executiveSummary}` };
   const general = composeGeneralReview({
     rows: state.rows, clusters: state.clusters, gaps: allGaps, scope: plan.scope, failedSurfaces: plan.failedSurfaces,
     reviewers: plan.reviewers, usage: plan.usage, summary,

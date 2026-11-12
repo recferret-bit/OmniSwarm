@@ -90,7 +90,7 @@ test('debate turns, the judge and the general review launch through the bridge; 
   const [row] = readReportJson(out, 'debate/adjudication.json');
   assert.deepEqual([row.finalStatus, row.judge.reviewerId, row.judge.alternate], ['CONFIRMED', JUDGE.id, false]);
   const general = readReportJson(out, 'general-review.json');
-  assert.equal(general.executiveSummary, 'One confirmed access-control finding.');
+  assert.equal(general.executiveSummary, 'Adjudicated: 1 cluster, 1 CONFIRMED; by severity 1 high. One confirmed access-control finding.');
   // A cost is shown only where a pass priced it; an unpriced reviewer is null, not a fabricated 0.
   assert.deepEqual(general.contributions.map((row) => [row.reviewerId, row.costUsd]), [[ZAI.id, 0.02], [QWEN.id, null]]);
   for (const name of names) {

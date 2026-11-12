@@ -13,6 +13,7 @@ import { rulesSummary } from './debate-general-review.mjs';
 import { recommendedOrchestrator, selectSurfaces } from './reviewer-plan.mjs';
 import { formatReviewerSpec } from './reviewer-registry.mjs';
 import { readJsonOr } from './report-util-files.mjs';
+import { peerReviewedSeverities } from './verify-and-adjudicate.mjs';
 import { DEFAULTS } from './run-config.mjs';
 
 const DEBATE_DEFAULTS = DEFAULTS.debate;
@@ -84,11 +85,13 @@ function partialSurfacesOf(ctx) {
 // host demo (claims loaded from its report dir) and the golden eval (claims passed in).
 export function offlinePlan({ out, sourceRoot, claims, controls, reviewers, rounds = DEBATE_DEFAULTS.rounds, scope = ['S1'], manifest = null, maxClusters = DEBATE_DEFAULTS.maxClusters }) {
   if (!isFixtureTarget(sourceRoot)) throw stageError(SCRIPTED_JUDGE_REFUSAL, `${SCRIPTED_JUDGE_REFUSAL}: the offline debate runs only on OmniSwarm fixtures`);
-  if (!claims) ({ claims, controls, reviewers } = loadClaims(out));
+  const fromReport = !claims;
+  if (fromReport) ({ claims, controls, reviewers } = loadClaims(out));
   const orchestrator = { id: 'scripted-judge', family: 'scripted', provider: 'judge', vendor: 'scripted', model: 'judge' };
   const reader = sourceReader(sourceRoot, manifest);
   return {
     out, reader, claims, reviewers, orchestrator, alternate: null, rounds, maxClusters,
+    severities: fromReport ? peerReviewedSeverities(out) : null,
     turnMs: DEBATE_DEFAULTS.turnMs, phaseMs: DEBATE_DEFAULTS.phaseMs, seed: 1,
     vendors: new Map(reviewers.map((r) => [r.id, r.vendor])),
     voices: voicesFor(reviewers, { claims, controls, reader, bridge: null }),
@@ -115,6 +118,8 @@ export function debatePlan(ctx, env = process.env) {
   return {
     out: ctx.output, reader, claims, reviewers, orchestrator, alternate: ctx.request.alternateJudge || null,
     rounds: debate.rounds, maxClusters: debate.maxClusters, turnMs: debate.turnMs, phaseMs: debate.phaseMs,
+    // One severity per cluster: the debate starts from the severity the report gives it after peer review.
+    severities: peerReviewedSeverities(ctx.output),
     signal: ctx.cancellation?.signal, seed: 1,
     prior: crosscheckPrior(ctx.output, reader),
     onProgress: ctx.progress ? (name, done, total) => ctx.progress.counter(name, done, total) : null,
