@@ -73,6 +73,13 @@ test('the orchestrator commits a schema-valid judgement and a general review wit
   const judge = session('orchestrator', 'cli-codex-gpt-5-5-judge-cluster-1', judgeTask);
   const handlers = bridgeRole('orchestrator').handlers;
   await assert.rejects(handlers.submit_adjudication(judge, { finalStatus: 'SECURE', severity: 'high', rationale: 'r' }), /Invalid adjudication/);
+  // A judge that answers in its own words (a real Codex judge sent `verdict`) is told which fields the tool takes.
+  // No alias is accepted, and nothing is committed.
+  await assert.rejects(
+    handlers.submit_adjudication(judge, { cluster_id: 'CLUSTER-1', verdict: 'CONFIRMED', severity: 'medium', rationale: 'r' }),
+    (error) => /missing finalStatus/.test(error.message) && /finalStatus \(CONFIRMED \| LIKELY/.test(error.message) && /does not take cluster_id, verdict/.test(error.message),
+  );
+  assert.equal(fs.existsSync(path.join(judge.reportDir, 'debate', 'inbox', `${judge.submissionIdentity.name}.json`)), false);
   await handlers.submit_adjudication(judge, { finalStatus: 'LIKELY', severity: 'medium', severityReason: 'Needs a caller.', rationale: 'One upheld argument.' });
   const row = readInbox(judge.reportDir, judge.submissionIdentity.name, 'judge');
   assert.deepEqual(row.judge, judgeTask.judge);

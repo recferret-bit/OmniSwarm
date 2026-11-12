@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { continuationText, modelMatches, runReviewSession, permissionDecision, preflightBridge } from './agent-session.mjs';
+import { continuationText, modelMatches, runReviewSession, permissionDecision, preflightBridge, sessionCallLimit } from './agent-session.mjs';
 import { openSessionStore } from './agent-session-store.mjs';
 import { buildSessionLaunch, sessionEnvironment } from './agent-session-launch.mjs';
 
@@ -172,7 +172,7 @@ test('the bridge preflight accepts the debater and orchestrator tool sets, which
   await assert.rejects(preflightBridge(server('debater'), { cwd: root, env: process.env, expectedRole: 'orchestrator', expectedName: 'claude-judge-cluster-1' }), /mcp_unavailable/);
 });
 
-test('W04-07: more than N+3 counted tool calls without a submit cancels the pass; the correction names the role\'s submit tool', async t => {
+test('W04-07: more than the session call limit without a submit cancels the pass; the correction names the role\'s submit tool', async t => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'audit-flood-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const executable = path.join(root, 'flood.mjs');
@@ -200,7 +200,9 @@ readline.createInterface({input:process.stdin}).on('line', line => {
     { directory: path.join(root, dir), identity: { ...identity, role, name: role === 'crosscheck' ? 'crosscheck-claude' : identity.name }, bridgeArgs: [], prompt: 'Review.', budgets: { toolBudget: 2, passes: 1, maxCostUsd: null } },
     { heartbeatMs: 30_000, preflight: async () => ({ state: 'ready', tools: [] }), launch: ({ workDir }) => ({ invocation: { executable: process.execPath, args: [executable, mode, String(calls)], cwd: workDir, env: process.env }, mcpServers: [{}], transport: 'inert_acp_fixture' }) },
   );
-  const flooded = await run('flood', 6, 'auditor', 'flood');
+  // toolBudget 2: the bridge answers calls 3 to 5 with "submit now"; the session backstop is sessionCallLimit(2) = 17.
+  assert.equal(sessionCallLimit(2), 17);
+  const flooded = await run('flood', sessionCallLimit(2) + 1, 'auditor', 'flood');
   assert.equal(flooded.code, 0);
   assert.equal(flooded.stop, 'budget');
   assert.equal(fs.readFileSync(path.join(root, 'flood', 'workspace', 'prompts.txt'), 'utf8').trim().split('\n').length, 1, 'no correction turn after a budget cancel');
@@ -210,6 +212,91 @@ readline.createInterface({input:process.stdin}).on('line', line => {
   const prompts = fs.readFileSync(path.join(root, 'quiet', 'workspace', 'prompts.txt'), 'utf8').trim().split('\n');
   assert.match(prompts[1], /Call submit_crosscheck_report now/);
   assert.doesNotMatch(prompts[1], /Budget exhausted/);
+});
+
+test('a parallel batch that crosses N+3 announced calls is not cancelled before the agent can submit', async t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'audit-batch-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const executable = path.join(root, 'batch.mjs');
+  // Codex announces a batch of reads before the bridge serves any of them, then submits after reading the
+  // bridge's "submit now" answers. 12 announced reads on a budget of 2 is past N+3 but inside one batch.
+  fs.writeFileSync(executable, `
+import fs from 'node:fs';
+import readline from 'node:readline';
+const send = msg => process.stdout.write(JSON.stringify({jsonrpc:'2.0',...msg})+'\\n');
+const sid = 'batch-session';
+const calls = Number(process.argv[2]);
+readline.createInterface({input:process.stdin}).on('line', line => {
+  const msg = JSON.parse(line);
+  if (msg.method === 'initialize') send({id:msg.id,result:{protocolVersion:1,agentCapabilities:{loadSession:true}}});
+  else if (msg.method === 'session/new') send({id:msg.id,result:{sessionId:sid}});
+  else if (msg.method === 'session/cancel') fs.appendFileSync('events.txt', 'cancel\\n');
+  else if (msg.method === 'session/prompt') {
+    for (let i = 0; i < calls; i++) send({method:'session/update',params:{sessionId:sid,update:{sessionUpdate:'tool_call',toolCallId:'r'+i,title:'mcp.audit_docker.read_file',status:'in_progress'}}});
+    send({method:'session/update',params:{sessionId:sid,update:{sessionUpdate:'tool_call',toolCallId:'s',title:'mcp.audit_docker.submit_crosscheck_report',status:'in_progress'}}});
+    send({id:msg.id,result:{stopReason:'end_turn'}});
+  }
+});
+`);
+  const run = (calls, dir) => runReviewSession(
+    { directory: path.join(root, dir), identity: { ...identity, role: 'crosscheck', name: 'crosscheck-claude', surface: undefined }, bridgeArgs: [], prompt: 'Cross-check.', budgets: { toolBudget: 2, passes: 1, maxCostUsd: null } },
+    { heartbeatMs: 30_000, preflight: async () => ({ state: 'ready', tools: [] }), launch: ({ workDir }) => ({ invocation: { executable: process.execPath, args: [executable, String(calls)], cwd: workDir, env: process.env }, mcpServers: [{}], transport: 'inert_acp_fixture' }) },
+  );
+  const batched = await run(12, 'batch');
+  assert.equal(batched.code, 0);
+  assert.equal(batched.stop, 'submitted');
+  assert.equal(fs.existsSync(path.join(root, 'batch', 'workspace', 'events.txt')), false, 'no cancel inside one batch');
+});
+
+test('a submit the bridge rejects is not counted as handed in: the judge gets the correction turn', async t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'audit-rejected-submit-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const report = path.join(root, 'report');
+  fs.mkdirSync(report);
+  const name = 'claude-judge-cluster-16';
+  const executable = path.join(root, 'judge.mjs');
+  // The failed result carries only the call id and status, as the Codex adapter sends it. In 'fix' mode the
+  // correction turn commits the judgement (the bridge would write debate/inbox/<name>.json).
+  fs.writeFileSync(executable, `
+import fs from 'node:fs';
+import path from 'node:path';
+import readline from 'node:readline';
+const [mode, report, name] = process.argv.slice(2);
+const send = msg => process.stdout.write(JSON.stringify({jsonrpc:'2.0',...msg})+'\\n');
+const sid = 'judge-session';
+let prompts = 0;
+readline.createInterface({input:process.stdin}).on('line', line => {
+  const msg = JSON.parse(line);
+  if (msg.method === 'initialize') send({id:msg.id,result:{protocolVersion:1,agentCapabilities:{loadSession:true}}});
+  else if (msg.method === 'session/new') send({id:msg.id,result:{sessionId:sid}});
+  else if (msg.method === 'session/prompt') {
+    prompts += 1;
+    fs.appendFileSync('prompts.txt', JSON.stringify(msg.params.prompt[0].text) + '\\n');
+    const id = 'j' + prompts;
+    send({method:'session/update',params:{sessionId:sid,update:{sessionUpdate:'tool_call',toolCallId:id,title:'mcp.audit_docker.submit_adjudication',status:'in_progress'}}});
+    if (prompts > 1 && mode === 'fix') {
+      fs.mkdirSync(path.join(report, 'debate', 'inbox'), { recursive: true });
+      fs.writeFileSync(path.join(report, 'debate', 'inbox', name + '.json'), '{}');
+      send({method:'session/update',params:{sessionId:sid,update:{sessionUpdate:'tool_call_update',toolCallId:id,status:'completed'}}});
+    } else {
+      send({method:'session/update',params:{sessionId:sid,update:{sessionUpdate:'tool_call_update',toolCallId:id,status:'failed'}}});
+    }
+    send({id:msg.id,result:{stopReason:'end_turn'}});
+  }
+});
+`);
+  const run = (mode, dir) => runReviewSession(
+    { directory: path.join(root, dir), identity: { ...identity, role: 'orchestrator', name, surface: undefined }, bridgeArgs: ['--report-dir', report], prompt: 'Judge.', budgets: { toolBudget: 12, passes: 1, maxCostUsd: null } },
+    { heartbeatMs: 30_000, preflight: async () => ({ state: 'ready', tools: [] }), launch: ({ workDir }) => ({ invocation: { executable: process.execPath, args: [executable, mode, report, name], cwd: workDir, env: process.env }, mcpServers: [{}], transport: 'inert_acp_fixture' }) },
+  );
+  const ignored = await run('ignore', 'ignore');
+  assert.equal(ignored.stop, 'budget', 'a rejected submit with nothing committed is not a submission');
+  const prompts = fs.readFileSync(path.join(root, 'ignore', 'workspace', 'prompts.txt'), 'utf8').trim().split('\n');
+  assert.equal(prompts.length, 2);
+  assert.match(prompts[1], /Call submit_adjudication now/);
+  const fixed = await run('fix', 'fix');
+  assert.equal(fixed.code, 0);
+  assert.equal(fixed.stop, 'submitted');
 });
 
 test('ACP session records completion and can load the exact saved conversation', async t => {

@@ -128,7 +128,19 @@ function updateToolText(update) {
   return [update?.title, raw.tool_name, raw.tool, raw.name, update?._meta?.claudeCode?.toolName].filter(Boolean).join(' ');
 }
 
-// Tool calls the agent reports in this turn. More than N+3 counted calls without a submit cancels the pass.
+// The bridge is the budget: it counts calls as it serves them and answers the three calls after N with "call
+// <submit> now". The session's own count is only the backstop for an agent that ignores those answers, and it
+// runs ahead of the bridge: it counts a call when the agent announces it, Codex and Grok announce 8 to 11 reads
+// in one batch before the bridge has served any, and AGY's own workspace reads never reach the bridge. Cancelling
+// at N+3 announced calls killed agents mid-batch, before they read the bridge's "submit now". The backstop
+// therefore sits at least one batch above the bridge's limit.
+export function sessionCallLimit(toolBudget) {
+  return toolBudget + GRACE + Math.max(12, Math.ceil(toolBudget / 4));
+}
+
+// Tool calls the agent reports in this turn. More than sessionCallLimit(N) counted calls without a submit
+// cancels the pass. A submit is tracked by its call id: a failed result often carries no title, so it would not
+// otherwise be recognised as the submit that failed.
 function onSessionUpdate(s, turn, params) {
   // During load, an adapter may replay history before returning. Its notifications must still belong to the exact saved session.
   if (s.sessionId && params?.sessionId !== s.sessionId) throw new SessionError('session_identity_rejected');
@@ -147,7 +159,8 @@ function onSessionUpdate(s, turn, params) {
       const firstSeen = callId ? !turn.seenCalls.has(callId) : update.sessionUpdate === 'tool_call';
       if (callId) turn.seenCalls.add(callId);
       const { identity, budgets } = s.options;
-      const isSubmit = updateToolText(update).includes(submitTool(identity?.role, identity?.name));
+      const isSubmit = updateToolText(update).includes(submitTool(identity?.role, identity?.name)) || Boolean(callId && turn.submitCalls.has(callId));
+      if (isSubmit && callId) turn.submitCalls.add(callId);
       const failed = update.status === 'failed' || update.status === 'STEP_STATE_ERROR' || update.status === 'error';
       if (isSubmit) {
         if (failed && hasCommittedOutput(s.options) === false) turn.submitted = false;
@@ -156,7 +169,7 @@ function onSessionUpdate(s, turn, params) {
         turn.toolCalls += 1;
       }
       if (!turn.submitted && hasCommittedOutput(s.options) === true) turn.submitted = true;
-      if (budgets && !turn.submitted && !turn.budgetCancel && turn.toolCalls > budgets.toolBudget + GRACE) {
+      if (budgets && !turn.submitted && !turn.budgetCancel && turn.toolCalls > sessionCallLimit(budgets.toolBudget)) {
         turn.budgetCancel = true;
         try { s.rpc.notify('session/cancel', { sessionId: s.sessionId }); } catch { /* the prompt result records the stop */ }
       }
@@ -250,16 +263,22 @@ async function endTurn(s, spec, stop, stopReason) {
   return s.result({ observedExitCode: exit.code, processSignal: exit.signal, transport: spec.transport, stop, stopReason });
 }
 
-// One chance to hand in the report. A second empty ending, or more than N+3 calls, cancels the pass.
+// One chance to hand in the report. A second empty ending, or more than sessionCallLimit(N) calls, cancels the pass.
+// The committed file decides whether the pass handed something in, when the session can see it: a submit the
+// bridge rejected (a schema error) was announced like any other call, and must still get the correction turn.
 async function settleTurn(s, spec, turn, init, result) {
   const { budgets, signal, identity } = s.options;
   if (providerStop(s.store) === 'cost') return endTurn(s, spec, 'cost', result.stopReason);
-  if (hasCommittedOutput(s.options) === true) turn.submitted = true;
+  const committed = hasCommittedOutput(s.options);
+  if (committed === true) turn.submitted = true;
+  else if (committed === false) turn.submitted = false;
   if (signal?.aborted) throw new SessionError('cancelled');
   if (budgets && result.stopReason === 'end_turn' && !turn.submitted && !turn.budgetCancel) {
     s.store.save('running', { event: 'submit_now' });
     result = await s.rpc.request('session/prompt', { sessionId: s.sessionId, prompt: [{ type: 'text', text: submitNowText(identity.role, identity.name) }] }, null);
-    if (hasCommittedOutput(s.options) === true) turn.submitted = true;
+    const corrected = hasCommittedOutput(s.options);
+    if (corrected === true) turn.submitted = true;
+    else if (corrected === false) turn.submitted = false;
   }
   if (signal?.aborted) throw new SessionError('cancelled');
   if (budgets && !turn.submitted && (turn.budgetCancel || result.stopReason === 'end_turn')) {
@@ -287,7 +306,7 @@ function failureReason(error, signal) {
 
 // One turn of a session. Returns the session result, or null when a lost transport is recovered (load and retry).
 async function runTurn(s, spec, maxRecoveries) {
-  const turn = { resumeCapable: false, refused: null, toolCalls: 0, seenCalls: new Set(), submitted: false, budgetCancel: false };
+  const turn = { resumeCapable: false, refused: null, toolCalls: 0, seenCalls: new Set(), submitCalls: new Set(), submitted: false, budgetCancel: false };
   const attempt = s.recoveries;
   openRpc(s, spec, turn);
   try {

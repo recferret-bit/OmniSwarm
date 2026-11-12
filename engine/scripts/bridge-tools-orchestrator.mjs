@@ -63,11 +63,24 @@ export function acceptGeneralReview(body, knownClusters, knownFiles = null) {
   return body;
 }
 
+// A judge that answers with its own field names (`verdict` for `finalStatus`) gets an error that names the fields
+// the tool takes, so it can correct the call; the schema path alone ("$.finalStatus: must be one of") read as a
+// wrong value, and a judge once ended its turn on it. The contract is not widened: no alias is accepted.
+const ADJUDICATION_FIELDS = ['finalStatus', 'severity', 'severityReason', 'rationale'];
+export function adjudicationArgsError(args) {
+  const missing = ['finalStatus', 'severity', 'rationale'].filter((key) => args?.[key] === undefined || args[key] === null || args[key] === '');
+  if (!missing.length) return null;
+  const unknown = Object.keys(args || {}).filter((key) => !ADJUDICATION_FIELDS.includes(key)).map((key) => String(key).replace(/[^\w.-]/g, '').slice(0, 40)).slice(0, 8);
+  return `Invalid adjudication: missing ${missing.join(', ')}. submit_adjudication takes finalStatus (${FINAL.join(' | ')}), severity (${SEVERITY.join(' | ')}), rationale and an optional severityReason${unknown.length ? `; it does not take ${unknown.join(', ')}` : ''}. Call submit_adjudication again with those fields.`;
+}
+
 async function submitAdjudication(ctx, raw) {
   const identity = requireRole(ctx, role);
   const task = assignmentOf(ctx);
   if (task.kind !== 'judge') throw new Error('This session was not assigned a judgement');
   const args = unwrapReportJson(raw);
+  const argsError = adjudicationArgsError(args);
+  if (argsError) throw new Error(argsError);
   const body = {
     clusterId: task.clusterId, finalStatus: args.finalStatus, severity: args.severity,
     ...(args.severityReason ? { severityReason: args.severityReason } : {}),
