@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url';
 import { readReportJson, writeReportFile } from './report-files.mjs';
 import { newestReportDir, readJsonOr } from './report-util-files.mjs';
 import { renderReport } from './generate-html-report.mjs';
-import { runStageAdvice } from './orchestrator-advice.mjs';
+import { adviceFallbackNote, runStageAdvice } from './orchestrator-advice.mjs';
 import {
   archiveJudgeInboxForNextRound,
   loadDebateState,
@@ -732,6 +732,8 @@ async function main() {
     const res = await runAdviseStep(reportDir, opts);
     const da = res.advice?.debateAdvice || {};
     process.stdout.write(`Step 2 Frontier Orchestrator Advice saved to ${path.join(reportDir, 'orchestrator-advice.json')} (debateNeeded=${da.debateNeeded}, recommendedRounds=${da.recommendedRounds})\n`);
+    const note = adviceFallbackNote(res.advice);
+    if (note) process.stderr.write(`${note}\n`);
     return;
   }
   if (cmd === 'debate') {
@@ -745,6 +747,8 @@ async function main() {
     if (res.action === 'advise') {
       const da = res.advice?.debateAdvice || {};
       process.stdout.write(`Step 2 Frontier Orchestrator Advice completed (debateNeeded=${da.debateNeeded}, recommendedRounds=${da.recommendedRounds}); run 'audit step' or 'audit debate' next if desired.\n`);
+      const note = adviceFallbackNote(res.advice);
+      if (note) process.stderr.write(`${note}\n`);
     } else {
       process.stdout.write(`Step 3 Debate round ${res.completedRounds} completed; artifacts saved in ${reportDir}\n`);
       if (res.incomplete) process.exitCode = 2;

@@ -155,9 +155,20 @@ describe('mock intake API', () => {
     expect(invalid.status).toBe(400);
     expect(invalid.body).toMatchObject({ error: { code: 'REPO_INVALID' } });
 
+    // No hosted panel: a job names the account's own NEAR AI key, and that key needs a model first.
+    const panel = await post('/api/dashboard/jobs', { repo: 'near/near-sdk-rs', models: ['opus'] });
+    expect(panel.status).toBe(400);
+    expect(panel.body).toMatchObject({ error: { code: 'VALIDATION_ERROR' } });
+    await api.saveAccountKey('nearai', { key: 'near-test-key' });
+    const noModel = await post('/api/dashboard/jobs', { repo: 'near/near-sdk-rs', source: 'nearai' });
+    expect(noModel.status).toBe(400);
+    expect(noModel.body).toMatchObject({ error: { code: 'VALIDATION_ERROR' } });
+    expect((await api.listProviderModels('nearai')).models).toContain('deepseek-ai/DeepSeek-V4');
+    await api.saveAccountKey('nearai', { models: ['deepseek-ai/DeepSeek-V4'] });
+
     let requestId = '';
     await withClock(1_700_000_000_000, async () => {
-      const created = await post('/api/dashboard/jobs', { repo: 'https://github.com/near/near-sdk-rs' });
+      const created = await post('/api/dashboard/jobs', { repo: 'https://github.com/near/near-sdk-rs', source: 'nearai' });
       expect(created.status).toBe(201);
       expect(created.body).toMatchObject({ repo: 'near/near-sdk-rs', commitSha: MOCK_COMMIT, status: 'queued' });
       requestId = (created.body as { requestId: string }).requestId;

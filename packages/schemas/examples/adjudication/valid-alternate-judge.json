@@ -3,7 +3,7 @@
   "finalStatus": "DISPUTED",
   "severity": "high",
   "judge": {
-    "reviewerId": "openrouter-openai-gpt-6-1-sol",
+    "reviewerId": "nearai-openai-gpt-oss-120b",
     "vendor": "openai",
     "alternate": true
   },

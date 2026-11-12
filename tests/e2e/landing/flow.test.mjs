@@ -1,17 +1,17 @@
-// W11 landing e2e on mocks: a production `next build` with MSW and the mock
-// wallet, driven in headless Chrome at 360 px. Demo steps 1-11 of the wave file.
+// Landing e2e on mocks: a production `next build` with MSW and the mock wallet,
+// driven in headless Chrome at 360 px. The landing has no paid quote flow any more
+// (its components stay dormant and unit-tested): reviews run on the account's own
+// NEAR AI key from the dashboard, and the optional USDC donation is the last section.
 import assert from 'node:assert/strict';
-import crypto from 'node:crypto';
 import path from 'node:path';
 import { after, before, describe, test } from 'node:test';
 import { chromium } from 'playwright-core';
 import { digestReport } from '@omniswarm/schemas/canonical-json';
-import { requestHash } from '@omniswarm/schemas/canonical-message';
-import { b58decode, nep413Payload } from '@omniswarm/schemas/nep413';
 import { listFiles, scan } from '../../../apps/web/scripts/bundle-scan.mjs';
 import { axeViolations, BASE, buildMockApp, removeMockWorker, startMockApp } from './app.mjs';
 
 const HERO = 'A swarm of AI reviewers that argue over your code, then sign the verdict on NEAR';
+const USDC_TESTNET = '3e2210e1184b45b64c8a434c0a7e7b23cc04ea7eb7a6c3c32520d03d4afcb8af';
 let server;
 let browser;
 let mockBuild;
@@ -36,13 +36,6 @@ async function newPage(query = '') {
   return page;
 }
 
-function verifyNep413({ publicKey, signature, message, nonce, recipient }) {
-  const raw = Buffer.from(b58decode(publicKey.replace(/^ed25519:/, '')));
-  const key = crypto.createPublicKey({ key: Buffer.concat([Buffer.from('302a300506032b6570032100', 'hex'), raw]), format: 'der', type: 'spki' });
-  const digest = crypto.createHash('sha256').update(nep413Payload(message, Buffer.from(nonce, 'base64'), recipient)).digest();
-  return crypto.verify(null, digest, key, Buffer.from(signature, 'base64'));
-}
-
 // Every same-origin link on the page resolves, and every #fragment has a target.
 async function checkInternalLinks(page) {
   const hrefs = await page.$$eval('a[href]', (links) => links.map((link) => link.getAttribute('href')));
@@ -52,15 +45,12 @@ async function checkInternalLinks(page) {
   }
 }
 
-async function quoteAndSign(page, repo, deployed = '') {
-  if (!(await page.getByTestId('account').count())) await page.getByRole('button', { name: 'Connect NEAR wallet' }).first().click();
-  await page.getByTestId('account').waitFor();
-  await page.getByLabel('GitHub repository').fill(repo);
-  if (deployed) await page.getByLabel('Deployed NEAR account (optional)').fill(deployed);
-  await page.getByRole('button', { name: 'Get quote' }).click();
-  await page.getByTestId('quote').waitFor();
-  await page.getByRole('button', { name: 'Sign request' }).click();
-  await page.getByTestId('request-hash').waitFor();
+// The mock API's operator session (dev/e2e only). Real sign-in is Google, X or a NEAR wallet.
+async function signInMock(page) {
+  const status = await page.evaluate(() => fetch('/api/login', {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ login: 'operator', password: 'operator' }),
+  }).then((response) => response.status));
+  assert.equal(status, 200);
 }
 
 describe('landing on mocks', { concurrency: false }, () => {
@@ -73,9 +63,24 @@ describe('landing on mocks', { concurrency: false }, () => {
     const page = await newPage();
     const main = await page.locator('main').innerText();
     assert.match(main, new RegExp(HERO));
-    for (const id of ['how', 'trust', 'pricing']) await page.locator(`#${id}`).waitFor();
+    for (const id of ['how', 'trust', 'start', 'support']) await page.locator(`#${id}`).waitFor();
     assert.match(await page.getByTestId('chain-status').innerText(), /Chain: mock \(dev\)/);
-    assert.match(await page.locator('#pricing').innerText(), /1 NEAR \(testnet\)[\s\S]*2 passes × 40 tool calls/);
+    // No pricing and no paid quote form: the call to action is the dashboard on your own NEAR AI key.
+    assert.equal(await page.locator('#pricing').count(), 0);
+    assert.equal(await page.getByRole('button', { name: 'Get quote' }).count(), 0);
+    assert.doesNotMatch(main, /Z\.AI|OpenRouter|1 NEAR \(testnet\)/);
+    assert.match(await page.locator('#start').innerText(), /own NEAR AI key[\s\S]*charges nothing[\s\S]*\.\/bin\/audit local/);
+    assert.equal(await page.locator('#start').getByRole('link', { name: 'Open the dashboard' }).getAttribute('href'), '/dashboard');
+    assert.equal(await page.getByRole('link', { name: 'Review a repo' }).getAttribute('href'), '#start');
+    // The donation section is the very last section of the landing.
+    assert.equal(await page.locator('main .land > :last-child').getAttribute('id'), 'support');
+    const support = await page.locator('#support').innerText();
+    assert.match(support, /Servers, sandbox runners, storage, the domain and coffee/);
+    assert.doesNotMatch(support, /OmniSwarm charges nothing/);
+    assert.equal(await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Support' }).getAttribute('href'), '/#support');
+    assert.match(support, /omniswarm\.testnet/);
+    assert.match(support, /Send native USDC on NEAR only — not USDC\.e or another network\./);
+    assert.ok(support.includes(USDC_TESTNET));
     assert.deepEqual(await axeViolations(page), []);
     await checkInternalLinks(page);
 
@@ -90,38 +95,72 @@ describe('landing on mocks', { concurrency: false }, () => {
     assert.deepEqual(await axeViolations(page), []);
   });
 
-  test('connect, quote, sign NEP-413, pay, watch to done, verify, tamper, my requests', { timeout: 90_000 }, async () => {
-    const page = await newPage('?mock=none');
-    await page.getByRole('button', { name: 'Connect NEAR wallet' }).first().click();
-    await page.reload();
-    assert.match(await page.getByTestId('account').innerText(), /alice\.testnet/, 'the session survives a reload');
-    await quoteAndSign(page, 'https://github.com/near-examples/guest-book-examples', 'guest-book.testnet');
-    const quote = await page.getByTestId('quote').innerText();
-    assert.match(quote, /1 NEAR/);
-    assert.match(quote, /#0 in queue/);
-    const read = async (id) => (await page.getByTestId(id).textContent()).trim();
-    const signed = { publicKey: await read('public-key'), signature: await read('signature'), message: await read('signed-message'), nonce: await read('nonce'), recipient: 'omniswarm.testnet' };
-    assert.equal(await requestHash(signed.message), await read('request-hash'));
-    assert.equal(JSON.parse(signed.message).nonce, signed.nonce);
-    assert.equal(verifyNep413(signed), true, 'the base64 NEP-413 signature verifies');
+  test('donate USDC with the mock wallet: cancel, then send', { timeout: 60_000 }, async () => {
+    const page = await newPage('?wallet=reject');
+    const support = page.locator('#support');
+    await support.scrollIntoViewIfNeeded();
+    assert.ok(await support.getByRole('button', { name: 'Donate 5 USDC' }).isDisabled(), 'donating waits for a wallet');
+    await support.getByRole('radio', { name: /25 USDC · A day of infrastructure/ }).check();
+    await support.getByRole('button', { name: 'Connect NEAR wallet' }).click();
+    await support.getByTestId('account').waitFor();
+    await support.getByRole('button', { name: 'Donate 25 USDC' }).click();
+    await support.getByText('Donation cancelled in wallet. Nothing was sent.').waitFor();
 
-    await page.getByRole('button', { name: 'Pay 1 NEAR' }).click();
-    await page.waitForURL(/\/r\/[0-9a-f-]{36}$/);
+    await support.getByRole('radio', { name: /Custom amount/ }).check();
+    await support.getByRole('textbox', { name: 'Amount in USDC' }).fill('1.234');
+    await support.getByText(/at most 2 decimals/).waitFor();
+    assert.ok(await support.getByRole('button', { name: 'Donate' }).isDisabled());
+    await support.getByRole('textbox', { name: 'Amount in USDC' }).fill('2.5');
+    await support.getByRole('button', { name: 'Donate 2.5 USDC' }).click();
+    await support.getByText(/2\.5 USDC transfer sent/).waitFor();
+    assert.match(await support.getByRole('link', { name: 'View the transaction' }).getAttribute('href'), /^https:\/\/[^/]+\/txns\/[1-9A-HJ-NP-Za-km-z]+$/);
+    assert.deepEqual(await axeViolations(page), []);
+  });
+
+  test('dashboard on your own NEAR AI key: save key, pick a model, review to done, verify, tamper', { timeout: 90_000 }, async () => {
+    const page = await newPage('?mock=none');
+    await signInMock(page);
+    await page.goto(`${BASE}/dashboard`);
+    const settings = page.getByRole('tab', { name: 'Settings' });
+    await settings.waitFor();
+    // No key yet: the key panel opens first and says who pays. There is no hosted panel to pick.
+    assert.equal(await settings.getAttribute('aria-selected'), 'true');
+    await page.getByRole('tabpanel').getByText('Paste your NEAR AI Cloud API key to run reviews. You pay NEAR AI directly; OmniSwarm charges nothing.').waitFor();
+    assert.doesNotMatch(await page.locator('main').innerText(), /Z\.AI|OpenRouter|Hosted panel/);
+    await page.getByLabel('NEAR AI Cloud API key').fill('near-e2e-key');
+    await page.getByRole('button', { name: 'Save key' }).click();
+    await page.getByText(/Key saved · mock0000/).waitFor();
+    assert.equal(await page.getByLabel('Replace NEAR AI Cloud API key').inputValue(), '', 'the key is never echoed back');
+    await page.getByRole('button', { name: 'Load models from NEAR AI Cloud' }).click();
+    await page.getByLabel('deepseek-ai/DeepSeek-V4', { exact: true }).click();
+    await page.getByLabel('deepseek-ai/DeepSeek-V4 (orchestrator)').waitFor();
+    assert.deepEqual(await axeViolations(page), []);
+
+    await page.getByRole('tab', { name: 'New review' }).click();
+    await page.getByText(/key with 1 model; deepseek-ai\/DeepSeek-V4 orchestrates/).waitFor();
+    await page.getByLabel('GitHub repository').fill('https://github.com/near-examples/guest-book-examples');
+    await page.getByRole('button', { name: 'Submit' }).click();
+    const history = page.getByRole('list', { name: 'Request history' });
+    await history.waitFor();
+    assert.match(await history.innerText(), /near-examples\/guest-book-examples/);
+    await history.getByRole('link', { name: 'near-examples/guest-book-examples' }).click();
+    await page.waitForURL(/\/dashboard\/requests\/[0-9a-f-]{36}$/);
     const id = page.url().split('/').pop();
+
     await page.getByRole('button', { name: 'Open report' }).waitFor({ timeout: 30_000 });
     assert.equal(await page.locator('[aria-current="step"]').innerText(), 'Done');
-    assert.match(await page.getByRole('list', { name: 'Reviewers' }).innerText(), /pass 2\/2[\s\S]*pass 2\/2[\s\S]*pass 2\/2/);
+    const reviewers = await page.getByRole('list', { name: 'Reviewers' }).innerText();
+    assert.match(reviewers, /pass 2\/2[\s\S]*pass 2\/2[\s\S]*pass 2\/2/);
+    assert.match(reviewers, /nearai-deepseek-ai-deepseek-v4/);
 
     await page.getByRole('button', { name: 'Open report' }).click();
     await page.getByText('hash matches on-chain attestation').waitFor();
+    const read = async (testId) => (await page.getByTestId(testId).textContent()).trim();
     const docs = await page.evaluate(async (rid) => Promise.all(['findings-and-scores.json', 'general-review.json']
       .map((name) => fetch(`https://reports.omniswarm.mock/${rid}/${name}`).then((response) => response.json()))), id);
     const recomputed = await digestReport(docs[0], docs[1]);
     assert.equal(await read('report-hash'), recomputed);
     assert.equal(await read('attested-hash'), recomputed);
-    assert.ok(await page.getByRole('link', { name: 'View the attest transaction' }).count());
-    assert.match(await page.getByTestId('binding-status').innerText(), /binding not confirmed[\s\S]*guest-book\.testnet/i);
-    assert.equal(JSON.parse(signed.message).deployed, 'guest-book.testnet');
     assert.deepEqual(await axeViolations(page), []);
 
     await page.getByRole('button', { name: 'Tamper the report' }).click();
@@ -129,46 +168,8 @@ describe('landing on mocks', { concurrency: false }, () => {
     await page.getByText('hash does not match the attestation').waitFor();
     assert.notEqual(await read('report-hash'), recomputed);
 
-    await page.getByRole('link', { name: 'My requests' }).click();
-    await page.getByRole('list', { name: 'Your requests' }).waitFor();
-    assert.match(await page.getByRole('list', { name: 'Your requests' }).innerText(), /near-examples\/guest-book-examples[\s\S]*done/i);
-  });
-
-  test('failure paths: queue full, private repo, wallet reject + retry, payment lag, refund, SSE drop', { timeout: 120_000 }, async () => {
-    let page = await newPage('?mock=QUEUE_FULL');
-    await page.getByLabel('GitHub repository').fill('near/near-sdk-rs');
-    await page.getByRole('button', { name: 'Get quote' }).click();
-    await page.getByRole('alert').getByText('Queue is full, try later').waitFor();
-    assert.equal(await page.getByRole('button', { name: /Sign request|Pay/ }).count(), 0);
-
-    page = await newPage('?mock=REPO_PRIVATE');
-    await page.getByLabel('GitHub repository').fill('near/near-sdk-rs');
-    await page.getByRole('button', { name: 'Get quote' }).click();
-    await page.getByRole('alert').getByText('This repository is private. Only public repositories can be reviewed.').waitFor();
-    assert.equal(await page.getByRole('button', { name: 'Sign request' }).count(), 0);
-
-    page = await newPage('?mock=PAYMENT_NOT_FOUND&wallet=reject');
-    await quoteAndSign(page, 'near/near-sdk-rs');
-    await page.getByRole('button', { name: 'Pay 1 NEAR' }).click();
-    await page.getByRole('alert').getByText('Payment cancelled in wallet.').waitFor();
-    await page.getByRole('button', { name: 'Retry' }).click();
-    await page.waitForURL(/\/r\//, { timeout: 20_000 });
-
-    page = await newPage('?mock=REVIEW_FAILED');
-    await quoteAndSign(page, 'near/near-sdk-rs');
-    await page.getByRole('button', { name: 'Pay 1 NEAR' }).click();
-    await page.getByRole('link', { name: 'View the refund transaction' }).waitFor({ timeout: 30_000 });
-    assert.equal(await page.locator('[aria-current="step"]').innerText(), 'Refunded');
-
-    page = await newPage('?mock=SSE_DROP');
-    await quoteAndSign(page, 'near/near-sdk-rs');
-    await page.getByRole('button', { name: 'Pay 1 NEAR' }).click();
-    await page.getByText('Live updates paused — refreshing every 5 seconds.').waitFor({ timeout: 20_000 });
-  });
-
-  test('/me signed out asks to connect', { timeout: 30_000 }, async () => {
-    const page = await newPage();
-    await page.getByRole('link', { name: 'My requests' }).click();
-    await page.getByText('Connect your wallet to see your requests').waitFor();
+    await page.getByRole('link', { name: 'All requests' }).click();
+    await page.getByRole('tab', { name: 'Review history' }).click();
+    assert.match(await page.getByRole('list', { name: 'Request history' }).innerText(), /near-examples\/guest-book-examples[\s\S]*done/i);
   });
 });

@@ -5,7 +5,7 @@
 // The literal env comparisons below are folded by the bundler, so a production
 // build never emits the mock or dev-wallet chunk.
 import { AppError } from '../api/errors';
-import type { PaymentTransaction } from './payment';
+import type { WalletTransaction } from './payment';
 
 export interface SignMessageInput {
   message: string;
@@ -27,7 +27,7 @@ export interface WalletConnector {
   connect(accountId?: string): Promise<string>;
   signOut(): Promise<void>;
   signMessage(input: SignMessageInput): Promise<SignedMessage>;
-  signAndSendTransaction(tx: PaymentTransaction): Promise<{ txHash: string }>;
+  signAndSendTransaction(tx: WalletTransaction): Promise<{ txHash: string }>;
   onSignOut(listener: () => void): () => void;
 }
 

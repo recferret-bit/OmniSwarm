@@ -76,8 +76,8 @@ test('the run-wide spend of one reviewer adds up across parallel surface process
   const [surfaces, turns] = [3, 20];
   const child = (surface) => new Promise((resolve, reject) => {
     const program = `const { costLedger, createBeforeCall } = await import(${JSON.stringify(module)});
-      const ledger = costLedger(${JSON.stringify(root)}, 'key-zai-glm-5-3');
-      const hook = createBeforeCall({ reportDir: ${JSON.stringify(root)}, reviewerId: 'key-zai-glm-5-3', surface: '${surface}', pass: 1, toolBudget: 200 });
+      const ledger = costLedger(${JSON.stringify(root)}, 'nearai-deepseek-ai-deepseek-v4');
+      const hook = createBeforeCall({ reportDir: ${JSON.stringify(root)}, reviewerId: 'nearai-deepseek-ai-deepseek-v4', surface: '${surface}', pass: 1, toolBudget: 200 });
       for (let i = 0; i < ${turns}; i++) { await ledger.add(0.25); await hook({ pendingArgs: { path: 'f' + i + '.rs' } }, 'read_file'); }`;
     const proc = spawn(process.execPath, ['--input-type=module', '-e', program], { stdio: ['ignore', 'ignore', 'pipe'] });
     let err = '';
@@ -85,9 +85,9 @@ test('the run-wide spend of one reviewer adds up across parallel surface process
     proc.on('close', (code) => (code === 0 ? resolve() : reject(new Error(err))));
   });
   await Promise.all(Array.from({ length: surfaces }, (_, i) => child(`S${i + 1}`)));
-  assert.equal(spentUsd(root, 'key-zai-glm-5-3'), surfaces * turns * 0.25);
-  assert.equal(await costLedger(root, 'key-zai-glm-5-3').add(0), 15, 'add(0) reads the total');
-  for (let i = 1; i <= surfaces; i++) assert.equal(loadBudget(root, 'key-zai-glm-5-3').passes[`s${i}:1`]?.calls, turns);
+  assert.equal(spentUsd(root, 'nearai-deepseek-ai-deepseek-v4'), surfaces * turns * 0.25);
+  assert.equal(await costLedger(root, 'nearai-deepseek-ai-deepseek-v4').add(0), 15, 'add(0) reads the total');
+  for (let i = 1; i <= surfaces; i++) assert.equal(loadBudget(root, 'nearai-deepseek-ai-deepseek-v4').passes[`s${i}:1`]?.calls, turns);
 });
 
 test('a lock left by a dead process is broken; a live holder is waited for', async () => {

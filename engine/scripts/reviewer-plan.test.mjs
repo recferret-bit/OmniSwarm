@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { assignJobs, recommendedOrchestrator, renderPlan, headerLabels } from './reviewer-plan.mjs';
+import { ORCHESTRATOR_ORDER, assignJobs, recommendedOrchestrator, renderPlan, headerLabels } from './reviewer-plan.mjs';
 import { parseReviewerList, parseReviewerSpec } from './reviewer-registry.mjs';
 import { resolveRunConfig } from './run-config.mjs';
 
@@ -33,11 +33,15 @@ test('an uninstalled family is a plan problem that names the wave', () => {
   const near = renderPlan({ ...resolveRunConfig({ flags: { reviewers: 'nearai:deepseek-ai/DeepSeek-V4' }, root: '/nonexistent' }) });
   assert.deepEqual(near.problems, []);
   assert.match(near.text, /env NEARAI_API_KEY\s+transport api-acp/);
-  const openrouter = renderPlan({ ...resolveRunConfig({ flags: { reviewers: 'openrouter:qwen/qwen3.8-max-0902,key:zai:glm-5.3' }, root: '/nonexistent' }) });
-  assert.deepEqual(openrouter.problems, []);
-  assert.match(openrouter.text, /openrouter-qwen-qwen3-8-max-0902\s+openrouter\s+alibaba/);
-  assert.match(openrouter.text, /env OPENROUTER_API_KEY\s+transport api-acp/);
-  assert.match(openrouter.text, /key-zai-glm-5-3\s+key\s+zai/);
+  assert.match(near.text, /nearai-deepseek-ai-deepseek-v4\s+nearai\s+deepseek/);
+  // Z.AI was removed: key:zai still parses as a generic key spec but is a plan problem.
+  const zai = renderPlan({ ...resolveRunConfig({ flags: { reviewers: 'key:zai:glm-5.3' }, root: '/nonexistent' }) });
+  assert.deepEqual(zai.problems, ['key-zai-glm-5-3: unknown provider zai']);
+});
+
+test('the recommended order names no removed provider', () => {
+  assert.deepEqual(ORCHESTRATOR_ORDER, ['cli:claude:opus', 'key:anthropic:claude-opus-5-5', 'scripted:judge']);
+  for (const spec of ORCHESTRATOR_ORDER) assert.doesNotThrow(() => parseReviewerSpec(spec), spec);
 });
 
 test('recommended orchestrator follows the OD-05 order and says why', () => {
@@ -53,7 +57,7 @@ test('the plan prints the alternate judge pickJudge would use: explicit, default
   const budgets = { passes: 1, toolBudget: 40, debate: { rounds: 2, maxClusters: 25, toolBudget: 12 }, maxCostUsd: null };
   const plan = (extra) => renderPlan({ reviewers: two, assign: 'matrix', budgets, ...extra }).text;
   assert.match(plan({ orchestrator: parseReviewerSpec('cli:claude:opus') }), /^Alternate judge: cli:codex:gpt-6\.1-sol \(default: first run reviewer of another vendor than anthropic\)$/m);
-  assert.match(plan({ orchestrator: parseReviewerSpec('cli:claude:opus'), alternateJudge: parseReviewerSpec('key:zai:glm-5.3') }), /^Alternate judge: key:zai:glm-5\.3$/m);
+  assert.match(plan({ orchestrator: parseReviewerSpec('cli:claude:opus'), alternateJudge: parseReviewerSpec('nearai:Qwen/Qwen3.8-Max') }), /^Alternate judge: nearai:Qwen\/Qwen3\.8-Max$/m);
   assert.match(renderPlan({ reviewers: [two[0]], assign: 'matrix', budgets, orchestrator: parseReviewerSpec('cli:claude:sonnet') }).text, /^Alternate judge: none \(no run reviewer of another vendor than anthropic; its clusters stay DISPUTED, no_independent_judge\)$/m);
   assert.match(plan({ orchestrator: parseReviewerSpec('scripted:judge') }), /^Alternate judge: not used/m);
   assert.match(plan({}), /^Orchestrator: none \(no debate or general review\)$/m);

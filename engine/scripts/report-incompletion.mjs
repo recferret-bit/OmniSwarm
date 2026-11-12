@@ -42,6 +42,9 @@ function scrubHostPath(text, root) {
   return s.split(normalized).join(REPORT_DIR_PLACEHOLDER).split(root).join(REPORT_DIR_PLACEHOLDER);
 }
 
+// Phase names of orchestrator-phases.mjs, as the progress line shows them.
+const PHASE_LABEL = Object.freeze({ prepare: 'Preparing sandbox', tests: 'Existing tests', review: 'Review', crosscheck: 'Cross-check', debate: 'Debate', adjudicate: 'Adjudication', 'general-review': 'General review', report: 'Report' });
+
 function surfaceFromJobName(name) {
   const m = /-((?:s[1-6])(?:-[a-z0-9]+)?)$/i.exec(String(name || ''));
   if (!m) return null;
@@ -55,6 +58,14 @@ function reviewerMetaLabel(jobOrAgent, reviewers) {
   if (!found) return text;
   return `${found.id} (${found.vendor}/${found.model})`;
 }
+
+// A reviewer that stopped before any review work needs an operator action, not just a re-run. Provider-neutral: the
+// key variable of each provider is in packages/schemas/providers.mjs and docs/providers.md.
+export const PROVIDER_SETUP_STEPS = Object.freeze({
+  live_required: 'Live provider calls are off: set OMNI_LIVE=1 for a real, billed API-provider run.',
+  auth_required: 'The reviewer was not authenticated: check its CLI login or its provider key (docs/providers.md lists each key variable).',
+  setup_error: 'The reviewer could not start: for an API provider, check that its key variable is set (docs/providers.md).',
+});
 
 export function categorizeFailureReason(reason, exitCode) {
   const r = String(reason || '').toLowerCase();
@@ -123,9 +134,14 @@ export function buildIncompletionNotes(first, second = {}) {
 
   // 1. Worker / surface pass failures (timeouts, usage limits, budget/cost_ceiling, provider errors)
   const workerExits = m.workerExits && typeof m.workerExits === 'object' ? m.workerExits : {};
+  const stageList = Array.isArray(m.stageFailures) ? m.stageFailures.map(String) : [];
+  // A session that never started (no exit, still pending, no recorded failure) did not fail at the provider: the run
+  // stopped before the review phase reached it. They get one note below instead of one provider_error each.
+  const notStarted = [];
   for (const [jobName, exitCode] of Object.entries(workerExits)) {
     if (exitCode === 0) continue;
     const job = jobByName.get(jobName);
+    if (exitCode == null && job?.state === 'pending' && !job.failure?.reason) { notStarted.push(jobName); continue; }
     const reasonCode = job?.failure?.reason || (exitCode === 130 && m.stageFailures?.includes('sandbox_unavailable') ? 'sandbox_unavailable' : exitCode === 124 ? 'timeout' : 'nonzero_exit');
     const category = categorizeFailureReason(reasonCode, exitCode);
     const surface = surfaceFromJobName(jobName) || 'assigned review scope';
@@ -143,7 +159,9 @@ export function buildIncompletionNotes(first, second = {}) {
       : `${surface} lacks validated findings from ${label}. Multi-vendor corroboration on ${surface} is reduced, leaving potential single-model blind spots.`;
     const nextStepText = category === 'budget_exhausted'
       ? `Raise --max-cost-usd or --tool-budget and re-run failed sessions with --restart-failed --resume-from ${REPORT_DIR_PLACEHOLDER}.`
-      : `Re-run failed sessions with --restart-failed --resume-from ${REPORT_DIR_PLACEHOLDER} or inspect ${surface} manually.`;
+      : PROVIDER_SETUP_STEPS[reasonCode]
+        ? `${PROVIDER_SETUP_STEPS[reasonCode]} Then re-run failed sessions with --restart-failed --resume-from ${REPORT_DIR_PLACEHOLDER}.`
+        : `Re-run failed sessions with --restart-failed --resume-from ${REPORT_DIR_PLACEHOLDER} or inspect ${surface} manually.`;
     add({
       category,
       code: `worker_${reasonCode}`,
@@ -151,6 +169,23 @@ export function buildIncompletionNotes(first, second = {}) {
       reason: reasonText,
       impact: impactText,
       nextStep: nextStepText,
+    });
+  }
+
+  if (notStarted.length) {
+    const cancelledIn = stageList.map((s) => /^run_cancelled:(.+)$/.exec(s)?.[1]).find(Boolean);
+    const sandboxDown = stageList.some((s) => s === 'sandbox_unavailable' || s.startsWith('sandbox_or_orchestrator:'));
+    const why = cancelledIn
+      ? `the run was cancelled during the ${PHASE_LABEL[cancelledIn] || cancelledIn} phase`
+      : sandboxDown ? 'the review sandbox failed before the review phase reached them' : 'the run stopped before the review phase reached them';
+    const ids = [...new Set(notStarted.map((name) => reviewers.find((r) => name.startsWith(`${r.id}-`))?.id || name))];
+    add({
+      category: 'stage_failure',
+      code: cancelledIn ? 'review_not_started_cancelled' : 'review_not_started',
+      source: 'review',
+      reason: `${notStarted.length} reviewer session(s) never started because ${why} (reviewers: ${ids.join(', ')}). No provider was called for them.`,
+      impact: 'No surface was reviewed by these sessions, so the report holds no findings from them; zero findings here is not a clean result.',
+      nextStep: cancelledIn ? 'Start a new run when ready.' : 'Fix the stage failure listed below, then start a new run.',
     });
   }
 
@@ -511,6 +546,19 @@ export function buildIncompletionNotes(first, second = {}) {
         ? `phase_${phaseName.replace(/[^a-z0-9]+/gi, '_')}_failed`
         : stageFailure;
 
+    if (normalizedCode === 'run_cancelled') {
+      const label = PHASE_LABEL[detail.split(':')[1]] || detail.split(':')[1] || 'an unknown';
+      add({
+        category: 'stage_failure',
+        code: 'run_cancelled',
+        source: 'pipeline',
+        reason: `The run was cancelled (Ctrl-C or SIGTERM) during the ${label} phase; every later phase was skipped.`,
+        impact: 'Only the phases that finished before the cancel produced output; nothing after them was reviewed.',
+        nextStep: 'Start a new run when ready.',
+      });
+      continue;
+    }
+
     if (normalizedCode === 'judge_unavailable') {
       if (!notes.some((n) => n.code === 'judge_unavailable')) {
         add({
@@ -594,7 +642,7 @@ export function buildIncompletionNotes(first, second = {}) {
     if (/missing or failed cross-check exit|expected cross-check output/i.test(err) && notes.some((n) => n.source.startsWith('crosscheck'))) continue;
     if (/worker exit is missing or nonzero|missing or invalid outputs/i.test(err)) {
       const prefix = err.split(':')[0]?.trim();
-      if (prefix && notes.some((n) => n.source === prefix)) continue;
+      if (prefix && (notes.some((n) => n.source === prefix) || notStarted.includes(prefix))) continue;
     }
     const budgetSubmissionErr = /^BUDGET:\s*([^:]+):\s*budget_exhausted_without_submission$/i.exec(err);
     if (budgetSubmissionErr) {

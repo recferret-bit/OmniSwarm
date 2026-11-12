@@ -4,7 +4,7 @@ import { NearConnector } from '@hot-labs/near-connect';
 import { AppError } from '../api/errors';
 import { env } from '../env';
 import { normalizeWalletError, type SignMessageInput, type WalletConnector } from './connector';
-import type { PaymentTransaction } from './payment';
+import type { WalletTransaction } from './payment';
 
 function txHashOf(outcome: unknown): string {
   const record = outcome as { transaction?: { hash?: unknown }; transaction_outcome?: { id?: unknown } } | null;
@@ -69,7 +69,7 @@ export function createNearConnector(): WalletConnector {
         throw normalizeWalletError(error);
       }
     },
-    async signAndSendTransaction(tx: PaymentTransaction) {
+    async signAndSendTransaction(tx: WalletTransaction) {
       const active = await wallet();
       try {
         const outcome = await active.signAndSendTransaction({ network, receiverId: tx.receiverId, actions: tx.actions });

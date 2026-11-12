@@ -43,6 +43,6 @@ export function MyRequests() {
   }
   if (status === 'error' && error) return <Alert>{error === 'UNAUTHORIZED' ? 'Sign a request from this browser to see your requests.' : messageFor(error)}</Alert>;
   if (status !== 'ready') return <p role="status">Loading your requests…</p>;
-  if (!requests.length) return <p>No requests yet. <Link href="/#review">Review a repository</Link>.</p>;
+  if (!requests.length) return <p>No requests yet. <Link href="/dashboard">Review a repository</Link>.</p>;
   return <ul className="request-list" aria-label="Your requests">{requests.map((row) => <Row key={row.requestId} row={row} />)}</ul>;
 }

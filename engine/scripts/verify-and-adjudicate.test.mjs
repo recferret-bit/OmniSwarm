@@ -5,7 +5,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { adjudicate } from './verify-and-adjudicate.mjs';
+import { adjudicate, groupedErrors } from './verify-and-adjudicate.mjs';
 import { loadAuditors } from './report-contract.mjs';
 
 const scripts = path.dirname(fileURLToPath(import.meta.url));
@@ -115,14 +115,14 @@ test('CLI wrapper keeps exit code and output', (t) => {
 });
 
 test('a review by a reviewer of the author\'s own vendor is ignored, whatever the reviewer ids (R-17c)', async (t) => {
-  const f = fixture(t, ['cli-claude-opus', 'openrouter-anthropic-x']);
+  const f = fixture(t, ['cli-claude-opus', 'nearai-x']);
   f.meta.reviewers = [
     { id: 'cli-claude-opus', family: 'cli', provider: 'claude', vendor: 'anthropic', model: 'requested-model' },
-    { id: 'openrouter-anthropic-x', family: 'openrouter', provider: 'openrouter', vendor: 'anthropic', model: 'requested-model' },
+    { id: 'nearai-x', family: 'nearai', provider: 'nearai', vendor: 'anthropic', model: 'requested-model' },
   ];
   f.put('meta.json', f.meta);
   f.save('cli-claude-opus', [finding({ title: 'Opus-only claim' }), controls()]);
-  f.save('openrouter-anthropic-x', [controls()]);
+  f.save('nearai-x', [controls()]);
   f.cross(() => 'refuted');
   const r = await adjudicate(f.dir);
   const row = r.scoredFindings.find((x) => x.title === 'Opus-only claim');
@@ -160,4 +160,16 @@ test('two vendors on the same line and surface are MODEL_AGREEMENT whatever thei
   f.save('codex', [finding({ title: 'Double spend on withdraw', location: at }), controls()]);
   const rows = (await adjudicate(f.dir)).scoredFindings;
   assert.deepEqual(rows.map((row) => row.status), ['MODEL_AGREEMENT']);
+});
+
+test('the terminal groups one message repeated across review jobs into a single line', () => {
+  const jobs = ['a-s1', 'a-s2', 'b-s1', 'b-s2', 'c-s1', 'd-s1'];
+  const msg = 'missing or invalid outputs (ENOENT). Worker exit status is missing; successful completion is unverified.';
+  const lines = groupedErrors([...jobs.map((j) => `${j}: ${msg}`), 'One or more review stages failed.', 'x-s9: not a known job'], jobs);
+  assert.deepEqual(lines, [
+    `6 review jobs: ${msg} (a-s1, a-s2, b-s1, b-s2, +2 more)`,
+    'One or more review stages failed.',
+    'x-s9: not a known job',
+  ]);
+  assert.deepEqual(groupedErrors(['a-s1: boom', 'a-s2: boom'], jobs), ['a-s1: boom\n  - a-s2: boom'], 'two repeats stay per job');
 });

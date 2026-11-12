@@ -15,8 +15,8 @@ import { readReportJson } from './report-contract.mjs';
 import { parseReviewerList, parseReviewerSpec } from './reviewer-registry.mjs';
 import { DEMO_FIXTURE } from './scripted-strategies.mjs';
 
-const [ZAI, QWEN] = parseReviewerList(['key:zai:glm-5.3', 'openrouter:qwen/qwen3.8-max-0902']);
-const JUDGE = parseReviewerSpec('openrouter:anthropic/claude-opus-5.5');
+const [DEEPSEEK, QWEN] = parseReviewerList(['nearai:deepseek-ai/DeepSeek-V4', 'nearai:Qwen/Qwen3.8-Max']);
+const JUDGE = parseReviewerSpec('nearai:meta-llama/Llama-5-70B');
 const BUDGETS = { passes: 1, toolBudget: 5, maxCostUsd: null, debate: { rounds: 2, toolBudget: 4, maxClusters: 25 } };
 const CITE = { file: 'src/lib.rs', startLine: 30, endLine: 30, quote: 'let next = self.balance.saturating_sub(amount);' };
 const WITHDRAW = {
@@ -43,11 +43,11 @@ function setup(t) {
     calls.push({ identity, bridgeArgs, budgets });
     if (identity.role === 'auditor') {
       // What the API shim records for a priced reviewer; the other reviewer reports no cost at all.
-      if (identity.agent === ZAI.id) {
+      if (identity.agent === DEEPSEEK.id) {
         fs.mkdirSync(path.join(options.directory, 'workspace'), { recursive: true });
         fs.writeFileSync(path.join(options.directory, 'workspace', 'api-session.json'), JSON.stringify({ usage: [{ prompt_tokens: 7, completion_tokens: 3, cost: 0.02, costSource: 'estimated' }] }));
       }
-      commitSubmission(out, identity.name, identity, [...(identity.agent === ZAI.id ? [WITHDRAW] : []), { verified_safe: [] }]);
+      commitSubmission(out, identity.name, identity, [...(identity.agent === DEEPSEEK.id ? [WITHDRAW] : []), { verified_safe: [] }]);
       return ok(identity, options);
     }
     if (identity.role === 'crosscheck') {
@@ -66,7 +66,7 @@ function setup(t) {
   const target = path.join(root, 'target');
   fs.mkdirSync(path.join(target, 'src'), { recursive: true });
   fs.copyFileSync(path.join(DEMO_FIXTURE, 'src/lib.rs'), path.join(target, 'src/lib.rs'));
-  const request = { target, out: path.join(root, 'report'), surface: 's1', reviewers: [ZAI, QWEN], orchestrator: JUDGE, budgets: BUDGETS };
+  const request = { target, out: path.join(root, 'report'), surface: 's1', reviewers: [DEEPSEEK, QWEN], orchestrator: JUDGE, budgets: BUDGETS };
   return { calls, review, startSandbox, request };
 }
 
@@ -93,7 +93,7 @@ test('debate turns, the judge and the general review launch through the bridge; 
   const general = readReportJson(out, 'general-review.json');
   assert.equal(general.executiveSummary, 'One confirmed access-control finding.');
   // A cost is shown only where a pass priced it; an unpriced reviewer is null, not a fabricated 0.
-  assert.deepEqual(general.contributions.map((row) => [row.reviewerId, row.costUsd]), [[ZAI.id, 0.02], [QWEN.id, null]]);
+  assert.deepEqual(general.contributions.map((row) => [row.reviewerId, row.costUsd]), [[DEEPSEEK.id, 0.02], [QWEN.id, null]]);
   for (const name of names) {
     assert.ok(readReportJson(out, `harness/bridge-${name}.json`).some((e) => e.tool.startsWith('submit_')), name);
     assert.equal(readReportJson(out, `harness/debate-budget-${name}.json`).calls, 1, `${name}: the read counts against the debate budget`);
@@ -107,7 +107,7 @@ test('debate turns, the judge and the general review launch through the bridge; 
   assert.deepEqual(progress.phases.map((row) => [row.name, row.state]), [['prepare', 'done'], ['tests', 'done'], ['review', 'done'], ['crosscheck', 'done'], ['debate', 'done'], ['adjudicate', 'done'], ['general-review', 'done'], ['report', 'done']]);
   assert.deepEqual(progress.debate, { clusters: 1, heard: 1, judged: 1, toJudge: 1 });
   assert.deepEqual(progress.crosscheck, { done: 2, total: 2 });
-  assert.deepEqual(progress.reviewers.map((row) => [row.id, row.state, row.jobsDone, row.jobs]), [[ZAI.id, 'done', 1, 1], [QWEN.id, 'done', 1, 1]]);
+  assert.deepEqual(progress.reviewers.map((row) => [row.id, row.state, row.jobsDone, row.jobs]), [[DEEPSEEK.id, 'done', 1, 1], [QWEN.id, 'done', 1, 1]]);
 });
 
 test('the bridge admits a judge only in the orchestrator role, under its own session names', async (t) => {
@@ -133,7 +133,7 @@ test('a crosscheck missing_report failure does not poison providerFailures or bl
     ...WITHDRAW, title: `Finding ${i + 1}`, location: [`src/lib.rs:${(i % 20) + 1}`],
   }));
   const review = async (options) => {
-    if (options.identity.role === 'auditor' && options.identity.agent === ZAI.id) {
+    if (options.identity.role === 'auditor' && options.identity.agent === DEEPSEEK.id) {
       const out = arg(options.bridgeArgs, '--report-dir');
       f.calls.push({ identity: options.identity, bridgeArgs: options.bridgeArgs, budgets: options.budgets });
       commitSubmission(out, options.identity.name, options.identity, [...manyClaims, { verified_safe: [] }]);

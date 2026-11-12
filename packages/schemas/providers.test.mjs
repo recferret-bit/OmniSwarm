@@ -1,15 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  PROVIDERS, accountPresetName, accountPresetProvider, accountProviders, adminProviders, apiProviders, envForSpec,
+  PROVIDERS, accountPresetName, accountPresetProvider, accountProviders, apiProviders, envForSpec,
   isModelId, providerById, providerEnvNames, providerOfSpec, specFor,
 } from './providers.mjs';
 import { loadSchema } from './index.mjs';
 
-test('the catalog names local, zai, openrouter and nearai, each separate from the others', () => {
-  assert.deepEqual(PROVIDERS.map((p) => p.id), ['local', 'zai', 'openrouter', 'nearai']);
+test('the catalog names local CLIs and NEAR AI Cloud only', () => {
+  assert.deepEqual(PROVIDERS.map((p) => p.id), ['local', 'nearai']);
   const api = apiProviders();
-  assert.deepEqual(api.map((p) => p.id), ['zai', 'openrouter', 'nearai']);
+  assert.deepEqual(api.map((p) => p.id), ['nearai']);
   // No two providers share a key variable, a spec prefix or a base URL.
   for (const field of ['keyEnv', 'specPrefix', 'baseUrl']) assert.equal(new Set(api.map((p) => p[field])).size, api.length, field);
   for (const p of api) {
@@ -18,7 +18,7 @@ test('the catalog names local, zai, openrouter and nearai, each separate from th
     assert.match(p.baseUrl, /^https:\/\//);
     assert.ok(p.dataPolicy.length > 20);
   }
-  assert.deepEqual(providerEnvNames(), ['NEARAI_API_KEY', 'OPENROUTER_API_KEY', 'ZAI_API_KEY', 'ZAI_BASE_URL']);
+  assert.deepEqual(providerEnvNames(), ['NEARAI_API_KEY']);
 });
 
 test('a provider whose key can come from an account has a fixed base URL', () => {
@@ -27,7 +27,8 @@ test('a provider whose key can come from an account has a fixed base URL', () =>
     assert.equal(p.baseUrlEnv, null, `${p.id} must not take a base URL override`);
     assert.equal(p.transport, 'openai-chat');
   }
-  assert.deepEqual(adminProviders().map((p) => p.id), ['zai', 'openrouter']);
+  // No provider takes an operator key from the admin page: the hosted service runs only on an account's own key.
+  for (const p of PROVIDERS) assert.ok(!p.keySources.includes('admin-page'), `${p.id} takes an admin-page key`);
 });
 
 test('every family and spec prefix in the catalog is one the reviewer-spec schema accepts', () => {
@@ -42,13 +43,14 @@ test('every family and spec prefix in the catalog is one the reviewer-spec schem
 
 test('specs map back to their provider and to only that provider\'s variables', () => {
   assert.equal(providerOfSpec('cli:claude:opus'), 'local');
-  assert.equal(providerOfSpec('key:zai:glm-5.3'), 'zai');
-  assert.equal(providerOfSpec('openrouter:qwen/qwen3.8-max-0902#qwen'), 'openrouter');
+  assert.equal(providerOfSpec('key:zai:glm-5.3'), null);
+  assert.equal(providerOfSpec('openrouter:qwen/qwen3.8-max-0902#qwen'), null);
   assert.equal(providerOfSpec('nearai:deepseek-ai/DeepSeek-V4'), 'nearai');
   assert.equal(providerOfSpec('scripted:lazy'), null);
   assert.equal(providerOfSpec('key:anthropic:claude-opus-5-5'), null);
   assert.deepEqual(envForSpec('nearai:m'), ['NEARAI_API_KEY']);
-  assert.deepEqual(envForSpec('cli:claude-zai:glm-5.3'), ['ZAI_API_KEY', 'ZAI_BASE_URL']);
+  assert.deepEqual(envForSpec('cli:claude-zai:glm-5.3'), []);
+  assert.deepEqual(envForSpec('openrouter:qwen/qwen3.8-max-0902'), []);
   assert.deepEqual(envForSpec('cli:claude:opus'), []);
   assert.throws(() => specFor('local', 'm'), /unknown API provider/);
   assert.throws(() => specFor('nearai', 'a b'), /invalid model id/);

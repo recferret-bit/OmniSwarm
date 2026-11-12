@@ -4,7 +4,6 @@
 import fs from 'node:fs';
 import { envForSpec, providerOfSpec } from '@omniswarm/schemas/providers';
 import { AppError } from '../shared/errors.ts';
-import { isPanelPreset, panelSpecs } from './panel.ts';
 
 /**
  * Provider variables per reviewer spec come from the provider catalog (packages/schemas/providers.mjs). Only
@@ -36,10 +35,6 @@ export function presetEnv(name: string, specs: string[]): ResolvedPreset {
 }
 
 export function resolvePreset(configPath: string, name: string): ResolvedPreset {
-  if (isPanelPreset(name)) {
-    const panel = panelSpecs(name);
-    return presetEnv(name, [panel.orchestrator, panel.alternateJudge, ...panel.reviewers]);
-  }
   if (!fs.existsSync(configPath)) refuse(`engine config ${configPath} is missing; preset ${name} cannot be resolved`);
   const config = JSON.parse(fs.readFileSync(configPath, 'utf8')) as { presets?: Record<string, Record<string, unknown>> };
   const preset = config.presets?.[name];

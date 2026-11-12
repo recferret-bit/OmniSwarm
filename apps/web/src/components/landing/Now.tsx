@@ -7,14 +7,14 @@ const NOW: FlowStep[] = [
     detail: 'audit local runs every installed CLI. Claude Opus orchestrates when claude is on PATH. One installed CLI does both jobs.',
   },
   {
-    title: 'Hosted panel',
-    lead: 'GLM 5.3 orchestrates. Qwen reviews. Two workers, one job each.',
-    detail: 'Optional add-ons: Opus 5.5, Sol 6.1, Argon 4, Grok 4.7. The worker decrypts a provider key only for that spawn.',
+    title: 'Your NEAR AI key',
+    lead: 'The cloud runs on your own NEAR AI Cloud key. Pick the models.',
+    detail: 'The first model orchestrates and every model reviews. The worker decrypts your key only for that spawn; the report records a fingerprint.',
   },
   {
     title: 'Dashboard and admin',
-    lead: 'Sample account starts a review. Admin stores a fingerprint, never the key.',
-    detail: 'The sample account is operator / operator and does not take a NEAR payment. The admin page is nginx basic auth, outside the public header.',
+    lead: 'Sign in with Google, X, or a NEAR wallet, then start a review.',
+    detail: 'The dashboard is its own page and holds your key as a fingerprint. Admin shows jobs only, behind nginx basic auth.',
   },
   {
     title: 'Large repositories',
@@ -27,9 +27,9 @@ const NOW: FlowStep[] = [
     detail: 'That run covers the reviewer registry, the sandbox, the intake API, the testnet contract, this app, and the guard.',
   },
   {
-    title: 'Testnet price',
-    lead: '1 NEAR. Refunded only when the review cannot run.',
-    detail: 'A finished review is not refunded. The deposit moves on the testnet registry, and the report hash is what you can check.',
+    title: 'Free',
+    lead: 'OmniSwarm charges nothing. You pay NEAR AI directly.',
+    detail: 'Model calls are billed to your own NEAR AI account. The report hash is still attested on NEAR testnet, so anyone can check it.',
   },
 ];
 

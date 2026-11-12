@@ -7,13 +7,14 @@ import { families, FamilyError } from './reviewer-families.mjs';
 import { parseReviewerSpec } from './reviewer-registry.mjs';
 import { buildSessionLaunch } from './agent-session-launch.mjs';
 
-test('key, openrouter, nearai and scripted are installed; a key provider without a preset is not', () => {
-  assert.deepEqual(families.list(), ['cli', 'key', 'openrouter', 'nearai', 'scripted']);
+test('cli, key, nearai and scripted are installed; a key provider without a preset is not', () => {
+  assert.deepEqual(families.list(), ['cli', 'key', 'nearai', 'scripted']);
   assert.equal(families.get('nearai').name, 'nearai');
   assert.equal(families.check(parseReviewerSpec('nearai:deepseek-ai/DeepSeek-V4')).ok, true);
   assert.equal(families.fingerprintEnv(parseReviewerSpec('nearai:x')), 'NEARAI_API_KEY');
   assert.deepEqual(families.envAllowlist(parseReviewerSpec('nearai:x')), ['NEARAI_API_KEY']);
-  assert.equal(families.get('openrouter').name, 'openrouter');
+  // The openrouter family was removed: no file, no wave, an unknown family.
+  assert.throws(() => families.get('openrouter'), { code: 'FAMILY_UNKNOWN' });
   assert.equal(families.get('key').transport, 'api-acp');
   assert.equal(families.check(parseReviewerSpec('key:anthropic:claude-opus-5-5')).code, 'FAMILY_NOT_INSTALLED');
   assert.throws(() => families.get('nonsense'), { code: 'FAMILY_UNKNOWN' });
@@ -21,9 +22,10 @@ test('key, openrouter, nearai and scripted are installed; a key provider without
 
 test('check() accepts installed W03 providers and rejects an unknown key provider', () => {
   assert.deepEqual(families.check(parseReviewerSpec('cli:claude:opus')), { ok: true });
-  assert.equal(families.check(parseReviewerSpec('openrouter:qwen/qwen3.8-max-0902')).ok, true);
-  assert.equal(families.check(parseReviewerSpec('cli:claude-zai:glm-5.3')).ok, true);
-  assert.equal(families.check(parseReviewerSpec('key:zai:glm-5.3')).ok, true);
+  assert.equal(families.check(parseReviewerSpec('nearai:Qwen/Qwen3.8-Max')).ok, true);
+  // Z.AI is gone both ways: as a key provider and as the claude-zai CLI variant.
+  assert.equal(families.check(parseReviewerSpec('cli:claude-zai:glm-5.3')).code, 'PROVIDER_UNKNOWN');
+  assert.equal(families.check(parseReviewerSpec('key:zai:glm-5.3')).code, 'PROVIDER_UNKNOWN');
   assert.equal(families.check(parseReviewerSpec('scripted:baseline')).ok, true);
   const unknown = families.check(parseReviewerSpec('key:foo:x'));
   assert.equal(unknown.code, 'PROVIDER_UNKNOWN');
@@ -31,10 +33,9 @@ test('check() accepts installed W03 providers and rejects an unknown key provide
   const deferred = families.check(parseReviewerSpec('key:openai:gpt-6.1-sol'));
   assert.equal(deferred.ok, false);
   assert.match(deferred.reason, /W03-05/);
-  const or = parseReviewerSpec('openrouter:qwen/qwen3.8-max-0902');
-  assert.equal(or.id, 'openrouter-qwen-qwen3-8-max-0902');
-  assert.equal(or.vendor, 'alibaba');
-  assert.deepEqual(parseReviewerSpec('cli:claude-zai:glm-5.3'), { id: 'cli-claude-zai-glm-5-3', family: 'cli', provider: 'claude-zai', vendor: 'zai', model: 'glm-5.3' });
+  const hosted = parseReviewerSpec('nearai:Qwen/Qwen3.8-Max');
+  assert.equal(hosted.id, 'nearai-qwen-qwen3-8-max');
+  assert.equal(hosted.vendor, 'alibaba');
 });
 
 test('cli reviewers receive no extra environment variables and claude, codex, grok and agy pin their model', () => {

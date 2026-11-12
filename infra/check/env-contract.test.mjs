@@ -7,7 +7,7 @@ function input(overrides = {}) {
     stack: parseEnv('POSTGRES_PASSWORD=\nSESSION_SECRET=\nNETWORK=testnet\nOMNI_DOMAIN=\n'),
     dev: parseEnv('OMNI_DOMAIN=omniswarm.localhost\nOMNI_HTTP_PORT=18480\n'),
     worker: parseEnv('DATABASE_URL=\nWORKER_CONCURRENCY=1\n'),
-    providers: parseEnv('ZAI_API_KEY=\nOPENROUTER_API_KEY=\n'),
+    providers: parseEnv(''),
     apiExample: parseEnv('DATABASE_URL=x\nSESSION_SECRET=x\nNETWORK=testnet\nWORKER_CONCURRENCY=1\n'),
     baseRefs: composeRefs('${POSTGRES_PASSWORD:?m} ${SESSION_SECRET:?m} ${NETWORK:?m} ${OMNI_DOMAIN:?m} ${OMNI_RELEASE:?m}'),
     devRefs: composeRefs('${OMNI_HTTP_PORT:?m} ${OMNI_DOMAIN}'),
@@ -51,21 +51,21 @@ test('an api variable nobody delivers is an error (the skeleton never passed ADM
 });
 
 test('a provider key in any compose service is an error', () => {
-  const composeJson = { services: { api: { environment: { DATABASE_URL: 'u', SESSION_SECRET: 's', NETWORK: 't', OPENROUTER_API_KEY: 'k' } } } };
+  const composeJson = { services: { api: { environment: { DATABASE_URL: 'u', SESSION_SECRET: 's', NETWORK: 't', NEARAI_API_KEY: 'k' } } } };
   const { errors } = checkContract(input({ composeJson }));
-  assert.ok(errors.includes('compose service api receives provider variable OPENROUTER_API_KEY; keys belong to the worker only'), errors.join('\n'));
+  assert.ok(errors.includes('compose service api receives provider variable NEARAI_API_KEY; keys belong to the worker only'), errors.join('\n'));
 });
 
 test('REPORTS_BASE_URL in the api is app config, not a provider variable', () => {
   const composeJson = { services: { api: { environment: { DATABASE_URL: 'u', SESSION_SECRET: 's', NETWORK: 't', REPORTS_BASE_URL: 'https://r' } } } };
   const { errors } = checkContract(input({ composeJson, apiExample: parseEnv('DATABASE_URL=x\nSESSION_SECRET=x\nNETWORK=testnet\nWORKER_CONCURRENCY=1\nREPORTS_BASE_URL=\n') }));
   assert.ok(!errors.some((e) => e.includes('provider variable')), errors.join('\n'));
-  const leaked = checkContract(input({ composeJson: { services: { api: { environment: { ZAI_BASE_URL: 'x' } } } } , providers: parseEnv('ZAI_API_KEY=\nZAI_BASE_URL=\n') })).errors;
-  assert.ok(leaked.includes('compose service api receives provider variable ZAI_BASE_URL; keys belong to the worker only'), leaked.join('\n'));
+  const leaked = checkContract(input({ composeJson: { services: { api: { environment: { EXAMPLE_BASE_URL: 'x' } } } }, providers: parseEnv('EXAMPLE_API_KEY=\nEXAMPLE_BASE_URL=\n') })).errors;
+  assert.ok(leaked.includes('compose service api receives provider variable EXAMPLE_BASE_URL; keys belong to the worker only'), leaked.join('\n'));
 });
 
 test('a non-provider name in providers.env.example is an error', () => {
-  const { errors } = checkContract(input({ providers: parseEnv('ZAI_API_KEY=\nDATABASE_URL=\n') }));
+  const { errors } = checkContract(input({ providers: parseEnv('NEARAI_API_KEY=\nDATABASE_URL=\n') }));
   assert.ok(errors.includes('DATABASE_URL (providers.env.example) is not a provider variable (<PROVIDER>_API_KEY or _BASE_URL)'));
 });
 
@@ -91,4 +91,17 @@ test('a dev-only value must be read by compose.dev.yml or by the local worker co
 test('requiredUnset lists the :? variables the owner must fill', () => {
   const i = input();
   assert.deepEqual(requiredUnset(i.stack, i.baseRefs), ['OMNI_DOMAIN', 'POSTGRES_PASSWORD', 'SESSION_SECRET']);
+});
+
+test('the donation build args are optional: declared empty, never required by compose', async () => {
+  const fs = await import('node:fs');
+  const read = (rel) => fs.readFileSync(new URL(`../${rel}`, import.meta.url), 'utf8');
+  const stack = parseEnv(read('env/stack.env.example'));
+  const refs = composeRefs(read('compose/compose.yml'));
+  for (const name of ['NEXT_PUBLIC_DONATION_ACCOUNT', 'NEXT_PUBLIC_DONATION_USDC_CONTRACT']) {
+    assert.equal(stack.get(name), '', `${name} must be declared empty in stack.env.example`);
+    assert.equal(refs.get(name), false, `${name} must be read by compose.yml without :?`);
+  }
+  assert.ok(!requiredUnset(stack, refs).some((name) => name.includes('DONATION')));
+  assert.equal(parseEnv(read('env/providers.env.example')).size, 0, 'providers.env.example declares no operator provider key');
 });

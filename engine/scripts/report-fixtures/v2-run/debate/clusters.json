@@ -7,12 +7,12 @@
       "severity": "low",
       "surface": "S1",
       "claimIds": [
-        "key-zai-glm-5-3-s1-auth#0",
-        "openrouter-qwen-qwen3-8-max-0902-s1-auth#0"
+        "nearai-deepseek-ai-deepseek-v4-s1-auth#0",
+        "nearai-qwen-qwen3-8-max-s1-auth#0"
       ],
       "rounds": 0,
       "vendors": [
-        "zai",
+        "deepseek",
         "alibaba"
       ]
     },
@@ -37,11 +37,11 @@
       "severity": "medium",
       "surface": "S1",
       "claimIds": [
-        "openrouter-anthropic-claude-opus-5-5-s1-auth#0"
+        "nearai-meta-llama-llama-5-70b-s1-auth#0"
       ],
       "rounds": 1,
       "vendors": [
-        "anthropic"
+        "meta"
       ]
     },
     {

@@ -12,6 +12,9 @@ describe('<WalletSlot>', () => {
     const user = userEvent.setup();
     render(<><WalletSlot /><MyRequests /></>);
     expect(screen.getByText('Connect your wallet to see your requests')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'alice.testnet' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'bob.test.near' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('list')).not.toBeInTheDocument();
     await user.click(screen.getAllByRole('button', { name: 'Connect NEAR wallet' })[0]!);
     expect(await screen.findByTestId('account')).toHaveTextContent('alice.testnet');
 

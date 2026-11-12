@@ -4,7 +4,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { scannerEvidence } from './scanner-evidence.mjs';
+import { killedDetail, scannerEvidence } from './scanner-evidence.mjs';
 import { analyseNodeDeps, analysePythonDeps } from './stack-detect.mjs';
 import { walk, rel } from './harness-walk.mjs';
 
@@ -27,11 +27,21 @@ function recordScanner(tool, result, scope = '.') {
   return row.state !== 'failed';
 }
 
-function runCmd(bin, args, cwd, timeoutMs, env) {
+// Semgrep's run time grows with the tree: close to three minutes for 3,000 files on the sandbox's two CPUs, and
+// longer on a busy host, so a fixed 180s limit killed it on mid-sized repositories. The sandbox passes the time
+// the whole lead scan has (AUDIT_HARNESS_BUDGET_MS); semgrep gets that less a minute, which the harness needs to
+// write its results.
+export function semgrepTimeoutMs(env = process.env) {
+  const budget = Number(env.AUDIT_HARNESS_BUDGET_MS);
+  return Number.isFinite(budget) && budget > 0 ? Math.max(30_000, budget - 60_000) : 15 * 60_000;
+}
+
+export function runCmd(bin, args, cwd, timeoutMs, env) {
   return new Promise((resolve) => {
     let stdout = '';
     let stderr = '';
     let child;
+    const started = Date.now();
     try {
       child = spawn(bin, args, { cwd, env, timeout: timeoutMs, killSignal: 'SIGKILL' });
     } catch (err) {
@@ -41,7 +51,8 @@ function runCmd(bin, args, cwd, timeoutMs, env) {
     child.stdout?.on('data', (b) => { if (stdout.length < 32 * 1024 * 1024) stdout += b; });
     child.stderr?.on('data', (b) => { if (stderr.length < 1024 * 1024) stderr += b; });
     child.on('error', (err) => resolve({ code: 127, stdout, stderr: `${stderr}${err.message}` }));
-    child.on('close', (code) => resolve({ code: code ?? 1, stdout, stderr }));
+    // A killed scanner has no exit code. The signal and the time it ran tell a time limit from another kill.
+    child.on('close', (code, signal) => resolve({ code: code ?? 1, stdout, stderr, ...(signal ? { signal, elapsedMs: Date.now() - started, timeoutMs } : {}) }));
   });
 }
 
@@ -330,7 +341,7 @@ async function prepareWriteTools(root, outDir, runOsv = (fn) => fn()) {
       '--config=/opt/audit-scanners/semgrep-rules', '--disable-nosem', '--no-git-ignore',
       '--exclude=node_modules', '--exclude=target', '--exclude=dist', '--exclude=harness-fixtures',
       root,
-    ], '/tmp', 180_000, cleanEnv({ SEMGREP_SEND_METRICS: 'off' }))
+    ], '/tmp', semgrepTimeoutMs(), cleanEnv({ SEMGREP_SEND_METRICS: 'off' }))
     : Promise.resolve(null);
 
   const osvPromise = hasOsv
@@ -370,7 +381,7 @@ async function prepareWriteTools(root, outDir, runOsv = (fn) => fn()) {
       missingScanner('semgrep', 'Executable unavailable');
     } else {
       lines.push(`## semgrep pinned upstream OWASP and Solidity security rules (exit ${semgrepRes.code})`);
-      lines.push(recordScanner('semgrep', semgrepRes) ? summariseSemgrep(semgrepRes.stdout, root) : 'FAILED: scanner did not produce a complete SAST result.');
+      lines.push(recordScanner('semgrep', semgrepRes) ? summariseSemgrep(semgrepRes.stdout, root) : ['FAILED: scanner did not produce a complete SAST result.', killedDetail(semgrepRes)].filter(Boolean).join(' '));
       lines.push('');
     }
     if (!hasOsv) {

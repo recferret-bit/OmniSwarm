@@ -15,6 +15,8 @@ import { Pill } from '../ui/Pill';
 import { PipelinePanel } from './PipelinePanel';
 import { ProgressPanel } from './ProgressPanel';
 import { ReviewerRows } from './ReviewerRows';
+import { ShareOnX } from './ShareOnX';
+import './share-x.css';
 import { TerminalState } from './TerminalState';
 import { statusLabel, Timeline } from './Timeline';
 
@@ -74,6 +76,7 @@ export function RequestStatusView({ id }: { id: string }) {
           </Alert>
         ) : null}
         {current.status === 'done' || current.status === 'refunded' ? <ReceiptSection id={id} /> : null}
+        {current.status === 'done' ? <ShareOnX requestId={id} incomplete={current.incomplete} /> : null}
         {current.status === 'done' ? (
           <p>
             {!open ? <Button onClick={() => setOpen(true)}>Open report</Button> : null}

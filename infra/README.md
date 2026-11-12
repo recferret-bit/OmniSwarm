@@ -56,23 +56,25 @@ The worker spawns `./bin/audit`, which builds and runs the review sandbox on the
 
 | File on the host (`root:root 0600`) | Example | Read by | Holds |
 |---|---|---|---|
-| `/etc/omniswarm/stack.env` | `env/stack.env.example` | `docker compose --env-file` only | hostnames, `POSTGRES_PASSWORD`, `SESSION_SECRET`, `ADMIN_TOKEN`, `GITHUB_TOKEN`, API settings |
+| `/etc/omniswarm/stack.env` | `env/stack.env.example` | `docker compose --env-file` only | hostnames, `POSTGRES_PASSWORD`, `SESSION_SECRET`, `ADMIN_TOKEN`, `GITHUB_TOKEN`, API settings, web build args (including the optional `NEXT_PUBLIC_DONATION_ACCOUNT` and `NEXT_PUBLIC_DONATION_USDC_CONTRACT`) |
 | `/etc/omniswarm/worker.env` | `env/worker.env.example` | systemd, for the worker units | `DATABASE_URL` (127.0.0.1), `WORKER_CONCURRENCY`, `REPORTS_ROOT`, chain settings |
-| `/etc/omniswarm/providers.env` | `env/providers.env.example` | systemd, for the worker units | `ZAI_API_KEY`, `OPENROUTER_API_KEY` |
+| `/etc/omniswarm/providers.env` | `env/providers.env.example` | systemd, for the worker units | nothing. It stays empty: a hosted review runs only on the account's own NEAR AI key (`account-nearai`), sealed under `ACCOUNT_KEYS_SECRET` (`worker.env`). The file exists because the unit loads it |
 | `/etc/omniswarm/operator-key.json` | (W10) | systemd `LoadCredential=` → worker only (`OPERATOR_KEY_FILE=%d/operator-key`) | function-call key |
 | `/etc/omniswarm/ops.env` | `env/ops.env.example` | systemd, for the health, prune and log-hygiene timers | alert webhook, heartbeat URL, thresholds |
 | `/etc/omniswarm/omniswarm.config.json` (optional) | `engine/omniswarm.config.example.json` | `release.sh` copies it into each release; the worker resolves `HOSTED_PRESET` from it | engine presets (not secret) |
 
-- Empty values in the examples must be set by the owner. Every compose reference to one is `${VAR:?}`, so `docker compose up` refuses to start without it. The gate proves this for each variable separately.
+- Empty values in the examples must be set by the owner. Every compose reference to one is `${VAR:?}`, so `docker compose up` refuses to start without it. The gate proves this for each variable separately. The exceptions are optional and read as `${VAR:-}`: `GITHUB_TOKEN`, `ALLOWED_PRESETS`, `ACCOUNT_KEYS_SECRET` (`secrets-check.mjs` requires it only when `ALLOWED_PRESETS` names an `account-` preset, but no account can save its NEAR AI key without it, so set it) and the two donation build args (an empty recipient hides the donation section).
 - Compose maps each value into the services that read it. Nothing is passed through wholesale. Provider keys never reach a container, and `SESSION_SECRET`/`ADMIN_TOKEN` reach only `api` (`check/compose-policy.mjs`).
 - `check/env-contract.mjs` checks the contract both ways. Every variable a compose file reads is declared, every declared variable is read, examples carry no secret value, and every variable in `apps/api/.env.example` is delivered somewhere. Variables infra sets that `apps/api/.env.example` does not declare are warnings. They become errors with `OMNI_ENV_CONTRACT=strict`.
 - `ops.env.example` is in the contract too. Its names are `OMNI_*`, each is read by an `infra/deploy` script, and URLs stay empty.
 - Keep the owner's filled copies outside the repo (`~/.omniswarm/env/`). Install them with `infra/deploy/secrets.sh [--dry-run] <ssh-host>`. It runs `secrets-check.mjs` first, which refuses:
-  - a missing or empty value
+  - a missing or empty value (the optional ones above may stay empty)
   - `NEXT_PUBLIC_CONTRACT_ID` different from `CONTRACT_ID`
   - a worker that disagrees with the stack
   - a `DATABASE_URL` without `POSTGRES_PASSWORD`
   - a placeholder contract id
+  - a donation recipient on another network than `NETWORK`
+  - any variable in `providers.env`
   - short secrets
   - the contract account's key in place of the operator's
 

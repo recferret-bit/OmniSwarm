@@ -18,4 +18,4 @@ An allow / warn / block wrapper around an agent's signer. The guard reads chain 
 **Owner:** the lead. It is the cross-track contract (AGENTS.md, "Tracks and boundaries"); a needed change is a change request to the lead.
 **Gate command:** `npm run test:schemas`.
 
-JSON Schemas for the engine, the intake API, jobs and attestations, plus the shared helpers both apps import by package name: `canonical-message` (request message and hash), `canonical-json` (report hash input), `nep413` (NEP-413 payload and base58) and `providers` (the LLM provider catalog: local, Z.AI, OpenRouter, NEAR AI Cloud; see [`docs/providers.md`](../docs/providers.md)).
+JSON Schemas for the engine, the intake API, jobs and attestations, plus the shared helpers both apps import by package name: `canonical-message` (request message and hash), `canonical-json` (report hash input), `nep413` (NEP-413 payload and base58) and `providers` (the LLM provider catalog: local CLIs and NEAR AI Cloud; see [`docs/providers.md`](../docs/providers.md)).

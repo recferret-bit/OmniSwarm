@@ -1,22 +1,15 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState } from 'react';
 import { ReportTabs } from '@/components/report/ReportTabs';
 import { statusLabel } from '@/components/request/Timeline';
 import type { Status } from '@/lib/api/schema.gen';
 import { Alert } from '@/components/ui/Alert';
-import { Button } from '@/components/ui/Button';
-import { Field } from '@/components/ui/Field';
 import { Panel } from '@/components/ui/Panel';
 import { Pill, type Tone } from '@/components/ui/Pill';
 import { Stat, StatGrid } from '@/components/ui/Stat';
-import { publicAdminProviders } from '@omniswarm/schemas/providers-public';
 
-interface StatusView { set: boolean; fingerprint: string | null }
-// One entry per provider whose catalog entry takes an operator key on this page (packages/schemas/providers-public.mjs).
-const ADMIN_PROVIDERS = publicAdminProviders();
-type Keys = Record<string, StatusView>;
 interface Job {
   id: string; account: string; repo: string; status: string; scope: string;
   theme: string | null; parentId: string | null; failureCause: string | null; createdAt: string;
@@ -128,61 +121,21 @@ function Jobs({ jobs }: { jobs: Job[] | null }) {
   );
 }
 
-function KeyLine({ name, view }: { name: string; view: StatusView | null }) {
-  if (!view) return <Stat label={name} value="…" />;
-  return (
-    <Stat
-      label={name}
-      value={<>
-        <Pill tone={view.set ? 'good' : 'warn'}>{view.set ? 'Set' : 'Not set'}</Pill>
-        {view.fingerprint ? <span className="muted"> {view.fingerprint}</span> : null}
-      </>}
-    />
-  );
-}
-
 export default function AdminPage() {
-  const [keys, setKeys] = useState<Keys | null>(null);
   const [activity, setActivity] = useState<Activity | null>(null);
-  const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
   useEffect(() => {
     let live = true;
-    void Promise.all([readJson<Keys>('/api/operator/providers'), readJson<Activity>('/api/operator/activity')]).then(([nextKeys, nextActivity]) => {
-      if (!live) return;
-      setKeys(nextKeys);
-      setActivity(nextActivity);
+    void readJson<Activity>('/api/operator/activity').then((nextActivity) => {
+      if (live) setActivity(nextActivity);
     }).catch((caught: unknown) => {
       if (live) setError(caught instanceof Error ? caught.message : 'Could not read the admin view');
     });
     return () => { live = false; };
   }, []);
-
-  const save = async (event: FormEvent) => {
-    event.preventDefault();
-    setPending(true);
-    setError(null);
-    setNotice(null);
-    try {
-      const response = await fetch('/api/operator/providers', {
-        method: 'PUT',
-        credentials: 'include',
-        headers: { accept: 'application/json', 'content-type': 'application/json' },
-        body: JSON.stringify(Object.fromEntries(Object.entries(drafts).filter(([, value]) => value))),
-      });
-      if (!response.ok) throw new Error('The keys were not saved');
-      setKeys(await response.json() as Keys);
-      setDrafts({});
-      setNotice('Keys saved. A blank field kept the key already stored.');
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'The keys were not saved');
-    } finally {
-      setPending(false);
-    }
-  };
 
   const setFree = async (freeChecks: boolean) => {
     setPending(true);
@@ -233,27 +186,6 @@ export default function AdminPage() {
               label: 'Settings',
               content: (
                 <div className="admin-stack">
-                  <section className="admin-stack">
-                    <h2 className="panel__title">Provider keys</h2>
-                    <StatGrid label="Provider keys">
-                      {ADMIN_PROVIDERS.map((provider) => <KeyLine key={provider.id} name={provider.label} view={keys?.[provider.id] ?? null} />)}
-                    </StatGrid>
-                    <form className="quote-form" onSubmit={(event) => void save(event)}>
-                      {ADMIN_PROVIDERS.map((provider) => (
-                        <Field
-                          key={provider.id}
-                          label={`${provider.label} API key`}
-                          name={provider.id}
-                          type="password"
-                          autoComplete="off"
-                          value={drafts[provider.id] ?? ''}
-                          onChange={(event) => setDrafts((current) => ({ ...current, [provider.id]: event.target.value }))}
-                          hint="Leave blank to keep the saved key."
-                        />
-                      ))}
-                      <Button type="submit" busy={pending} disabled={!keys}>Save keys</Button>
-                    </form>
-                  </section>
                   <section className="admin-stack">
                     <h2 id="free-checks" className="panel__title">Free checks {activity ? <Pill tone={activity.freeChecks ? 'good' : 'neutral'}>{activity.freeChecks ? 'On' : 'Off'}</Pill> : null}</h2>
                     <div role="radiogroup" aria-labelledby="free-checks" className="choice">

@@ -1,0 +1,21 @@
+[
+  {
+    "title": "nearai-deepseek-ai-deepseek-v4 S2 finding 1",
+    "surface": "S2",
+    "severity": "high",
+    "confidence": "confirmed",
+    "location": [
+      "src/lib.rs:30"
+    ],
+    "impact": "Fixture impact.",
+    "preconditions": "Fixture.",
+    "analysis": "The line omits the owner check.",
+    "validation": "Source inspection.",
+    "attack": [],
+    "poc": "",
+    "fix": "Compare the predecessor to the owner."
+  },
+  {
+    "verified_safe": []
+  }
+]

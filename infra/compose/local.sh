@@ -223,7 +223,7 @@ case "${1:-}" in
     fi
     cat <<EOF
 stack up: http://$(omni_env_value OMNI_DOMAIN):$port/
-account: http://$(omni_env_value OMNI_DOMAIN):$port/dashboard  (operator / operator)
+account: http://$(omni_env_value OMNI_DOMAIN):$port/dashboard  (Google, X, or a NEAR wallet)
 admin:   http://$(omni_env_value OMNI_DOMAIN):$port/admin      (nginx asks: user admin, password is ADMIN_BASIC_PASSWORD in $env_file)
 $near_line
 local:   ./bin/audit local [--repo <dir> | --github owner/repo]

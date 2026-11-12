@@ -7,11 +7,12 @@ Claude Code session notes for editing OmniSwarm. Shared rules for every coding a
 ```sh
 ./bin/audit local                 # review the current directory with installed claude, codex, grok, agy
 ./bin/audit local --repo <path>   # or --github owner/repo
-./bin/audit local --provider nearai --models <m,...>   # or zai / openrouter; key variable from your own shell (docs/providers.md)
+./bin/audit local --provider nearai --models <m,...>   # or --nearai <m,...>; NEARAI_API_KEY from your own shell (docs/providers.md)
+./bin/audit local --step-by-step  # Stage 1 + Step 2 advice; then ./bin/audit step|advise|debate <report-dir>
 npm run stack:local               # http://omniswarm.localhost:18480/
 ```
 
-`audit local` prefers Claude Opus as orchestrator. One installed CLI is both orchestrator and reviewer. The local stack is HTTP, not HTTPS. `/dashboard` is the sample account (`operator` / `operator`): GLM 5.3 orchestrates, Qwen reviews, and Opus 5.5, Sol 6.1, Argon 4 and Grok 4.7 are optional. `/admin` is a separate page. nginx basic auth (`admin` / `ADMIN_BASIC_PASSWORD` in `infra/compose/.local/stack.env`) runs before the page or `/api/operator/providers` is proxied. That page is where the Z.AI and OpenRouter keys are saved. A signed-in account saves its own NEAR AI Cloud key on `/dashboard` or `/me` (provider catalog: `packages/schemas/providers.mjs`). Two host workers are started with the stack; each runs one job. With the default local sandbox (`NEAR_LOCAL=1`) those workers use the mock engine so the home-page review finishes. `NEAR_LOCAL=0` keeps the CLI panel workers on the mock chain. `OMNI_LIVE=1 LOCAL_ENGINE_RUNNER=cli npm run stack:local` runs real models on the sandbox chain (dashboard reviews only). `npm run stack:local:down` stops them.
+`audit local` prefers Claude Opus as orchestrator. One installed CLI is both orchestrator and reviewer. The local stack is HTTP, not HTTPS. On `/dashboard` a user signs in (Google, X or a NEAR wallet), pastes their own NEAR AI Cloud key and picks models; every dashboard review runs on that key (`account-nearai`, provider catalog: `packages/schemas/providers.mjs`). OmniSwarm charges users nothing; the dashboard and the end of the landing page show an optional NEAR USDC donation when `NEXT_PUBLIC_DONATION_ACCOUNT` is set. The landing page links to `/dashboard` instead of a quote or pay form, and the payment backend is dormant. `/admin` is a separate page for jobs, operators and free checks. nginx basic auth (`admin` / `ADMIN_BASIC_PASSWORD` in `infra/compose/.local/stack.env`) runs before the page or `/api/operator/` is proxied. It saves no provider key. Two host workers are started with the stack; each runs one job. With the default local sandbox (`NEAR_LOCAL=1`) those workers use the mock engine so a review finishes without a model call. `NEAR_LOCAL=0` keeps the CLI-engine workers on the mock chain. `OMNI_LIVE=1 LOCAL_ENGINE_RUNNER=cli npm run stack:local` runs real models on the sandbox chain (dashboard reviews only). `npm run stack:local:down` stops them.
 
 If the task is to review another repository, use `./bin/audit local` or `./bin/audit run --repo <path>` or `--github owner/repo`. Do not invent a second review loop, and do not generate exploits or PoCs as a substitute for that workflow.
 
@@ -36,7 +37,7 @@ The skill's job is the target review. It does not grant this session permission 
 
 ## Key policy
 
-Provider keys follow AGENTS.md "Key policy": operator environment, or the local stack's admin page, then exactly one allow-listed variable per reviewer process for its own provider. Never the MCP bridge or the sandbox. Reports store only a `keyFingerprint`. OpenRouter requests carry `data_collection: "deny"`. This session never reads, prints or writes a key, `infra/compose/.local/stack.env`, or `infra/compose/.local/secrets/`. It does not make real provider calls (`check-agents --live`) unless asked.
+Provider keys follow AGENTS.md "Key policy": the operator's own shell for `audit local --provider nearai`, or a signed-in account's own NEAR AI key for hosted reviews, then exactly one allow-listed variable per reviewer process for its own provider. The host holds no operator provider key. Never the MCP bridge or the sandbox. Reports store only a `keyFingerprint`. This session never reads, prints or writes a key, `infra/compose/.local/stack.env`, or `infra/compose/.local/secrets/`. It does not make real provider calls (`check-agents --live`) unless asked.
 
 ## How to change the suite
 

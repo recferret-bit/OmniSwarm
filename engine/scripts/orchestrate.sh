@@ -186,6 +186,8 @@ fi
 if [ "$code" -ne 0 ] && [ "${OMNI_DEMO:-0}" = "1" ]; then
   # The demo decides its own outcome (audit-demo-verdict.mjs); do not announce a failed audit first.
   echo "Demo run finished (engine exit $code); checking the demo verdict for: $OUTPUT_DIR" >&2
+elif [ "$code" -eq 130 ]; then
+  echo "AUDIT CANCELLED (exit 130); nothing after the cancelled phase ran. Partial output at: $OUTPUT_DIR" >&2
 elif [ "$code" -ne 0 ]; then
   echo "AUDIT FAILED (exit $code); partial output at: $OUTPUT_DIR" >&2
 else

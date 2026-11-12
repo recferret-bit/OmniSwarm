@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { continuationText, modelMatches, runReviewSession, permissionDecision, preflightBridge } from './agent-session.mjs';
+import { continuationText, modelMatches, passLedger, runReviewSession, permissionDecision, preflightBridge } from './agent-session.mjs';
 import { openSessionStore } from './agent-session-store.mjs';
 import { buildSessionLaunch, sessionEnvironment } from './agent-session-launch.mjs';
 
@@ -210,6 +210,91 @@ readline.createInterface({input:process.stdin}).on('line', line => {
   const prompts = fs.readFileSync(path.join(root, 'quiet', 'workspace', 'prompts.txt'), 'utf8').trim().split('\n');
   assert.match(prompts[1], /Call submit_crosscheck_report now/);
   assert.doesNotMatch(prompts[1], /Budget exhausted/);
+});
+
+test('with a bridge ledger the pass is cancelled on the bridge\'s count, not on the calls the agent announces', async t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'audit-ledger-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const executable = path.join(root, 'ledger.mjs');
+  // Announces <calls> read calls in one batch; then "submit" hands in, "end" ends the turn, "wait" stays in the turn.
+  fs.writeFileSync(executable, `
+import fs from 'node:fs';
+import readline from 'node:readline';
+const send = msg => process.stdout.write(JSON.stringify({jsonrpc:'2.0',...msg})+'\\n');
+const sid = 'ledger-session';
+const [mode, calls] = [process.argv[2], Number(process.argv[3])];
+let pending;
+readline.createInterface({input:process.stdin}).on('line', line => {
+  const msg = JSON.parse(line);
+  if (msg.method === 'initialize') send({id:msg.id,result:{protocolVersion:1,agentCapabilities:{loadSession:true}}});
+  else if (msg.method === 'session/new') send({id:msg.id,result:{sessionId:sid}});
+  else if (msg.method === 'session/cancel') { fs.appendFileSync('events.txt', 'cancel\\n'); if (pending) send({id:pending,result:{stopReason:'cancelled'}}); pending = null; }
+  else if (msg.method === 'session/prompt') {
+    fs.appendFileSync('prompts.txt', JSON.stringify(msg.params.prompt[0].text) + '\\n');
+    pending = msg.id;
+    for (let i = 0; i < calls; i++) send({method:'session/update',params:{sessionId:sid,update:{sessionUpdate:'tool_call',toolCallId:'t'+i,title:i % 2 ? 'read_file' : 'call_mcp_tool'}}});
+    if (mode === 'wait') return;
+    // The turn stays open long enough for a cancel to land before it hands in.
+    setTimeout(() => {
+      if (!pending) return;
+      if (mode === 'submit') send({method:'session/update',params:{sessionId:sid,update:{sessionUpdate:'tool_call',toolCallId:'s',title:'submit_audit_report'}}});
+      send({id:pending,result:{stopReason:'end_turn'}}); pending = null;
+    }, 200);
+  }
+});
+`);
+  // toolBudget 2: the bridge serves 2 calls, answers 3 with "submit now", then refuses and marks the pass exhausted.
+  const run = (mode, calls, record, dir) => {
+    const reportDir = path.join(root, `${dir}-report`);
+    fs.mkdirSync(path.join(reportDir, 'harness'), { recursive: true });
+    if (record) fs.writeFileSync(path.join(reportDir, 'harness', 'budget-claude.json'), JSON.stringify({ version: 1, reviewer: 'claude', passes: { 's1:1': record }, spentUsd: 0 }));
+    return runReviewSession(
+      { directory: path.join(root, dir), identity, bridgeArgs: ['--report-dir', reportDir, '--role', 'auditor', '--agent', 'claude', '--surface', 'S1', '--pass', '1', '--tool-budget', '2'], prompt: 'Review.', budgets: { toolBudget: 2, passes: 1, maxCostUsd: null } },
+      { heartbeatMs: 30_000, preflight: async () => ({ state: 'ready', tools: [] }), launch: ({ workDir }) => ({ invocation: { executable: process.execPath, args: [executable, mode, String(calls)], cwd: workDir, env: process.env }, mcpServers: [{}], transport: 'inert_acp_fixture' }) },
+    );
+  };
+  const events = dir => { try { return fs.readFileSync(path.join(root, dir, 'workspace', 'events.txt'), 'utf8'); } catch { return ''; } };
+  const prompts = dir => fs.readFileSync(path.join(root, dir, 'workspace', 'prompts.txt'), 'utf8').trim().split('\n');
+
+  // Nine announced calls are more than N+3, but the bridge served 2 and never said "submit now": an agent's own
+  // tools and a parallel batch still in flight are not the pass's count.
+  const batch = await run('submit', 9, { calls: 2, graceUsed: 0, filesRead: [], finalizeOnlyAt: null }, 'batch');
+  assert.equal(batch.code, 0);
+  assert.equal(batch.stop, 'submitted');
+  assert.equal(events('batch'), '', 'a pass the bridge has not exhausted is not cancelled');
+  const noCalls = await run('submit', 9, null, 'no-record');
+  assert.equal(noCalls.stop, 'submitted', 'no bridge record yet means no bridge call was refused');
+
+  // The bridge refused a call past the grace. Up to 3 further announced calls are the rest of that batch.
+  const exhausted = { calls: 2, graceUsed: 3, filesRead: [], finalizeOnlyAt: '2026-01-01T00:00:00.000Z', exhausted: true, exhaustedAt: '2026-01-01T00:00:01.000Z' };
+  const tail = await run('end', 3, exhausted, 'tail');
+  assert.equal(tail.stop, 'budget');
+  assert.equal(prompts('tail').length, 2, 'the rest of a batch is tolerated, so the pass still gets its one correction');
+  assert.match(prompts('tail')[1], /Call submit_audit_report now/);
+  const ignored = await run('wait', 4, exhausted, 'ignored');
+  assert.equal(ignored.code, 0);
+  assert.equal(ignored.stop, 'budget');
+  assert.match(events('ignored'), /cancel/);
+  assert.equal(prompts('ignored').length, 1, 'no correction turn after a budget cancel');
+
+  // Calls the bridge never counted are bounded too: twice the allowance (N+3 = 5).
+  const unseen = await run('wait', 11, { calls: 0, graceUsed: 0, filesRead: [], finalizeOnlyAt: null }, 'unseen');
+  assert.equal(unseen.stop, 'budget');
+  assert.match(events('unseen'), /cancel/);
+  const within = await run('submit', 10, { calls: 0, graceUsed: 0, filesRead: [], finalizeOnlyAt: null }, 'within');
+  assert.equal(within.stop, 'submitted');
+  assert.equal(events('within'), '');
+
+  // Debate and judge sessions have no pass ledger: the announced calls stay their only count.
+  for (const role of ['debater', 'orchestrator', 'verification']) assert.equal(passLedger({ bridgeArgs: ['--report-dir', root, '--role', role, '--agent', 'claude', '--pass', '1'] }), null, role);
+  assert.equal(passLedger({ bridgeArgs: ['--report-dir', root, '--role', 'auditor'] }), null, 'no reviewer, no ledger');
+  assert.equal(passLedger({ bridgeArgs: [] }), null);
+  // A cross-check is launched without --pass; the bridge counts it as pass 1 under its own key.
+  const crossDir = path.join(root, 'cross-report');
+  fs.mkdirSync(path.join(crossDir, 'harness'), { recursive: true });
+  fs.writeFileSync(path.join(crossDir, 'harness', 'budget-claude.json'), JSON.stringify({ version: 1, reviewer: 'claude', passes: { 'crosscheck:1': { calls: 7 }, 's4:2': { calls: 9 } }, spentUsd: 0 }));
+  assert.equal(passLedger({ bridgeArgs: ['--report-dir', crossDir, '--role', 'crosscheck', '--agent', 'claude', '--tool-budget', '60', '--surface', 'ALL'] })().calls, 7);
+  assert.equal(passLedger({ bridgeArgs: ['--report-dir', crossDir, '--role', 'auditor', '--agent', 'claude', '--pass', '2', '--auditor', 'claude-s4-config', '--surface', 'S4'] })().calls, 9);
 });
 
 test('ACP session records completion and can load the exact saved conversation', async t => {

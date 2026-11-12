@@ -4,7 +4,7 @@ import { adjudicateCluster, pickJudge } from './debate-judge.mjs';
 import { classifyArgument, rulesVerdict } from './debate-rules.mjs';
 import { parseReviewerSpec } from './reviewer-registry.mjs';
 
-const [claude, codex, grok, openrouterClaude, judge] = ['cli:claude:opus', 'cli:codex:gpt-5.5', 'cli:grok:grok-4', 'openrouter:anthropic/claude-opus-5.5', 'scripted:judge'].map(parseReviewerSpec);
+const [claude, codex, grok, sonnet, judge] = ['cli:claude:opus', 'cli:codex:gpt-5.5', 'cli:grok:grok-4', 'cli:claude:sonnet', 'scripted:judge'].map(parseReviewerSpec);
 const cluster = (vendors, extra = {}) => ({ id: 'CLUSTER-1', status: 'QUEUED', severity: 'high', vendors, citationsOk: true, ...extra });
 const ok = { file: 'src/lib.rs', startLine: 2, endLine: 2, quote: 'x', valid: true };
 const turn = (anonId, verdict, citations, extra = {}) => ({ anonId, round: 1, verdict, citations, discarded: false, conformitySuspect: false, ...extra });
@@ -19,7 +19,7 @@ test('the judge never shares a vendor with an author; the alternate takes over, 
     const choice = pickJudge(cluster(authors), { orchestrator: claude, alternate: grok, reviewers });
     if (choice) assert.equal(authors.includes(choice.record.vendor), false, authors.join());
   }
-  assert.equal(pickJudge(cluster(['anthropic']), { orchestrator: claude, reviewers: [claude, openrouterClaude] }), null);
+  assert.equal(pickJudge(cluster(['anthropic']), { orchestrator: claude, reviewers: [claude, sonnet] }), null);
 });
 
 test('with no independent judge the cluster stays DISPUTED and says why', async () => {

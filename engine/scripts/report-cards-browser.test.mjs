@@ -30,13 +30,13 @@ const win = { location: { hash: '' }, addEventListener() {} };
 const visible = (cards) => cards.filter((card) => !card.hidden).map((card) => card.attributes.id);
 
 test('cardMatches combines severity, surface, status, reviewer and search', () => {
-  const card = { severity: 'info', surface: 'S1', status: 'LIKELY', reviewers: ['key-zai-glm-5-3-s1-auth'], text: 'logged secret in src/log.ts' };
+  const card = { severity: 'info', surface: 'S1', status: 'LIKELY', reviewers: ['nearai-deepseek-ai-deepseek-v4-s1-auth'], text: 'logged secret in src/log.ts' };
   const all = { severity: 'all', surface: 'all', status: '', reviewer: '', query: '' };
   assert.equal(cardMatches(card, all), true);
   assert.equal(cardMatches(card, { ...all, severity: 'low' }), true);
   assert.equal(cardMatches(card, { ...all, severity: 'high' }), false);
-  assert.equal(cardMatches(card, { ...all, status: 'LIKELY', reviewer: 'key-zai-glm-5-3', query: 'log.ts' }), true);
-  assert.equal(cardMatches(card, { ...all, reviewer: 'key-zai' }), false);
+  assert.equal(cardMatches(card, { ...all, status: 'LIKELY', reviewer: 'nearai-deepseek-ai-deepseek-v4', query: 'log.ts' }), true);
+  assert.equal(cardMatches(card, { ...all, reviewer: 'nearai-deepseek' }), false);
   assert.equal(cardMatches(card, { ...all, query: 'withdraw' }), false);
   assert.match(browserScript(), /^\(function installReport\(doc, matches\)[\s\S]*\(function installPage\(doc, win\)/);
 });

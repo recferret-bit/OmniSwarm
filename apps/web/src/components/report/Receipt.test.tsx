@@ -9,7 +9,7 @@ const YOCTO = '1000000000000000000000000';
 
 const fixture: ReceiptBody = {
   paid: { yocto: YOCTO, tx: 'PayTx1111111111111111111111111111111111111111' },
-  reviewers: [{ id: 'key-zai-glm-5-3', vendor: 'zai', model: 'glm-5.3', calls: 4, tokens: 1800, usd: 0.02 }],
+  reviewers: [{ id: 'nearai-deepseek-ai-deepseek-v4', vendor: 'deepseek', model: 'deepseek-ai/DeepSeek-V4', calls: 4, tokens: 1800, usd: 0.02 }],
   check: { passed: 2, total: 3, byStatus: { CONFIRMED: 1, REFUTED: 1, DISPUTED: 1 } },
   attestation: { tx: 'AttestTx11111111111111111111111111111111111111', hash: HASH, match: true },
 };
@@ -23,8 +23,8 @@ describe('receipt', () => {
     expect(screen.getByRole('link', { name: 'payment transaction' })).toHaveAttribute(
       'href', 'https://explorer.mock.invalid/txns/PayTx1111111111111111111111111111111111111111',
     );
-    expect(screen.getByRole('cell', { name: 'glm-5.3' })).toBeInTheDocument();
-    expect(screen.getByRole('cell', { name: 'zai' })).toBeInTheDocument();
+    expect(screen.getByRole('cell', { name: 'deepseek-ai/DeepSeek-V4' })).toBeInTheDocument();
+    expect(screen.getByRole('cell', { name: 'deepseek' })).toBeInTheDocument();
     expect(screen.getByRole('cell', { name: '4' })).toBeInTheDocument();
     expect(screen.getByRole('cell', { name: '1800' })).toBeInTheDocument();
     expect(screen.getByRole('cell', { name: '$0.02' })).toBeInTheDocument();

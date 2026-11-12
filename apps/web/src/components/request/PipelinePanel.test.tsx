@@ -147,20 +147,24 @@ describe('<Dashboard> pipelineMode selector', () => {
     const user = userEvent.setup();
     vi.spyOn(api, 'session').mockResolvedValue({ account: 'operator' });
     vi.spyOn(api, 'listMine').mockResolvedValue({ requests: [] });
-    vi.spyOn(api, 'listAccountKeys').mockResolvedValue({ providers: [] });
+    vi.spyOn(api, 'listAccountKeys').mockResolvedValue({ providers: [{
+      provider: 'nearai', label: 'NEAR AI Cloud', set: true, fingerprint: 'ab12cd34', models: ['deepseek-ai/DeepSeek-V4'],
+      dataPolicy: 'Reviewed source is sent to NEAR AI Cloud.', signedRequests: false,
+    }] });
     const create = vi.spyOn(api, 'createDashboardJob').mockResolvedValue({
       requestId: '1', repo: 'near/near-sdk-rs', commitSha: 'a'.repeat(40), status: 'queued',
     });
 
     render(<Dashboard />);
+    await screen.findByText(/key with 1 model/);
     await user.type(await screen.findByLabelText('GitHub repository'), 'near/near-sdk-rs');
     await user.click(screen.getByLabelText(/Step-by-step/));
     await user.click(screen.getByRole('button', { name: 'Submit' }));
 
     expect(create).toHaveBeenCalledWith({
       repo: 'near/near-sdk-rs',
-      models: [],
       scopes: ['full'],
+      source: 'nearai',
       pipelineMode: 'step-by-step',
     });
   });

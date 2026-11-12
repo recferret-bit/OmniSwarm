@@ -88,25 +88,17 @@ test('429 then 503 then 200 retries and records one usage entry; 401 does not re
   assert.equal(auth.failure, 'auth');
 });
 
-test('zai and openrouter presets set the base url, reasoning effort and data collection deny', async () => {
-  const zai = presetFor('zai');
-  const zaiFetch = scriptedFetch([{ body: { model: 'glm-5.3', choices: [{ message: { content: 'done' } }], usage: {} } }]);
-  await runToolLoop({
-    baseUrl: zai.baseUrl({}), apiKey: 'k', model: 'glm-5.3', headers: zai.headers(), extraBody: zai.extraBody,
-    tools: [], callTool: async () => '', brief: 'review', fetchImpl: zaiFetch.fetch, sleep: async () => {},
-  });
-  assert.equal(zaiFetch.calls[0].url, 'https://api.z.ai/api/paas/v4/chat/completions');
-  assert.equal(zaiFetch.calls[0].body.reasoning_effort, 'high');
-  const openrouter = presetFor('openrouter');
-  const orFetch = scriptedFetch([{ body: { model: 'qwen/qwen3.8-max-0902', choices: [{ message: { content: 'done' } }], usage: { cost: 0.01 } } }]);
+test('the nearai preset posts to its fixed base url with no provider-specific body field or header', async () => {
+  const nearai = presetFor('nearai');
+  const nearaiFetch = scriptedFetch([{ body: { model: 'deepseek-ai/DeepSeek-V4', choices: [{ message: { content: 'done' } }], usage: {} } }]);
   const result = await runToolLoop({
-    baseUrl: openrouter.baseUrl({}), apiKey: 'k', model: 'qwen/qwen3.8-max-0902', headers: openrouter.headers(), extraBody: openrouter.extraBody,
-    tools: [], callTool: async () => '', brief: 'review', fetchImpl: orFetch.fetch, sleep: async () => {},
+    baseUrl: nearai.baseUrl({}), apiKey: 'k', model: 'deepseek-ai/DeepSeek-V4', headers: nearai.headers(), extraBody: nearai.extraBody,
+    provider: 'nearai', tools: [], callTool: async () => '', brief: 'review', fetchImpl: nearaiFetch.fetch, sleep: async () => {},
   });
-  assert.equal(orFetch.calls[0].body.provider.require_parameters, true);
-  assert.equal(orFetch.calls[0].body.provider.data_collection, 'deny');
-  assert.equal(orFetch.calls[0].headers['X-OpenRouter-Title'], 'OmniSwarm');
-  assert.equal(result.usage[0].cost, 0.01);
+  assert.equal(nearaiFetch.calls[0].url, 'https://cloud-api.near.ai/v1/chat/completions');
+  assert.deepEqual(Object.keys(nearaiFetch.calls[0].body).sort(), ['messages', 'model', 'stream', 'tools']);
+  assert.deepEqual(Object.keys(nearaiFetch.calls[0].headers).sort(), ['authorization', 'content-type']);
+  assert.equal(result.stop, 'no_tools');
   assert.equal(modelMatches('glm-5.3', 'glm-5.1'), false);
 });
 
@@ -142,9 +134,9 @@ test('the last turn forces the submit tool of the reviewer role', async () => {
 
 test('a crosscheck launch configures the crosscheck submit tool', () => {
   const work = fs.mkdtempSync(path.join(os.tmpdir(), 'api-role-'));
-  const env = { PATH: '/bin', HOME: '/tmp', ZAI_API_KEY: 'zk-test' };
+  const env = { PATH: '/bin', HOME: '/tmp', NEARAI_API_KEY: 'nk-test' };
   for (const [role, tool] of [['auditor', 'submit_audit_report'], ['crosscheck', 'submit_crosscheck_report']]) {
-    buildApiLaunch({ provider: 'zai', model: 'glm-5.3' }, { workDir: work, env, role, toolBudget: 5 }, presetFor('zai'));
+    buildApiLaunch({ provider: 'nearai', model: 'deepseek-ai/DeepSeek-V4' }, { workDir: work, env, role, toolBudget: 5 }, presetFor('nearai'));
     const config = JSON.parse(fs.readFileSync(path.join(work, 'api-launch.json'), 'utf8'));
     assert.equal(config.submitTool, tool);
     assert.equal(config.maxTurns, 8);
@@ -179,14 +171,14 @@ const pricedLoop = (fetch, ledger) => runToolLoop({
 
 test('the cost ceiling is the reviewer total: a later pass on the run ledger stops once the total reaches it', async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'loop-ceiling-'));
-  const ledger = () => costLedger(root, 'key-zai-glm-5-3');
+  const ledger = () => costLedger(root, 'nearai-deepseek-ai-deepseek-v4');
   const first = scriptedFetch([{ body: priced([read('a1')], 0.3) }, { body: priced([submit('a2')], 0.3) }]);
   assert.equal((await pricedLoop(first.fetch, ledger())).stop, 'submitted');
   const second = scriptedFetch([{ body: priced([read('b1')], 0.3) }, { body: priced([read('b2')], 0.3) }, { body: priced([submit('b3')], 0.3) }]);
   const stopped = await pricedLoop(second.fetch, ledger());
   assert.equal(stopped.stop, 'cost', 'its own 0.6 is under the ceiling; the reviewer total 1.2 is not');
   assert.equal(second.calls.length, 2);
-  assert.ok(Math.abs(spentUsd(root, 'key-zai-glm-5-3') - 1.2) < 1e-9);
+  assert.ok(Math.abs(spentUsd(root, 'nearai-deepseek-ai-deepseek-v4') - 1.2) < 1e-9);
   const third = scriptedFetch([]);
   assert.equal((await pricedLoop(third.fetch, ledger())).stop, 'cost');
   assert.equal(third.calls.length, 0, 'a loop that starts over the ceiling sends no request');
@@ -196,21 +188,21 @@ test('parallel surfaces of one reviewer share one ceiling', async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'loop-ceiling-par-'));
   const script = (id) => scriptedFetch([{ body: priced([read(`${id}1`)], 0.4) }, { body: priced([read(`${id}2`)], 0.4) }, { body: priced([submit(`${id}3`)], 0.4) }]);
   const [s1, s2] = [script('s1-'), script('s2-')];
-  const results = await Promise.all([s1, s2].map((surface) => pricedLoop(surface.fetch, costLedger(root, 'key-zai-glm-5-3'))));
+  const results = await Promise.all([s1, s2].map((surface) => pricedLoop(surface.fetch, costLedger(root, 'nearai-deepseek-ai-deepseek-v4'))));
   assert.deepEqual(results.map((result) => result.stop), ['cost', 'cost'], 'each surface alone (1.2) would have submitted');
   assert.ok(s1.calls.length + s2.calls.length < 6);
 });
 
 test('an auditor launch books its spend on the run budget file; debate and judge sessions do not', () => {
   const work = fs.mkdtempSync(path.join(os.tmpdir(), 'api-ledger-'));
-  const env = { PATH: '/bin', HOME: '/tmp', ZAI_API_KEY: 'zk-test' };
-  const bridgeArgs = ['--report-dir', '/reports/run', '--role', 'auditor', '--agent', 'key-zai-glm-5-3', '--surface', 'S1'];
+  const env = { PATH: '/bin', HOME: '/tmp', NEARAI_API_KEY: 'nk-test' };
+  const bridgeArgs = ['--report-dir', '/reports/run', '--role', 'auditor', '--agent', 'nearai-deepseek-ai-deepseek-v4', '--surface', 'S1'];
   const ledgerOf = (role, args = bridgeArgs) => {
-    buildApiLaunch({ provider: 'zai', model: 'glm-5.3' }, { workDir: work, env, role, bridgeArgs: args, maxCostUsd: 25 }, presetFor('zai'));
+    buildApiLaunch({ provider: 'nearai', model: 'deepseek-ai/DeepSeek-V4' }, { workDir: work, env, role, bridgeArgs: args, maxCostUsd: 25 }, presetFor('nearai'));
     return JSON.parse(fs.readFileSync(path.join(work, 'api-launch.json'), 'utf8')).spendLedger;
   };
-  assert.deepEqual(ledgerOf('auditor'), { reportDir: '/reports/run', reviewerId: 'key-zai-glm-5-3' });
-  assert.deepEqual(ledgerOf('crosscheck'), { reportDir: '/reports/run', reviewerId: 'key-zai-glm-5-3' });
+  assert.deepEqual(ledgerOf('auditor'), { reportDir: '/reports/run', reviewerId: 'nearai-deepseek-ai-deepseek-v4' });
+  assert.deepEqual(ledgerOf('crosscheck'), { reportDir: '/reports/run', reviewerId: 'nearai-deepseek-ai-deepseek-v4' });
   for (const role of ['debater', 'orchestrator']) assert.equal(ledgerOf(role), null, role);
   assert.equal(ledgerOf('auditor', []), null, 'no report dir: the loop counts its own spend');
 });

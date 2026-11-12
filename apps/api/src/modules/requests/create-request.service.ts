@@ -41,7 +41,7 @@ function checkFields(config: Config, body: CreateBody, message: SignedMessage): 
   if (message.account !== body.accountId) fail('ACCOUNT_MISMATCH', 'The signed account does not match accountId');
   if (message.nonce !== body.nonce) fail('MESSAGE_INVALID', 'The signed nonce does not match the challenge');
   priceFor(config, message.network);
-  // The hosted panel, or (when the operator lists it in ALLOWED_PRESETS) a review on the account's own key.
+  // The configured hosted preset, or (when the operator lists it in ALLOWED_PRESETS) a review on the account's own key.
   const ownKey = accountPresetProvider(message.preset) !== null;
   if ((message.preset !== config.intake.hostedPreset && !ownKey) || !config.intake.allowedPresets.includes(message.preset)) {
     const allowed = config.intake.allowedPresets.filter((preset) => preset === config.intake.hostedPreset || accountPresetProvider(preset));

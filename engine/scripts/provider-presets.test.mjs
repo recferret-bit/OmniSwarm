@@ -6,21 +6,9 @@ import assert from 'node:assert/strict';
 import { PRESETS, presetFor } from './provider-openai-compat.mjs';
 
 test('each API provider preset sends exactly its own base URL, key variable, body and headers', () => {
-  assert.deepEqual(Object.keys(PRESETS).sort(), ['nearai', 'openrouter', 'zai']);
-  const zai = presetFor('zai');
-  assert.equal(zai.baseUrl({}), 'https://api.z.ai/api/paas/v4');
-  assert.equal(zai.baseUrl({ ZAI_BASE_URL: 'https://example.invalid/v4/' }), 'https://example.invalid/v4');
-  assert.equal(zai.keyEnv, 'ZAI_API_KEY');
-  assert.deepEqual(zai.envAllowlist, ['ZAI_API_KEY', 'ZAI_BASE_URL']);
-  assert.deepEqual(zai.extraBody, { reasoning_effort: 'high' });
-  assert.deepEqual(zai.headers({}), {});
-
-  const openrouter = presetFor('openrouter');
-  assert.equal(openrouter.baseUrl({ OPENROUTER_BASE_URL: 'https://evil.invalid' }), 'https://openrouter.ai/api/v1');
-  assert.equal(openrouter.keyEnv, 'OPENROUTER_API_KEY');
-  assert.deepEqual(openrouter.envAllowlist, ['OPENROUTER_API_KEY']);
-  assert.deepEqual(openrouter.extraBody, { provider: { require_parameters: true, data_collection: 'deny' } });
-  assert.deepEqual(openrouter.headers({}), { 'HTTP-Referer': 'https://omniswarm.dev', 'X-OpenRouter-Title': 'OmniSwarm' });
+  assert.deepEqual(Object.keys(PRESETS).sort(), ['nearai']);
+  // Removed providers have no preset: nothing can send a request to their hosts.
+  for (const removed of ['zai', 'openrouter']) assert.throws(() => presetFor(removed), /unknown provider/);
 
   const nearai = presetFor('nearai');
   assert.equal(nearai.baseUrl({ NEARAI_BASE_URL: 'https://evil.invalid' }), 'https://cloud-api.near.ai/v1');

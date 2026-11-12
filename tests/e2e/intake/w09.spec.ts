@@ -13,7 +13,7 @@ import { freshDatabase, NEEDS_DB, type TestDatabase } from '../../../apps/api/te
 import { ADMIN_TOKEN, testEnv } from '../../../apps/api/test/helpers/stack.ts';
 import { freePort, Proc, script, step, waitFor } from './processes.ts';
 
-const PLANTED_KEY = 'sk-or-planted-0123456789abcdef';
+const PLANTED_KEY = 'near-planted-0123456789abcdef';
 
 function streamEvents(url: string): Promise<any[]> {
   return new Promise((resolve, reject) => {
@@ -43,7 +43,7 @@ describe('W09 queue and worker @hack', NEEDS_DB, () => {
   let pool: pg.Pool;
   const workers: Proc[] = [];
   const worker = (extra: Record<string, string> = {}) => {
-    const proc = new Proc('src/bin/worker.ts', { ...env, OPENROUTER_API_KEY: PLANTED_KEY, ...extra });
+    const proc = new Proc('src/bin/worker.ts', { ...env, NEARAI_API_KEY: PLANTED_KEY, ...extra });
     workers.push(proc);
     return proc;
   };

@@ -21,7 +21,7 @@
 
 ## 1. Reviewer specs and families
 
-Providers (local CLIs, Z.AI, OpenRouter, NEAR AI Cloud) are described once, in the provider catalog `packages/schemas/providers.mjs` (base URL, key variable and allow-list, body, headers, models endpoint, key sources, data policy); see [`docs/providers.md`](../providers.md). A family is the spec syntax and transport; the catalog says what each provider sends. The harness, bridge, sandbox, debate and skill never depend on the provider.
+Providers (local CLIs and NEAR AI Cloud) are described once, in the provider catalog `packages/schemas/providers.mjs` (base URL, key variable and allow-list, body, headers, models endpoint, key sources, data policy); see [`docs/providers.md`](../providers.md). A family is the spec syntax and transport; the catalog says what each provider sends. The harness, bridge, sandbox, debate and skill never depend on the provider.
 
 A **reviewer** is one model in one family. Its spec string:
 
@@ -31,29 +31,28 @@ A **reviewer** is one model in one family. Its spec string:
 
 | Family | Approach (owner's words) | Providers | Transport | Auth | Example |
 |---|---|---|---|---|---|
-| `cli` | 1 — local vendor subscriptions | `claude`, `codex`, `grok`, `agy`, `claude-zai` | existing ACP / native sessions (`agent-session.mjs`) | the CLI's own login; `claude-zai` maps `ZAI_API_KEY` (Coding Plan) to `ANTHROPIC_AUTH_TOKEN` + `ANTHROPIC_BASE_URL=https://api.z.ai/api/anthropic` | `cli:claude:opus`, `cli:claude-zai:glm-5.3` |
-| `key` | 2 — direct API keys | `zai`, `anthropic`, `openai`, `xai`, `google` | OmniSwarm tool loop (`provider-openai-compat.mjs`, `provider-anthropic.mjs`) wrapped as an ACP agent (`api-acp-agent.mjs`) | `ZAI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `XAI_API_KEY`, `GEMINI_API_KEY` | `key:zai:glm-5.3` |
-| `openrouter` | 3 — OpenRouter | any OpenRouter slug | same tool loop, base `https://openrouter.ai/api/v1` | `OPENROUTER_API_KEY` | `openrouter:qwen/qwen3.8-max-0902` |
-| `nearai` (OD-15) | 4 — NEAR AI Cloud | `nearai` | same tool loop, base `https://cloud-api.near.ai/v1` (fixed). The attestation check with a fresh nonce (W03-22) is **not built** | `NEARAI_API_KEY` (operator env, or a signed-in account's own key, preset `account-nearai`) | `nearai:deepseek-ai/DeepSeek-V4` |
+| `cli` | 1 — local vendor subscriptions | `claude`, `codex`, `grok`, `agy` | existing ACP / native sessions (`agent-session.mjs`) | the CLI's own login | `cli:claude:opus` |
+| `key` | 2 — direct API keys | `anthropic`, `openai`, `xai`, `google` parse; **none is installed** | OmniSwarm tool loop (`provider-openai-compat.mjs`, `provider-anthropic.mjs`) wrapped as an ACP agent (`api-acp-agent.mjs`) | the provider's catalog allow-list, once one is installed | `key:<provider>:<model>` |
+| `nearai` (OD-15) | 4 — NEAR AI Cloud | `nearai` | same tool loop, base `https://cloud-api.near.ai/v1` (fixed). The attestation check with a fresh nonce (W03-22) is **not built** | `NEARAI_API_KEY` (the operator's own shell for `audit local`, or a signed-in account's own key, preset `account-nearai`; the only key a hosted review uses) | `nearai:deepseek-ai/DeepSeek-V4` |
 | `scripted` | demo / simulation, no LLM | `baseline`, `paranoid`, `lazy`, `wrong` (fixture strategies) | in-process scripted agent | none | `scripted:baseline` |
 
-- **Reviewer id** = slug of the spec (`key-zai-glm-5-3`, `openrouter-qwen-qwen3-8-max`), unique per run; `#label` overrides it. Slashes are allowed in the model part and never reach a path (fixes R-17a).
-- **Vendor** is derived (`anthropic`, `openai`, `xai`, `google`, `zai`, `alibaba`, `scripted`). Peer filtering and judge-conflict rules use the **vendor**, so `cli:claude:opus` and `openrouter:anthropic/claude-opus-5.5` count as the same vendor (fixes R-17c).
+- **Reviewer id** = slug of the spec (`cli-claude-opus`, `nearai-qwen-qwen3-8-max`), unique per run; `#label` overrides it. Slashes are allowed in the model part and never reach a path (fixes R-17a).
+- **Vendor** is who trained the model, not who serves it (`anthropic`, `openai`, `xai`, `google`, `alibaba`, `deepseek`, `meta`, `scripted`, ...). Peer filtering and judge-conflict rules use the **vendor**, so `cli:codex:gpt-6.1-sol` and `nearai:openai/gpt-oss-120b` count as the same vendor (fixes R-17c).
 - **Combining approaches:** any mix in one run, e.g. the owner's default local preset:
-  `--reviewers cli:claude:opus,cli:codex:gpt-6.1-sol,cli:grok:grok-4.7,cli:agy:gemini-4-argon-high,openrouter:qwen/qwen3.8-max-0902,key:zai:glm-5.3`
-- **Hosted preset (OD-04, owner-confirmed):** `key:zai:glm-5.3`, `openrouter:qwen/qwen3.8-max-0902`, `openrouter:anthropic/claude-opus-5.5`, `openrouter:openai/gpt-6.1-sol`, `openrouter:x-ai/grok-4.7`, `openrouter:google/gemini-4-argon`; orchestrator `openrouter:anthropic/claude-opus-5.5`, alternate judge `openrouter:openai/gpt-6.1-sol`; `--assign round-robin --passes 2 --tool-budget 30 --max-cost-usd 25`.
-- **Config file:** `omniswarm.config.json` (or `--config path`) holds `reviewers`, `orchestrator`, `passes`, `toolBudget`, `debate`, `presets`; flags override it. Schema: `packages/schemas/run-config.schema.json`. Presets: `local-subscriptions`, `api-only`, `mixed`, `hosted` (OD-04), `demo` (all `scripted`).
-- **Defaults** (verified 2026-11-02, keep in config, not code): Claude `opus`, Codex `gpt-6.1-sol`, Grok `grok-4.7`, AGY `gemini-4-argon-high`, Z.ai `glm-5.3` (thinking always on; `reasoning_effort: high`), OpenRouter Qwen `qwen/qwen3.8-max-0902` (alt `qwen/qwen3-coder-next`).
+  `--reviewers cli:claude:opus,cli:codex:gpt-6.1-sol,cli:grok:grok-4.7,cli:agy:gemini-4-argon-high,nearai:Qwen/Qwen3.8-Max,nearai:deepseek-ai/DeepSeek-V4`
+- **Hosted reviews (OD-26, supersedes OD-04's operator-paid panel):** every dashboard review is `account-nearai`: the signed-in account's own NEAR AI key and chosen models, the first orchestrating, the second the alternate judge, `--assign matrix --passes 2 --tool-budget 30 --max-cost-usd 25` (`apps/api/src/worker/account-config.ts`). The `hosted` preset (six `nearai:` models, orchestrator `nearai:meta-llama/Llama-5-70B`, alternate judge `nearai:openai/gpt-oss-120b`, round-robin) serves only the dormant paid wallet flow; OmniSwarm installs no operator key for it.
+- **Config file:** `omniswarm.config.json` (or `--config path`) holds `reviewers`, `orchestrator`, `passes`, `toolBudget`, `debate`, `presets`; flags override it. Schema: `packages/schemas/run-config.schema.json`. Presets: `local-subscriptions`, `api-only`, `mixed`, `hosted` (dormant), `demo` (all `scripted`).
+- **Defaults** (verified 2026-11-02, keep in config, not code): Claude `opus`, Codex `gpt-6.1-sol`, Grok `grok-4.7`, AGY `gemini-4-argon-high`. NEAR AI Cloud has no default model: list what your key serves (`GET /v1/models`) and pick tool-calling models.
 - **Assignment:** `--assign matrix` (default when reviewers ≤ 8): every reviewer reviews every selected surface, so each per-model report covers the whole repo. `--assign round-robin` keeps today's behaviour for cost control (fixes R-17d).
 
 ### 1.1 Key policy (changes a documented rule)
 
 Today no key or endpoint enters any reviewer runtime (`agent-session-launch.mjs:12-20`, test `agent-session.test.mjs:190`). New rule, written into AGENTS.md in W00:
-- Keys are read from the operator's environment (or the local stack's admin page), never from the target, a config file in the repo, or a report. Exception: a catalog provider with key source `account` (today `nearai`) may use a signed-in account's own key, sealed in Postgres and used only for that account's `account-<provider>` reviews.
-- Each reviewer process gets **exactly one** allow-listed variable for its own provider (`zai` → `ZAI_API_KEY` [+ `ZAI_BASE_URL`]); `cli` reviewers still get none (except `claude-zai`, which gets its two mapped vars).
+- Keys are read from the operator's own shell (`audit local`, `audit run`), never from the target, a config file in the repo, or a report. On the hosted service the only key is a signed-in account's own key for a catalog provider with key source `account` (today `nearai`), sealed in Postgres and used only for that account's `account-<provider>` reviews. The host holds no operator provider key, and OmniSwarm pays for no user's review (OD-26).
+- Each reviewer process gets **exactly one** allow-listed variable for its own provider (`nearai` → `NEARAI_API_KEY`); `cli` reviewers still get none.
 - The MCP bridge and the Docker sandbox **never** receive a key. A unit test greps every spawned env.
 - Reports record `keyFingerprint` (first 4 + last 4 chars of sha256 of the key), never the key.
-- OpenRouter requests send `provider: {require_parameters: true, data_collection: "deny"}` because target source code leaves the machine; Z.ai and other key providers carry a README warning to the same effect.
+- Target source code leaves the machine for every API provider; each carries its catalog `dataPolicy` line in the README, `docs/providers.md` and the UI. `nearai` attests nothing yet (W03-22), so it is not called private or confidential.
 
 ## 2. Phases (workflow in code)
 
@@ -86,7 +85,7 @@ Two fixed numbers, the same for every family:
 | Debate phase time | `--debate-phase-ms` | **900000** | Wall clock for the speaking phase. Clusters not started in time stay out of the missing-answer list, are recorded as a `debate_time` coverage gap, and are adjudicated from citations only |
 | Debate rounds | `--debate-rounds R` | **2**, max 3 | Round 1 challenge (+ devil's advocate), round 2 defend; round 3 rebut only if any verdict changed in round 2 |
 | Judge calls | — | 1 per cluster, plus one different-model retry when the verdict stays DISPUTED or the judge does not answer, plus 1 general review | The retry prefers another vendor that did not author the cluster. A second DISPUTED stays DISPUTED. A retry that also does not answer keeps the first gap and does not add another. A resumable session may still recover once from a lost transport |
-| Cost ceiling | `--max-cost-usd` | unset (hosted preset: 25) | Per reviewer, for the whole run: the sum of reported `usage.cost` (OpenRouter) or estimated cost over every API turn of all its passes and surfaces (including its cross-check), kept as `spentUsd` in `harness/budget-<reviewer>.json` under the bridge budget lock. Reaching it ends the current pass with `stop: cost`; the reviewer's remaining passes and surfaces are skipped (`skipped: cost_ceiling` usage rows) and `harness/budget-health.json` records the stop. Debate and judge sessions are not counted against a reviewer |
+| Cost ceiling | `--max-cost-usd` | unset (hosted preset: 25) | Per reviewer, for the whole run: the sum of reported `usage.cost` or estimated cost (from `prices.<provider>.<model>`) over every API turn of all its passes and surfaces (including its cross-check), kept as `spentUsd` in `harness/budget-<reviewer>.json` under the bridge budget lock. Reaching it ends the current pass with `stop: cost`; the reviewer's remaining passes and surfaces are skipped (`skipped: cost_ceiling` usage rows) and `harness/budget-health.json` records the stop. Debate and judge sessions are not counted against a reviewer |
 
 **Where the cap is enforced** (one gate per family, all three tested):
 1. **Bridge counter** (plugged into W02's `beforeCall(ctx, name)` hook in the `docker-mcp-bridge.mjs` dispatcher, per identity + pass, stored in `harness/budget-<reviewer>.json`, not in the 200-entry log). This is the only gate every family passes through.
@@ -128,7 +127,7 @@ Every pass writes raw usage to `harness/usage/<reviewer>/<surface>-pass-<k>.json
 
 ### 4.5 Orchestrator model
 - `--orchestrator <reviewer-spec>` or `--orchestrator recommended`.
-- **Recommended** = first available of: `cli:claude:opus` → `key:anthropic:claude-opus-5-5` → `openrouter:anthropic/claude-opus-5.5` → `key:zai:glm-5.3` → `scripted:judge` (demo only). Printed in `--plan` with the reason.
+- **Recommended** = first available of: `cli:claude:opus` → `key:anthropic:claude-opus-5-5` → `scripted:judge` (demo only) (`reviewer-plan.mjs` `ORCHESTRATOR_ORDER`). A NEAR AI run names its orchestrator explicitly (`audit local --nearai` uses the first model). Printed in `--plan` with the reason.
 - The orchestrator runs through the same family registry with bridge role `orchestrator` (read-only tools + `submit_merge_suggestions`, `submit_adjudication`, `submit_general_review`). It never gets `run_existing_tests`.
 
 ## 5. Brief templates (P3)

@@ -2,7 +2,7 @@
 // orchestrator when Claude is installed. A machine with only one CLI uses that
 // model as both orchestrator and reviewer (Agy alone -> Argon).
 // `--provider <id> --models <m1,...>` reviews with one API provider from the provider catalog
-// (packages/schemas/providers.mjs: zai, openrouter, nearai) instead. The first model orchestrates and every
+// (packages/schemas/providers.mjs: today only nearai, NEAR AI Cloud) instead. The first model orchestrates and every
 // model reviews. `--nearai <m1,...>` is shorthand for `--provider nearai --models <m1,...>`. The provider's
 // key variable (for example NEARAI_API_KEY) is only checked for presence here; it reaches the reviewer process
 // through `audit run`, never this file. `--with-clis` adds the installed CLIs as extra reviewers.
@@ -53,7 +53,7 @@ const API_IDS = () => apiProviders().map((provider) => provider.id).join(', ');
 const PIPELINE_MODES = ['full', 'step-by-step', 'stage-1'];
 const USAGE = 'usage: audit local [--repo <directory> | --github <owner/repo or url>] [--scope full|web2|web3|infra] '
   + '[--pipeline full|step-by-step|stage-1 | --step-by-step | --no-debate] [--concurrency <1-8>] '
-  + '[--provider <zai|openrouter|nearai> --models <model,...> | --nearai <model,...>] [--with-clis]';
+  + '[--provider nearai --models <model,...> | --nearai <model,...>] [--with-clis]';
 
 /** One API provider's panel: every named model reviews, the first orchestrates. `withClis` adds installed CLIs as reviewers. */
 export function selectProviderPanel(providerId, models, { installed = [], withClis = false } = {}) {
@@ -151,7 +151,7 @@ function main() {
   const installed = installedClis();
   const provider = target.provider ? providerById(target.provider) : null;
   if (provider && process.env.OMNI_LIVE !== '1') {
-    process.stderr.write(`--provider ${provider.id} makes real, billed ${provider.label} calls. Opt in with OMNI_LIVE=1, for example:\n  OMNI_LIVE=1 ./bin/audit local --provider ${provider.id} --models ${target.models.join(',')}\n`);
+    process.stderr.write(`--provider ${provider.id} makes real, billed ${provider.label} calls. Opt in with OMNI_LIVE=1, for example:\n  OMNI_LIVE=1 ./bin/audit local ${process.argv.slice(2).join(' ')}\n`);
     process.exit(1);
   }
   if (provider && !process.env[provider.keyEnv]) {

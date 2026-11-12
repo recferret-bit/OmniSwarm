@@ -39,7 +39,7 @@
   "methodology": {
     "reviewers": [
       "cli:claude:opus",
-      "key:zai:glm-5.3"
+      "nearai:deepseek-ai/DeepSeek-V4"
     ],
     "orchestrator": "cli:claude:opus",
     "passes": 2,

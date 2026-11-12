@@ -18,7 +18,7 @@ import { callBridgeTool, resolveDockerBin } from './docker-mcp-bridge.mjs';
 import { readReportJson, writeReportFile } from './report-files.mjs';
 import { createSnapshot, disposeSnapshot } from './worker-isolation.mjs';
 import { HOST_DIR } from './sandbox-host-paths.mjs';
-import { createProgress, createSticky } from './orchestrator-progress.mjs';
+import { PHASES, createProgress, createSticky } from './orchestrator-progress.mjs';
 import { runReviewSession } from './agent-session.mjs';
 import { REVIEW_WORKFLOW, buildExistingTestCatalog } from './review-workflow.mjs';
 import { families } from './reviewer-families.mjs';
@@ -36,6 +36,7 @@ import { checkBridgeAgents } from './agent-presence.mjs';
 import { runStageAdvice } from './orchestrator-advice.mjs';
 import { persistHarnessEvidence, storeStage1Evidence, syncPipelineProgress, writeStage1Artifacts } from './orchestrator-pipeline.mjs';
 import { renderReport } from './generate-html-report.mjs';
+const PHASE_LABELS = new Map(PHASES.map((row) => [row.name, row.label]));
 
 export { buildAuditorPrompt } from './orchestrator-prompts.mjs';
 export { savedTurnCompleted } from './orchestrator-resume.mjs';
@@ -158,9 +159,33 @@ function createRun(request, output, sealed, planned, options) {
   return run;
 }
 
+// The newest file the sandbox wrote under harness/sandbox-run and how long ago, for the status line: preparation
+// (image, dependency caches, scanners) runs for minutes without printing, and this tells slow from stuck.
+export function sandboxActivity(output, at = Date.now()) {
+  const root = path.join(output, 'harness', 'sandbox-run');
+  let newest = null;
+  const visit = (dir, rel, depth) => {
+    let ents = [];
+    try { ents = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const ent of ents) {
+      const name = rel ? `${rel}/${ent.name}` : ent.name;
+      const full = path.join(dir, ent.name);
+      if (ent.isDirectory()) { if (depth < 1) visit(full, name, depth + 1); continue; }
+      if (!ent.isFile() || ent.name.startsWith('.')) continue;
+      try { const { mtimeMs } = fs.statSync(full); if (!newest || mtimeMs > newest.mtimeMs) newest = { name, mtimeMs }; } catch { /* written meanwhile */ }
+    }
+  };
+  visit(root, '', 0);
+  if (!newest) return null;
+  const secs = Math.max(0, Math.floor((at - newest.mtimeMs) / 1000));
+  return `${newest.name.replace(/^.*\//, '')} ${secs >= 60 ? `${Math.floor(secs / 60)}m${String(secs % 60).padStart(2, '0')}s` : `${secs}s`} ago`;
+}
+
 async function preparePhase(run) {
   console.log('      Starting one-shot Docker sandbox and source scanners...');
   const sealed = createSnapshot(run.request.target, { exclude: [run.output] });
+  const activity = setInterval(() => run.progress.detail(sandboxActivity(run.output)), 1_000);
+  activity.unref?.();
   try {
     if (sealed.manifest.digest !== run.sourceDigest) throw new Error('Source changed before sandbox creation; start a new review');
     run.session = await run.startSandbox({ target: sealed.snapshot, out: run.output });
@@ -170,7 +195,7 @@ async function preparePhase(run) {
       run.stageFailures.push('sandbox_unavailable');
       run.cancellation.abort();
     });
-  } finally { disposeSnapshot(sealed); }
+  } finally { clearInterval(activity); run.progress.detail(null); disposeSnapshot(sealed); }
   console.log(`      Container ${run.session.container} is ready and airgapped (network disconnected).`);
 }
 
@@ -206,7 +231,7 @@ async function postReviewPipeline(run) {
     let health = await renderReport(run.output);
     const evidence = storeStage1Evidence(run.output, run.request.target, maxClusters);
     if ((run.pipelineMode === 'step-by-step' || run.pipelineMode === 'full') && !run.cancellation.signal.aborted) {
-      console.log('  == Step 2 · Frontier orchestrator quality & debate advice');
+      console.log('\n  ══ Step 2 · Frontier orchestrator quality & debate advice ══');
       advice = await runStageAdvice({
         out: run.output,
         target: run.request.target,
@@ -252,7 +277,15 @@ function phaseContext(run, cleanupSignal) {
     stageFailures: run.stageFailures, providerFailures: run.providerFailures, workerExits: run.workerExits, crosscheckExits: run.crosscheckExits,
     cancellation: run.cancellation, get session() { return run.session; }, execute: run.execute,
     progress: run.progress,
-    fail(err) {
+    fail(err, phase) {
+      // Ctrl-C (or SIGTERM) reaches the sandbox's docker process too, so a phase interrupted by a cancel usually
+      // fails with a docker exit. Record the cancel, not a sandbox fault, unless the sandbox was lost first.
+      if (run.cancellation.signal.aborted && !run.sandboxFailure) {
+        const name = phase?.name || 'unknown';
+        run.stageFailures.push(`run_cancelled:${name}`);
+        console.error(`Cancelled during ${PHASE_LABELS.get(name) || name}; later phases were skipped.`);
+        return;
+      }
       run.stageFailures.push(`sandbox_or_orchestrator:${err.message}`);
       console.error(`Orchestrator error: ${err.message}`);
     },

@@ -3,7 +3,7 @@ import path from 'node:path';
 import { AgentRpc, SessionError } from './agent-rpc.mjs';
 import { openSessionStore } from './agent-session-store.mjs';
 import { buildSessionLaunch } from './agent-session-launch.mjs';
-import { GRACE } from './bridge-budget.mjs';
+import { GRACE, budgetedRole, loadBudget, passKey } from './bridge-budget.mjs';
 import { families } from './reviewer-families.mjs';
 import { classifyAuditFailure } from './audit-process.mjs';
 
@@ -131,7 +131,32 @@ function updateToolText(update) {
   return [update?.title, raw.tool_name, raw.tool, raw.name, update?._meta?.claudeCode?.toolName].filter(Boolean).join(' ');
 }
 
-// Tool calls the agent reports in this turn. More than N+3 counted calls without a submit cancels the pass.
+// The bridge's own record of this pass (harness/budget-<reviewer>.json), read fresh on each call. Null for a
+// session the bridge keeps no pass ledger for: debate and judge roles, and a launch without a report directory
+// or reviewer. The conditions and the pass default are the bridge's (bridge-budget.mjs attachBudget): a
+// cross-check is launched without --pass and is counted as pass 1.
+export function passLedger(options) {
+  const args = options?.bridgeArgs || [];
+  const arg = (flag) => { const at = args.indexOf(flag); return at >= 0 ? args[at + 1] : undefined; };
+  const reportDir = arg('--report-dir'), reviewer = arg('--agent'), role = arg('--role') || 'auditor';
+  if (!reportDir || !reviewer || !budgetedRole(role)) return null;
+  const key = passKey({ role, surface: arg('--surface'), pass: Number(arg('--pass')) || 1 });
+  return () => loadBudget(reportDir, reviewer).passes?.[key] || {};
+}
+
+// More than N+3 counted calls without a submit cancels the pass, and the bridge is what counts: it serves N
+// calls, answers the next 3 with "submit now", then refuses and marks the pass exhausted. The calls an agent
+// announces are not that count. They include its own tools, which the bridge never sees, and every call of a
+// parallel batch before the bridge has answered the first, so cancelling on them ends a pass that was never
+// told to submit. With a ledger the pass is cancelled when the agent announces more than 3 further calls after
+// the bridge marked it exhausted, or announces twice the allowance in calls the bridge did not count. Without
+// a ledger the announced calls are the only count there is.
+function overBudget(turn, budgets) {
+  const allowance = budgets.toolBudget + GRACE;
+  return turn.ledger ? turn.pastExhaustion > GRACE || turn.toolCalls > 2 * allowance : turn.toolCalls > allowance;
+}
+
+// Tool calls the agent reports in this turn.
 function onSessionUpdate(s, turn, params) {
   // During load, an adapter may replay history before returning. Its notifications must still belong to the exact saved session.
   if (s.sessionId && params?.sessionId !== s.sessionId) throw new SessionError('session_identity_rejected');
@@ -157,9 +182,10 @@ function onSessionUpdate(s, turn, params) {
         else if (!failed) turn.submitted = true;
       } else if (firstSeen) {
         turn.toolCalls += 1;
+        if (turn.ledger?.().exhausted) turn.pastExhaustion += 1;
       }
       if (!turn.submitted && hasCommittedOutput(s.options) === true) turn.submitted = true;
-      if (budgets && !turn.submitted && !turn.budgetCancel && turn.toolCalls > budgets.toolBudget + GRACE) {
+      if (budgets && !turn.submitted && !turn.budgetCancel && overBudget(turn, budgets)) {
         turn.budgetCancel = true;
         try { s.rpc.notify('session/cancel', { sessionId: s.sessionId }); } catch { /* the prompt result records the stop */ }
       }
@@ -253,7 +279,7 @@ async function endTurn(s, spec, stop, stopReason) {
   return s.result({ observedExitCode: exit.code, processSignal: exit.signal, transport: spec.transport, stop, stopReason });
 }
 
-// One chance to hand in the report. A second empty ending, or more than N+3 calls, cancels the pass.
+// One chance to hand in the report. A second empty ending, or calling past the budget (overBudget), cancels the pass.
 async function settleTurn(s, spec, turn, init, result) {
   const { budgets, signal, identity } = s.options;
   if (providerStop(s.store) === 'cost') return endTurn(s, spec, 'cost', result.stopReason);
@@ -290,7 +316,7 @@ function failureReason(error, signal) {
 
 // One turn of a session. Returns the session result, or null when a lost transport is recovered (load and retry).
 async function runTurn(s, spec, maxRecoveries) {
-  const turn = { resumeCapable: false, refused: null, toolCalls: 0, seenCalls: new Set(), submitted: false, budgetCancel: false };
+  const turn = { resumeCapable: false, refused: null, toolCalls: 0, seenCalls: new Set(), submitted: false, budgetCancel: false, pastExhaustion: 0, ledger: s.options.budgets ? passLedger(s.options) : null };
   const attempt = s.recoveries;
   openRpc(s, spec, turn);
   try {

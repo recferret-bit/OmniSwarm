@@ -1,0 +1,6 @@
+/* "Share on X" block on a finished review (components/request/ShareOnX.tsx). */
+.share-x { display: grid; gap: var(--os-s2); max-width: 40rem; margin-top: var(--os-s4); }
+.share-x p { margin: 0; }
+.share-x__text { width: 100%; resize: vertical; font: inherit; }
+.share-x__count--over { color: var(--os-bad, #c0392b); }
+.share-x__actions { display: flex; flex-wrap: wrap; gap: var(--os-s3); align-items: center; }

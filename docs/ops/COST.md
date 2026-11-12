@@ -1,6 +1,6 @@
 # Running cost of the hosted demo
 
-Three costs: the VM, the provider calls each review makes, and the disk the reviews fill. The provider numbers below are **budgets** taken from the engine presets. Nothing here is measured yet: no hosted run has happened (W12-18). The last section says how to measure, and where to write the numbers.
+Two costs fall on the owner: the VM and the disk the reviews fill. Provider calls do not. A hosted review runs only on the signed-in account's own NEAR AI Cloud key, so that account pays NEAR AI Cloud for its tokens, and OmniSwarm charges users nothing (DECISIONS.md OD-26). Optional NEAR USDC donations help with the VM, the domain and coffee (README "Support the project"). The provider numbers below are **budgets** from the engine config. Nothing here is measured yet: no hosted run has happened (W12-18). The last section says how to measure, and where to write the numbers.
 
 ## Host
 
@@ -15,30 +15,32 @@ This is the OD-13 size (`docs/spec/DECISIONS.md`). One worker at concurrency 1 f
 
 ## Provider calls per review
 
-The hosted preset is `hosted` in `engine/omniswarm.config.example.json`. The operator's `omniswarm.config.json` overrides it.
+Who pays: the account whose NEAR AI key runs the review. The operator puts no provider key on the host (`infra/env/providers.env.example` is empty), so a hosted review costs the owner only VM time and disk.
+
+A dashboard review runs preset `account-nearai`: the models the account chose, the first one orchestrating. Its limits:
 
 | Setting | Value | Source |
 |---|---|---|
-| Reviewers | `key:zai:glm-5.3` and, through OpenRouter, `qwen/qwen3.8-max-0902`, `anthropic/claude-opus-5.5`, `openai/gpt-6.1-sol`, `x-ai/grok-4.7`, `google/gemini-4-argon` | preset `reviewers`, OD-04 |
-| Orchestrator / alternate judge | `openrouter:anthropic/claude-opus-5.5` / `openrouter:openai/gpt-6.1-sol` | preset |
-| Assignment | round-robin, 2 passes | preset `assign`, `passes` |
-| Tool budget | 30 tool turns per reviewer per pass, plus a short grace | preset `toolBudget` |
+| Reviewers | the account's chosen NEAR AI Cloud models (`nearai:<model>`) | the request's model snapshot |
+| Orchestrator / alternate judge | the first model / the second model | `account-nearai` |
+| Assignment | matrix, 2 passes | `apps/api/src/worker/account-config.ts` |
+| Tool budget | 30 tool turns per reviewer per pass, plus a short grace | `account-config.ts` |
 | Debate | 2 rounds, at most 25 clusters, 12 tool turns per debate turn | config `debate` defaults |
-| Cost ceiling | `maxCostUsd: 25` per reviewer, whole run | preset |
+| Cost ceiling | `maxCostUsd: 25` per reviewer, whole run, but it binds only on a priced reply: no `prices.nearai.<model>` is configured, and whether NEAR AI Cloud returns `usage.cost` is unverified | `account-config.ts`, `docs/providers.md` "Cost" |
 
 How much one review can call:
-- **Reviewer tool loops:** 6 reviewers × 2 passes = 12 loops, each at most 30 turns. Every turn resends the conversation so far, so input tokens grow with each turn.
+- **Reviewer tool loops:** each model × 2 passes, each at most 30 turns. Every turn resends the conversation so far, so input tokens grow with each turn.
 - **Debate and judging:** up to 2 rounds over at most 25 clusters, plus the orchestrator and the judge.
-- **Price reference:** Opus is $4 per million input tokens and $20 per million output tokens (OD-04). Take the other models' prices from the OpenRouter catalog and the Z.ai price list when you measure. Do not guess them.
+- **Price reference:** take each model's price from NEAR AI Cloud's model list when you measure. Do not guess it.
 
 **Ceiling, read carefully.**
 - The ceiling is per reviewer for the whole run: every API turn adds its `usage.cost` to `spentUsd` in `harness/budget-<reviewer>.json` under the budget lock (`docs/spec/ORCHESTRATION.md` §3).
-- At $25 the running loop stops with `stop: cost`; that reviewer's remaining passes and surfaces are skipped and recorded as `cost_ceiling` in `budget-health.json`.
-- Worst case for one review is 6 reviewers × $25 = $150, plus the debate and judge loops, each capped at $25 on its own spend.
-- The hard stops stay the monthly spend limit on the OpenRouter key and the prepaid balance on the Z.ai pay-as-you-go key. Set both before the first hosted run (`docs/ops/OWNER_TASKS.md`).
-- 25 is the spec value; W12-18's 15 is superseded.
+- A reply without `usage.cost` and a model without a configured price add nothing, so the ceiling does not bind a NEAR AI model until `prices.nearai.<model>` is set.
+- The hard stop is the balance or limit on the account's own NEAR AI key.
 
-Testnet requests pay 1 testnet NEAR (OD-08), which is worth nothing. Every review is a real cost to the owner, and the API's limits (`MAX_QUEUE`, `REQUESTS_PER_DAY`, the nginx rate limits) are the only throttle on it.
+The `hosted` preset in `engine/omniswarm.config.example.json` (six NEAR AI models, round-robin, `maxCostUsd: 25`) serves only the dormant paid wallet flow. It would need an operator key, which OmniSwarm does not install.
+
+The API's limits (`MAX_QUEUE`, `REQUESTS_PER_DAY`, the nginx rate limits) are the throttle on VM time.
 
 ## Storage
 
@@ -62,13 +64,13 @@ At demo scale (tens of reviews), expect about 20–30 GB used, mostly images. `o
 
 Run this on the host, once, after the first deploy. Each step is an owner action, because it spends real money.
 
-1. Check that every reviewer of the preset finds its key. This is offline: it prints key fingerprints and makes no call. systemd reads the env file, so no key appears in a command line:
+Dashboard jobs are refused on testnet today (`assertDashboardChain`, README "Hosted flow" gaps). Until that changes, measure on the local sandbox with `OMNI_LIVE=1 LOCAL_ENGINE_RUNNER=cli npm run stack:local`; the steps are the same.
+
+1. Sign in on the dashboard with your own account, save your own NEAR AI Cloud key, and choose the models to measure. The calls are billed to your key. Check the key is present first, on your own machine (offline: prints a fingerprint, makes no call):
    ```sh
-   sudo systemd-run --pipe --wait --uid=omniswarm -p EnvironmentFile=/etc/omniswarm/providers.env \
-     -p WorkingDirectory=/srv/omniswarm/current /srv/omniswarm/current/bin/audit check-agents --reviewers \
-     key:zai:glm-5.3,openrouter:qwen/qwen3.8-max-0902,openrouter:anthropic/claude-opus-5.5,openrouter:openai/gpt-6.1-sol,openrouter:x-ai/grok-4.7,openrouter:google/gemini-4-argon
+   ./bin/audit check-agents --reviewers nearai:<model>,nearai:<model>
    ```
-2. Submit one review of a small public repository through the web app, as a normal user would.
+2. Submit one review of a small public repository from the dashboard, as a normal user would.
 3. Collect the numbers from the published report:
    - `meta.json`: the reviewers and their budgets
    - each reviewer's usage: calls, input and output tokens, `usage.cost`
@@ -77,13 +79,9 @@ Run this on the host, once, after the first deploy. Each step is an owner action
 
 | Reviewer | Calls | Input tokens | Output tokens | USD | Minutes |
 |---|---|---|---|---|---|
-| `key:zai:glm-5.3` | | | | | |
-| `openrouter:qwen/qwen3.8-max-0902` | | | | | |
-| `openrouter:anthropic/claude-opus-5.5` | | | | | |
-| `openrouter:openai/gpt-6.1-sol` | | | | | |
-| `openrouter:x-ai/grok-4.7` | | | | | |
-| `openrouter:google/gemini-4-argon` | | | | | |
+| `nearai:<model 1>` (orchestrator) | | | | | |
+| `nearai:<model 2>` (alternate judge) | | | | | |
 | orchestrator + judge | | | | | |
 | **Total** | | | | | |
 
-The total sets the mainnet price later (OD-08).
+The total tells users what a review costs them on NEAR AI Cloud. OmniSwarm adds no fee.

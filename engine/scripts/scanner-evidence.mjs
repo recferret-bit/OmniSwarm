@@ -1,6 +1,18 @@
+// A scanner ended by a signal never chose its exit code. Say whether it ran into its own time limit, so the
+// coverage gap names the cause instead of an unexplained failure.
+export function killedDetail(result) {
+  if (!result?.signal) return null;
+  const secs = (ms) => `${Math.round(ms / 1000)}s`;
+  if (!Number.isFinite(result.elapsedMs) || !Number.isFinite(result.timeoutMs)) return `Killed by ${result.signal} before it finished.`;
+  return result.elapsedMs >= result.timeoutMs
+    ? `Timed out: killed at its ${secs(result.timeoutMs)} limit before it finished.`
+    : `Killed by ${result.signal} after ${secs(result.elapsedMs)}, inside its ${secs(result.timeoutMs)} limit; this is not a timeout (the container memory limit is the usual cause).`;
+}
+
 // Scanner exits and schemas are evidence; an error-shaped JSON object is never a clean scan.
 export function scannerEvidence(tool, result) {
-  const row = { tool, exitCode: result.code, state: 'failed', findings: null };
+  const killed = killedDetail(result);
+  const row = { tool, exitCode: result.code, state: 'failed', findings: null, ...(killed ? { detail: killed } : {}) };
   try {
     if (![0, 1].includes(result.code)) return row;
     const data = JSON.parse(result.stdout);
@@ -19,7 +31,8 @@ export function scannerEvidence(tool, result) {
     if (tool === 'node-deps' && result.code === 0 && data.nodeDeps?.unresolved === 0) findings = 0;
     if (tool === 'npm-audit' && data.metadata?.vulnerabilities && data.vulnerabilities && !data.error) findings = Object.keys(data.vulnerabilities).length;
     if (!Number.isSafeInteger(findings) || findings < 0 || result.code === 1 && findings === 0) return row;
-    return { ...row, state: findings ? 'findings' : 'passed', findings };
+    const { detail, ...complete } = row;
+    return { ...complete, state: findings ? 'findings' : 'passed', findings };
   } catch { return row; }
 }
 

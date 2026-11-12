@@ -26,7 +26,7 @@ declare module '@omniswarm/schemas/providers' {
     id: string; label: string; transport: 'cli' | 'openai-chat'; family: string; specPrefix: string;
     baseUrl?: string; baseUrlEnv?: string | null; keyEnv: string | null; envAllowlist: readonly string[];
     extraBody?: Record<string, unknown>; headers?: Record<string, string>; modelsPath: string | null;
-    keySources: readonly ('operator-env' | 'admin-page' | 'account')[]; dataPolicy: string;
+    keySources: readonly ('operator-env' | 'account')[]; dataPolicy: string;
   }
   export const MODEL_ID_PATTERN: string;
   export const PROVIDERS: readonly Provider[];
@@ -34,7 +34,6 @@ declare module '@omniswarm/schemas/providers' {
   export function providerById(id: string): Provider | null;
   export function apiProviders(): Provider[];
   export function accountProviders(): Provider[];
-  export function adminProviders(): Provider[];
   export function providerEnvNames(): string[];
   export function isModelId(model: unknown): boolean;
   export function specFor(providerId: string, model: string): string;

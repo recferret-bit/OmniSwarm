@@ -15,7 +15,7 @@ import { DEFAULTS } from './run-config.mjs';
 export { assignJobs, selectSurfaces };
 
 // OD-05 order. First usable one wins; `reason` says why it won or why none did.
-export const ORCHESTRATOR_ORDER = ['cli:claude:opus', 'key:anthropic:claude-opus-5-5', 'openrouter:anthropic/claude-opus-5.5', 'key:zai:glm-5.3', 'scripted:judge'];
+export const ORCHESTRATOR_ORDER = ['cli:claude:opus', 'key:anthropic:claude-opus-5-5', 'scripted:judge'];
 
 export function recommendedOrchestrator({ env = process.env, order = ORCHESTRATOR_ORDER } = {}) {
   const skipped = [];

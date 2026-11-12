@@ -32,14 +32,14 @@ describe('signed request on an account provider key', NEEDS_DB, () => {
     assert.equal(refused.body.error.code, 'PRESET_NOT_ALLOWED');
     assert.match(refused.body.error.message, /Save your NEAR AI Cloud key/);
 
-    const saved = await call(api.base, '/api/account/providers/nearai', { method: 'PUT', body: { key: 'near-test-key-not-real-0000', models: ['zai-org/GLM-5.3', 'deepseek-ai/DeepSeek-V4'] }, cookie });
+    const saved = await call(api.base, '/api/account/providers/nearai', { method: 'PUT', body: { key: 'near-test-key-not-real-0000', models: ['deepseek-ai/DeepSeek-V4', 'Qwen/Qwen3.8-Max'] }, cookie });
     assert.equal(saved.status, 200, JSON.stringify(saved.body));
     const created = await call(api.base, '/api/requests', { method: 'POST', body: sign(dev, await challenge(api.base), { preset: 'account-nearai' }) });
     assert.equal(created.status, 201, JSON.stringify(created.body));
     const row = await api.deps.pool.query<{ preset: string; models: string[] }>('SELECT preset, models FROM request WHERE id = $1', [created.body.requestId]);
-    assert.deepEqual(row.rows[0], { preset: 'account-nearai', models: ['zai-org/GLM-5.3', 'deepseek-ai/DeepSeek-V4'] });
+    assert.deepEqual(row.rows[0], { preset: 'account-nearai', models: ['deepseek-ai/DeepSeek-V4', 'Qwen/Qwen3.8-Max'] });
 
-    const other = await call(api.base, '/api/requests', { method: 'POST', body: sign(await wallet(api.deps.pool, 'eve.mock'), await challenge(api.base), { preset: 'account-zai' }) });
+    const other = await call(api.base, '/api/requests', { method: 'POST', body: sign(await wallet(api.deps.pool, 'eve.mock'), await challenge(api.base), { preset: 'account-local' }) });
     assert.equal(other.body.error.code, 'PRESET_NOT_ALLOWED');
   });
 });

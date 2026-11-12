@@ -152,6 +152,8 @@ finish() {
 trap finish EXIT
 
 note_blocked() {
+  # The orchestrator only sees that the sandbox ended; the reason goes to the operator's terminal as well.
+  printf 'Sandbox blocked: %s\n' "$1" >&2
   node "$LIB" blocked "$RUN/results.json" "$1" || true
   render
   exit 0
@@ -261,8 +263,11 @@ VOLUME_READY=1
 
 SBX_NET="none"
 if [ "$SKIP_PREP" -eq 0 ]; then
-  docker network create --internal "$NET" >/dev/null
-  docker network create "$OUTNET" >/dev/null
+  # Each run needs two Docker networks. A daemon with none left ("all predefined address pools have been fully
+  # subnetted") is fixed by removing unused networks, so name it instead of failing later on a missing network.
+  if ! NET_ERR="$(docker network create --internal "$NET" 2>&1 >/dev/null)" || ! NET_ERR="$(docker network create "$OUTNET" 2>&1 >/dev/null)"; then
+    note_blocked "Docker could not create the sandbox networks: $(printf '%s' "$NET_ERR" | tr '\n' ' ' | cut -c1-200). Remove unused Docker networks (docker network prune) and start a new run."
+  fi
   SBX_NET="$NET"
 
   docker run -d --name "$PROXY" \

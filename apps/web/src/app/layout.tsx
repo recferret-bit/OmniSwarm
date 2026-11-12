@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 import { headers } from 'next/headers';
-import Script from 'next/script';
 import { IBM_Plex_Mono, Sora, Source_Sans_3 } from 'next/font/google';
 import { LiveRegion } from '@/components/ui/LiveRegion';
 import { Providers } from './providers';
@@ -46,9 +45,6 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className={`${display.variable} ${body.variable} ${mono.variable}`}>
       <body>
-        <Script id="os-theme" strategy="beforeInteractive">
-          {`try{var t=localStorage.getItem('os-theme');if(t==='day'||t==='night')document.documentElement.dataset.theme=t;}catch(e){}`}
-        </Script>
         <Providers>{children}</Providers>
         <LiveRegion />
       </body>

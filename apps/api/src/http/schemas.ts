@@ -106,20 +106,32 @@ export const requestListResponse = z.strictObject({
 });
 
 export const loginBody = z.strictObject({ login: z.string().min(1).max(256), password: z.string().min(1).max(256) });
-export const sessionResponse = z.strictObject({ account: accountId });
+export const socialLoginBody = z.strictObject({
+  provider: z.enum(['google', 'x']),
+  token: z.string().min(1).max(4000),
+});
+export const nearLoginBody = z.strictObject({
+  accountId,
+  publicKey: z.string().min(1).max(128),
+  signature: z.string().min(1).max(200),
+  nonce: z.string().min(1).max(128),
+});
+export const sessionResponse = z.strictObject({
+  account: accountId,
+  label: z.string().min(1).max(128).optional(),
+  provider: z.enum(['password', 'near', 'google', 'x']).optional(),
+});
 
 export const dashboardJobBody = z.strictObject({
   repo: z.string().min(1).max(300),
-  models: z.array(z.enum(['opus', 'sol', 'argon', 'grok'])).max(4).optional(),
   scopes: z.array(z.enum(['full', 'web2', 'web3'])).max(3).optional(),
   pipelineMode: pipelineMode.optional(),
   concurrency: z.int().min(1).max(8).optional(),
   /**
-   * `panel` (default) runs the operator's Z.AI and OpenRouter panel. A provider id whose catalog entry takes
-   * account keys (today `nearai`) runs on the signed-in account's own key and saved models (preset
-   * `account-<provider>`); `models` extras are then not allowed.
+   * The provider whose key the signed-in account saved (catalog entries that take account keys; today only
+   * `nearai`, the default). The review runs as preset `account-<provider>` on that key and the saved models.
    */
-  source: z.enum(['panel', ...accountProviders().map((provider) => provider.id)] as [string, ...string[]]).optional(),
+  source: z.enum(accountProviders().map((provider) => provider.id) as [string, ...string[]]).optional(),
 });
 export const dashboardJobResponse = z.strictObject({ requestId: uuid, repo, commitSha, status: z.literal('queued') });
 export const debateStepBody = z.strictObject({ rounds: z.int().min(1).max(5).optional() }).nullish();

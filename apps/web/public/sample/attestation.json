@@ -3,7 +3,7 @@
   "request_hash": "5a1e5a1e5a1e5a1e5a1e5a1e5a1e5a1e5a1e5a1e5a1e5a1e5a1e5a1e5a1e5a1e",
   "repo": "near-examples/guest-book-examples",
   "commit": "0123456789abcdef0123456789abcdef01234567",
-  "report_sha256": "cd8a533dc78a6d48e47e7fbe6bb7f9f591badd1e5854564cd4f3dd8f09ca38ab",
+  "report_sha256": "8fb5033c2932c638b5d6967b1ca779d134d76102e98c3f32f0c2ed99fbc86c85",
   "report_uri": "https://reports.omniswarm.example/sample/index.json",
   "deployed": null,
   "code_hash": null,

@@ -29,9 +29,9 @@ test('usage.json: totals.cost, else the sum of passes[].cost; anything else is n
 test('a request costs what every attempt spent', () => {
   const runs = fs.mkdtempSync(path.join(os.tmpdir(), 'cost-'));
   const id = '3f2b8c1e-5d4a-4b7e-9c1a-2e6f0a8b4d10';
-  usage(path.join(runs, id, '0'), 'openrouter-a', { passes: [pass(0.4)], totals: { cost: 0.4 } });
-  usage(path.join(runs, id, '1'), 'openrouter-a', { passes: [pass(1.1)], totals: { cost: 1.1 } });
-  usage(path.join(runs, id, '1'), 'zai-b', { passes: [pass(0.2), pass(0.3)] });
+  usage(path.join(runs, id, '0'), 'nearai-deepseek-ai-deepseek-v4', { passes: [pass(0.4)], totals: { cost: 0.4 } });
+  usage(path.join(runs, id, '1'), 'nearai-deepseek-ai-deepseek-v4', { passes: [pass(1.1)], totals: { cost: 1.1 } });
+  usage(path.join(runs, id, '1'), 'nearai-qwen-qwen3-8-max', { passes: [pass(0.2), pass(0.3)] });
   fs.mkdirSync(path.join(runs, id, '1', 'report', 'reviewers', 'by-provider'), { recursive: true });
   assert.deepEqual(requestCost(runs, id), { costUsd: 2, reviewers: 2 });
   assert.deepEqual(requestCost(runs, 'missing'), { costUsd: 0, reviewers: 0 });

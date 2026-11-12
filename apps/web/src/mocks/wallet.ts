@@ -6,8 +6,8 @@ import { b58encode, nep413Payload } from '@omniswarm/schemas/nep413';
 import { AppError } from '@/lib/api/errors';
 import type { SignMessageInput, WalletConnector } from '@/lib/near/connector';
 import { bytesToBase64 } from '@/lib/near/nep413';
-import type { PaymentTransaction } from '@/lib/near/payment';
-import { recordPayment } from './chain';
+import type { WalletTransaction } from '@/lib/near/payment';
+import { newTxHash, recordPayment } from './chain';
 import { updateState } from './db';
 
 export const MOCK_ACCOUNT = 'alice.testnet';
@@ -49,7 +49,7 @@ export function createMockConnector(): WalletConnector {
       const signature = new Uint8Array(await crypto.subtle.sign({ name: 'Ed25519' }, (await keyPair()).privateKey, digest));
       return { accountId: MOCK_ACCOUNT, publicKey: await publicKey(), signature: bytesToBase64(signature) };
     },
-    async signAndSendTransaction(tx: PaymentTransaction) {
+    async signAndSendTransaction(tx: WalletTransaction) {
       const reject = updateState((state) => {
         const value = state.controls.walletReject;
         state.controls.walletReject = false;
@@ -61,7 +61,10 @@ export function createMockConnector(): WalletConnector {
         throw error;
       }
       const action = tx.actions[0];
-      const txHash = recordPayment({ signer: MOCK_ACCOUNT, receiver: tx.receiverId, requestHash: action.params.args.request_hash, deposit: action.params.deposit });
+      const requestHash = action.params.args.request_hash;
+      // Only a `request_review` call is a payment the mock intake looks up; anything else (a donation) just gets a hash.
+      if (action.params.methodName !== 'request_review' || typeof requestHash !== 'string') return { txHash: newTxHash() };
+      const txHash = recordPayment({ signer: MOCK_ACCOUNT, receiver: tx.receiverId, requestHash, deposit: action.params.deposit });
       return { txHash };
     },
     onSignOut(listener) {

@@ -10,7 +10,6 @@ import { chainEvents } from '../../src/chain/mock/mock-ledger.ts';
 import { withTransaction } from '../../src/db/pool.ts';
 import { findRequest } from '../../src/db/repositories/requests.ts';
 import { enqueueReview, JobContractError } from '../../src/queue/review-queue.ts';
-import { writeProviderSecrets } from '../../src/modules/providers/secrets.ts';
 import { APP_ROOT } from '../../src/shared/paths.ts';
 import { call, conforms, queuedRequest } from '../helpers/flow.ts';
 import { NEEDS_DB } from '../helpers/db.ts';
@@ -189,16 +188,18 @@ describe('review worker (mock engine, mock chain)', NEEDS_DB, () => {
   });
 
   test('step-by-step cloud pipeline: Stage 1 -> Step 2 Advise -> Step 3 Debate rounds publish artifacts and URLs', async () => {
-    const secretsFile = path.join(t.config.storage.runsRoot, 'providers.json');
-    fs.mkdirSync(path.dirname(secretsFile), { recursive: true });
-    writeProviderSecrets(secretsFile, t.env.SESSION_SECRET!, { zai: 'zai-test-0000', openrouter: 'or-test-0000' });
-    const envWithProviders = { ...t.env, PROVIDER_SECRETS_FILE: secretsFile, MOCK_ENGINE_STEP_MS: '20' };
-    const apiStep = await startApi(envWithProviders);
-    const worker = await startWorkerInProcess(envWithProviders);
+    const envStep = { ...t.env, MOCK_ENGINE_STEP_MS: '20' };
+    const apiStep = await startApi(envStep);
+    const worker = await startWorkerInProcess(envStep);
     try {
       const login = await call(apiStep.base, '/api/login', { method: 'POST', body: { login: 'operator', password: 'operator' } });
       assert.equal(login.status, 200);
       const cookie = login.headers.get('set-cookie')?.split(';')[0] ?? '';
+      // Every dashboard step runs on the signed-in account's own NEAR AI Cloud key and models.
+      const saved = await call(apiStep.base, '/api/account/providers/nearai', {
+        method: 'PUT', cookie, body: { key: 'near-test-key-not-real-0000', models: ['deepseek-ai/DeepSeek-V4', 'Qwen/Qwen3.8-Max'] },
+      });
+      assert.equal(saved.status, 200, JSON.stringify(saved.body));
 
       // 1. Stage 1 only (no debates, no advice yet)
       const created = await call(apiStep.base, '/api/dashboard/jobs', {

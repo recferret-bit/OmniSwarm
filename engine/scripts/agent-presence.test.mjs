@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { agyHookStatus, checkBridgeAgents, presenceProviders } from './agent-presence.mjs';
 
-test('the presence list comes from the cli family and leaves out claude-zai', () => {
+test('the presence list is the cli family: claude, codex, grok and agy', () => {
   assert.deepEqual(presenceProviders().sort(), ['agy', 'claude', 'codex', 'grok']);
 });
 

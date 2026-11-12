@@ -11,9 +11,21 @@ export interface Env {
   explorerUrl: string;
   wallet: 'real' | 'mock' | 'local';
   apiMock: boolean;
+  /** NEAR account that receives optional USDC donations. null hides every donation section. */
+  donationAccount: string | null;
+  /** NEP-141 native USDC contract for the wallet donation. null (sandbox, no override) keeps only the manual address. */
+  donationUsdcContract: string | null;
 }
 
-export type RawEnv = Record<keyof Env, string | undefined>;
+type OptionalRaw = 'donationAccount' | 'donationUsdcContract';
+export type RawEnv = Record<Exclude<keyof Env, OptionalRaw>, string | undefined> & Partial<Record<OptionalRaw, string | undefined>>;
+
+// Native USDC on NEAR (Circle). Bridged USDC.e is a different contract and is never the default.
+export const NATIVE_USDC: Readonly<Record<Network, string | null>> = {
+  mainnet: '17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1',
+  testnet: '3e2210e1184b45b64c8a434c0a7e7b23cc04ea7eb7a6c3c32520d03d4afcb8af',
+  sandbox: null,
+};
 
 const ACCOUNT_ID = /^[a-z0-9._-]{2,64}$/;
 
@@ -36,6 +48,12 @@ function account(name: string, value: string | undefined): string {
   return text;
 }
 
+// Optional account: unset or empty (a Docker ARG with no value) is null, anything else must be an account id.
+function optionalAccount(name: string, value: string | undefined): string | null {
+  const text = value?.trim();
+  return text ? account(name, text) : null;
+}
+
 export function parseEnv(raw: RawEnv): Env {
   const network = required('NEXT_PUBLIC_NETWORK', raw.network);
   if (network !== 'testnet' && network !== 'mainnet' && network !== 'sandbox') {
@@ -53,6 +71,8 @@ export function parseEnv(raw: RawEnv): Env {
     explorerUrl: endpointUrl('NEXT_PUBLIC_EXPLORER_URL', raw.explorerUrl, network),
     wallet,
     apiMock: raw.apiMock === '1',
+    donationAccount: optionalAccount('NEXT_PUBLIC_DONATION_ACCOUNT', raw.donationAccount),
+    donationUsdcContract: optionalAccount('NEXT_PUBLIC_DONATION_USDC_CONTRACT', raw.donationUsdcContract) ?? NATIVE_USDC[network],
   };
 }
 
@@ -64,6 +84,8 @@ export const env: Env = parseEnv({
   explorerUrl: process.env.NEXT_PUBLIC_EXPLORER_URL,
   wallet: process.env.NEXT_PUBLIC_WALLET,
   apiMock: process.env.NEXT_PUBLIC_API_MOCK,
+  donationAccount: process.env.NEXT_PUBLIC_DONATION_ACCOUNT,
+  donationUsdcContract: process.env.NEXT_PUBLIC_DONATION_USDC_CONTRACT,
 });
 
 // Code that imports mock modules does not branch on `env`: it compares the

@@ -11,20 +11,20 @@
       "assign": "matrix"
     },
     "api-only": {
-      "reviewers": ["key:zai:glm-5.3", "openrouter:qwen/qwen3.8-max-0902"],
-      "orchestrator": "recommended",
+      "reviewers": ["nearai:deepseek-ai/DeepSeek-V4", "nearai:Qwen/Qwen3.8-Max"],
+      "orchestrator": "nearai:deepseek-ai/DeepSeek-V4",
       "assign": "matrix",
       "maxCostUsd": 25
     },
     "mixed": {
-      "reviewers": ["cli:claude:opus", "cli:codex:gpt-6.1-sol", "cli:grok:grok-4.7", "cli:agy:gemini-4-argon-high", "openrouter:qwen/qwen3.8-max-0902", "key:zai:glm-5.3"],
+      "reviewers": ["cli:claude:opus", "cli:codex:gpt-6.1-sol", "cli:grok:grok-4.7", "cli:agy:gemini-4-argon-high", "nearai:Qwen/Qwen3.8-Max", "nearai:deepseek-ai/DeepSeek-V4"],
       "orchestrator": "recommended",
       "assign": "matrix"
     },
     "hosted": {
-      "reviewers": ["key:zai:glm-5.3", "openrouter:qwen/qwen3.8-max-0902", "openrouter:anthropic/claude-opus-5.5", "openrouter:openai/gpt-6.1-sol", "openrouter:x-ai/grok-4.7", "openrouter:google/gemini-4-argon"],
-      "orchestrator": "openrouter:anthropic/claude-opus-5.5",
-      "alternateJudge": "openrouter:openai/gpt-6.1-sol",
+      "reviewers": ["nearai:deepseek-ai/DeepSeek-V4", "nearai:Qwen/Qwen3.8-Max", "nearai:meta-llama/Llama-5-70B", "nearai:openai/gpt-oss-120b", "nearai:moonshotai/Kimi-K3", "nearai:google/gemma-4-27b"],
+      "orchestrator": "nearai:meta-llama/Llama-5-70B",
+      "alternateJudge": "nearai:openai/gpt-oss-120b",
       "assign": "round-robin",
       "passes": 2,
       "toolBudget": 30,

@@ -4,7 +4,7 @@ import type { Config } from '../../config/load.ts';
 import type { Db } from '../../db/pool.ts';
 import { queueDepth } from '../../db/repositories/requests.ts';
 import type { GitHubPort } from '../../github/port.ts';
-import { readReviewSettings, settingsPath } from '../providers/settings.ts';
+import { readReviewSettings } from '../providers/settings.ts';
 import { fail } from '../../shared/errors.ts';
 import { normalizeRepoUrl } from './repo-url.ts';
 
@@ -58,6 +58,6 @@ export async function quote(deps: QuoteDeps, input: { repoUrl: string; network: 
     normalizedRepo: checked.repo, commitSha: checked.commitSha, priceYocto, contractId: deps.config.intake.contractId,
     queueDepth: depth, preset: deps.config.intake.hostedPreset, etaMinutes: (depth + 1) * deps.config.intake.etaMinutesPerJob,
     sizeKb: checked.sizeKb, large: checked.sizeKb > deps.config.intake.maxRepoKb,
-    freeChecks: readReviewSettings(settingsPath(deps.config.providerSecretsFile)).freeChecks,
+    freeChecks: readReviewSettings(deps.config.reviewSettingsFile).freeChecks,
   };
 }

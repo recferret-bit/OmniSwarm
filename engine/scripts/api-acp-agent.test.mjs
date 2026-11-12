@@ -41,11 +41,12 @@ function harness(envExtra) {
   fs.writeFileSync(stub, STUB);
   const directory = path.join(root, 'session');
   fs.mkdirSync(directory, { mode: 0o700 });
-  const env = { HOME: '/home/inert', PATH: '/bin', USER: 'inert', ZAI_API_KEY: 'zk-test', OPENROUTER_API_KEY: 'or-test', ...envExtra };
+  // A stale ZAI_API_KEY in the operator's shell must not reach the bridge either.
+  const env = { HOME: '/home/inert', PATH: '/bin', USER: 'inert', NEARAI_API_KEY: 'nk-test', ZAI_API_KEY: 'zk-stale', ...envExtra };
   const launch = (opts) => buildApiLaunch(
-    { provider: 'zai', model: opts.model },
+    { provider: 'nearai', model: opts.model },
     { workDir: opts.workDir, env: opts.env, bridgeArgs: [envFile], mcpCommand: process.execPath, mcpLeadingArgs: [stub] },
-    presetFor('zai'),
+    presetFor('nearai'),
   );
   return { root, envFile, directory, env, launch };
 }
@@ -55,7 +56,7 @@ test('runReviewSession drives the api ACP agent through a stub bridge', async ()
   const logFile = path.join(h.root, 'agent.log');
   const result = await runReviewSession({
     directory: h.directory,
-    identity: { agent: 'key-zai-glm-5-3', family: 'key', provider: 'zai', model: 'glm-5.3', role: 'auditor', sourceDigest: 'a'.repeat(64), assignmentDigest: 'b'.repeat(64) },
+    identity: { agent: 'nearai-qwen-qwen3-8-max', family: 'nearai', provider: 'nearai', model: 'Qwen/Qwen3.8-Max', role: 'auditor', sourceDigest: 'a'.repeat(64), assignmentDigest: 'b'.repeat(64) },
     bridgeArgs: [h.envFile],
     prompt: 'Review the fixture.',
     env: h.env,
@@ -67,21 +68,21 @@ test('runReviewSession drives the api ACP agent through a stub bridge', async ()
   const state = JSON.parse(fs.readFileSync(path.join(h.directory, 'state.json'), 'utf8'));
   assert.equal(state.transport, 'api-acp');
   const log = fs.readFileSync(logFile, 'utf8');
-  assert.equal(log.split('"sessionUpdate":"tool_call"').length - 1, 2);
+  assert.equal(log.split('"sessionUpdate":"tool_call"').length - 1, 3);
   const bridgeEnv = JSON.parse(fs.readFileSync(h.envFile, 'utf8'));
+  assert.equal(bridgeEnv.NEARAI_API_KEY, undefined);
   assert.equal(bridgeEnv.ZAI_API_KEY, undefined);
-  assert.equal(bridgeEnv.OPENROUTER_API_KEY, undefined);
-  assert.equal(fs.readFileSync(path.join(h.directory, 'workspace', 'api-launch.json'), 'utf8').includes('zk-test'), false);
+  assert.equal(fs.readFileSync(path.join(h.directory, 'workspace', 'api-launch.json'), 'utf8').includes('nk-test'), false);
 });
 
 test('a mismatched served model fails the session as model_mismatch', async () => {
   const replay = fs.mkdtempSync(path.join(os.tmpdir(), 'replay-'));
-  fs.mkdirSync(path.join(replay, 'zai'), { recursive: true });
-  fs.writeFileSync(path.join(replay, 'zai', '0.json'), JSON.stringify({ status: 200, body: { model: 'glm-5.1', choices: [{ message: { content: 'wrong model' } }], usage: { prompt_tokens: 1, completion_tokens: 1 } } }));
+  fs.mkdirSync(path.join(replay, 'nearai'), { recursive: true });
+  fs.writeFileSync(path.join(replay, 'nearai', '0.json'), JSON.stringify({ status: 200, body: { model: 'deepseek-ai/DeepSeek-V3', choices: [{ message: { content: 'wrong model' } }], usage: { prompt_tokens: 1, completion_tokens: 1 } } }));
   const h = harness({ OMNI_HTTP_REPLAY: replay });
   const result = await runReviewSession({
     directory: h.directory,
-    identity: { agent: 'key-zai-glm-5-3', family: 'key', provider: 'zai', model: 'glm-5.3', role: 'auditor', sourceDigest: 'c'.repeat(64), assignmentDigest: 'd'.repeat(64) },
+    identity: { agent: 'nearai-deepseek-ai-deepseek-v4', family: 'nearai', provider: 'nearai', model: 'deepseek-ai/DeepSeek-V4', role: 'auditor', sourceDigest: 'c'.repeat(64), assignmentDigest: 'd'.repeat(64) },
     bridgeArgs: [h.envFile],
     prompt: 'Review.',
     env: h.env,
@@ -96,7 +97,7 @@ test('a request with no recorded replay fails as live_required, not provider_err
   const h = harness({ OMNI_HTTP_REPLAY: replay });
   const result = await runReviewSession({
     directory: h.directory,
-    identity: { agent: 'key-zai-glm-5-3', family: 'key', provider: 'zai', model: 'glm-5.3', role: 'auditor', sourceDigest: 'e'.repeat(64), assignmentDigest: 'f'.repeat(64) },
+    identity: { agent: 'nearai-deepseek-ai-deepseek-v4', family: 'nearai', provider: 'nearai', model: 'deepseek-ai/DeepSeek-V4', role: 'auditor', sourceDigest: 'e'.repeat(64), assignmentDigest: 'f'.repeat(64) },
     bridgeArgs: [h.envFile], prompt: 'Review.', env: h.env, logFile: path.join(h.root, 'live.log'),
   }, { launch: h.launch, heartbeatMs: 60_000 });
   assert.equal(result.code, 1);
@@ -107,22 +108,24 @@ test('an API pass books its spend on the run ledger and stops on the reviewer to
   const h = harness({ OMNI_HTTP_REPLAY: path.join(path.dirname(FIXTURE), 'w04') });
   const report = path.join(h.root, 'report');
   // Another surface of the same reviewer already spent 0.01 of the 0.015 ceiling; this pass's first turn costs 0.01.
-  await costLedger(report, 'key-zai-glm-5-3').add(0.01);
+  // NEAR AI reports no usage.cost, so the turn is priced from prices.nearai.<model> (100 prompt tokens at $100/MTok).
+  await costLedger(report, 'nearai-deepseek-ai-deepseek-v4').add(0.01);
+  const prices = { nearai: { 'deepseek-ai/DeepSeek-V4': { inPerMTok: 100, outPerMTok: 0 } } };
   const launch = (opts) => buildApiLaunch(
-    { provider: 'zai', model: opts.model },
-    { workDir: opts.workDir, env: opts.env, role: 'auditor', maxCostUsd: 0.015, bridgeArgs: [h.envFile, '--report-dir', report, '--agent', 'key-zai-glm-5-3'], mcpCommand: process.execPath, mcpLeadingArgs: [path.join(h.root, 'stub.mjs')] },
-    presetFor('zai'),
+    { provider: 'nearai', model: opts.model },
+    { workDir: opts.workDir, env: opts.env, role: 'auditor', maxCostUsd: 0.015, prices, bridgeArgs: [h.envFile, '--report-dir', report, '--agent', 'nearai-deepseek-ai-deepseek-v4'], mcpCommand: process.execPath, mcpLeadingArgs: [path.join(h.root, 'stub.mjs')] },
+    presetFor('nearai'),
   );
   const result = await runReviewSession({
     directory: h.directory,
-    identity: { agent: 'key-zai-glm-5-3', family: 'key', provider: 'zai', model: 'glm-5.3', role: 'auditor', sourceDigest: '1'.repeat(64), assignmentDigest: '2'.repeat(64) },
+    identity: { agent: 'nearai-deepseek-ai-deepseek-v4', family: 'nearai', provider: 'nearai', model: 'deepseek-ai/DeepSeek-V4', role: 'auditor', sourceDigest: '1'.repeat(64), assignmentDigest: '2'.repeat(64) },
     bridgeArgs: [h.envFile], prompt: 'Review.', env: h.env, logFile: path.join(h.root, 'ledger.log'),
   }, { launch, heartbeatMs: 60_000 });
   assert.equal(result.code, 0, result.failureReason);
   const session = JSON.parse(fs.readFileSync(path.join(h.directory, 'workspace', 'api-session.json'), 'utf8'));
   assert.equal(session.stop, 'cost', 'alone the pass (0.01) is under the ceiling');
   assert.equal(session.turns, 1);
-  assert.ok(Math.abs(spentUsd(report, 'key-zai-glm-5-3') - 0.02) < 1e-9);
+  assert.ok(Math.abs(spentUsd(report, 'nearai-deepseek-ai-deepseek-v4') - 0.02) < 1e-9);
 });
 
 // A bridge stub: `body` runs once per request frame `m` (an object with an id).

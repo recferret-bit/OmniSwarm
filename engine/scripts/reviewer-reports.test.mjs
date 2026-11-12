@@ -13,7 +13,7 @@ const node = (script, args) => spawnSync(process.execPath, [path.join(SCRIPTS, s
 
 test('a reviewer report validates and an unknown family is rejected', () => {
   const sample = {
-    reviewer: { id: 'key-zai-glm-5-3', family: 'key', provider: 'zai', vendor: 'zai', model: 'glm-5.3' },
+    reviewer: { id: 'nearai-deepseek-ai-deepseek-v4', family: 'nearai', provider: 'nearai', vendor: 'deepseek', model: 'deepseek-ai/DeepSeek-V4' },
     status: 'COMPLETE', gaps: [], surfaces: ['S1'], findings: [], verified_safe: [],
   };
   assert.equal(validate('reviewer-report', sample).ok, true);

@@ -23,7 +23,7 @@ test('cli provider metadata names presence rows, transports and the --max-turns 
   assert.equal(family.providers, CLI_PROVIDERS);
   assert.deepEqual(Object.keys(CLI_PROVIDERS).filter((name) => CLI_PROVIDERS[name].presence), ['claude', 'codex', 'grok', 'agy']);
   assert.deepEqual(Object.fromEntries(Object.entries(CLI_PROVIDERS).map(([name, p]) => [name, p.transport])), {
-    claude: 'maintained_acp', codex: 'maintained_acp', grok: 'native_acp', agy: 'native_cli_acp_adapter', 'claude-zai': 'maintained_acp',
+    claude: 'maintained_acp', codex: 'maintained_acp', grok: 'native_acp', agy: 'native_cli_acp_adapter',
   });
   assert.deepEqual(Object.keys(CLI_PROVIDERS).filter((name) => CLI_PROVIDERS[name].maxTurnsFlag), ['grok']);
 });

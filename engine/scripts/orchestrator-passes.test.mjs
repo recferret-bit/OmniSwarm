@@ -13,7 +13,7 @@ import { parseReviewerList } from './reviewer-registry.mjs';
 import { DEMO_FIXTURE } from './scripted-strategies.mjs';
 
 const BUDGETS = { passes: 2, toolBudget: 5, maxCostUsd: 2, debate: { rounds: 2, toolBudget: 12, maxClusters: 25 } };
-const PRICES = { zai: { 'glm-5.3': { inPerMTok: 1, outPerMTok: 2 } } };
+const PRICES = { nearai: { 'deepseek-ai/DeepSeek-V4': { inPerMTok: 1, outPerMTok: 2 } } };
 
 function finding(identity, pass) {
   return [{ title: `Pass ${pass} finding ${identity.name}`, surface: identity.surface, severity: 'low', confidence: 'probable', location: ['source.js:1'], impact: 'Fixture only', preconditions: 'Inert fixture', analysis: 'Inspected source.js:1', validation: 'No target execution', attack: [], poc: '', fix: 'Fixture guidance' }, { verified_safe: [] }];

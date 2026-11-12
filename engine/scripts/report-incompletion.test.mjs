@@ -77,7 +77,7 @@ test('buildIncompletionNotes parses real budgetHealth(), cost_ceiling workers, r
       jobs: [
         { name: 'claude-s1', adapter: 'claude', failure: { reason: 'timeout' } },
         { name: 'grok-s4', adapter: 'grok', failure: { reason: 'usage_limit' } },
-        { name: 'zai-s5', adapter: 'zai', failure: { reason: 'cost_ceiling' } },
+        { name: 'deepseek-s5', adapter: 'deepseek', failure: { reason: 'cost_ceiling' } },
       ],
     });
 
@@ -140,18 +140,18 @@ test('buildIncompletionNotes parses real budgetHealth(), cost_ceiling workers, r
     const meta = {
       pipelineMode: 'full',
       debatesCompleted: true,
-      agents: ['claude', 'codex', 'grok', 'zai'],
+      agents: ['claude', 'codex', 'grok', 'deepseek'],
       reviewers: [
         { id: 'claude', family: 'cli', vendor: 'anthropic', model: 'opus' },
         { id: 'codex', family: 'cli', vendor: 'openai', model: 'gpt-5' },
         { id: 'grok', family: 'cli', vendor: 'xai', model: 'grok-4' },
-        { id: 'zai', family: 'zai', vendor: 'zhipu', model: 'glm-5' },
+        { id: 'deepseek', family: 'nearai', vendor: 'deepseek', model: 'deepseek-ai/DeepSeek-V4' },
       ],
-      workerExits: { 'claude-s1': 124, 'grok-s4': 1, 'zai-s5': 1, 'codex-s2': 0 },
+      workerExits: { 'claude-s1': 124, 'grok-s4': 1, 'deepseek-s5': 1, 'codex-s2': 0 },
       crosscheckExits: { grok: 1 },
       stageFailures: [
         'auditor_error:claude-s1',
-        'auditor_error:zai-s5',
+        'auditor_error:deepseek-s5',
         'crosscheck_error:grok',
         'phase_failed:adjudicate:debate_incomplete: 3 turn(s) or judgement(s) had no answer (debate_turn_timeout, session_failed, judge_unavailable)',
         'phase_failed:general-review:general_review_unavailable: debate_turn_timeout',
@@ -159,7 +159,7 @@ test('buildIncompletionNotes parses real budgetHealth(), cost_ceiling workers, r
     };
     const health = {
       complete: false,
-      expected: ['claude-s1', 'grok-s4', 'zai-s5', 'codex-s2'],
+      expected: ['claude-s1', 'grok-s4', 'deepseek-s5', 'codex-s2'],
       accepted: [],
       errors: [
         'One or more review stages failed.',
@@ -230,7 +230,7 @@ test('buildIncompletionNotes end-to-end against real debateStage + adjudicateSta
       { id: 'claude', family: 'cli', vendor: 'anthropic', model: 'opus' },
       { id: 'codex', family: 'cli', vendor: 'openai', model: 'gpt-5' },
       { id: 'grok', family: 'cli', vendor: 'xai', model: 'grok-4' },
-      { id: 'qwen', family: 'openrouter', vendor: 'alibaba', model: 'qwen-3' },
+      { id: 'qwen', family: 'nearai', vendor: 'alibaba', model: 'Qwen/Qwen3.8-Max' },
     ];
     const claims = [
       {
@@ -342,6 +342,39 @@ test('buildIncompletionNotes preserves multiple distinct verification.gaps, mult
     const incompleteJobNote = notes.find((n) => n.code === 'auditor_incomplete');
     assert.ok(incompleteJobNote, 'must emit note for auditor_incomplete:<job> when workerExits did not already cover it');
     assert.equal(incompleteJobNote.source, 'claude-s1-auth');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a run cancelled before review explains the cancel once, not one provider_error per never-started session', () => {
+  const dir = makeTempDir();
+  try {
+    const reviewers = [
+      { id: 'cli-claude-opus', family: 'cli', vendor: 'anthropic', model: 'opus' },
+      { id: 'cli-codex-gpt-6-1-sol', family: 'cli', vendor: 'openai', model: 'gpt-6.1-sol' },
+    ];
+    const jobs = reviewers.flatMap((r) => ['s1-auth', 's2-input'].map((s) => ({ name: `${r.id}-${s}`, adapter: r.id, state: 'pending' })));
+    writeJson(dir, 'workers.json', { version: 1, jobs });
+    const meta = {
+      reviewers, agents: reviewers.map((r) => r.id), finalized: true,
+      workerExits: Object.fromEntries(jobs.map((j) => [j.name, null])),
+      stageFailures: ['run_cancelled:prepare'],
+    };
+    const errors = [...jobs.map((j) => `${j.name}: missing or invalid outputs (ENOENT). Worker exit status is missing; successful completion is unverified.`), 'One or more review stages failed.'];
+    const notes = buildIncompletionNotes(dir, { meta, health: { expected: jobs.map((j) => j.name), accepted: [], errors } });
+    assert.deepEqual(notes.map((n) => n.code).sort(), ['review_not_started_cancelled', 'run_cancelled'], 'the missing outputs of never-started sessions are covered by the one note');
+    assert.equal(notes.filter((n) => n.category === 'provider_error').length, 0, 'no provider is blamed for a session that never started');
+    const notStarted = notes.find((n) => n.code === 'review_not_started_cancelled');
+    assert.ok(notStarted);
+    assert.match(notStarted.reason, /^4 reviewer session\(s\) never started because the run was cancelled during the Preparing sandbox phase \(reviewers: cli-claude-opus, cli-codex-gpt-6-1-sol\)/);
+    assert.match(notes.find((n) => n.code === 'run_cancelled').reason, /cancelled \(Ctrl-C or SIGTERM\) during the Preparing sandbox phase/);
+
+    // A job that did start and ended without an exit is still reported per job.
+    writeJson(dir, 'workers.json', { version: 1, jobs: jobs.map((j, i) => (i ? j : { ...j, state: 'running' })) });
+    const mixed = buildIncompletionNotes(dir, { meta: { ...meta, stageFailures: ['sandbox_unavailable'] }, health: { expected: [], accepted: [], errors: [] } });
+    assert.ok(mixed.some((n) => n.source === jobs[0].name));
+    assert.match(mixed.find((n) => n.code === 'review_not_started').reason, /^3 reviewer session\(s\) never started because the review sandbox failed/);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

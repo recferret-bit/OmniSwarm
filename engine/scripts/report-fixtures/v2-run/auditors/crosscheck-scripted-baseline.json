@@ -16,7 +16,7 @@
     ]
   },
   {
-    "id": "key-zai-glm-5-3-s1-auth#0",
+    "id": "nearai-deepseek-ai-deepseek-v4-s1-auth#0",
     "verdict": "upheld",
     "reason": "Read the cited line.",
     "evidence": [
@@ -24,7 +24,7 @@
     ]
   },
   {
-    "id": "openrouter-qwen-qwen3-8-max-0902-s1-auth#0",
+    "id": "nearai-qwen-qwen3-8-max-s1-auth#0",
     "verdict": "upheld",
     "reason": "Read the cited line.",
     "evidence": [
@@ -32,7 +32,7 @@
     ]
   },
   {
-    "id": "openrouter-anthropic-claude-opus-5-5-s1-auth#0",
+    "id": "nearai-meta-llama-llama-5-70b-s1-auth#0",
     "verdict": "upheld",
     "reason": "Read the cited line.",
     "evidence": [

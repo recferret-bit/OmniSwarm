@@ -25,7 +25,7 @@
       "additionalProperties": false,
       "properties": {
         "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,80}$" },
-        "family": { "enum": ["cli", "key", "openrouter", "nearai", "scripted"] },
+        "family": { "enum": ["cli", "key", "nearai", "scripted"] },
         "provider": { "type": "string", "pattern": "^[a-z0-9-]+$" },
         "vendor": { "type": "string", "pattern": "^[a-z0-9-]+$" },
         "model": { "type": "string", "minLength": 1, "maxLength": 128 },

@@ -39,7 +39,7 @@ test('status pill tokens and the CSS tone classes meet WCAG AA contrast', () => 
 
 test('v2 pages have one main, native disclosures, pressed state, labelled badges and no heading skips', () => {
   const dir = renderV2();
-  for (const rel of ['report.html', 'reviewers.html', 'findings-by-model.html', 'reviewers/key-zai-glm-5-3/report.html']) {
+  for (const rel of ['report.html', 'reviewers.html', 'findings-by-model.html', 'reviewers/nearai-deepseek-ai-deepseek-v4/report.html']) {
     const html = read(dir, rel);
     assert.equal(html.match(/<main\b/g).length, 1, rel);
     const levels = headings(html);
@@ -51,5 +51,5 @@ test('v2 pages have one main, native disclosures, pressed state, labelled badges
   assert.match(report, /data-cross-filter="DISPUTED"[^>]*aria-pressed="false"/);
   assert.match(report, /data-status-filter="LIKELY"[^>]*aria-pressed="false"/);
   assert.match(read(dir, 'reviewers.html'), /aria-label="cli · anthropic · opus"/);
-  assert.match(read(dir, 'reviewers.html'), /<span class="pill" aria-label="openrouter · alibaba · qwen\/qwen3\.8-max-0902">openrouter · alibaba · qwen\/qwen3\.8-max-0902<\/span>/);
+  assert.match(read(dir, 'reviewers.html'), /<span class="pill" aria-label="nearai · alibaba · Qwen\/Qwen3\.8-Max">nearai · alibaba · Qwen\/Qwen3\.8-Max<\/span>/);
 });

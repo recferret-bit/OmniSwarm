@@ -15,7 +15,7 @@ import { createExecute } from './orchestrator-session.mjs';
 import { parseReviewerSpec } from './reviewer-registry.mjs';
 import { validate } from '../../packages/schemas/index.mjs';
 
-const [claude, codex, grok, openrouterClaude, judge] = ['cli:claude:opus', 'cli:codex:gpt-5.5', 'cli:grok:grok-4', 'openrouter:anthropic/claude-opus-5.5', 'scripted:judge'].map(parseReviewerSpec);
+const [claude, codex, grok, sonnet, judge] = ['cli:claude:opus', 'cli:codex:gpt-5.5', 'cli:grok:grok-4', 'cli:claude:sonnet', 'scripted:judge'].map(parseReviewerSpec);
 const ok = { file: 'src/lib.rs', startLine: 2, endLine: 2, quote: 'x', valid: true };
 const cluster = (vendors, extra = {}) => ({ id: 'CLUSTER-1', status: 'QUEUED', severity: 'high', vendors, citationsOk: true, ...extra });
 const argued = [
@@ -169,9 +169,9 @@ test('the same-vendor model is the replacement when no other vendor is independe
     return seen.length === 1
       ? { finalStatus: 'DISPUTED', rationale: 'Both sides cite the line.' }
       : { finalStatus: 'LIKELY', rationale: 'Keep the single-source finding.' };
-  }, { reviewers: [claude, openrouterClaude], alternate: null }));
-  assert.deepEqual(seen, [claude.id, openrouterClaude.id]);
-  assert.equal(row.judge.reviewerId, openrouterClaude.id);
+  }, { reviewers: [claude, sonnet], alternate: null }));
+  assert.deepEqual(seen, [claude.id, sonnet.id]);
+  assert.equal(row.judge.reviewerId, sonnet.id);
   assert.equal(row.finalStatus, 'LIKELY');
 });
 

@@ -97,7 +97,7 @@ test('local audit argv is the fixed flag list and never --rpc', () => {
   assert.equal(command[0], path.join('/opt/omniswarm', 'bin/audit'));
   assert.equal(command.includes('--rpc'), false);
   assert.equal(command.includes('--github'), false);
-  assert.deepEqual(Object.keys(localAuditEnv({ PATH: '/usr/bin', HOME: '/home/op', LANG: 'C', TMPDIR: '/tmp', ZAI_API_KEY: 'secret', DATABASE_URL: 'postgres://x' })).sort(),
+  assert.deepEqual(Object.keys(localAuditEnv({ PATH: '/usr/bin', HOME: '/home/op', LANG: 'C', TMPDIR: '/tmp', NEARAI_API_KEY: 'secret', DATABASE_URL: 'postgres://x' })).sort(),
     ['HOME', 'LANG', 'PATH', 'TMPDIR']);
   assert.throws(() => localAuditArgv({ kind: 'path', target: 'relative', outDir: out }));
   assert.throws(() => localAuditArgv({ kind: 'path', target: '/tmp/../etc', outDir: out }));

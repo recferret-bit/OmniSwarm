@@ -170,15 +170,15 @@ Pick exactly ONE target:
                      accepts https://github.com/<owner>/<repo>[.git], git@github.com:<owner>/<repo>.git, <owner>/<repo>
 
 Usage:
-  audit local [--repo <directory> | --github <owner/repo or url>] [--provider <zai|openrouter|nearai> --models <model,...> | --nearai <model,...>] [--with-clis]
+  audit local [--repo <directory> | --github <owner/repo or url>] [--provider nearai --models <model,...> | --nearai <model,...>] [--with-clis]
       One command. Uses every installed CLI (claude, codex, grok, agy). Opus is the orchestrator when Claude is installed. With only one CLI, that model is both orchestrator and reviewer. Defaults to the current directory.
-      --provider <id> --models <model,...>: review with one API provider from the provider catalog instead (the first model orchestrates). Needs that provider's key variable in your environment (ZAI_API_KEY, OPENROUTER_API_KEY or NEARAI_API_KEY); source is sent to that provider. --nearai <model,...> is shorthand for --provider nearai --models. --with-clis adds the installed CLIs.
+      --provider nearai --models <model,...>: review with NEAR AI Cloud, the provider catalog's API provider, instead (the first model orchestrates). Needs NEARAI_API_KEY (your own key) in your environment and OMNI_LIVE=1; source is sent to NEAR AI Cloud. --nearai <model,...> is shorthand for --provider nearai --models. --with-clis adds the installed CLIs.
   audit run   (--repo <path> | --github <url>) [options]
       Review supplied source/configuration/dependencies through restricted MCP tools and persistent ACP sessions. Only catalogued existing tests run in the offline Docker sandbox; no arbitrary commands, PoCs or deployed probes. Save validated peer-reviewed reports and remove owned resources.
   audit setup-agents
       Install the lockfile-pinned ACP runtime locally; no global tools or account login.
   audit check-agents [--live [--agents <list>] [--out <empty-dir>] | --reviewers <list>]
-      Check Docker, CLIs and pinned adapters. --reviewers checks key presence for key/openrouter/scripted/claude-zai and never prints a key.
+      Check Docker, CLIs and pinned adapters. --reviewers checks key presence for nearai/key/scripted reviewers and never prints a key.
       --live explicitly runs inert inference, bridge access and saved-session recovery checks.
   audit demo [--surface s1|all] [--out <empty-dir>] [--no-docker]
       Review the bundled engine/scripts/demo-fixture with scripted reviewers. Refuses --repo and --github.
@@ -209,16 +209,17 @@ Options (run):
   --restart-failed         With --resume-from, review failed assignments in new sessions; provider refusals, quotas and login errors remain blocked
   -s, --surface <id>       s1..s6 or all (default: all)
   -o, --out <dir>          report directory (default: reports/<timestamp>-<repo>)
-  --reviewers <list>       comma-separated reviewer specs <family>:<provider>:<model>[#label]. Families: cli (claude, codex, grok, agy,
-                           claude-zai), key (zai), openrouter (<vendor>/<model>), scripted (fixture strategies, demo only).
-                           Example: cli:claude:opus,cli:codex:gpt-6.1-sol,key:zai:glm-5.3,openrouter:qwen/qwen3.8-max-0902
+  --reviewers <list>       comma-separated reviewer specs <family>:<provider>:<model>[#label]. Families: cli (claude, codex, grok, agy),
+                           nearai (NEAR AI Cloud <org>/<model>, your own NEARAI_API_KEY), scripted (fixture strategies, demo only).
+                           Example: cli:claude:opus,cli:codex:gpt-6.1-sol,nearai:deepseek-ai/DeepSeek-V4,nearai:Qwen/Qwen3.8-Max
   --config <file>          run config (default: omniswarm.config.json at the OmniSwarm repository root, if present); see engine/omniswarm.config.example.json
   --preset <name>          a preset from the config file (local-subscriptions, api-only, mixed, hosted, demo)
   --assign <mode>          matrix (every reviewer x every surface; default with --reviewers/--preset up to 8 reviewers)
                            or round-robin (one reviewer per surface; default with --agents)
   --orchestrator <spec|recommended>   model that judges the debate and writes the general review; without it there is no debate.
-                           recommended takes the first available of cli:claude:opus, key:anthropic, openrouter:anthropic, key:zai,
-                           scripted:judge. scripted:judge (the citation rules, no model) is refused on anything but the bundled
+                           recommended takes the first available of cli:claude:opus, key:anthropic (not installed yet),
+                           scripted:judge; name a nearai:<model> explicitly to orchestrate with NEAR AI Cloud.
+                           scripted:judge (the citation rules, no model) is refused on anything but the bundled
                            fixtures (scripted_judge_demo_only)
   --alternate-judge <spec>            judge for a cluster whose authors share the orchestrator's vendor
                            (default: the first run reviewer of another vendor; with none the cluster stays DISPUTED)

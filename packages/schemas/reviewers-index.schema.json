@@ -14,7 +14,7 @@
         "required": ["family", "label", "vendors"],
         "additionalProperties": false,
         "properties": {
-          "family": { "enum": ["cli", "key", "openrouter", "scripted", "nearai"] },
+          "family": { "enum": ["cli", "key", "scripted", "nearai"] },
           "label": { "type": "string", "minLength": 1 },
           "vendors": {
             "type": "array",

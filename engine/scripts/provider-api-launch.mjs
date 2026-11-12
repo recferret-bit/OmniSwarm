@@ -1,4 +1,4 @@
-// Shared launch for every API-provider reviewer (key:zai, openrouter, nearai). The reviewer process receives its allow-listed
+// Shared launch for every API-provider reviewer (today: nearai; a future installed `key:` provider uses it too). The reviewer process receives its allow-listed
 // variables; the bridge process receives the base session environment and nothing else.
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -62,7 +62,7 @@ export function buildApiLaunch(reviewer, ctx, preset) {
   return apiAcpInvocation(ctx.workDir, config, reviewerProcessEnv(env, preset.envAllowlist));
 }
 
-// A family that is exactly one catalog API provider (openrouter, nearai). The family file is then one line;
+// A family that is exactly one catalog API provider (nearai). The family file is then one line;
 // everything provider-specific (base URL, key variable, body, headers) lives in the provider catalog.
 export function singleProviderFamily(providerId) {
   const preset = presetFor(providerId);

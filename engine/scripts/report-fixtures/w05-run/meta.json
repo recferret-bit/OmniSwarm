@@ -7,14 +7,14 @@
   "surface": "s1",
   "agents": [
     "cli-claude-opus",
-    "key-zai-glm-5-3",
-    "openrouter-qwen-qwen3-8-max-0902",
+    "nearai-deepseek-ai-deepseek-v4",
+    "nearai-qwen-qwen3-8-max",
     "scripted-baseline"
   ],
   "models": {
     "cli-claude-opus": "opus",
-    "key-zai-glm-5-3": "glm-5.3",
-    "openrouter-qwen-qwen3-8-max-0902": "qwen/qwen3.8-max-0902",
+    "nearai-deepseek-ai-deepseek-v4": "deepseek-ai/DeepSeek-V4",
+    "nearai-qwen-qwen3-8-max": "Qwen/Qwen3.8-Max",
     "scripted-baseline": "baseline"
   },
   "reviewers": [
@@ -26,18 +26,18 @@
       "model": "opus"
     },
     {
-      "id": "key-zai-glm-5-3",
-      "family": "key",
-      "provider": "zai",
-      "vendor": "zai",
-      "model": "glm-5.3"
+      "id": "nearai-deepseek-ai-deepseek-v4",
+      "family": "nearai",
+      "provider": "nearai",
+      "vendor": "deepseek",
+      "model": "deepseek-ai/DeepSeek-V4"
     },
     {
-      "id": "openrouter-qwen-qwen3-8-max-0902",
-      "family": "openrouter",
-      "provider": "openrouter",
+      "id": "nearai-qwen-qwen3-8-max",
+      "family": "nearai",
+      "provider": "nearai",
       "vendor": "alibaba",
-      "model": "qwen/qwen3.8-max-0902"
+      "model": "Qwen/Qwen3.8-Max"
     },
     {
       "id": "scripted-baseline",
@@ -49,15 +49,15 @@
   ],
   "auditors": [
     "cli-claude-opus-s1-auth",
-    "key-zai-glm-5-3-s1-auth",
-    "openrouter-qwen-qwen3-8-max-0902-s1-auth",
+    "nearai-deepseek-ai-deepseek-v4-s1-auth",
+    "nearai-qwen-qwen3-8-max-s1-auth",
     "scripted-baseline-s1-auth"
   ],
   "submissionAuthority": "mcp_commit",
   "workerExits": {
     "cli-claude-opus-s1-auth": 0,
-    "key-zai-glm-5-3-s1-auth": 0,
-    "openrouter-qwen-qwen3-8-max-0902-s1-auth": 0,
+    "nearai-deepseek-ai-deepseek-v4-s1-auth": 0,
+    "nearai-qwen-qwen3-8-max-s1-auth": 0,
     "scripted-baseline-s1-auth": 0
   },
   "crosscheckExits": {},

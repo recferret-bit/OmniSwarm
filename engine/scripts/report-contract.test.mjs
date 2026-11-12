@@ -561,14 +561,14 @@ test('W04-15: a budget stop without a submission reaches report health, and a bu
 });
 
 test('meta.reviewers may carry the observed key fingerprint and served model, nothing else', (t) => {
-  const f = fixture(t, ['key-zai-glm-5-3']);
-  f.meta.models = { 'key-zai-glm-5-3': 'glm-5.3' };
-  f.meta.reviewers = [{ id: 'key-zai-glm-5-3', family: 'key', provider: 'zai', vendor: 'zai', model: 'glm-5.3', keyFingerprint: 'ab12cd34', servedModel: 'glm-5.3' }];
-  f.save('key-zai-glm-5-3');
+  const f = fixture(t, ['nearai-deepseek-ai-deepseek-v4']);
+  f.meta.models = { 'nearai-deepseek-ai-deepseek-v4': 'deepseek-ai/DeepSeek-V4' };
+  f.meta.reviewers = [{ id: 'nearai-deepseek-ai-deepseek-v4', family: 'nearai', provider: 'nearai', vendor: 'deepseek', model: 'deepseek-ai/DeepSeek-V4', keyFingerprint: 'ab12cd34', servedModel: 'deepseek-ai/DeepSeek-V4' }];
+  f.save('nearai-deepseek-ai-deepseek-v4');
   const inventory = () => loadAuditors(f.dir).health.errors.filter((e) => /Invalid reviewer inventory/.test(e));
   assert.deepEqual(inventory(), []);
   for (const bad of [{ keyFingerprint: 'sk-full-key-value' }, { servedModel: '' }, { apiKey: 'x' }]) {
-    f.meta.reviewers = [{ id: 'key-zai-glm-5-3', family: 'key', provider: 'zai', vendor: 'zai', model: 'glm-5.3', ...bad }];
+    f.meta.reviewers = [{ id: 'nearai-deepseek-ai-deepseek-v4', family: 'nearai', provider: 'nearai', vendor: 'deepseek', model: 'deepseek-ai/DeepSeek-V4', ...bad }];
     f.put('meta.json', f.meta);
     assert.equal(inventory().length, 1, JSON.stringify(bad));
   }

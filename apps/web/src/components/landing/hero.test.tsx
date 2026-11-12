@@ -7,6 +7,6 @@ describe('Hero', () => {
     render(<Hero />);
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(HERO);
     expect(screen.getByRole('link', { name: 'View a sample report' })).toHaveAttribute('href', '/sample');
-    expect(screen.getByRole('link', { name: 'Review a repo' })).toHaveAttribute('href', '#review');
+    expect(screen.getByRole('link', { name: 'Review a repo' })).toHaveAttribute('href', '#start');
   });
 });

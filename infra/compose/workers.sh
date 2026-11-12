@@ -40,19 +40,26 @@ for n in 1 2; do
     contract_id="$(value CONTRACT_ID)"
     network="$(value NETWORK)"
     recipient="$(value INTAKE_RECIPIENT)"
-    export NODE_ENV=development HOSTED_PRESET=panel WORKER_CONCURRENCY=1
+    export NODE_ENV=development WORKER_CONCURRENCY=1
+    # Dashboard jobs are account-nearai and carry their own run config. HOSTED_PRESET only has to pass the
+    # cli engine's startup check (a preset of an omniswarm.config.json); the paid wallet flow that would
+    # use it is dormant. Without a root omniswarm.config.json, the example config supplies `hosted`.
+    export HOSTED_PRESET=hosted
+    if [ -z "${ENGINE_CONFIG:-}" ] && [ ! -f "$ROOT/omniswarm.config.json" ]; then
+      export ENGINE_CONFIG="$ROOT/engine/omniswarm.config.example.json"
+    fi
     export WORKER_ID="worker-$n" ENGINE_ROOT="$ROOT" DATABASE_URL="$database_url"
-    export SESSION_SECRET="$session_secret" PROVIDER_SECRETS_FILE="$state/secrets/providers.json"
+    # Outside production SESSION_SECRET also seals accounts' own NEAR AI keys (no ACCOUNT_KEYS_SECRET here).
+    export SESSION_SECRET="$session_secret"
     export REPORTS_ROOT="$state/reports" REPORTS_BASE_URL="$reports_base_url" RUNS_ROOT="$state/runs"
     export GITHUB_ADAPTER=live
-    # NEAR_LOCAL=1: the home-page quote is the scripted preset. The cli runner
-    # refuses that preset, so the local sandbox demo uses the mock engine and
-    # still attests on the sandbox registry. The host worker uses 127.0.0.1:3030
+    # NEAR_LOCAL=1: the local sandbox demo uses the mock engine (recorded report,
+    # no model call) and still attests on the sandbox registry. The host worker uses 127.0.0.1:3030
     # and the operator key. Do not pass host.docker.internal; that name is for
     # the API container only.
     # LOCAL_ENGINE_RUNNER=cli keeps the sandbox chain but runs the real engine, so a dashboard review on
-    # the operator panel or an account's own NEAR AI key is paid by bob.test.near, reviewed by real models
-    # and attested on the sandbox registry. The home-page quote (scripted preset) is then refused.
+    # the account's own NEAR AI key is paid by bob.test.near, reviewed by real models and attested on the
+    # sandbox registry. The scripted preset is then refused.
     if [ "${NEAR_LOCAL:-0}" = 1 ]; then
       export ENGINE_RUNNER="${LOCAL_ENGINE_RUNNER:-mock}"
       export NEAR_NETWORK=sandbox NETWORK=sandbox CHAIN_ADAPTER=near

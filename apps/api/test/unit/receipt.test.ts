@@ -25,7 +25,7 @@ const attestation: ChainAttestation = {
 
 function row(status: RequestRow['status'], extra: Partial<RequestRow> = {}): RequestRow {
   return {
-    id: ID, account: 'alice.test.near', repo: 'near/example', commit_sha: 'd'.repeat(40), network: 'sandbox', preset: 'panel',
+    id: ID, account: 'alice.test.near', repo: 'near/example', commit_sha: 'd'.repeat(40), network: 'sandbox', preset: 'account-nearai',
     deployed: 'vault.test.near', request_hash: REQUEST_HASH, price_yocto: YOCTO, status, attempts: 1, failure_cause: null,
     report_sha256: status === 'done' ? HASH : null, report_url: status === 'done' ? `https://reports.example/${ID}/report.html` : null,
     max_severity: 'high', scope: 'full', theme: null, parent_id: null, slice_path: null, models: null, incomplete: false,
@@ -36,12 +36,12 @@ function row(status: RequestRow['status'], extra: Partial<RequestRow> = {}): Req
 }
 
 function writeReport(dir: string): void {
-  fs.mkdirSync(path.join(dir, 'reviewers', 'key-zai-glm-5-3'), { recursive: true });
+  fs.mkdirSync(path.join(dir, 'reviewers', 'nearai-deepseek-ai-deepseek-v4'), { recursive: true });
   fs.writeFileSync(path.join(dir, 'reviewers', 'index.json'), JSON.stringify({
-    groups: [{ family: 'key', label: 'API keys', vendors: [{ vendor: 'zai', reviewers: [{ id: 'key-zai-glm-5-3', model: 'glm-5.3' }] }] }],
+    groups: [{ family: 'nearai', label: 'NEAR AI Cloud', vendors: [{ vendor: 'deepseek', reviewers: [{ id: 'nearai-deepseek-ai-deepseek-v4', model: 'deepseek-ai/DeepSeek-V4' }] }] }],
     totals: {}, pages: [],
   }));
-  fs.writeFileSync(path.join(dir, 'reviewers', 'key-zai-glm-5-3', 'usage.json'), JSON.stringify({
+  fs.writeFileSync(path.join(dir, 'reviewers', 'nearai-deepseek-ai-deepseek-v4', 'usage.json'), JSON.stringify({
     passes: [], totals: { calls: 4, tokensIn: 1000, tokensOut: 800, cost: 0.02 },
   }));
   fs.writeFileSync(path.join(dir, 'findings-and-scores.json'), JSON.stringify([
@@ -73,11 +73,11 @@ test('a fixture report gives the expected receipt', async () => {
   writeReport(path.join(root, ID));
   const body = await reportIndex(deps(root, row('done')), ID);
   assert.equal(body.reportSha256, HASH);
-  assert.deepEqual(body.reviewers, ['key-zai-glm-5-3']);
+  assert.deepEqual(body.reviewers, ['nearai-deepseek-ai-deepseek-v4']);
   assert.ok(body.receipt);
   assert.deepEqual(body.receipt, {
     paid: { yocto: YOCTO, tx: 'PayTx111' },
-    reviewers: [{ id: 'key-zai-glm-5-3', vendor: 'zai', model: 'glm-5.3', calls: 4, tokens: 1800, usd: 0.02 }],
+    reviewers: [{ id: 'nearai-deepseek-ai-deepseek-v4', vendor: 'deepseek', model: 'deepseek-ai/DeepSeek-V4', calls: 4, tokens: 1800, usd: 0.02 }],
     check: { passed: 2, total: 3, byStatus: { CONFIRMED: 1, REFUTED: 1, DISPUTED: 1 } },
     attestation: { tx: 'AttestTx111', hash: HASH, match: true },
   });
@@ -100,7 +100,7 @@ test('a refund reads the newest numeric attempt, not a source checkout named rep
   const attempt = path.join(root, 'runs', ID, '1', 'report');
   for (const [dir, id] of [[source, 'from-source'], [attempt, 'from-attempt']] as const) {
     fs.mkdirSync(path.join(dir, 'reviewers', id), { recursive: true });
-    fs.writeFileSync(path.join(dir, 'meta.json'), JSON.stringify({ reviewers: [{ id, vendor: 'zai', model: 'glm-5.3' }] }));
+    fs.writeFileSync(path.join(dir, 'meta.json'), JSON.stringify({ reviewers: [{ id, vendor: 'deepseek', model: 'deepseek-ai/DeepSeek-V4' }] }));
     fs.writeFileSync(path.join(dir, 'reviewers', id, 'usage.json'), JSON.stringify({ passes: [], totals: { calls: 1, tokensIn: 1, tokensOut: 1, cost: 0 } }));
   }
   const body = await reportIndex(deps(root, row('refunded')), ID);
@@ -114,10 +114,10 @@ test('a split parent receipt sums its done slices', async () => {
   fs.writeFileSync(path.join(root, parent.id, 'findings-and-scores.json'), '[]\n');
   fs.writeFileSync(path.join(root, parent.id, 'published.json'), JSON.stringify({ reportSha256: HASH, files: ['findings-and-scores.json'] }));
   const childId = '3f2b8c1e-5d4a-4b7e-9c1a-2e6f0a8b4d11';
-  const childDir = path.join(root, childId, 'reviewers', 'key-zai-glm-5-3');
+  const childDir = path.join(root, childId, 'reviewers', 'nearai-deepseek-ai-deepseek-v4');
   fs.mkdirSync(childDir, { recursive: true });
   fs.writeFileSync(path.join(root, childId, 'reviewers', 'index.json'), JSON.stringify({
-    groups: [{ family: 'key', vendors: [{ vendor: 'zai', reviewers: [{ id: 'key-zai-glm-5-3', model: 'glm-5.3' }] }] }],
+    groups: [{ family: 'nearai', vendors: [{ vendor: 'deepseek', reviewers: [{ id: 'nearai-deepseek-ai-deepseek-v4', model: 'deepseek-ai/DeepSeek-V4' }] }] }],
   }));
   fs.writeFileSync(path.join(childDir, 'usage.json'), JSON.stringify({ passes: [], totals: { calls: 2, tokensIn: 3, tokensOut: 4, cost: 1 } }));
   fs.writeFileSync(path.join(root, childId, 'findings-and-scores.json'), JSON.stringify([{ finalStatus: 'AGREED' }]));
@@ -133,7 +133,7 @@ test('a split parent receipt sums its done slices', async () => {
     },
   } as unknown as typeof base.pool;
   const body = await reportIndex({ ...base, pool }, parent.id);
-  assert.deepEqual(body.receipt?.reviewers, [{ id: 'key-zai-glm-5-3', vendor: 'zai', model: 'glm-5.3', calls: 2, tokens: 7, usd: 1 }]);
+  assert.deepEqual(body.receipt?.reviewers, [{ id: 'nearai-deepseek-ai-deepseek-v4', vendor: 'deepseek', model: 'deepseek-ai/DeepSeek-V4', calls: 2, tokens: 7, usd: 1 }]);
   assert.deepEqual(body.receipt?.check, { passed: 1, total: 1, byStatus: { AGREED: 1 } });
 });
 

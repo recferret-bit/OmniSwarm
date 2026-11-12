@@ -9,7 +9,7 @@ export class ReviewerError extends Error {
   constructor(code, message) { super(message || code); this.name = 'ReviewerError'; this.code = code; }
 }
 
-export const FAMILIES = ['cli', 'key', 'openrouter', 'nearai', 'scripted'];
+export const FAMILIES = ['cli', 'key', 'nearai', 'scripted'];
 
 // Default model per cli provider when only an adapter name is given (--agents claude).
 // Kept here, not in shell, so every entry point agrees (ORCHESTRATION section 1 "Defaults").
@@ -18,7 +18,8 @@ export const CLI_DEFAULT_MODELS = Object.freeze({
   claude: 'opus', grok: 'grok-4.7', agy: 'gemini-4-argon-high', codex: 'gpt-6.1-sol',
 });
 
-const CLI_VENDORS = { claude: 'anthropic', 'claude-zai': 'zai', codex: 'openai', grok: 'xai', agy: 'google' };
+const CLI_VENDORS = { claude: 'anthropic', codex: 'openai', grok: 'xai', agy: 'google' };
+// Vendor = who trained the model, not who serves it: `zai` here is Zhipu (GLM models such as NEAR AI's zai-org/GLM-*).
 const ORG_VENDORS = {
   anthropic: 'anthropic', openai: 'openai', 'x-ai': 'xai', xai: 'xai', google: 'google', qwen: 'alibaba', alibaba: 'alibaba', 'z-ai': 'zai', zai: 'zai', 'zai-org': 'zai', zhipuai: 'zai', thudm: 'zai',
   meta: 'meta', 'meta-llama': 'meta', mistral: 'mistral', mistralai: 'mistral', deepseek: 'deepseek', 'deepseek-ai': 'deepseek', moonshot: 'moonshot', moonshotai: 'moonshot',
@@ -56,18 +57,11 @@ export function vendorOf(reviewer) {
   // NEAR AI Cloud hosts other vendors' models; the vendor is the model's, or 'nearai' when the name does not say.
   if (r.family === 'nearai') return vendorOfHostedModel(r.model, 'nearai');
   if (r.family === 'scripted') return 'scripted';
-  if (r.family === 'openrouter') {
-    return vendorOfOpenRouterModel(r.model);
-  }
   return r.provider;
 }
 
-// OpenRouter slugs are <org>/<model>. The model's own name decides the vendor when it names a known family
-// (somehost/claude-opus-5.5 is anthropic); otherwise the org does. A slug without an org is 'openrouter'.
-export function vendorOfOpenRouterModel(model) {
-  return vendorOfHostedModel(model, 'openrouter');
-}
-
+// Hosted model ids are <org>/<model>. The model's own name decides the vendor when it names a known family
+// (somehost/claude-opus-5.5 is anthropic); otherwise the org does. An id without an org is the host.
 function vendorOfHostedModel(model, host) {
   const text = String(model || '');
   const slash = text.lastIndexOf('/');
@@ -130,8 +124,8 @@ export function assertUniqueReviewers(list) {
   return list;
 }
 
-// Same character set and length as a model in a reviewer spec (packages/schemas reviewer-spec), so an
-// OpenRouter slug such as `qwen/qwen3.8-max-0902` is accepted. A path segment of `.` or `..`, or a leading
+// Same character set and length as a model in a reviewer spec (packages/schemas reviewer-spec), so a
+// hosted model id such as `Qwen/Qwen3.8-Max` is accepted. A path segment of `.` or `..`, or a leading
 // or trailing `/`, is refused: the model is a label, never a path. Session stores and submission
 // identities both use this check.
 const MODEL_ID = /^[A-Za-z0-9._:/-]{1,128}$/;

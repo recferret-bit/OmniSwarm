@@ -4,7 +4,8 @@ import { buildApiLaunch } from './provider-api-launch.mjs';
 import { presetFor } from './provider-openai-compat.mjs';
 import { apiProviders } from '../../packages/schemas/providers.mjs';
 
-// Installed `key:` providers are the catalog's API providers of family `key` (today: zai).
+// Installed `key:` providers are the catalog's API providers of family `key` (today: none; NEAR AI Cloud is its own
+// `nearai` family). The direct vendor APIs below parse as specs but are not installed.
 const KNOWN = {
   ...Object.fromEntries(apiProviders().filter((provider) => provider.family === 'key').map((provider) => [provider.id, { installed: () => true }])),
   // Messages API and the other compat presets are H+ (W03-11, W03-05). Specs parse; launch waits.

@@ -10,15 +10,22 @@ import { validate } from '../../../packages/schemas/index.mjs';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const run = (args, env = {}) => spawnSync(path.join(ROOT, 'bin', 'audit'), args, { cwd: ROOT, encoding: 'utf8', env: { ...process.env, ...env }, timeout: 180_000 });
 
-test('plan lists key, openrouter and scripted reviewers without printing a key', () => {
-  const result = run(['run', '--repo', 'engine/scripts/demo-fixture', '--reviewers', 'key:zai:glm-5.3,openrouter:qwen/qwen3.8-max-0902,scripted:baseline', '--surface', 's1', '--plan'], { ZAI_API_KEY: 'zk-secret', OPENROUTER_API_KEY: 'or-secret' });
+test('plan lists nearai and scripted reviewers without printing a key', () => {
+  const result = run(['run', '--repo', 'engine/scripts/demo-fixture', '--reviewers', 'nearai:Qwen/Qwen3.8-Max,scripted:baseline', '--surface', 's1', '--plan'], { NEARAI_API_KEY: 'nk-secret' });
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /key-zai-glm-5-3\s+key\s+zai\s+glm-5\.3\s+yes/);
-  assert.match(result.stdout, /env ZAI_API_KEY,ZAI_BASE_URL/);
-  assert.match(result.stdout, /openrouter\s+alibaba\s+qwen\/qwen3\.8-max-0902/);
+  assert.match(result.stdout, /nearai-qwen-qwen3-8-max\s+nearai\s+alibaba\s+Qwen\/Qwen3\.8-Max/);
+  assert.match(result.stdout, /env NEARAI_API_KEY\s+transport api-acp/);
   assert.match(result.stdout, /scripted-baseline\s+scripted\s+scripted/);
-  assert.equal(result.stdout.includes('zk-secret'), false);
-  assert.equal(result.stdout.includes('or-secret'), false);
+  assert.equal(result.stdout.includes('nk-secret'), false);
+});
+
+test('removed providers are refused at plan time', () => {
+  const zai = run(['run', '--repo', 'engine/scripts/demo-fixture', '--reviewers', 'key:zai:glm-5.3', '--surface', 's1', '--plan'], { ZAI_API_KEY: 'zk-stale' });
+  assert.notEqual(zai.status, 0);
+  assert.match(`${zai.stdout}\n${zai.stderr}`, /unknown provider zai/);
+  const openrouter = run(['run', '--repo', 'engine/scripts/demo-fixture', '--reviewers', 'openrouter:qwen/qwen3.8-max-0902', '--surface', 's1', '--plan']);
+  assert.notEqual(openrouter.status, 0);
+  assert.match(openrouter.stderr, /invalid reviewer spec/);
 });
 
 test('demo refuses a foreign repo and the host snapshot stamps the banner', () => {
@@ -51,40 +58,40 @@ test('demo refuses a foreign repo and the host snapshot stamps the banner', () =
 });
 
 // Demo step 2: the documented replay command, with the documented RELATIVE OMNI_HTTP_REPLAY.
-// The openrouter identity carries a `vendor/model` id, which audit-submission.mjs validates with validModelId.
-test('a replayed zai and openrouter run reads, searches and submits through the bridge', () => {
+// The nearai identity carries an `org/model` id, which audit-submission.mjs validates with validModelId.
+test('a replayed nearai run reads, searches and submits through the bridge', () => {
   const out = fs.mkdtempSync(path.join(os.tmpdir(), 'w03-replay-'));
   fs.rmSync(out, { recursive: true });
-  const result = run(['run', '--repo', 'engine/scripts/demo-fixture', '--reviewers', 'key:zai:glm-5.3,openrouter:qwen/qwen3.8-max-0902', '--surface', 's1', '--passes', '1', '--out', out], {
-    OMNI_DEMO_HOST: '1', OMNI_HTTP_REPLAY: 'engine/scripts/provider-fixtures/w03', ZAI_API_KEY: 'zk-test', OPENROUTER_API_KEY: 'or-test',
+  const result = run(['run', '--repo', 'engine/scripts/demo-fixture', '--reviewers', 'nearai:Qwen/Qwen3.8-Max', '--surface', 's1', '--passes', '1', '--out', out], {
+    OMNI_DEMO_HOST: '1', OMNI_HTTP_REPLAY: 'engine/scripts/provider-fixtures/w03', NEARAI_API_KEY: 'nk-test',
   });
   assert.equal(result.status, 0, `${result.stderr}\n${result.stdout}`);
   const submissions = fs.readdirSync(path.join(out, 'submissions'));
-  assert.ok(submissions.includes('key-zai-glm-5-3-s1-auth.json'));
-  assert.ok(submissions.includes('openrouter-qwen-qwen3-8-max-0902-s1-auth.json'));
-  const usage = JSON.parse(fs.readFileSync(path.join(out, 'harness', 'usage', 'openrouter-qwen-qwen3-8-max-0902', 's1-pass-1.json'), 'utf8'));
+  assert.ok(submissions.includes('nearai-qwen-qwen3-8-max-s1-auth.json'));
+  const usage = JSON.parse(fs.readFileSync(path.join(out, 'harness', 'usage', 'nearai-qwen-qwen3-8-max', 's1-pass-1.json'), 'utf8'));
   assert.equal(usage.stop, 'submitted');
-  assert.equal(usage.costSource, 'reported');
-  const tools = JSON.parse(fs.readFileSync(path.join(out, 'harness', 'bridge-openrouter-qwen-qwen3-8-max-0902-s1-auth.json'), 'utf8')).map((row) => row.tool);
+  // NEAR AI reports no usage.cost and no prices.nearai entry is configured: the run is unpriced, not free.
+  assert.equal(usage.costSource, 'none');
+  const tools = JSON.parse(fs.readFileSync(path.join(out, 'harness', 'bridge-nearai-qwen-qwen3-8-max-s1-auth.json'), 'utf8')).map((row) => row.tool);
   assert.deepEqual(tools, ['read_file', 'search_code', 'submit_audit_report']);
-  const committed = JSON.parse(fs.readFileSync(path.join(out, 'submissions', 'openrouter-qwen-qwen3-8-max-0902-s1-auth.json'), 'utf8'));
+  const committed = JSON.parse(fs.readFileSync(path.join(out, 'submissions', 'nearai-qwen-qwen3-8-max-s1-auth.json'), 'utf8'));
   assert.equal(JSON.stringify(committed).includes('src/lib.rs:30'), true);
   for (const name of fs.readdirSync(out, { recursive: true })) {
     const file = path.join(out, name);
     if (!fs.statSync(file).isFile()) continue;
     const text = fs.readFileSync(file, 'utf8');
-    assert.equal(text.includes('zk-test') || text.includes('or-test'), false, `${name} contains a key`);
+    assert.equal(text.includes('nk-test'), false, `${name} contains a key`);
   }
 });
 
-test('check-agents --reviewers reports a missing openrouter key', () => {
+test('check-agents --reviewers reports a missing NEAR AI key', () => {
   const env = { ...process.env };
-  delete env.OPENROUTER_API_KEY;
-  const missing = spawnSync(path.join(ROOT, 'bin', 'audit'), ['check-agents', '--reviewers', 'openrouter:qwen/qwen3.8-max-0902'], { cwd: ROOT, encoding: 'utf8', env });
+  delete env.NEARAI_API_KEY;
+  const missing = spawnSync(path.join(ROOT, 'bin', 'audit'), ['check-agents', '--reviewers', 'nearai:Qwen/Qwen3.8-Max'], { cwd: ROOT, encoding: 'utf8', env });
   assert.equal(missing.status, 1);
-  assert.match(missing.stdout, /openrouter: OPENROUTER_API_KEY missing/);
-  const present = spawnSync(path.join(ROOT, 'bin', 'audit'), ['check-agents', '--reviewers', 'openrouter:qwen/qwen3.8-max-0902'], { cwd: ROOT, encoding: 'utf8', env: { ...env, OPENROUTER_API_KEY: 'or-test' } });
+  assert.match(missing.stdout, /nearai: NEARAI_API_KEY missing/);
+  const present = spawnSync(path.join(ROOT, 'bin', 'audit'), ['check-agents', '--reviewers', 'nearai:Qwen/Qwen3.8-Max'], { cwd: ROOT, encoding: 'utf8', env: { ...env, NEARAI_API_KEY: 'nk-test' } });
   assert.equal(present.status, 0, present.stderr);
-  assert.match(present.stdout, /openrouter: key present/);
-  assert.equal(present.stdout.includes('or-test'), false);
+  assert.match(present.stdout, /nearai: key present/);
+  assert.equal(present.stdout.includes('nk-test'), false);
 });

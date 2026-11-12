@@ -86,7 +86,15 @@
 
 .review-center { display: flex; justify-content: center; }
 .review-center > * { width: min(760px, 100%); }
-#review { max-width: 760px; width: 100%; margin-inline: auto; }
+
+.start-steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; list-style: none; padding: 0; margin: 0 0 var(--os-s5); }
+.start-steps > li { display: grid; align-content: start; gap: 8px; }
+.start-steps h3, .start-steps p { margin: 0; }
+.start-steps > li > p:last-child { color: var(--os-text-2); }
+.start-local { display: grid; gap: 8px; margin-top: var(--os-s6); max-width: 46rem; }
+.start-local h3, .start-local p { margin: 0; }
+.start-local p { color: var(--os-text-2); }
+.start-local pre { margin: 0; padding: var(--os-s3) var(--os-s4); background: var(--os-plate-2); border: 1px solid var(--os-seam); overflow-x: auto; }
 
 .trust__list { margin: 0; padding-left: 1.1rem; display: grid; gap: 8px; color: var(--os-text-2); }
 .trust__chain { margin: 0; color: var(--os-steel); }

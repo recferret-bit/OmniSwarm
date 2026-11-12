@@ -1,13 +1,8 @@
-// Operator switch for free reviews. A boolean, not a secret. Stored beside the sealed key file.
+// Operator switch for free reviews. A boolean, not a secret. Stored in REVIEW_SETTINGS_FILE.
 import fs from 'node:fs';
 import path from 'node:path';
 
 export interface ReviewSettings { freeChecks: boolean }
-
-export function settingsPath(secretsFile: string | null): string | null {
-  if (!secretsFile) return null;
-  return path.join(path.dirname(secretsFile), 'review-settings.json');
-}
 
 export function readReviewSettings(file: string | null): ReviewSettings {
   if (!file || !fs.existsSync(file)) return { freeChecks: false };

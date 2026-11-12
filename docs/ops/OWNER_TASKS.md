@@ -29,8 +29,8 @@ Keep your filled env files in `~/.omniswarm/env/` on your own machine (`chmod 70
 
 | Task | Where | Hand over |
 |---|---|---|
-| [ ] Z.ai **pay-as-you-go** API key. Not the Coding Plan, which may only be used through Z.ai's own coding tools (OD-04). Top up a small prepaid balance: that balance is the hard spend limit | z.ai console, API keys | `ZAI_API_KEY` (`providers.env`) |
-| [ ] OpenRouter API key, with a **monthly spend limit** set on the key (`docs/ops/COST.md` explains why that limit is the real ceiling). The engine sends `data_collection: "deny"` on every request | openrouter.ai, Keys | `OPENROUTER_API_KEY` (`providers.env`) |
+| [ ] No provider key. OmniSwarm charges users nothing and pays for no review: each user pastes their own NEAR AI Cloud key on `/dashboard`. Leave `providers.env` empty (the worker unit still loads the file) | nothing to buy | nothing (`providers.env` stays comment-only) |
+| [ ] Generate the account-key secret: `openssl rand -base64 48`. It seals each account's own NEAR AI key in Postgres and must differ from `SESSION_SECRET`, because the workers receive it. Without it a production API cannot store any account's key | your machine | `ACCOUNT_KEYS_SECRET` (`stack.env` and `worker.env`, equal) |
 | [ ] Fine-grained GitHub token: public repositories, read-only, no other permission. Optional: without it, the API uses the unauthenticated rate limit | github.com, Settings, Developer settings, Fine-grained tokens | `GITHUB_TOKEN` (`stack.env`) |
 | [ ] Generate three random secrets: `openssl rand -hex 32`, run once for each | your machine | `SESSION_SECRET`, `ADMIN_TOKEN`, `POSTGRES_PASSWORD` (`stack.env`); the same password inside `DATABASE_URL` (`worker.env`) |
 | [ ] An alert webhook (a Slack or Discord incoming webhook) and a heartbeat URL (`docs/ops/UPTIME.md`) | Slack/Discord, healthchecks.io | `OMNI_ALERT_WEBHOOK_URL`, `OMNI_HEARTBEAT_URL` (`ops.env`) |
@@ -66,13 +66,15 @@ You need `near` (near-cli-rs 0.30) and `cargo-near` on your machine, not on the 
   mkdir -p -m 700 ~/.omniswarm/env
   for f in stack worker providers ops; do install -m 600 infra/env/$f.env.example ~/.omniswarm/env/$f.env; done
   ```
-- [ ] `HOSTED_PRESET` in `stack.env` and in `worker.env` (equal): the examples say `hosted`, the six API reviewers (OD-04). Use `demo` for a first deploy that spends nothing. Leave `OMNI_API_NODE_ENV=production`, `CHAIN_ADAPTER=near` and `GITHUB_ADAPTER=live` as they are: production refuses the test adapters.
+- [ ] `HOSTED_PRESET` in `stack.env` and in `worker.env` (equal): the examples say `hosted`. Only the dormant paid wallet flow uses it, and it would need an operator key that you do not install (OD-26). Use `demo` for a first deploy that spends nothing. Dashboard reviews always run `account-nearai` on the user's own key. Leave `OMNI_API_NODE_ENV=production`, `CHAIN_ADAPTER=near` and `GITHUB_ADAPTER=live` as they are: production refuses the test adapters.
 - [ ] Optional: `~/.omniswarm/env/omniswarm.config.json`, your copy of `engine/omniswarm.config.example.json` with your own presets or `prices`. Without it, each release uses the example file, which defines `hosted` and `demo`.
 - [ ] Check without copying anything: `node infra/deploy/secrets-check.mjs ~/.omniswarm/env`. It lists each variable name with a fingerprint and refuses:
   - an empty required value
   - a contract-id mismatch, or a placeholder contract id (`*.mock`, `review-registry.owner.testnet`)
   - a `DATABASE_URL` whose password is not `POSTGRES_PASSWORD`
   - secrets shorter than the minimum
+  - a donation recipient on another network than `NETWORK`
+  - any variable in `providers.env`
   - an operator key of the contract account
 
 ### Placeholder contract ids in the repository
@@ -146,6 +148,25 @@ node engine/native/grok-review/admit.mjs --admit
 ## 13. Mainnet payout account (W14)
 
 - [ ] Create the mainnet account that will receive withdrawals once mainnet is priced (OD-08). Hand it over only when W14 asks. Mainnet stays off for the hackathon.
+
+## 14. Donations (optional)
+
+The user dashboard and the end of the landing page can show a NEAR USDC donation section (README "Support the project"). It is hidden until you set a recipient. A donation is a NEP-141 `ft_transfer` with 1 yoctoNEAR attached, signed by the donor's wallet.
+
+- [ ] Pick the recipient account on the stack's network (`<you>.testnet` on testnet). Use an account you control; it receives the USDC directly.
+- [ ] Storage-register it on the USDC contract, or every transfer to it fails. Read the minimum deposit, check the account, then register it once (USDC on testnet is `3e2210e1184b45b64c8a434c0a7e7b23cc04ea7eb7a6c3c32520d03d4afcb8af`; on mainnet `17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1`):
+  ```sh
+  USDC=3e2210e1184b45b64c8a434c0a7e7b23cc04ea7eb7a6c3c32520d03d4afcb8af
+  near contract call-function as-read-only $USDC storage_balance_bounds json-args '{}' network-config testnet now
+  near contract call-function as-read-only $USDC storage_balance_of json-args '{"account_id":"<recipient>"}' network-config testnet now
+  near contract call-function as-transaction $USDC storage_deposit \
+    json-args '{"account_id":"<recipient>","registration_only":true}' \
+    prepaid-gas '30.0 Tgas' attached-deposit '<min from storage_balance_bounds, in NEAR>' \
+    sign-as <you>.testnet network-config testnet sign-with-keychain send
+  ```
+  `storage_balance_of` returns `null` before the deposit and a balance after it.
+- [ ] Hand over: `NEXT_PUBLIC_DONATION_ACCOUNT=<recipient>` (`stack.env`). Leave `NEXT_PUBLIC_DONATION_USDC_CONTRACT` empty to use the network's USDC; set it only to use another NEP-141 contract (the recipient must be registered there too). `secrets.sh` refuses a recipient on the wrong network.
+- [ ] Deploy again: both values are web build args, so the section appears only in a new web image.
 
 ## Maintenance while the demo runs
 

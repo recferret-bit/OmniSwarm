@@ -262,9 +262,9 @@ test('runDebate executes round speakers in parallel while settling deterministic
 test('Cloud/API launch & tool loop recognize all 6 submit tools (fixing arguing loop timeouts)', async () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'omni-api-submit-tools-'));
   try {
-    const reviewer = { id: 'openrouter-qwen', family: 'openrouter', vendor: 'qwen', model: 'qwen/qwen3-coder' };
-    const preset = presetFor('openrouter');
-    const baseCtx = { workDir: tmp, env: { OPENROUTER_API_KEY: 'sk-test-dummy' } };
+    const reviewer = { id: 'nearai-qwen', family: 'nearai', vendor: 'alibaba', model: 'Qwen/Qwen3-Coder' };
+    const preset = presetFor('nearai');
+    const baseCtx = { workDir: tmp, env: { NEARAI_API_KEY: 'sk-test-dummy' } };
 
     // Check api-launch.json written for each role
     const checkRole = (ctx, expectedTool) => {
@@ -287,7 +287,7 @@ test('Cloud/API launch & tool loop recognize all 6 submit tools (fixing arguing 
       const fakeFetch = async () => {
         fetchCalls += 1;
         return new Response(JSON.stringify({
-          model: 'qwen/qwen3-coder',
+          model: 'Qwen/Qwen3-Coder',
           choices: [{
             finish_reason: 'tool_calls',
             message: {
@@ -296,14 +296,14 @@ test('Cloud/API launch & tool loop recognize all 6 submit tools (fixing arguing 
               tool_calls: [{ id: 'call_1', type: 'function', function: { name: submitName, arguments: '{"ok":true}' } }],
             },
           }],
-          usage: { prompt_tokens: 10, completion_tokens: 5, cost: 0.001 },
+          usage: { prompt_tokens: 10, completion_tokens: 5 },
         }), { status: 200, headers: { 'content-type': 'application/json' } });
       };
       const outcome = await runToolLoop({
-        provider: 'openrouter',
-        baseUrl: 'https://openrouter.ai/api/v1',
+        provider: 'nearai',
+        baseUrl: 'https://cloud-api.near.ai/v1',
         apiKey: 'sk-test-dummy',
-        model: 'qwen/qwen3-coder',
+        model: 'Qwen/Qwen3-Coder',
         brief: 'Submit now',
         tools: [{ type: 'function', function: { name: submitName, parameters: { type: 'object' } } }],
         submitTool: submitName,
@@ -394,8 +394,8 @@ test('incomplete runDebateStep writes all artifacts, exits 2 via CLI, and cleans
   fs.mkdirSync(path.join(target, 'src'), { recursive: true });
   fs.copyFileSync(path.join(DEMO_FIXTURE, 'src/lib.rs'), path.join(target, 'src/lib.rs'));
 
-  const [ZAI, QWEN] = parseReviewerList(['key:zai:glm-5.3', 'openrouter:qwen/qwen3.8-max-0902']);
-  const JUDGE = parseReviewerSpec('openrouter:anthropic/claude-opus-5.5');
+  const [DEEPSEEK, QWEN] = parseReviewerList(['nearai:deepseek-ai/DeepSeek-V4', 'nearai:Qwen/Qwen3.8-Max']);
+  const JUDGE = parseReviewerSpec('nearai:meta-llama/Llama-5-70B');
   const CITE = { file: 'src/lib.rs', startLine: 30, endLine: 30, quote: 'let next = self.balance.saturating_sub(amount);' };
   const WITHDRAW = {
     title: 'Missing owner check in withdraw', surface: 'S1', severity: 'high', confidence: 'probable', location: ['src/lib.rs:30'],
@@ -412,7 +412,7 @@ test('incomplete runDebateStep writes all artifacts, exits 2 via CLI, and cleans
     const { identity, bridgeArgs } = options;
     const reportDir = argVal(bridgeArgs, '--report-dir');
     if (identity.role === 'auditor') {
-      commitSubmission(reportDir, identity.name, identity, [...(identity.agent === ZAI.id ? [WITHDRAW] : []), { verified_safe: [] }]);
+      commitSubmission(reportDir, identity.name, identity, [...(identity.agent === DEEPSEEK.id ? [WITHDRAW] : []), { verified_safe: [] }]);
       return okRes(identity, options);
     }
     if (identity.role === 'crosscheck') {
@@ -447,7 +447,7 @@ test('incomplete runDebateStep writes all artifacts, exits 2 via CLI, and cleans
     out,
     surface: 's1',
     pipelineMode: 'stage-1',
-    reviewers: [ZAI, QWEN],
+    reviewers: [DEEPSEEK, QWEN],
     orchestrator: JUDGE,
     budgets: { passes: 1, toolBudget: 5, maxCostUsd: null, debate: { rounds: 1, toolBudget: 4, maxClusters: 25 } },
   }, { review, startSandbox });
@@ -499,8 +499,8 @@ test('Cloud published continuation restores full harness evidence without secret
   fs.mkdirSync(path.join(target, 'src'), { recursive: true });
   fs.copyFileSync(path.join(DEMO_FIXTURE, 'src/lib.rs'), path.join(target, 'src/lib.rs'));
 
-  const [ZAI, QWEN] = parseReviewerList(['key:zai:glm-5.3', 'openrouter:qwen/qwen3.8-max-0902']);
-  const JUDGE = parseReviewerSpec('openrouter:anthropic/claude-opus-5.5');
+  const [DEEPSEEK, QWEN] = parseReviewerList(['nearai:deepseek-ai/DeepSeek-V4', 'nearai:Qwen/Qwen3.8-Max']);
+  const JUDGE = parseReviewerSpec('nearai:meta-llama/Llama-5-70B');
   const CITE = { file: 'src/lib.rs', startLine: 30, endLine: 30, quote: 'let next = self.balance.saturating_sub(amount);' };
   const WITHDRAW = {
     title: 'Missing owner check in withdraw', surface: 'S1', severity: 'high', confidence: 'probable', location: ['src/lib.rs:30'],
@@ -520,7 +520,7 @@ test('Cloud published continuation restores full harness evidence without secret
     const { identity, bridgeArgs } = options;
     const reportDir = argVal(bridgeArgs, '--report-dir');
     if (identity.role === 'auditor') {
-      commitSubmission(reportDir, identity.name, identity, [...(identity.agent === ZAI.id ? [WITHDRAW] : []), { verified_safe: [] }]);
+      commitSubmission(reportDir, identity.name, identity, [...(identity.agent === DEEPSEEK.id ? [WITHDRAW] : []), { verified_safe: [] }]);
       return okRes(identity, options);
     }
     if (identity.role === 'crosscheck') {
@@ -567,7 +567,7 @@ test('Cloud published continuation restores full harness evidence without secret
     out: stage1Dir,
     surface: 's1',
     pipelineMode: 'stage-1',
-    reviewers: [ZAI, QWEN],
+    reviewers: [DEEPSEEK, QWEN],
     orchestrator: JUDGE,
     budgets: { passes: 1, toolBudget: 5, maxCostUsd: null, debate: { rounds: 1, toolBudget: 4, maxClusters: 25 } },
   }, { review, startSandbox });
@@ -691,18 +691,18 @@ test('resolveStepOrchestrator and runAdviseStep never auto-select scripted:judge
   // 3. --config / --preset / OMNI_RUN_CONFIG properly resolves a configured model orchestrator
   const cfgPath = path.join(root, 'custom-config.json');
   fs.writeFileSync(cfgPath, JSON.stringify({
-    reviewers: ['key:zai:glm-5.3'],
+    reviewers: ['nearai:deepseek-ai/DeepSeek-V4'],
     presets: {
       panel: {
-        reviewers: ['key:zai:glm-5.3', 'openrouter:qwen/qwen3.8-max-0902'],
-        orchestrator: 'openrouter:anthropic/claude-opus-5.5',
+        reviewers: ['nearai:deepseek-ai/DeepSeek-V4', 'nearai:Qwen/Qwen3.8-Max'],
+        orchestrator: 'nearai:meta-llama/Llama-5-70B',
       },
     },
   }));
   const fromPreset = resolveStepOrchestrator(reportDir, meta, undefined, emptyEnv, { configFile: cfgPath, preset: 'panel' }, realTarget);
-  assert.equal(fromPreset?.model, 'anthropic/claude-opus-5.5');
+  assert.equal(fromPreset?.model, 'meta-llama/Llama-5-70B');
   const fromEnvCfg = resolveStepOrchestrator(reportDir, meta, undefined, { ...emptyEnv, OMNI_RUN_CONFIG: cfgPath }, { preset: 'panel' }, realTarget);
-  assert.equal(fromEnvCfg?.model, 'anthropic/claude-opus-5.5');
+  assert.equal(fromEnvCfg?.model, 'meta-llama/Llama-5-70B');
 
   // 4. Explicitly passing scripted:judge on a real target is still refused
   await assert.rejects(

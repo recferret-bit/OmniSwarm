@@ -58,7 +58,7 @@ export async function recordExchange(root, provider, init, response) {
   return responseFrom(saved);
 }
 
-export function selectFetch({ env = process.env, provider = 'zai' } = {}) {
+export function selectFetch({ env = process.env, provider = 'nearai' } = {}) {
   if (env.OMNI_HTTP_REPLAY) return replayFetch(env.OMNI_HTTP_REPLAY, provider);
   return async (url, init) => {
     if (env.OMNI_LIVE !== '1') {

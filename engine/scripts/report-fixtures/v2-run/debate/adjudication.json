@@ -19,8 +19,8 @@
     "severity": "high",
     "severityReason": "Left as reported.",
     "judge": {
-      "reviewerId": "key-zai-glm-5-3",
-      "vendor": "zai",
+      "reviewerId": "nearai-deepseek-ai-deepseek-v4",
+      "vendor": "deepseek",
       "alternate": true
     },
     "rationale": "Verified quotes disagree.",
@@ -37,8 +37,8 @@
     "severity": "medium",
     "severityReason": "Left as reported.",
     "judge": {
-      "reviewerId": "key-zai-glm-5-3",
-      "vendor": "zai",
+      "reviewerId": "nearai-deepseek-ai-deepseek-v4",
+      "vendor": "deepseek",
       "alternate": true
     },
     "rationale": "Single source, not refuted.",

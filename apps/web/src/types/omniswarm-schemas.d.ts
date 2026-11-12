@@ -37,7 +37,6 @@ declare module '@omniswarm/schemas/providers-public' {
   export const ACCOUNT_PRESET_PREFIX: string;
   export function isModelId(model: unknown): boolean;
   export function publicAccountProviders(): PublicProvider[];
-  export function publicAdminProviders(): PublicProvider[];
   export function accountPresetName(providerId: string): string;
   export function accountPresetProvider(preset: string): string | null;
 }

@@ -43,7 +43,7 @@ describe('bundle guard scanner', () => {
   });
 
   it('flags an inlined fixture hash passed as an extra literal', () => {
-    const hash = 'cd8a533dc78a6d48e47e7fbe6bb7f9f591badd1e5854564cd4f3dd8f09ca38ab';
+    const hash = '8fb5033c2932c638b5d6967b1ca779d134d76102e98c3f32f0c2ed99fbc86c85';
     const files = bundle({ 'static/c.js': `const ATTESTED="${hash}"` });
     expect(hitsOf(files, [hash])).toHaveLength(1);
   });

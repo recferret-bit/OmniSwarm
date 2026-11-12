@@ -220,7 +220,7 @@ test('the mock engine writes a schema-valid snapshot at every step, finished onl
     const out = fs.mkdtempSync(path.join(os.tmpdir(), 'mock-progress-'));
     const runner = new MockEngineRunner({ fixtureDir, stepMs: 1, fail });
     const watcher = setInterval(() => { const row = progressFromSnapshot(out); if (row) seen.push({ state: String((row.detail as { state: string }).state), percent: row.percent, phase: row.phase }); }, 0);
-    await runner.run({ repo: 'o/r', commitSha: 'a'.repeat(40), preset: 'panel', outDir: out, logPath: path.join(out, 'engine.log') } as never, new AbortController().signal);
+    await runner.run({ repo: 'o/r', commitSha: 'a'.repeat(40), preset: 'account-nearai', outDir: out, logPath: path.join(out, 'engine.log') } as never, new AbortController().signal);
     clearInterval(watcher);
     const last = progressFromSnapshot(out);
     assert.ok(last);

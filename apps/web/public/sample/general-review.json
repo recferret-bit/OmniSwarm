@@ -33,21 +33,21 @@
       "costUsd": 0
     },
     {
-      "reviewerId": "key-zai-glm-5-3",
+      "reviewerId": "nearai-deepseek-ai-deepseek-v4",
       "uniqueConfirmed": 0,
       "refuted": 0,
       "toolCalls": 4,
       "costUsd": 0
     },
     {
-      "reviewerId": "openrouter-qwen-qwen3-8-max",
+      "reviewerId": "nearai-qwen-qwen3-8-max",
       "uniqueConfirmed": 0,
       "refuted": 0,
       "toolCalls": 4,
       "costUsd": 0
     },
     {
-      "reviewerId": "openrouter-anthropic-claude-opus",
+      "reviewerId": "nearai-meta-llama-llama-5-70b",
       "uniqueConfirmed": 0,
       "refuted": 0,
       "toolCalls": 4,
@@ -64,9 +64,9 @@
   "methodology": {
     "reviewers": [
       "cli-claude-opus",
-      "key-zai-glm-5-3",
-      "openrouter-qwen-qwen3-8-max",
-      "openrouter-anthropic-claude-opus",
+      "nearai-deepseek-ai-deepseek-v4",
+      "nearai-qwen-qwen3-8-max",
+      "nearai-meta-llama-llama-5-70b",
       "scripted-baseline"
     ],
     "orchestrator": "scripted:judge",

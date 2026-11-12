@@ -12,14 +12,14 @@ export interface EngineRunInput {
   logPath: string;
   /** Already-checked-out slice. When set, the engine reviews this directory instead of cloning `repo`. */
   sourceDir?: string;
-  /** Panel config the engine reads instead of the repo omniswarm.config.json. */
+  /** Per-job run config (an account job's models) the engine reads instead of the repo omniswarm.config.json. */
   configFile?: string;
   /** Provider key variables (provider catalog envAllowlist names) for this spawn only. */
   providerEnv?: Record<string, string>;
   /**
    * The provider variables this job's reviewers may use (from its specs). When set, every other catalog
    * provider variable is removed from the spawn, so an account job never carries an operator key and a
-   * panel job never carries a provider it does not run.
+   * hosted-preset job never carries a provider it does not run.
    */
   providerScope?: string[];
   /** Pipeline execution mode for initial reviews (`full`, `step-by-step`, or `stage-1`). */

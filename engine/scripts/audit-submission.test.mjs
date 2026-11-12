@@ -95,7 +95,7 @@ test('R-09: exploit steps, PoCs and missing evidence are refused for every ident
 
 test('W02-02: the bridge accepts reviewer ids listed in harness/reviewers.json and refuses any other with IDENTITY_UNKNOWN', t => {
   const f = fixture(t);
-  const id = 'openrouter-qwen-qwen3-8-max';
+  const id = 'nearai-qwen-qwen3-8-max';
   const identity = { ...f.identity, name: `${id}-s3-logic`, agent: id };
   const identityFile = path.join(f.root, 'identity.json');
   fs.writeFileSync(identityFile, JSON.stringify(identity));

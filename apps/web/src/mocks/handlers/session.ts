@@ -1,4 +1,5 @@
 // Dev/e2e only. Operator login, dashboard jobs and the request PDF.
+// A dashboard job runs only on the account's own NEAR AI Cloud key (source "nearai"), as the API requires.
 // Dashboard jobs set paidAt so snapshotAt walks queued -> running -> done.
 // txHash stays null: this is not a chain payment.
 import { http, HttpResponse } from 'msw';
@@ -33,9 +34,12 @@ const session = http.get('/api/session', () => {
 const dashboardJob = http.post('/api/dashboard/jobs', async ({ request }) => {
   const account = readState().session;
   if (!account) return apiError('UNAUTHORIZED', 401, 'Sign in required');
-  const body = (await request.json()) as { repo?: unknown } | null;
+  const body = (await request.json()) as { repo?: unknown; source?: unknown } | null;
   const parsed = typeof body?.repo === 'string' ? parseRepoInput(body.repo) : null;
   if (!parsed) return apiError('REPO_INVALID', 400, 'Not a GitHub repository');
+  if (body?.source !== 'nearai') return apiError('VALIDATION_ERROR', 400, 'A review runs on your own NEAR AI Cloud key: send source "nearai"');
+  const key = own.nearai;
+  if (!key?.set || key.models.length === 0) return apiError('VALIDATION_ERROR', 400, 'Save your NEAR AI Cloud key and at least one model first');
   const row: MockRequest = {
     id: uuid(), account, repo: parsed.repo, commit: MOCK_COMMIT, deployed: null, requestHash: sha256Hex(),
     priceYocto: '0', createdAt: clock.now(), paidAt: clock.now(), txHash: null,
@@ -74,7 +78,7 @@ const ownPut = http.put('/api/account/providers/:provider', async ({ request, pa
   return HttpResponse.json(view(provider));
 });
 const ownModels = http.get('/api/account/providers/:provider/models', ({ params }) => (view(String(params.provider)).set
-  ? HttpResponse.json({ source: 'live', models: ['deepseek-ai/DeepSeek-V4', 'zai-org/GLM-5.3'] })
+  ? HttpResponse.json({ source: 'live', models: ['deepseek-ai/DeepSeek-V4', 'Qwen/Qwen3.8-Max', 'meta-llama/Llama-5-70B', 'openai/gpt-oss-120b'] })
   : apiError('NOT_FOUND', 404, 'Save your key first')));
 
 export const sessionHandlers = [login, logout, session, dashboardJob, requestPdf, ownList, ownPut, ownModels];

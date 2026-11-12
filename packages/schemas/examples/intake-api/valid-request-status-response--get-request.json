@@ -2,7 +2,7 @@
   "status": "running",
   "progress": {
     "phase": "review",
-    "reviewer": "key-zai-glm-5-3",
+    "reviewer": "nearai-deepseek-ai-deepseek-v4",
     "pass": 1,
     "percent": 35.5
   },

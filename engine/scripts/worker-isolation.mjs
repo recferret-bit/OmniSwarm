@@ -20,7 +20,12 @@ const TEXT_EXT = new Set(['.js', '.mjs', '.cjs', '.ts', '.tsx', '.jsx', '.json',
 // can also be real source (docs, social, openapi) are anchored in SKIP_PATHS to the repository root.
 // Fixtures and public/ stay: existing tests read them at run or compile time. SVG is text, so site tests that
 // check for it exist; binary media (webp, mp4, fonts) stays out of the text-only snapshot.
-const SKIP_NAME = /^(readme|changelog|license|licence|notice|authors|contributors|code_of_conduct|security)(\..*)?$|^(swagger|openapi)[^/]*\.(json|ya?ml)$|\.(min\.js|min\.css|map|d\.ts|snap|log)$/i;
+const SKIP_NAME = /^(swagger|openapi)[^/]*\.(json|ya?ml)$|\.(min\.js|min\.css|map|d\.ts|snap|log)$/i;
+// A documentation name is prose only with no extension or a prose one. security.py, notice.ts and license.rs are
+// source: dropping them hides code from reviewers and breaks the imports of the target's own tests.
+const DOC_NAME = /^(readme|changelog|license|licence|notice|authors|contributors|code_of_conduct|security)(\..*)?$/i;
+const DOC_EXT = new Set(['', '.md', '.markdown', '.mdx', '.txt', '.rst', '.adoc', '.html', '.htm']);
+const skippedName = (name) => SKIP_NAME.test(name) || (DOC_NAME.test(name) && DOC_EXT.has(path.extname(name).toLowerCase()));
 const OWNED = new Map();
 const CAPTURES = new WeakMap();
 export { hash };
@@ -56,7 +61,7 @@ function fileOmission(name, rel, stat, limits) {
   if (!stat.isFile()) return 'special_file';
   if (secretName(name) || rel === '.claude/settings.json') return 'credential_name';
   if (stat.nlink !== 1) return 'hardlink';
-  if (SKIP_NAME.test(name)) return 'non_code_artifact';
+  if (skippedName(name)) return 'non_code_artifact';
   const text = TEXT_EXT.has(path.extname(name).toLowerCase()) || /^(\.dockerignore|requirements[\w.-]*\.txt|constraints\.txt|Dockerfile(?:\..*)?|Makefile|Cargo\.lock|go\.mod|go\.sum)$/.test(name);
   if (!text) return 'non_source_extension';
   if (stat.size > limits.fileBytes) return 'file_byte_limit';
@@ -78,6 +83,27 @@ function readCapturedFile(from, stat, root, limits) {
     }
     return buffer.subarray(0, n);
   } finally { fs.closeSync(fd); }
+}
+
+// Node's opendir/open errors can omit the path ("EPERM: operation not permitted, opendir"), and on macOS an EPERM
+// on a readable-looking checkout is almost always privacy control (TCC), which only the operator can lift.
+const TCC_HOME_DIRS = ['Downloads', 'Desktop', 'Documents', 'Library/Mobile Documents'];
+export function describeSourceReadError(err, target, { platform = process.platform, home = os.homedir() } = {}) {
+  if (!err || !['EPERM', 'EACCES'].includes(err.code)) return err;
+  const lines = [`cannot read audit source ${target}: ${err.code} (${err.syscall || 'read'} not permitted)`];
+  if (err.code === 'EPERM' && platform === 'darwin') {
+    const protectedDir = TCC_HOME_DIRS.map((d) => path.join(home, d)).find((d) => inside(d, target));
+    const where = protectedDir ? `${protectedDir} is a macOS privacy-protected folder` : (target.startsWith('/Volumes/') ? 'removable and network volumes are macOS privacy-protected' : 'macOS privacy controls (TCC) blocked the read');
+    lines.push(`  ${where}; the terminal app running ./bin/audit needs access to it.`);
+    lines.push('  Fix: System Settings > Privacy & Security > Files and Folders (or Full Disk Access) > allow your terminal app, then restart it;');
+    lines.push('  or move/clone the checkout outside Downloads, Desktop, Documents and iCloud Drive and pass that path to --repo.');
+  } else {
+    lines.push('  Check that the current user can list and read every directory under the --repo path.');
+  }
+  const wrapped = new Error(lines.join('\n'), { cause: err });
+  wrapped.code = err.code;
+  wrapped.path = target;
+  return wrapped;
 }
 
 function sealTree(dir) {
@@ -107,7 +133,8 @@ export function createSnapshot(source, { exclude = [], limits = LIMITS, only = n
   const omit = (rel, reason) => omissions.push({ path: rel, reason });
   const walk = (dir, rel, depth) => {
     if (depth > limits.depth) { omit(rel, 'depth_limit'); return; }
-    const handle = fs.opendirSync(dir);
+    let handle;
+    try { handle = fs.opendirSync(dir); } catch (err) { throw describeSourceReadError(err, dir); }
     const names = [];
     try {
       for (let ent; (ent = handle.readSync());) {
@@ -130,7 +157,8 @@ export function createSnapshot(source, { exclude = [], limits = LIMITS, only = n
       }
       const skipped = fileOmission(name, next, stat, limits);
       if (skipped) { omit(next, skipped); continue; }
-      const data = readCapturedFile(from, stat, root, limits);
+      let data;
+      try { data = readCapturedFile(from, stat, root, limits); } catch (err) { throw describeSourceReadError(err, from); }
       if (data.includes(0)) { omit(next, 'binary_content'); continue; }
       try { new TextDecoder('utf-8', { fatal: true }).decode(data); } catch { omit(next, 'non_utf8_text'); continue; }
       if (files.length >= limits.files || bytes + data.length > limits.totalBytes) throw new Error('snapshot content budget exceeded');

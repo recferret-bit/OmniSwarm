@@ -145,7 +145,7 @@ test('the guard account-age signal is off unless GUARD_ACCOUNT_AGE=nearblocks; h
 
 test('account- presets: only for account providers, never the hosted preset, and production needs ACCOUNT_KEYS_SECRET', () => {
   assert.equal(issue('api', { ...BASE, HOSTED_PRESET: 'hosted', ALLOWED_PRESETS: 'hosted,account-nearai' }), '');
-  assert.match(issue('api', { ...BASE, HOSTED_PRESET: 'hosted', ALLOWED_PRESETS: 'hosted,account-zai' }), /ALLOWED_PRESETS names an account- preset/);
+  assert.match(issue('api', { ...BASE, HOSTED_PRESET: 'hosted', ALLOWED_PRESETS: 'hosted,account-local' }), /ALLOWED_PRESETS names an account- preset/);
   assert.match(issue('api', { ...BASE, HOSTED_PRESET: 'account-nearai', ALLOWED_PRESETS: 'account-nearai' }), /HOSTED_PRESET cannot be an account- preset/);
   const prod = { ...PROD, ALLOWED_PRESETS: 'hosted,account-nearai' };
   assert.match(issue('api', prod), /ACCOUNT_KEYS_SECRET is required in production/);
@@ -154,4 +154,13 @@ test('account- presets: only for account providers, never the hosted preset, and
   // Outside production the session secret seals account keys; in production only ACCOUNT_KEYS_SECRET does.
   assert.equal(loadConfig('api', BASE as NodeJS.ProcessEnv).accountKeysSecret, BASE.SESSION_SECRET);
   assert.equal(loadConfig('api', PROD as NodeJS.ProcessEnv).accountKeysSecret, '');
+});
+
+test('the free-checks switch lives in REVIEW_SETTINGS_FILE; there is no operator provider-key file', () => {
+  assert.equal(loadConfig('api', BASE as NodeJS.ProcessEnv).reviewSettingsFile, null);
+  assert.equal(loadConfig('api', { ...BASE, REVIEW_SETTINGS_FILE: '/srv/omni/review-settings.json' } as NodeJS.ProcessEnv).reviewSettingsFile, '/srv/omni/review-settings.json');
+  // A leftover PROVIDER_SECRETS_FILE from an older deployment is ignored, not read.
+  const stale = loadConfig('api', { ...BASE, PROVIDER_SECRETS_FILE: '/srv/omni/providers.json' } as NodeJS.ProcessEnv) as unknown as Record<string, unknown>;
+  assert.equal('providerSecretsFile' in stale, false);
+  assert.equal(stale.reviewSettingsFile, null);
 });

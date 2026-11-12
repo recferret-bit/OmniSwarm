@@ -19,7 +19,9 @@ import { parseReviewerSpec } from './reviewer-registry.mjs';
 import { selectSurfaces } from './reviewer-plan-assign.mjs';
 import { DEMO_FIXTURE, runStrategy } from './scripted-strategies.mjs';
 
-const SPECS = { cli: 'cli:claude:opus', key: 'key:zai:glm-5.3', openrouter: 'openrouter:auto', scripted: 'scripted:lazy' };
+// Every installed family with a launchable provider. The `key` family has no installed provider (anthropic, openai, xai
+// and google are not built yet), so the API tool loop is covered through `nearai`.
+const SPECS = { cli: 'cli:claude:opus', nearai: 'nearai:deepseek-ai/DeepSeek-V4', scripted: 'scripted:lazy' };
 const EMPTY_REPORT = { findings: [], verified_safe: [], markdown_summary: 'Read until the budget, then submitted; coverage is partial.' };
 const S1 = selectSurfaces('s1')[0];
 
@@ -66,7 +68,7 @@ function greedyProvider(provider, seen) {
 async function runFamilyPass(family, reviewer, callTool, { pass, toolBudget, requests }) {
   if (family === 'scripted') return runStrategy('lazy', { callTool, fixtureRoot: DEMO_FIXTURE, surface: 'S1', pass });
   if (family === 'cli') return cliAgent(callTool);
-  const preset = PRESETS[family === 'key' ? reviewer.provider : 'openrouter'];
+  const preset = PRESETS[reviewer.provider];
   return runToolLoop({ baseUrl: 'https://example.invalid/v1', apiKey: 'fixture', model: reviewer.model, extraBody: preset.extraBody, tools: toOpenAiTools(toolDefinitions('auditor')), callTool, brief: `Pass ${pass}`, maxTurns: toolBudget + 3, provider: preset.provider, fetchImpl: greedyProvider(family, requests), sleep: async () => {} });
 }
 
@@ -98,13 +100,13 @@ test('every family x passes x tool budget completes exactly P passes and never e
           if (k < passes) assert.ok(fs.existsSync(path.join(out, 'submissions', `${name}-pass-${k}.json`)), `${label}: pass ${k} archived`);
         }
         assert.ok(fs.existsSync(path.join(out, 'submissions', `${name}.json`)), `${label}: last pass committed`);
-        if (family === 'key' || family === 'openrouter') {
+        if (family === 'nearai') {
           assert.ok(requests.every((body, i) => i % (toolBudget + 3) !== toolBudget + 2 || body.tool_choice?.function?.name === 'submit_audit_report'), `${label}: last turn forces the submit`);
-          if (family === 'openrouter') assert.ok(requests.every((body) => body.provider?.data_collection === 'deny'), 'OpenRouter requests deny data collection');
+          assert.ok(requests.every((body) => body.provider === undefined), 'NEAR AI requests carry no provider-specific body field');
         }
         cases += 1;
       }
     }
   }
-  assert.equal(cases, 24);
+  assert.equal(cases, 18);
 });

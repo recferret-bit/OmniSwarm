@@ -45,12 +45,12 @@ test('argv is exactly the 8-flag allow-list; any field carrying a flag is refuse
 });
 
 test('the hosted preset gets only its provider keys; intake secrets never reach the engine', async () => {
-  const config = { presets: { hosted: { reviewers: ['key:zai:glm-5.3', 'openrouter:qwen/qwen3.8-max-0902'], orchestrator: 'openrouter:anthropic/claude-opus-5.5' } } };
+  const config = { presets: { hosted: { reviewers: ['nearai:deepseek-ai/DeepSeek-V4', 'nearai:Qwen/Qwen3.8-Max'], orchestrator: 'nearai:deepseek-ai/DeepSeek-V4' } } };
   const root = fakeEngine(`${RECORD}\nfs.mkdirSync(process.argv[process.argv.indexOf('--out') + 1], { recursive: true });`, config);
   const env = {
     PATH: process.env.PATH ?? '', HOME: os.homedir(), DATABASE_URL: 'postgres://secret', SESSION_SECRET: 'x'.repeat(40), ADMIN_TOKEN: 'y'.repeat(40),
     GITHUB_TOKEN: 'ghp_secret', OPERATOR_KEY_FILE: '/run/credentials/operator-key', PROBE_SECRET_KEY: 'leak', ANTHROPIC_API_KEY: 'not-in-preset',
-    ZAI_API_KEY: 'zai-key', OPENROUTER_API_KEY: 'or-key', INTAKE_RECIPIENT: 'omniswarm.testnet', CONTRACT_ID: 'registry.testnet',
+    NEARAI_API_KEY: 'near-operator-key', INTAKE_RECIPIENT: 'omniswarm.testnet', CONTRACT_ID: 'registry.testnet',
     ENGINE_RUNNER: 'cli', ENGINE_ROOT: root, HOSTED_PRESET: 'hosted',
   };
   const engine: EngineRunner = await createEngine(loadConfig('worker', env), env);
@@ -62,7 +62,7 @@ test('the hosted preset gets only its provider keys; intake secrets never reach 
   assert.equal(fs.realpathSync(seen.cwd), fs.realpathSync(root), 'cwd is the engine root');
   assert.notEqual(seen.pid, process.pid);
   assert.deepEqual(Object.keys(seen.env).filter((key) => !['PATH', 'HOME', 'USER', 'TMPDIR', 'LANG', '__CF_USER_TEXT_ENCODING'].includes(key)).sort(),
-    ['OPENROUTER_API_KEY', 'ZAI_API_KEY']);
+    ['NEARAI_API_KEY']);
   for (const secret of ['postgres://secret', 'ghp_secret', 'leak', 'not-in-preset', 'x'.repeat(40)]) {
     assert.ok(!JSON.stringify(seen.env).includes(secret), `engine env carries ${secret}`);
   }
@@ -71,30 +71,31 @@ test('the hosted preset gets only its provider keys; intake secrets never reach 
   assert.throws(() => assertPassable(['OPERATOR_KEY_FILE']), /may not be passed/);
 });
 
-test('a scoped run gets only its own provider variables: an account job never carries the operator keys in the worker env', async () => {
-  const root = fakeEngine(`${RECORD}\nfs.mkdirSync(process.argv[process.argv.indexOf('--out') + 1], { recursive: true });`, { presets: { hosted: { reviewers: ['key:zai:glm-5.3'], orchestrator: 'key:zai:glm-5.3' } } });
+test('an account job runs on the account\'s own key, never the operator\'s key in the worker env', async () => {
+  const root = fakeEngine(`${RECORD}\nfs.mkdirSync(process.argv[process.argv.indexOf('--out') + 1], { recursive: true });`, { presets: { hosted: { reviewers: ['nearai:deepseek-ai/DeepSeek-V4'], orchestrator: 'nearai:deepseek-ai/DeepSeek-V4' } } });
   const env = {
     PATH: process.env.PATH ?? '', HOME: os.homedir(), DATABASE_URL: 'postgres://secret', SESSION_SECRET: 'x'.repeat(40), ADMIN_TOKEN: 'y'.repeat(40),
-    OPERATOR_KEY_FILE: '/run/credentials/operator-key', ZAI_API_KEY: 'zai-key', OPENROUTER_API_KEY: 'or-key', INTAKE_RECIPIENT: 'omniswarm.testnet', CONTRACT_ID: 'registry.testnet',
+    OPERATOR_KEY_FILE: '/run/credentials/operator-key', NEARAI_API_KEY: 'near-operator-key', INTAKE_RECIPIENT: 'omniswarm.testnet', CONTRACT_ID: 'registry.testnet',
     OMNI_LIVE: '1', ENGINE_RUNNER: 'cli', ENGINE_ROOT: root, HOSTED_PRESET: 'hosted',
   };
   const engine: EngineRunner = await createEngine(loadConfig('worker', env), env);
-  const run = { ...input(root), preset: 'account-nearai', providerEnv: { NEARAI_API_KEY: 'near-key', ZAI_API_KEY: 'zai-key', NOT_A_PROVIDER: 'x' }, providerScope: ['NEARAI_API_KEY'] };
+  const run = { ...input(root), preset: 'account-nearai', providerEnv: { NEARAI_API_KEY: 'near-account-key', NOT_A_PROVIDER: 'x' }, providerScope: ['NEARAI_API_KEY'] };
   assert.equal((await engine.run(run, new AbortController().signal)).exitCode, 0);
   const seen = JSON.parse(fs.readFileSync(path.join(root, 'seen.json'), 'utf8'));
   assert.deepEqual(Object.keys(seen.env).filter((key) => !['PATH', 'HOME', 'USER', 'TMPDIR', 'LANG', '__CF_USER_TEXT_ENCODING'].includes(key))
-    .sort(), ['NEARAI_API_KEY', 'OMNI_LIVE'], 'the operator\'s OMNI_LIVE opt-in rides along; no other provider variable does');
-  assert.ok(!JSON.stringify(seen.env).includes('zai-key') && !JSON.stringify(seen.env).includes('or-key'));
+    .sort(), ['NEARAI_API_KEY', 'OMNI_LIVE'], 'the operator\'s OMNI_LIVE opt-in rides along; no other variable does');
+  assert.equal(seen.env.NEARAI_API_KEY, 'near-account-key');
+  assert.ok(!JSON.stringify(seen.env).includes('near-operator-key'));
 });
 
 test('presets with CLI subscriptions, scripted reviewers or an unvetted orchestrator are refused', () => {
   const notAllowed = (error: unknown) => error instanceof AppError && error.code === 'PRESET_NOT_ALLOWED';
   assert.throws(() => presetEnv('demo', ['scripted:baseline', 'scripted:judge']), notAllowed, 'scripted runs on OmniSwarm fixtures only');
-  assert.throws(() => presetEnv('x', ['openrouter:a/b', 'cli:claude:opus']), notAllowed);
+  assert.throws(() => presetEnv('x', ['nearai:a/b', 'cli:claude:opus']), notAllowed);
   const example = path.join(APP_ROOT, '../../engine/omniswarm.config.example.json');
   const hosted = resolvePreset(example, loadConfig('worker', { DATABASE_URL: 'postgres://u@h/d', CONTRACT_ID: 'registry.testnet' }).intake.hostedPreset);
   assert.equal(hosted.name, 'hosted', 'the default HOSTED_PRESET exists in the example config and is allowed');
-  assert.deepEqual(hosted.envNames, ['OPENROUTER_API_KEY', 'ZAI_API_KEY', 'ZAI_BASE_URL']);
+  assert.deepEqual(hosted.envNames, ['NEARAI_API_KEY']);
   assert.throws(() => resolvePreset(example, 'demo'), notAllowed, 'the demo preset (scripted judge) is refused');
   const root = fakeEngine('', { presets: { auto: { reviewers: ['scripted:baseline'], orchestrator: 'recommended' } } });
   assert.throws(() => resolvePreset(path.join(root, 'omniswarm.config.json'), 'auto'), /orchestrator explicitly/);

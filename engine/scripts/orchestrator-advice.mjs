@@ -7,7 +7,7 @@ import { boundedCall } from './debate-clock.mjs';
 import { readInbox } from './debate-inbox.mjs';
 import { DEBATE_TOOL_BUDGET } from './debate-bridge.mjs';
 import { formatReviewerSpec, reviewersOfMeta } from './reviewer-registry.mjs';
-import { buildIncompletionNotes } from './report-incompletion.mjs';
+import { PROVIDER_SETUP_STEPS, buildIncompletionNotes } from './report-incompletion.mjs';
 import { validate } from '../../packages/schemas/index.mjs';
 import { readJsonOr, writeJson, writeText } from './report-util-files.mjs';
 import { DEFAULTS } from './run-config.mjs';
@@ -304,6 +304,20 @@ export function writeAdviceArtifacts(out, advice) {
   writeText(out, 'orchestrator-advice.md', adviceMarkdown(advice));
   writeText(out, 'audit_stage_2_advice.html', adviceHtml(advice));
   return ['orchestrator-advice.json', 'orchestrator-advice.md', 'audit_stage_2_advice.html'];
+}
+
+// Fallback reasons that are the intended outcome, not a failed orchestrator session.
+const PLANNED_FALLBACKS = new Set(['scripted_orchestrator', 'offline_rules_advisor', 'no_orchestrator_configured']);
+
+/**
+ * One line for the operator when a model orchestrator was configured but the advice came from the rules advisor
+ * (for an API provider: OMNI_LIVE unset, key missing, rejected key). Null when the model answered or rules were planned.
+ */
+export function adviceFallbackNote(advice) {
+  const by = advice?.generatedBy;
+  if (!by || by.mode !== 'rules_fallback' || !by.fallbackReason || PLANNED_FALLBACKS.has(by.fallbackReason)) return null;
+  const step = PROVIDER_SETUP_STEPS[by.fallbackReason];
+  return `The orchestrator ${by.orchestrator} did not answer (${by.fallbackReason}); this advice comes from the deterministic rules advisor.${step ? ` ${step}` : ''}`;
 }
 
 export async function runStageAdvice(first, second = {}) {

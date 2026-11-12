@@ -61,6 +61,8 @@ const id = (value: string) => encodeURIComponent(value);
 
 export interface SessionAccount {
   account: string;
+  label?: string;
+  provider?: 'password' | 'near' | 'google' | 'x';
 }
 
 export interface LoginRequest {
@@ -147,9 +149,11 @@ export const api = {
   listMine: () => call<RequestListResponse>('GET', '/requests?mine=1'),
   getReport: (requestId: string) => call<ReportIndexResponse>('GET', `/reports/${id(requestId)}`),
   login: (body: LoginRequest) => call<SessionAccount>('POST', '/login', body),
+  loginSocial: (body: { provider: 'google' | 'x'; token: string }) => call<SessionAccount>('POST', '/login/social', body),
+  loginNear: (body: { accountId: string; publicKey: string; signature: string; nonce: string }) => call<SessionAccount>('POST', '/login/near', body),
   logout: () => call<void>('POST', '/logout'),
   session: () => call<SessionAccount>('GET', '/session'),
-  createDashboardJob: (body: { repo: string; models?: string[]; scopes?: string[]; source?: string; pipelineMode?: PipelineMode }) => call<DashboardJobCreated>('POST', '/dashboard/jobs', body),
+  createDashboardJob: (body: { repo: string; scopes?: string[]; source?: 'nearai'; pipelineMode?: PipelineMode }) => call<DashboardJobCreated>('POST', '/dashboard/jobs', body),
   adviseRequest: (requestId: string) => call<DebateStepCreated>('POST', `/requests/${id(requestId)}/advise`, {}),
   continueDebate: (requestId: string, body: { rounds?: number } = {}) => call<DebateStepCreated>('POST', `/requests/${id(requestId)}/debate`, body),
   adviseDashboardJob: (requestId: string) => call<DebateStepCreated>('POST', `/dashboard/jobs/${id(requestId)}/advise`, {}),

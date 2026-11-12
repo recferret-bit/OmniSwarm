@@ -16,7 +16,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.
 const run = (args, env = {}) => spawnSync(path.join(ROOT, 'bin', 'audit'), args, { cwd: ROOT, encoding: 'utf8', env: { ...process.env, ...env }, timeout: 180_000 });
 
 test('plan prints passes, grace and the worst-case call count', () => {
-  const result = run(['run', '--repo', 'engine/scripts/demo-fixture', '--reviewers', 'scripted:baseline,scripted:lazy,key:zai:glm-5.3', '--passes', '2', '--tool-budget', '5', '--surface', 's1', '--plan']);
+  const result = run(['run', '--repo', 'engine/scripts/demo-fixture', '--reviewers', 'scripted:baseline,scripted:lazy,nearai:deepseek-ai/DeepSeek-V4', '--passes', '2', '--tool-budget', '5', '--surface', 's1', '--plan']);
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /scripted-lazy\s+2 × 5 \(\+3\)\s+discover, self-verify\s+max 16 calls\s+gate: bridge\+loop/);
   assert.match(result.stdout, /Pass roles: discover, self-verify/);
@@ -51,17 +51,21 @@ test('scripted and replayed reviewers record two passes, a budget stop and a cos
 test('a priced replay under the cost ceiling records stop cost and skips pass 2', () => {
   const out = fs.mkdtempSync(path.join(os.tmpdir(), 'w04-cost-'));
   fs.rmSync(out, { recursive: true });
-  const result = run(['run', '--repo', 'engine/scripts/demo-fixture', '--reviewers', 'key:zai:glm-5.3', '--surface', 's1', '--passes', '2', '--tool-budget', '5', '--max-cost-usd', '0.0001', '--out', out], {
-    OMNI_DEMO_HOST: '1', OMNI_HTTP_REPLAY: path.join(ROOT, 'engine', 'scripts', 'provider-fixtures', 'w04'), ZAI_API_KEY: 'zk-test',
+  // NEAR AI reports no usage.cost: the ceiling can bound it only through a configured prices.nearai.<model>.
+  const config = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'w04-prices-')), 'omniswarm.config.json');
+  fs.writeFileSync(config, JSON.stringify({ reviewers: ['nearai:deepseek-ai/DeepSeek-V4'], prices: { nearai: { 'deepseek-ai/DeepSeek-V4': { inPerMTok: 100, outPerMTok: 0 } } } }));
+  const result = run(['run', '--repo', 'engine/scripts/demo-fixture', '--config', config, '--reviewers', 'nearai:deepseek-ai/DeepSeek-V4', '--surface', 's1', '--passes', '2', '--tool-budget', '5', '--max-cost-usd', '0.0001', '--out', out], {
+    OMNI_DEMO_HOST: '1', OMNI_HTTP_REPLAY: path.join(ROOT, 'engine', 'scripts', 'provider-fixtures', 'w04'), NEARAI_API_KEY: 'nk-test',
   });
   assert.equal(result.status, 0, `${result.stderr}\n${result.stdout}`);
-  const first = JSON.parse(fs.readFileSync(path.join(out, 'harness', 'usage', 'key-zai-glm-5-3', 's1-pass-1.json'), 'utf8'));
-  const second = JSON.parse(fs.readFileSync(path.join(out, 'harness', 'usage', 'key-zai-glm-5-3', 's1-pass-2.json'), 'utf8'));
+  const first = JSON.parse(fs.readFileSync(path.join(out, 'harness', 'usage', 'nearai-deepseek-ai-deepseek-v4', 's1-pass-1.json'), 'utf8'));
+  const second = JSON.parse(fs.readFileSync(path.join(out, 'harness', 'usage', 'nearai-deepseek-ai-deepseek-v4', 's1-pass-2.json'), 'utf8'));
   assert.equal(first.stop, 'cost');
+  assert.equal(first.costSource, 'estimated');
   assert.equal(second.skipped, 'cost_ceiling');
   const metaText = fs.readFileSync(path.join(out, 'meta.json'), 'utf8');
-  assert.equal(JSON.parse(metaText).reviewers[0].keyFingerprint, keyFingerprint('zk-test'), 'host runs record the key fingerprint');
-  assert.equal(metaText.includes('zk-test'), false);
+  assert.equal(JSON.parse(metaText).reviewers[0].keyFingerprint, keyFingerprint('nk-test'), 'host runs record the key fingerprint');
+  assert.equal(metaText.includes('nk-test'), false);
   assert.equal(JSON.parse(fs.readFileSync(path.join(out, 'harness', 'budget-health.json'), 'utf8')).state, 'INCOMPLETE', 'a cost stop without a report is recorded, not hidden');
 });
 
@@ -86,7 +90,7 @@ test('Docker path: budgets and prices reach every session, each pass is recorded
     return { code: 0, stop: 'submitted', sessionId: identity.name, directory, elapsedMs: 1, observedExitCode: 0 };
   };
   const out = path.join(root, 'report');
-  const prices = { zai: { 'glm-5.3': { inPerMTok: 1, outPerMTok: 2 } } };
+  const prices = { nearai: { 'deepseek-ai/DeepSeek-V4': { inPerMTok: 1, outPerMTok: 2 } } };
   await runOrchestratedAudit({ target, out, surface: 's1', reviewers: parseReviewerList(['scripted:baseline', 'scripted:lazy']), budgets: { passes: 2, toolBudget: 5, maxCostUsd: 1 }, prices }, { review, startSandbox: async () => ({ container: 'inert', hostRunDir: out, stop: async () => {} }) });
   assert.ok(seen.length >= 4 && seen.every((call) => call.toolBudget === 5 && call.maxCostUsd === 1 && call.prices === prices));
   const jobs = JSON.parse(fs.readFileSync(path.join(out, 'workers.json'), 'utf8')).jobs;

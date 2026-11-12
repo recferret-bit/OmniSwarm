@@ -3,7 +3,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { runAllScanners, scannerChecks, setScannerOutputDir } from './harness-scanners.mjs';
+import { runAllScanners, runCmd, scannerChecks, semgrepTimeoutMs, setScannerOutputDir } from './harness-scanners.mjs';
+import { scannerEvidence } from './scanner-evidence.mjs';
 
 function writeShim(binDir, name, body) {
   const file = path.join(binDir, name);
@@ -210,4 +211,21 @@ console.log(JSON.stringify({ results: [] }));
   const osvCalls = fs.readFileSync(osvTrace, 'utf8').trim().split(/\r?\n/);
   assert.deepEqual(osvCalls, ['py-resolved', 'root-scan'], 'Both osv-scanner scans must complete without overlapping');
   assert.equal(scannerChecks.filter((r) => r.tool === 'osv-scanner' && r.state === 'passed').length, 2);
+});
+
+test('a scanner that outlives its time limit is recorded as timed out, and semgrep gets the lead scan\'s time', async () => {
+  const slow = await runCmd(process.execPath, ['-e', 'setTimeout(() => {}, 30000)'], os.tmpdir(), 150, { PATH: process.env.PATH });
+  assert.equal(slow.code, 1);
+  assert.equal(slow.signal, 'SIGKILL');
+  assert.equal(slow.timeoutMs, 150);
+  assert.ok(slow.elapsedMs >= 150, `ran ${slow.elapsedMs}ms`);
+  assert.match(scannerEvidence('semgrep', slow).detail, /^Timed out: killed at its 0s limit/);
+  const quick = await runCmd(process.execPath, ['-e', 'process.stdout.write("[]")'], os.tmpdir(), 30_000, { PATH: process.env.PATH });
+  assert.deepEqual(quick, { code: 0, stdout: '[]', stderr: '' });
+
+  // Semgrep needs close to three minutes for 3,000 files on two CPUs; a fixed 180s killed it on a busy host.
+  assert.equal(semgrepTimeoutMs({}), 15 * 60_000);
+  assert.equal(semgrepTimeoutMs({ AUDIT_HARNESS_BUDGET_MS: String(20 * 60_000) }), 19 * 60_000);
+  assert.equal(semgrepTimeoutMs({ AUDIT_HARNESS_BUDGET_MS: '15000' }), 30_000);
+  assert.equal(semgrepTimeoutMs({ AUDIT_HARNESS_BUDGET_MS: 'nonsense' }), 15 * 60_000);
 });

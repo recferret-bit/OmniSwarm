@@ -3,7 +3,7 @@
   "reportUrl": "https://reports.example.org/3f2b8c1e-5d4a-4b7e-9c1a-2e6f0a8b4d10/report.html",
   "reportSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
   "reviewers": [
-    "key-zai-glm-5-3"
+    "nearai-deepseek-ai-deepseek-v4"
   ],
   "generalReviewUrl": "https://reports.example.org/3f2b8c1e-5d4a-4b7e-9c1a-2e6f0a8b4d10/general-review.json",
   "attestation": {

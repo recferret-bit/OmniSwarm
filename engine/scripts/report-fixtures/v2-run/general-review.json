@@ -33,21 +33,21 @@
       "costUsd": 0
     },
     {
-      "reviewerId": "key-zai-glm-5-3",
+      "reviewerId": "nearai-deepseek-ai-deepseek-v4",
       "uniqueConfirmed": 0,
       "refuted": 0,
       "toolCalls": 4,
       "costUsd": 0
     },
     {
-      "reviewerId": "openrouter-qwen-qwen3-8-max-0902",
+      "reviewerId": "nearai-qwen-qwen3-8-max",
       "uniqueConfirmed": 0,
       "refuted": 0,
       "toolCalls": 4,
       "costUsd": 0
     },
     {
-      "reviewerId": "openrouter-anthropic-claude-opus-5-5",
+      "reviewerId": "nearai-meta-llama-llama-5-70b",
       "uniqueConfirmed": 1,
       "refuted": 0,
       "toolCalls": 4,
@@ -64,9 +64,9 @@
   "methodology": {
     "reviewers": [
       "cli-claude-opus",
-      "key-zai-glm-5-3",
-      "openrouter-qwen-qwen3-8-max-0902",
-      "openrouter-anthropic-claude-opus-5-5",
+      "nearai-deepseek-ai-deepseek-v4",
+      "nearai-qwen-qwen3-8-max",
+      "nearai-meta-llama-llama-5-70b",
       "scripted-baseline"
     ],
     "orchestrator": "cli:codex:gpt-5.5",
@@ -74,7 +74,7 @@
     "toolBudget": 40,
     "debateRounds": 2,
     "judgeAssignment": [
-      "CLUSTER-1: key-zai-glm-5-3 (alternate)"
+      "CLUSTER-1: nearai-deepseek-ai-deepseek-v4 (alternate)"
     ]
   },
   "disclaimer": "Model agreement and passing checks do not certify security."

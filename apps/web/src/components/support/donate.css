@@ -1,0 +1,23 @@
+/* Optional USDC donation (components/support/Donate.tsx): the landing band and the dashboard footer block.
+   Both are centered horizontally; one stylesheet, one component. */
+.donate { display: grid; gap: var(--os-s4); min-width: 0; justify-items: center; text-align: center; width: 100%; }
+.donate__form { width: 100%; max-width: 40rem; text-align: left; }
+.donate__tiers { grid-template-columns: 1fr; }
+@media (min-width: 721px) { .donate__tiers { grid-template-columns: 1fr 1fr; } }
+.donate__wallet { display: flex; flex-wrap: wrap; gap: var(--os-s3); align-items: center; justify-content: center; }
+.donate__wallet .wallet-slot { justify-items: center; }
+.donate__wallet p { flex: 1 0 100%; margin: 0; text-align: center; }
+.donate__manual { display: grid; gap: var(--os-s3); justify-items: center; width: 100%; max-width: 40rem; min-width: 0; }
+.donate__manual > p { margin: 0; }
+.donate__qr { display: grid; gap: var(--os-s2); justify-items: center; }
+.donate__qr p { margin: 0; }
+.qr { display: block; max-width: 100%; height: auto; border: var(--os-s3) solid #fff; border-radius: var(--os-s2); box-sizing: content-box; background: #fff; }
+.donate__facts { display: grid; gap: var(--os-s1, 4px); justify-items: center; margin: 0; }
+.donate__facts dt { font-weight: 600; margin-top: var(--os-s2); }
+.donate__facts dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.donate__account { display: flex; flex-wrap: wrap; gap: var(--os-s2); align-items: center; justify-content: center; }
+.donate__account code, .donate__contract { overflow-wrap: anywhere; word-break: break-all; }
+.donate__manual .alert { text-align: center; }
+/* Dashboard footer block: set off from the tabs above it and centered under them. */
+.donate-footer { display: grid; gap: var(--os-s4); justify-items: center; text-align: center; margin: var(--os-s6, 3rem) auto 0; padding-top: var(--os-s5, 2rem); border-top: 1px solid var(--os-line, currentColor); max-width: 48rem; }
+.donate-footer .panel__title { margin: 0; }

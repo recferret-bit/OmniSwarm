@@ -4,11 +4,15 @@ import { perMinute } from '../../http/plugins/rate-limit.ts';
 import {
   dashboardJobBody, dashboardJobResponse, debateStepBody, errorResponse, loginBody, requestParams, sessionResponse,
 } from '../../http/schemas.ts';
-import { requireAccount, setSession } from '../auth/session.ts';
+import { readSession, requireAccount, setSession } from '../auth/session.ts';
 import { authenticateDashboard } from './credentials.ts';
-import { readReviewSettings, settingsPath } from '../providers/settings.ts';
-import { adviseDashboardRequest, continueDashboardDebate, createDashboardJob, readDashboardReportPdf } from './dashboard.service.ts';
+import { readReviewSettings } from '../providers/settings.ts';
+import { adviseDashboardRequest, continueDashboardDebate, createDashboardJob, readDashboardReportPdf, type DashboardJobInput } from './dashboard.service.ts';
 import { fail } from '../../shared/errors.ts';
+
+function jobInput(body: { repo: string; scopes?: string[] | undefined; source?: string | undefined; pipelineMode?: DashboardJobInput['pipelineMode'] | undefined }): DashboardJobInput {
+  return { repo: body.repo, scopes: body.scopes ?? [], ...(body.source ? { source: body.source } : {}), pipelineMode: body.pipelineMode ?? 'full' };
+}
 
 export const dashboardRoutes: FastifyPluginAsyncZod<{ deps: ApiDeps }> = async (app, { deps }) => {
   app.post('/api/login', {
@@ -16,7 +20,7 @@ export const dashboardRoutes: FastifyPluginAsyncZod<{ deps: ApiDeps }> = async (
     schema: { summary: 'Password sign-in for the operator dashboard', body: loginBody, response: { 200: sessionResponse, 401: errorResponse, 403: errorResponse } },
   }, async (request, reply) => {
     const account = authenticateDashboard(deps.config, request.body.login, request.body.password);
-    setSession(reply, account, deps.clock.now(), deps.config.http.cookieSecure);
+    setSession(reply, account, deps.clock.now(), deps.config.http.cookieSecure, { provider: 'password' });
     return { account };
   });
 
@@ -29,40 +33,37 @@ export const dashboardRoutes: FastifyPluginAsyncZod<{ deps: ApiDeps }> = async (
 
   app.get('/api/session', {
     schema: { summary: 'The signed-in account', response: { 200: sessionResponse, 401: errorResponse } },
-  }, async (request) => ({ account: requireAccount(request, deps.clock.now()) }));
+  }, async (request) => {
+    const session = readSession(request, deps.clock.now());
+    if (!session) fail('UNAUTHORIZED', 'Sign in required');
+    return session;
+  });
 
   app.post('/api/free/jobs', {
     config: perMinute(deps.config.http.rateLimitPerMinute),
     schema: {
-      summary: 'Queue a review with no payment while free checks are on',
+      summary: "Queue a review on the signed-in account's own provider key with no payment while free checks are on",
       body: dashboardJobBody,
-      response: { 201: dashboardJobResponse, 400: errorResponse, 403: errorResponse, 404: errorResponse, 409: errorResponse, 503: errorResponse },
+      response: { 201: dashboardJobResponse, 400: errorResponse, 401: errorResponse, 403: errorResponse, 404: errorResponse, 409: errorResponse, 503: errorResponse },
     },
   }, async (request, reply) => {
-    if (!readReviewSettings(settingsPath(deps.config.providerSecretsFile)).freeChecks) fail('FORBIDDEN', 'Free checks are off');
-    let account = 'guest';
-    if (request.cookies.sid) {
-      try { account = requireAccount(request, deps.clock.now()); } catch { account = 'guest'; }
-    }
-    return reply.code(201).send(await createDashboardJob(
-      deps, account, request.body.repo, request.body.models ?? [], request.body.scopes ?? [],
-      request.body.source ?? 'panel', request.body.pipelineMode ?? 'full',
-    ));
+    if (!readReviewSettings(deps.config.reviewSettingsFile).freeChecks) fail('FORBIDDEN', 'Free checks are off');
+    // A review runs only on an account's own key, so a guest has nothing to run on.
+    const session = readSession(request, deps.clock.now());
+    if (!session) fail('UNAUTHORIZED', 'Sign in and save your NEAR AI Cloud key on the dashboard to run a review');
+    return reply.code(201).send(await createDashboardJob(deps, session.account, jobInput(request.body)));
   });
 
   app.post('/api/dashboard/jobs', {
     config: perMinute(deps.config.http.rateLimitPerMinute),
     schema: {
-      summary: 'Queue a GitHub review for the signed-in operator (mock chain only)',
+      summary: "Queue a GitHub review on the signed-in account's own provider key and models (mock chain or local sandbox only)",
       body: dashboardJobBody,
       response: { 201: dashboardJobResponse, 400: errorResponse, 401: errorResponse, 403: errorResponse, 404: errorResponse, 409: errorResponse, 503: errorResponse },
     },
   }, async (request, reply) => {
     const account = requireAccount(request, deps.clock.now());
-    return reply.code(201).send(await createDashboardJob(
-      deps, account, request.body.repo, request.body.models ?? [], request.body.scopes ?? [],
-      request.body.source ?? 'panel', request.body.pipelineMode ?? 'full',
-    ));
+    return reply.code(201).send(await createDashboardJob(deps, account, jobInput(request.body)));
   });
 
   app.post('/api/dashboard/jobs/:id/advise', {

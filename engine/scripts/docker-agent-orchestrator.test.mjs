@@ -442,3 +442,44 @@ await runOrchestratedAudit({ target: ${JSON.stringify(target)}, out, name: 'cras
   assert.ok(health.errors.some(e => /^claude-s1-auth: missing or invalid outputs/.test(e)), health.errors.join('\n'));
   assert.ok(health.errors.some(e => /finalized/.test(e)));
 });
+
+test('the prepare status names the sandbox file written last and how long ago', async () => {
+  const { sandboxActivity } = await import('./docker-agent-orchestrator.mjs');
+  const out = fs.mkdtempSync(path.join(os.tmpdir(), 'omni-sbx-activity-'));
+  try {
+    assert.equal(sandboxActivity(out), null);
+    const run = path.join(out, 'harness', 'sandbox-run');
+    fs.mkdirSync(path.join(run, 'harness-leads'), { recursive: true });
+    fs.writeFileSync(path.join(run, 'image.log'), 'x');
+    fs.writeFileSync(path.join(run, 'harness-leads', 'gitleaks.json'), '{}');
+    fs.writeFileSync(path.join(run, '.spill-1'), '');
+    const t = Date.now() / 1000;
+    fs.utimesSync(path.join(run, 'image.log'), t - 300, t - 300);
+    fs.utimesSync(path.join(run, 'harness-leads', 'gitleaks.json'), t - 95, t - 95);
+    fs.utimesSync(path.join(run, '.spill-1'), t, t);
+    assert.match(sandboxActivity(out, t * 1000), /^gitleaks\.json 1m3[45]s ago$/);
+  } finally { fs.rmSync(out, { recursive: true, force: true }); }
+});
+
+test('Ctrl-C while the sandbox starts is recorded as a cancel, not a sandbox failure', { timeout: 10_000 }, async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'omni-cancel-prepare-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const target = path.join(root, 'target');
+  fs.mkdirSync(target);
+  fs.writeFileSync(path.join(target, 'source.js'), 'export const inert = true;\n');
+  const agents = ['claude', 'codex'];
+  let reviewed = 0;
+  // Like the real one-shot sandbox: Ctrl-C reaches docker too, which exits 1 before becoming ready.
+  const startSandbox = () => new Promise((_, reject) => {
+    setTimeout(() => process.emit('SIGINT'), 5);
+    setTimeout(() => reject(new Error('One-shot Docker sandbox exited before becoming ready (exit 1)')), 20);
+  });
+  const request = { target, out: path.join(root, 'out'), name: 'cancel-prepare', agents, surface: 'all', models: Object.fromEntries(agents.map((a) => [a, 'fixture-model'])) };
+  const result = await runOrchestratedAudit(request, { review: async () => { reviewed++; }, startSandbox, quietProgress: true });
+  assert.equal(result.cancelled, true);
+  assert.equal(reviewed, 0);
+  assert.deepEqual(result.stageFailures, ['run_cancelled:prepare']);
+  const progress = JSON.parse(fs.readFileSync(path.join(request.out, 'harness', 'host', 'progress.json'), 'utf8'));
+  assert.equal(progress.state, 'cancelled');
+  assert.ok(progress.percent <= 5, `a cancel during prepare does not read as nearly done (${progress.percent}%)`);
+});

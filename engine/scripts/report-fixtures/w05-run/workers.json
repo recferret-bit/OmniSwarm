@@ -23,43 +23,43 @@
       "turnCode": 0
     },
     {
-      "name": "key-zai-glm-5-3-s1-auth",
-      "adapter": "key-zai-glm-5-3",
+      "name": "nearai-deepseek-ai-deepseek-v4-s1-auth",
+      "adapter": "nearai-deepseek-ai-deepseek-v4",
       "surface": "S1",
       "state": "collected",
       "turnCode": 0
     },
     {
-      "name": "key-zai-glm-5-3-s2-input",
-      "adapter": "key-zai-glm-5-3",
+      "name": "nearai-deepseek-ai-deepseek-v4-s2-input",
+      "adapter": "nearai-deepseek-ai-deepseek-v4",
       "surface": "S2",
       "state": "collected",
       "turnCode": 0
     },
     {
-      "name": "key-zai-glm-5-3-s3-logic",
-      "adapter": "key-zai-glm-5-3",
+      "name": "nearai-deepseek-ai-deepseek-v4-s3-logic",
+      "adapter": "nearai-deepseek-ai-deepseek-v4",
       "surface": "S3",
       "state": "collected",
       "turnCode": 0
     },
     {
-      "name": "openrouter-qwen-qwen3-8-max-0902-s1-auth",
-      "adapter": "openrouter-qwen-qwen3-8-max-0902",
+      "name": "nearai-qwen-qwen3-8-max-s1-auth",
+      "adapter": "nearai-qwen-qwen3-8-max",
       "surface": "S1",
       "state": "collected",
       "turnCode": 0
     },
     {
-      "name": "openrouter-qwen-qwen3-8-max-0902-s2-input",
-      "adapter": "openrouter-qwen-qwen3-8-max-0902",
+      "name": "nearai-qwen-qwen3-8-max-s2-input",
+      "adapter": "nearai-qwen-qwen3-8-max",
       "surface": "S2",
       "state": "collected",
       "turnCode": 0
     },
     {
-      "name": "openrouter-qwen-qwen3-8-max-0902-s3-logic",
-      "adapter": "openrouter-qwen-qwen3-8-max-0902",
+      "name": "nearai-qwen-qwen3-8-max-s3-logic",
+      "adapter": "nearai-qwen-qwen3-8-max",
       "surface": "S3",
       "state": "collected",
       "turnCode": 0

@@ -15,7 +15,11 @@ export const ENV_FILES = ['stack.env', 'worker.env', 'providers.env', 'ops.env']
 export const OPTIONAL = new Set(['ops.env', 'operator-key.json', 'omniswarm.config.json']);
 // May stay empty: unauthenticated GitHub API, no alert hook, no heartbeat.
 // ALLOWED_PRESETS empty = HOSTED_PRESET only; ACCOUNT_KEYS_SECRET is needed only with an account- preset (checked below).
-const MAY_BE_EMPTY = new Set(['GITHUB_TOKEN', 'OMNI_ALERT_WEBHOOK_URL', 'OMNI_HEARTBEAT_URL', 'ALLOWED_PRESETS', 'ACCOUNT_KEYS_SECRET']);
+// The donation section is optional: no recipient hides it, no contract override uses the network's USDC.
+const MAY_BE_EMPTY = new Set([
+  'GITHUB_TOKEN', 'OMNI_ALERT_WEBHOOK_URL', 'OMNI_HEARTBEAT_URL', 'ALLOWED_PRESETS', 'ACCOUNT_KEYS_SECRET',
+  'NEXT_PUBLIC_DONATION_ACCOUNT', 'NEXT_PUBLIC_DONATION_USDC_CONTRACT',
+]);
 const MIN_LENGTH = { SESSION_SECRET: 32, ADMIN_TOKEN: 32, POSTGRES_PASSWORD: 16, ACCOUNT_KEYS_SECRET: 32 };
 const PLACEHOLDER_CONTRACT = /(\.mock$|^review-registry\.owner\.testnet$|example)/;
 
@@ -35,7 +39,12 @@ function checkPresence(file, vars, errors, warnings) {
       (file === 'providers.env' ? warnings : errors).push(`${file}: ${name} is empty`);
     }
   }
-  for (const name of vars.keys()) if (!want.has(name)) warnings.push(`${file}: ${name} is not in infra/env/${file}.example (ignored by the stack)`);
+  for (const name of vars.keys()) {
+    if (want.has(name)) continue;
+    // The worker unit loads providers.env, so a key left there could pay for a `hosted` preset job (OD-26).
+    if (file === 'providers.env') errors.push(`providers.env: ${name} is set; OmniSwarm holds no operator provider key (users bring their own NEAR AI key), so remove it`);
+    else warnings.push(`${file}: ${name} is not in infra/env/${file}.example (ignored by the stack)`);
+  }
   for (const [name, min] of Object.entries(MIN_LENGTH)) {
     const value = vars.get(name);
     if (value && value.length < min) errors.push(`${file}: ${name} is ${value.length} characters; use at least ${min} (openssl rand -hex ${min / 2})`);
@@ -66,6 +75,10 @@ function checkConsistency(stack, worker, errors, warnings) {
   if (contract && network === 'testnet' && !contract.endsWith('.testnet')) errors.push(`stack.env CONTRACT_ID ${contract} is not a .testnet account but NETWORK=testnet`);
   if (contract && network === 'mainnet' && contract.endsWith('.testnet')) errors.push(`stack.env CONTRACT_ID ${contract} is a .testnet account but NETWORK=mainnet`);
   if (contract === 'review-registry.omniswarm.testnet') warnings.push('CONTRACT_ID equals the web app\'s built-in example; make sure your account owns it');
+  // Donations are an ft_transfer on the same network as the stack; a recipient on the other network never receives them.
+  const donation = stack.get('NEXT_PUBLIC_DONATION_ACCOUNT') || '';
+  if (donation && network === 'testnet' && !donation.endsWith('.testnet') && !/^[0-9a-f]{64}$/.test(donation)) errors.push(`stack.env NEXT_PUBLIC_DONATION_ACCOUNT ${donation} is not a testnet account but NETWORK=testnet`);
+  if (donation && network === 'mainnet' && donation.endsWith('.testnet')) errors.push(`stack.env NEXT_PUBLIC_DONATION_ACCOUNT ${donation} is a .testnet account but NETWORK=mainnet`);
   checkDatabaseUrl(worker.get('DATABASE_URL') || '', stack.get('POSTGRES_PASSWORD') || '', errors);
   const reports = stack.get('OMNI_REPORTS_DOMAIN');
   if (reports && worker.get('REPORTS_BASE_URL') !== `https://${reports}`) errors.push(`worker.env REPORTS_BASE_URL must be https://${reports} (stack.env OMNI_REPORTS_DOMAIN)`);

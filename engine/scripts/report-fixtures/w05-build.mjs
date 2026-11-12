@@ -8,8 +8,9 @@ import { parseReviewerList } from '../reviewer-registry.mjs';
 const root = path.dirname(fileURLToPath(import.meta.url));
 const out = path.join(root, 'w05-run');
 fs.rmSync(out, { recursive: true, force: true });
-// Parsed by the registry, so ids and models are exactly what a real run records (openrouter keeps `qwen/`).
-const reviewers = parseReviewerList(['cli:claude:opus', 'key:zai:glm-5.3', 'openrouter:qwen/qwen3.8-max-0902', 'scripted:baseline']);
+// Parsed by the registry, so ids and models are exactly what a real run records (nearai keeps `deepseek-ai/`).
+const reviewers = parseReviewerList(['cli:claude:opus', 'nearai:deepseek-ai/DeepSeek-V4', 'nearai:Qwen/Qwen3.8-Max', 'scripted:baseline']);
+const deepseek = reviewers[1].id;
 const surfaces = [['S1', 's1-auth', 'auth'], ['S2', 's2-input', 'input'], ['S3', 's3-logic', 'logic']];
 const finding = (reviewer, surface, n) => ({
   title: `${reviewer.id} ${surface} finding ${n}`, surface, severity: 'high', confidence: 'confirmed',
@@ -43,9 +44,9 @@ for (const reviewer of reviewers) {
       put(`auditors/${name}.md`, 'Source review only.\n');
     }
   }
-  if (reviewer.id === 'key-zai-glm-5-3') {
-    put('harness/usage/key-zai-glm-5-3/s1-pass-1.json', { k: 1, index: 1, role: 'discover', calls: 30, tokensIn: 10, tokensOut: 4, cost: 0.2, costSource: 'reported', stop: 'submitted', startedAt: '2026-11-02T00:00:00Z', endedAt: '2026-11-02T00:01:00Z' });
-    put('harness/usage/key-zai-glm-5-3/s1-pass-2.json', { k: 2, index: 2, role: 'self-verify', calls: 33, tokensIn: 12, tokensOut: 5, cost: 0.21, costSource: 'reported', stop: 'submitted', startedAt: '2026-11-02T00:02:00Z', endedAt: '2026-11-02T00:03:00Z' });
+  if (reviewer.id === deepseek) {
+    put(`harness/usage/${deepseek}/s1-pass-1.json`, { k: 1, index: 1, role: 'discover', calls: 30, tokensIn: 10, tokensOut: 4, cost: 0.2, costSource: 'reported', stop: 'submitted', startedAt: '2026-11-02T00:00:00Z', endedAt: '2026-11-02T00:01:00Z' });
+    put(`harness/usage/${deepseek}/s1-pass-2.json`, { k: 2, index: 2, role: 'self-verify', calls: 33, tokensIn: 12, tokensOut: 5, cost: 0.21, costSource: 'reported', stop: 'submitted', startedAt: '2026-11-02T00:02:00Z', endedAt: '2026-11-02T00:03:00Z' });
   }
   if (reviewer.id === 'scripted-baseline') {
     put('harness/usage/scripted-baseline/s1-pass-1.json', { k: 1, calls: 4, tokensIn: 1, tokensOut: 1, cost: 0, costSource: 'none', stop: 'submitted', startedAt: '2026-11-02T00:00:00Z', endedAt: '2026-11-02T00:00:01Z' });

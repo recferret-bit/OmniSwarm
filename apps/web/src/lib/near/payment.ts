@@ -8,15 +8,18 @@ export const REQUEST_REVIEW_GAS = '30000000000000';
 const HEX64 = /^[0-9a-f]{64}$/;
 const YOCTO = /^(0|[1-9][0-9]{0,38})$/;
 
-export interface FunctionCallAction {
+export interface FunctionCallAction<Args extends Record<string, unknown> = Record<string, unknown>> {
   type: 'FunctionCall';
-  params: { methodName: string; args: { request_hash: string }; gas: string; deposit: string };
+  params: { methodName: string; args: Args; gas: string; deposit: string };
 }
 
-export interface PaymentTransaction {
+/** One function call the wallet signs and sends: the `request_review` payment or a USDC donation. */
+export interface WalletTransaction<Args extends Record<string, unknown> = Record<string, unknown>> {
   receiverId: string;
-  actions: [FunctionCallAction];
+  actions: [FunctionCallAction<Args>];
 }
+
+export type PaymentTransaction = WalletTransaction<{ request_hash: string }>;
 
 export function buildPaymentTx(input: { contractId: string; requestHash: string; priceYocto: string }, contractId = env.contractId): PaymentTransaction {
   if (input.contractId !== contractId) throw new AppError('CONTRACT_MISMATCH');

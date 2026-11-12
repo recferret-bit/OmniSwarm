@@ -192,6 +192,30 @@ export async function adjudicate(reportDir) {
   return { scoredFindings, health, verifiedSafe: allVerifiedSafe, exitCode: health.state === 'incomplete' ? 2 : 0, auditorCount: reports.length };
 }
 
+// Health errors for the terminal: the same message for several review jobs ("<job>: <message>") is one line with
+// the job count and names, so a run stopped before review prints a few lines, not one per job. Display only:
+// report-health.json keeps every error.
+export function groupedErrors(errors = [], jobs = []) {
+  const known = new Set(jobs);
+  const groups = new Map();
+  const out = [];
+  for (const error of errors) {
+    const at = String(error).indexOf(': ');
+    const name = at > 0 ? error.slice(0, at) : null;
+    if (!name || !known.has(name)) { out.push(error); continue; }
+    const message = error.slice(at + 2);
+    if (!groups.has(message)) { groups.set(message, []); out.push({ message }); }
+    groups.get(message).push(name);
+  }
+  return out.map((row) => {
+    if (typeof row === 'string') return row;
+    const names = groups.get(row.message);
+    if (names.length < 3) return names.map((name) => `${name}: ${row.message}`).join('\n  - ');
+    const shown = names.slice(0, 4).join(', ');
+    return `${names.length} review jobs: ${row.message} (${shown}${names.length > 4 ? `, +${names.length - 4} more` : ''})`;
+  });
+}
+
 export function printSummary(reportDir, { scoredFindings, health, auditorCount }) {
   const dedup = health.dedup;
   console.log(`\n======================================================`);
@@ -205,10 +229,12 @@ export function printSummary(reportDir, { scoredFindings, health, auditorCount }
     console.log(String(f.score).padEnd(7) + f.severity.toUpperCase().padEnd(10) + (f.finalStatus || f.status).padEnd(22) + f.vendors.join(',').padEnd(20) + f.title.slice(0, 50));
   }
   if (health.state === 'incomplete') {
+    const cancelledIn = (health.incompletionNotes || []).find((note) => note.code === 'run_cancelled');
+    if (cancelledIn) console.error(`CANCELLED: ${cancelledIn.reason} This is not an audit result.`);
     console.error(health.reviewState === 'validated_outputs'
       ? 'INCOMPLETE VERIFICATION: review outputs validated, but required execution coverage has gaps; this is not a security pass.'
       : 'INCOMPLETE: missing, failed or invalid review outputs; zero findings is not a clean audit.');
-    for (const error of health.errors) console.error(`  - ${error}`);
+    for (const line of groupedErrors(health.errors, health.expected)) console.error(`  - ${line}`);
     if (Array.isArray(health.incompletionNotes) && health.incompletionNotes.length) {
       console.error('\nIncompletion causes & security impact:');
       for (const note of health.incompletionNotes) {

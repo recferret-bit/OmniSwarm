@@ -135,10 +135,11 @@ test('the plan prints for the local, hosted and demo presets without starting a 
   const local = plan('local-subscriptions');
   assert.match(local, /Assignment: matrix \(24 jobs\)/);
   assert.match(local, /cli-claude-opus\s+cli\s+anthropic/);
-  const hosted = plan('hosted', ['--surface', 's3'], { ZAI_API_KEY: 'zk-not-a-key', OPENROUTER_API_KEY: 'or-not-a-key' });
+  const hosted = plan('hosted', ['--surface', 's3'], { NEARAI_API_KEY: 'nk-not-a-key' });
   assert.match(hosted, /Assignment: round-robin \(6 jobs\)/);
   assert.match(hosted, /max cost \$25 per reviewer/);
-  assert.equal(/zk-not-a-key|or-not-a-key/.test(hosted), false);
+  assert.match(hosted, /nearai-meta-llama-llama-5-70b\s+nearai\s+meta/);
+  assert.equal(hosted.includes('nk-not-a-key'), false);
   const demo = plan('demo', [], { OMNI_DEMO: '1' });
   assert.match(demo, /Orchestrator: scripted:judge/);
   const refused = audit(['run', '--repo', FIXTURE, '--rpc', 'https://rpc.mainnet.near.org', '--plan']);

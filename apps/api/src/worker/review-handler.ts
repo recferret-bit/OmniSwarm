@@ -23,10 +23,9 @@ import { ProgressTailer } from './progress-tailer.ts';
 import { publishReport, readPublished } from './publish.ts';
 import { maxSeverity } from './report.ts';
 import { ensureReportPdf } from '../shared/report-pdf.ts';
-import { readProviderEnv } from '../modules/providers/secrets.ts';
-import { accountPresetProvider, envForSpec, providerById } from '@omniswarm/schemas/providers';
+import { accountPresetProvider, providerById } from '@omniswarm/schemas/providers';
 import { readAccountKey } from '../modules/providers/account-keys.ts';
-import { accountConfigDocument, isPanelPreset, jobSpecs, panelConfigDocument } from './panel.ts';
+import { accountConfigDocument } from './account-config.ts';
 import { resolvePreset } from './preset.ts';
 import { chainReportUri } from './report-uri.ts';
 
@@ -95,14 +94,15 @@ interface Prepared { configFile?: string; providerEnv: Record<string, string>; p
 
 /**
  * Keys and config for one run, per the provider catalog. An `account-<provider>` job runs on the requesting
- * account's own key and the models snapshotted on its row; a panel job runs on the operator's admin-page keys.
- * Either way the spawn carries only the provider variables its own specs need (providerScope).
+ * account's own key and the models snapshotted on its row. A configured hosted preset runs on the provider
+ * variables in the worker's own environment. Either way the spawn carries only the provider variables its own
+ * specs need (providerScope). There are no operator-held provider keys to decrypt.
  */
 export async function prepareProviders(deps: Pick<HandlerDeps, 'config' | 'pool'>, row: RequestRow, root: string): Promise<Prepared | { failed: string }> {
   const accountProvider = accountPresetProvider(row.preset);
   const pipelineOpts = row.pipeline_mode && row.pipeline_mode !== 'full' ? { pipelineMode: row.pipeline_mode } : undefined;
   const write = (doc: Record<string, unknown>) => {
-    const file = path.join(root, 'panel.config.json');
+    const file = path.join(root, 'run.config.json');
     fs.writeFileSync(file, `${JSON.stringify(doc)}\n`, { mode: 0o600 });
     return file;
   };
@@ -113,11 +113,7 @@ export async function prepareProviders(deps: Pick<HandlerDeps, 'config' | 'pool'
     const configFile = write(accountConfigDocument(row.preset, row.models, pipelineOpts));
     return { configFile, providerEnv: { [provider.keyEnv]: key }, providerScope: [...provider.envAllowlist] };
   }
-  const providerEnv = readProviderEnv(deps.config.providerSecretsFile ?? '', deps.config.http.sessionSecret);
-  if (isPanelPreset(row.preset)) {
-    const providerScope = [...new Set(jobSpecs(row.preset, null).flatMap(envForSpec))];
-    return { configFile: write(panelConfigDocument(row.preset, pipelineOpts)), providerEnv, providerScope };
-  }
+  const providerEnv: Record<string, string> = {};
   // A configured hosted preset (omniswarm.config.json): its own specs decide the scope too.
   try {
     const resolved = resolvePreset(deps.config.engine.configPath, row.preset);

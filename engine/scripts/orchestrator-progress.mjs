@@ -89,15 +89,22 @@ export function createSticky({ stream = process.stdout, errors = process.stderr,
   console.error = wrap('error');
   void errors;
   return {
+    get width() { return stream.columns > 8 ? stream.columns - 1 : Infinity; },
     set(line) { clear(); text = fit(String(line)); draw(); },
     end() { clear(); text = ''; console.log = original.log; console.error = original.error; },
   };
 }
 
+const SPINNER = '⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏';
+
 // tracker = createProgress({output, jobs, budgets, print, sticky, now}). Every method rewrites the snapshot.
 // print(line): banners and, without a sticky line, status lines. sticky: createSticky(); the status line is set
 // there on every change instead of being printed.
-export function createProgress({ output, jobs = [], budgets = null, print = null, sticky = null, now = Date.now, intervalMs = 60_000 } = {}) {
+// A phase can run for minutes without an event (Docker start, scanners, a long agent turn), so a ticker keeps the
+// terminal alive: the sticky row is redrawn every tickMs with a spinner and the elapsed time (display only, the
+// snapshot file is left alone), and without a sticky row the once-an-interval status line is still printed.
+// tickMs 0 turns the ticker off; timer/clearTimer are injectable for tests.
+export function createProgress({ output, jobs = [], budgets = null, print = null, sticky = null, now = Date.now, intervalMs = 60_000, tickMs = 1_000, timer = setInterval, clearTimer = clearInterval } = {}) {
   const jobNames = new Set(jobs.map((row) => row.name));
   const started = now();
   const phases = new Map(PHASES.map((row) => [row.name, { name: row.name, state: 'pending' }]));
@@ -108,6 +115,19 @@ export function createProgress({ output, jobs = [], budgets = null, print = null
   let lastLine = '';
   let lastPrinted = 0;
   let lastSticky = 0;
+  let frame = 0;
+  // A short note on what the running phase is doing (e.g. the sandbox's newest log). Terminal only, never in the
+  // snapshot file.
+  let detail = '';
+  // On the sticky row the note is cut to the width left, so the end of the line never gets chopped mid-word.
+  const line = (snapshot, room = Infinity) => {
+    const base = statusLine(snapshot);
+    if (!detail || snapshot.state !== 'running') return base;
+    const left = room - base.length - 3;
+    if (left >= detail.length) return `${base} · ${detail}`;
+    return left >= 12 ? `${base} · ${detail.slice(0, left - 1)}…` : base;
+  };
+  const drawSticky = (snapshot) => { sticky.set(`${SPINNER[frame++ % SPINNER.length]} ${line(snapshot, (sticky.width ?? Infinity) - 2).trimStart()}`); lastSticky = now(); };
 
   const current = () => [...phases.values()].find((row) => row.state === 'running') || null;
   // The phase the headline names: the running one; after a failure the phase that failed; between two phases
@@ -135,11 +155,16 @@ export function createProgress({ output, jobs = [], budgets = null, print = null
     let computed = 0;
     for (const row of PHASES) {
       const phase = phases.get(row.name);
+      // After a failed or cancelled phase the run jumps straight to the report: the phases it never reached end
+      // the count, so the report phase does not read as a run that got to 97%.
+      if (phase.state === 'pending' && [...phases.values()].some((p) => p.state === 'failed')) break;
       if (phase.state === 'done' || phase.state === 'skipped' || phase.state === 'failed') computed = Math.max(computed, row.to);
       else if (phase.state === 'running') computed = Math.max(computed, row.from + (row.to - row.from) * share(row.name, reviewers));
     }
-    // Never backward, and 100 only for a run that finished cleanly.
-    percent = state === 'finished' ? 100 : Math.min(99, Math.max(percent, Math.round(computed)));
+    // Never backward, and 100 only for a run that finished cleanly. A run that stopped keeps the percent it had
+    // reached: finish() marks the phases it never started as skipped, which must not read as progress.
+    if (state === 'finished') percent = 100;
+    else if (state === 'running') percent = Math.min(99, Math.max(percent, Math.round(computed)));
     const debate = counters.debate || counters.adjudicate
       ? { ...(counters.debate ? { clusters: counters.debate.total, heard: counters.debate.done } : {}), ...(counters.adjudicate ? { judged: counters.adjudicate.done, toJudge: counters.adjudicate.total } : {}) }
       : null;
@@ -164,7 +189,7 @@ export function createProgress({ output, jobs = [], budgets = null, print = null
     // On a terminal the status line is one sticky row, updated at most once a second; banners scroll above it.
     if (sticky && state === 'running') {
       const at = now();
-      if (at - lastSticky >= 1_000 || force) { sticky.set(statusLine(snapshot)); lastSticky = at; }
+      if (at - lastSticky >= 1_000 || force || banner) drawSticky(snapshot);
     }
     if (print) {
       // A change worth a line: phase, a reviewer starting, finishing, changing pass or stalling, a debate count.
@@ -174,19 +199,29 @@ export function createProgress({ output, jobs = [], budgets = null, print = null
       const at = now();
       if (banner) {
         // A phase start is its own line, with the percent, so it is not followed by a duplicate status line.
-        print(`  == ${banner} · ${snapshot.percent}% · ${minutes(snapshot.elapsedMs)}`);
+        print(`\n  ══ ${banner} · ${snapshot.percent}% · ${minutes(snapshot.elapsedMs)} ══`); // blank line above: each phase starts a visible block
         lastLine = key;
         lastPrinted = at;
       } else if (sticky) {
         lastLine = key;
       } else if (force || (key !== lastLine && at - lastPrinted >= 5_000) || at - lastPrinted >= intervalMs) {
-        print(statusLine(snapshot));
+        print(line(snapshot));
         lastLine = key;
         lastPrinted = at;
       }
     }
     return snapshot;
   }
+
+  let ticker = null;
+  if (tickMs > 0 && (sticky || print)) {
+    ticker = timer(() => {
+      if (state !== 'running') return;
+      try { if (sticky) drawSticky(build()); else write(); } catch { /* display only */ }
+    }, sticky ? tickMs : Math.max(tickMs, 5_000));
+    ticker?.unref?.();
+  }
+  const stopTicker = () => { if (ticker) { clearTimer(ticker); ticker = null; } };
 
   return {
     phaseStart(name) {
@@ -213,14 +248,18 @@ export function createProgress({ output, jobs = [], budgets = null, print = null
       write();
     },
     sessionEnd(name) { activity.delete(name); write(); },
+    detail(text) { detail = text ? String(text).replace(/\s+/g, ' ').slice(0, 80) : ''; },
     refresh() { return write(); },
     // outcome: 'finished' | 'incomplete' | 'failed' | 'cancelled'. Phases that never started are skipped.
     finish(outcome) {
+      stopTicker();
+      build(); // settle the percent the run reached before unstarted phases turn into "skipped"
+      detail = '';
       for (const row of phases.values()) if (row.state === 'pending' || row.state === 'running') row.state = row.state === 'running' ? 'failed' : 'skipped';
       state = outcome;
       const snapshot = write(true);
       // The last status line stays in the scrollback as an ordinary line.
-      if (sticky) { sticky.end(); if (print) print(statusLine(snapshot)); }
+      if (sticky) { sticky.end(); if (print) print(`\n${statusLine(snapshot)}\n`); }
       return snapshot;
     },
     snapshot: build,

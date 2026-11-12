@@ -4,7 +4,7 @@
  * Collects the claims a cross-check reviewer receives: every other reviewer's findings (id, title,
  * location, impact). The argument and the other reviewer's write-up are left out on purpose.
  * Peers are chosen by reviewer id; a claim is excluded from a reviewer's inbox when the reviewer
- * shares its **vendor** (cli:claude:opus and openrouter:anthropic/... are one vendor).
+ * shares its **vendor** (cli:claude:opus and nearai:anthropic/... are one vendor).
  */
 
 import path from 'node:path';

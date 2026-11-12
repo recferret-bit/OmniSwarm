@@ -23,7 +23,7 @@ export function Hero() {
           general review. The report hash is attested on NEAR so anyone can check it was not changed.
         </p>
         <div className="hero-actions">
-          <a className="btn btn-primary btn-lg" href="#review">Review a repo</a>
+          <a className="btn btn-primary btn-lg" href="#start">Review a repo</a>
           <Link className="btn btn-secondary btn-lg" href="/sample">View a sample report</Link>
         </div>
         <ol className="hero-stats" aria-label="Review facts">

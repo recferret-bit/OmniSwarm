@@ -12,7 +12,7 @@ import { writeText } from '../../../engine/scripts/report-util-files.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const SENTENCE = /Model agreement and passing checks do not certify security\./;
-const IDS = ['cli-claude-opus', 'key-zai-glm-5-3', 'openrouter-qwen-qwen3-8-max-0902', 'openrouter-anthropic-claude-opus-5-5', 'scripted-baseline'];
+const IDS = ['cli-claude-opus', 'nearai-deepseek-ai-deepseek-v4', 'nearai-qwen-qwen3-8-max', 'nearai-meta-llama-llama-5-70b', 'scripted-baseline'];
 const render = (dir) => spawnSync(process.execPath, [path.join(ROOT, 'engine', 'scripts', 'generate-html-report.mjs'), dir], { cwd: ROOT, encoding: 'utf8' });
 
 function railLabels(html) {
@@ -36,14 +36,15 @@ test('a v2 run grows the rail, the hero, the debate card and the reviewer pages'
   assert.match(html, /Not debated \(cap\)/);
   const table = html.slice(html.indexOf('id="crosscheck"'), html.indexOf('id="general-review"'));
   assert.equal((table.match(/<tr data-status=/g) || []).length, JSON.parse(read(dir, 'debate/clusters.json')).clusters.length);
-  assert.match(table, /<td>zai<\/td><td>yes<\/td>/);
+  assert.match(table, /<td>deepseek<\/td><td>yes<\/td>/);
   assert.equal(html.includes('<script>alert(1)</script>'), false);
   assert.match(html, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/);
   const index = read(dir, 'reviewers.html');
-  const order = ['cli', 'key', 'openrouter', 'scripted'].map((family) => index.indexOf(`data-family="${family}"`));
+  const order = ['cli', 'nearai', 'scripted'].map((family) => index.indexOf(`data-family="${family}"`));
   assert.ok(order.every((at) => at >= 0), order.join(','));
   assert.deepEqual(order, [...order].sort((a, b) => a - b));
-  assert.match(index, /openrouter-qwen-qwen3-8-max-0902[\s\S]*?cost —/);
+  assert.equal(index.includes('data-family="openrouter"'), false, 'the removed openrouter family has no group');
+  assert.match(index, /nearai-qwen-qwen3-8-max[\s\S]*?cost —/);
   assert.match(index, /cost \$0\.41/);
   assert.match(index, /reviewers\/scripted-baseline\/report\.html/);
   for (const id of IDS) assert.equal(fs.existsSync(path.join(dir, 'reviewers', id, 'report.html')), true, id);

@@ -38,7 +38,11 @@ async function visibleText(locator) {
   return (await locator.first().innerText()).trim();
 }
 
-test('dev wallet, quote, sign, pay, status, report match, local explorer', { timeout: 240_000 }, async () => {
+// The landing no longer renders the paid quote/sign/pay flow (its components are dormant; reviews run on the
+// account's own NEAR AI key from /dashboard), so this walk-through has nothing to drive until a page mounts it again.
+const DORMANT = 'the landing no longer renders the paid quote flow; reviews run from /dashboard on your own NEAR AI key';
+
+test('dev wallet, quote, sign, pay, status, report match, local explorer', { timeout: 240_000, skip: DORMANT }, async () => {
   const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   const page = await context.newPage();
   const notes = [];

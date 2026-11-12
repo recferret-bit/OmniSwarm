@@ -1,4 +1,4 @@
-// One non-streaming chat-completions tool loop shared by every API provider (key:zai, openrouter, nearai).
+// One non-streaming chat-completions tool loop shared by every API provider (today: nearai).
 // ORCHESTRATION sections 1 and 1.1. The loop never opens a socket unless the caller passes fetch
 // or OMNI_LIVE=1; replay and tests inject fetch.
 import fs from 'node:fs';
@@ -125,7 +125,7 @@ function loopLedger() {
 
 export async function runToolLoop({
   baseUrl, apiKey, model, headers = {}, extraBody = {}, tools = [], callTool, brief, maxTurns = 40, submitTool = 'submit_audit_report',
-  provider = 'zai', env = process.env, fetchImpl, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  provider = 'nearai', env = process.env, fetchImpl, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
   random = Math.random, transcriptPath, timeoutMs = Number(env.OMNI_API_TIMEOUT_MS) || 300_000, maxCostUsd = null, prices = null,
   ledger = loopLedger(),
 } = {}) {

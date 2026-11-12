@@ -20,6 +20,8 @@ const MOCK_ENV = {
   NEXT_PUBLIC_WALLET: 'mock',
   // An unroutable RPC origin: MSW answers it, and nothing can reach a real node.
   NEXT_PUBLIC_RPC_URL: 'https://rpc.mock.invalid',
+  // Donations are optional and hidden when unset; the e2e build turns them on to drive them with the mock wallet.
+  NEXT_PUBLIC_DONATION_ACCOUNT: 'omniswarm.testnet',
   NEXT_DIST_DIR: DIST,
   NEXT_TELEMETRY_DISABLED: '1',
 };

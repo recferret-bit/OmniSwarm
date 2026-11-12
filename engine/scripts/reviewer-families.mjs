@@ -1,6 +1,6 @@
 // Family registry: a family knows how to launch its reviewers. Each family is one file,
 // scripts/provider-<family>.mjs, exporting `family` ({name, providers, launch, envAllowlist, installed, ...}).
-// Later waves add files (W03: key, openrouter, scripted, nearai); nothing here is edited to add one.
+// Later waves add files (W03: key, scripted, nearai); nothing here is edited to add one.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -9,7 +9,7 @@ import { FAMILIES } from './reviewer-registry.mjs';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
 // Wave that ships each family, named in the error a reviewer gets before then.
-export const FAMILY_WAVES = Object.freeze({ cli: 'W01', key: 'W03', openrouter: 'W03', nearai: 'W03 (H+)', scripted: 'W03' });
+export const FAMILY_WAVES = Object.freeze({ cli: 'W01', key: 'W03', nearai: 'W03 (H+)', scripted: 'W03' });
 
 export class FamilyError extends Error {
   constructor(code, message) { super(message); this.name = 'FamilyError'; this.code = code; }

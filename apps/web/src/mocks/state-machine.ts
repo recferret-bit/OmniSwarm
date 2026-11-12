@@ -4,7 +4,7 @@
 import type { Progress, Status } from '@/lib/api/schema.gen';
 import type { MockRequest } from './db';
 
-export const REVIEWERS = ['cli-claude-opus', 'key-zai-glm-5-3', 'openrouter-qwen-qwen3-8-max'] as const;
+export const REVIEWERS = ['cli-claude-opus', 'nearai-deepseek-ai-deepseek-v4', 'nearai-qwen-qwen3-8-max'] as const;
 export const PHASES = ['prepare', 'tests', 'review', 'cross-check', 'debate', 'adjudicate', 'general review', 'publish'] as const;
 
 export const STEP_MS = 600;

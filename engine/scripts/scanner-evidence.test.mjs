@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { dominantTestFailure, scannerEvidence, testCounts } from './scanner-evidence.mjs';
+import { dominantTestFailure, killedDetail, scannerEvidence, testCounts } from './scanner-evidence.mjs';
 
 test('scanner failures, error envelopes and malformed output cannot become clean scans', () => {
   for (const code of [127, 124, 2]) assert.equal(scannerEvidence('osv-scanner', { code, stdout: '{"results":[]}' }).state, 'failed');
@@ -15,6 +15,17 @@ test('scanner failures, error envelopes and malformed output cannot become clean
   assert.equal(scannerEvidence('gitleaks', { code: 0, stdout: '[{"RuleID":"fixture"}]' }).state, 'findings');
   assert.equal(scannerEvidence('python-deps', { code: 0, stdout: '{"pythonDeps":{"unresolved":0}}' }).state, 'passed');
   assert.equal(scannerEvidence('python-deps', { code: 0, stdout: '{"pythonDeps":{"unresolved":3}}' }).state, 'failed');
+});
+
+test('a scanner killed at its time limit is a failed scan that says so', () => {
+  const timedOut = { code: 1, stdout: '', stderr: '', signal: 'SIGKILL', elapsedMs: 180_004, timeoutMs: 180_000 };
+  assert.deepEqual(scannerEvidence('semgrep', timedOut), { tool: 'semgrep', exitCode: 1, state: 'failed', findings: null, detail: 'Timed out: killed at its 180s limit before it finished.' });
+  assert.match(killedDetail({ code: 1, signal: 'SIGKILL', elapsedMs: 41_000, timeoutMs: 900_000 }), /Killed by SIGKILL after 41s, inside its 900s limit; this is not a timeout/);
+  assert.equal(killedDetail({ code: 1, signal: 'SIGTERM' }), 'Killed by SIGTERM before it finished.');
+  assert.equal(killedDetail({ code: 1, stdout: '' }), null);
+  // An exit the scanner chose itself carries no kill detail, failed or not.
+  assert.deepEqual(scannerEvidence('semgrep', { code: 2, stdout: '' }), { tool: 'semgrep', exitCode: 2, state: 'failed', findings: null });
+  assert.equal('detail' in scannerEvidence('gitleaks', { code: 0, stdout: '[]' }), false);
 });
 
 test('execution summaries distinguish nonzero tests, failures, skips and absent evidence', () => {

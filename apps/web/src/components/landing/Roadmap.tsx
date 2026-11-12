@@ -17,9 +17,9 @@ const LATER: FlowStep[] = [
     detail: 'Turn it on to show which model wrote which side of a debate. Off, the round hides the author.',
   },
   {
-    title: 'NEAR AI panel',
-    lead: 'A reviewer path only. The review does not call that host today.',
-    detail: 'If it lands, it uses the same offline bridge. Nothing in the sandbox calls NEAR AI.',
+    title: 'NEAR AI attestation',
+    lead: 'Check NEAR AI Cloud\'s TEE attestation before a key is used.',
+    detail: 'Reviews on your NEAR AI key run today. OmniSwarm does not yet verify the TEE attestation, so it does not call those reviews private.',
   },
   {
     title: 'GitHub Action',

@@ -1,4 +1,4 @@
-// Step-by-step & iterative audit pipeline unit tests for Intake API, MockEngineRunner, report-index, panel config, and local operator argv.
+// Step-by-step & iterative audit pipeline unit tests for Intake API, MockEngineRunner, report-index, account run config, and local operator argv.
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -17,7 +17,7 @@ import { reportIndex } from '../../src/modules/report-index/report-index.ts';
 import { findLatestReportDir, readPipelineSummary } from '../../src/modules/requests/pipeline-view.ts';
 import { AppError } from '../../src/shared/errors.ts';
 import { APP_ROOT } from '../../src/shared/paths.ts';
-import { accountConfigDocument, panelConfigDocument } from '../../src/worker/panel.ts';
+import { accountConfigDocument } from '../../src/worker/account-config.ts';
 import { publishReport, removeTree } from '../../src/worker/publish.ts';
 
 const FIXTURE = path.join(APP_ROOT, 'test/fixtures/engine-report');
@@ -35,7 +35,7 @@ test('MockEngineRunner produces schema-valid Stage 1, Step 2 Advice, and iterati
     const res1 = await runner.run({
       repo: 'near/example',
       commitSha: 'a'.repeat(40),
-      preset: 'panel',
+      preset: 'account-nearai',
       outDir: outStep,
       logPath: logStep,
       pipelineMode: 'step-by-step',
@@ -64,7 +64,7 @@ test('MockEngineRunner produces schema-valid Stage 1, Step 2 Advice, and iterati
     const res2 = await runner.run({
       repo: 'near/example',
       commitSha: 'a'.repeat(40),
-      preset: 'panel',
+      preset: 'account-nearai',
       outDir: outRound1,
       logPath: path.join(tmp, 'r1.log'),
       pipelineMode: 'step-by-step',
@@ -88,7 +88,7 @@ test('MockEngineRunner produces schema-valid Stage 1, Step 2 Advice, and iterati
     await runner.run({
       repo: 'near/example',
       commitSha: 'a'.repeat(40),
-      preset: 'panel',
+      preset: 'account-nearai',
       outDir: outStage1,
       logPath: path.join(tmp, 's1.log'),
       pipelineMode: 'stage-1',
@@ -103,7 +103,7 @@ test('MockEngineRunner produces schema-valid Stage 1, Step 2 Advice, and iterati
     await runner.run({
       repo: 'near/example',
       commitSha: 'a'.repeat(40),
-      preset: 'panel',
+      preset: 'account-nearai',
       outDir: outAdvise,
       logPath: path.join(tmp, 's2.log'),
       pipelineMode: 'step-by-step',
@@ -157,7 +157,7 @@ test('publishReport + reportIndex expose stage1Url, adviceUrl, pipelineUrl, and 
     await runner.run({
       repo: 'near/example',
       commitSha: 'd'.repeat(40),
-      preset: 'panel',
+      preset: 'account-nearai',
       outDir: sourceDir,
       logPath: path.join(tmp, 'run.log'),
       pipelineMode: 'step-by-step',
@@ -165,7 +165,7 @@ test('publishReport + reportIndex expose stage1Url, adviceUrl, pipelineUrl, and 
     await runner.run({
       repo: 'near/example',
       commitSha: 'd'.repeat(40),
-      preset: 'panel',
+      preset: 'account-nearai',
       outDir: sourceDir,
       logPath: path.join(tmp, 'run2.log'),
       pipelineMode: 'step-by-step',
@@ -178,11 +178,11 @@ test('publishReport + reportIndex expose stage1Url, adviceUrl, pipelineUrl, and 
       sourceDir,
       repo: 'near/example',
       commitSha: 'd'.repeat(40),
-      preset: 'panel',
+      preset: 'account-nearai',
     });
 
     const row: RequestRow = {
-      id: REQ_ID, account: 'alice.test.near', repo: 'near/example', commit_sha: 'd'.repeat(40), network: 'sandbox', preset: 'panel',
+      id: REQ_ID, account: 'alice.test.near', repo: 'near/example', commit_sha: 'd'.repeat(40), network: 'sandbox', preset: 'account-nearai',
       deployed: null, request_hash: 'c'.repeat(64), price_yocto: '0', status: 'done', attempts: 1, failure_cause: null,
       report_sha256: pub.reportSha256, report_url: `https://reports.example/${REQ_ID}/report.html`,
       max_severity: 'medium', scope: 'full', theme: null, parent_id: null, slice_path: null, models: null, incomplete: false,
@@ -214,9 +214,9 @@ test('publishReport + reportIndex expose stage1Url, adviceUrl, pipelineUrl, and 
   }
 });
 
-test('panelConfigDocument, accountConfigDocument, and localAuditArgv enforce valid pipelineMode and concurrency', () => {
-  const panelDoc = panelConfigDocument('panel', { pipelineMode: 'step-by-step', concurrency: 4 });
-  assert.equal(validate('run-config', panelDoc).ok, true, JSON.stringify(validate('run-config', panelDoc).errors));
+test('accountConfigDocument and localAuditArgv enforce valid pipelineMode and concurrency', () => {
+  const stepDoc = accountConfigDocument('account-nearai', ['deepseek-ai/DeepSeek-V4', 'Qwen/Qwen3.8-Max'], { pipelineMode: 'step-by-step', concurrency: 4 });
+  assert.equal(validate('run-config', stepDoc).ok, true, JSON.stringify(validate('run-config', stepDoc).errors));
 
   const acctDoc = accountConfigDocument('account-nearai', ['deepseek-ai/DeepSeek-V4'], { pipelineMode: 'stage-1', concurrency: 2 });
   assert.equal(validate('run-config', acctDoc).ok, true, JSON.stringify(validate('run-config', acctDoc).errors));
@@ -252,8 +252,8 @@ test('publishReport output alone (after deleting source harness/ and sessions/) 
     fs.mkdirSync(path.join(targetDir, 'src'), { recursive: true });
     fs.copyFileSync(path.join(DEMO_FIXTURE, 'src/lib.rs'), path.join(targetDir, 'src/lib.rs'));
 
-    const [ZAI, QWEN] = parseReviewerList(['key:zai:glm-5.3', 'openrouter:qwen/qwen3.8-max-0902']);
-    const JUDGE = parseReviewerSpec('openrouter:anthropic/claude-opus-5.5');
+    const [DEEPSEEK, QWEN] = parseReviewerList(['nearai:deepseek-ai/DeepSeek-V4', 'nearai:Qwen/Qwen3.8-Max']);
+    const JUDGE = parseReviewerSpec('nearai:openai/gpt-oss-120b');
     const CITE = { file: 'src/lib.rs', startLine: 30, endLine: 30, quote: 'let next = self.balance.saturating_sub(amount);' };
     const WITHDRAW = {
       title: 'Missing owner check in withdraw', surface: 'S1', severity: 'high', confidence: 'probable', location: ['src/lib.rs:30'],
@@ -267,7 +267,7 @@ test('publishReport output alone (after deleting source harness/ and sessions/) 
       const out = bridgeArgs[bridgeArgs.indexOf('--report-dir') + 1]!;
       const ok = { code: 0, stop: 'submitted', sessionId: identity.name, directory, elapsedMs: 1, observedExitCode: 0 };
       if (identity.role === 'auditor') {
-        commitSubmission(out, identity.name, identity, [...(identity.agent === ZAI.id ? [WITHDRAW] : []), { verified_safe: [] }]);
+        commitSubmission(out, identity.name, identity, [...(identity.agent === DEEPSEEK.id ? [WITHDRAW] : []), { verified_safe: [] }]);
         return ok;
       }
       if (identity.role === 'crosscheck') {
@@ -310,7 +310,7 @@ test('publishReport output alone (after deleting source harness/ and sessions/) 
       out: sourceDir,
       surface: 's1',
       pipelineMode: 'stage-1',
-      reviewers: [ZAI, QWEN],
+      reviewers: [DEEPSEEK, QWEN],
       orchestrator: JUDGE,
       budgets: { passes: 1, toolBudget: 5, maxCostUsd: null, debate: { rounds: 1, toolBudget: 4, maxClusters: 25 } },
     }, { review, startSandbox });
@@ -349,7 +349,7 @@ test('publishReport output alone (after deleting source harness/ and sessions/) 
       sourceDir,
       repo: 'near/example',
       commitSha: 'a'.repeat(40),
-      preset: 'panel',
+      preset: 'account-nearai',
     });
     assert.equal(fs.existsSync(path.join(published.dir, 'harness')), false, 'publishReport must strip top-level harness/');
     assert.equal(fs.existsSync(path.join(published.dir, 'sessions')), false, 'publishReport must strip top-level sessions/');
@@ -388,7 +388,7 @@ test('publishReport output alone (after deleting source harness/ and sessions/) 
       sourceDir: contDir,
       repo: 'near/example',
       commitSha: 'a'.repeat(40),
-      preset: 'panel',
+      preset: 'account-nearai',
     });
     for (const relEntry of fs.readdirSync(publishedFollowUp.dir, { recursive: true })) {
       const relStr = String(relEntry);

@@ -8,7 +8,7 @@ import { AppError } from '../api/errors';
 import { env } from '../env';
 import { normalizeWalletError, type SignMessageInput, type SignedMessage, type WalletConnector } from './connector';
 import { bytesToBase64 } from './nep413';
-import type { PaymentTransaction } from './payment';
+import type { WalletTransaction } from './payment';
 
 export interface DevAccount {
   accountId: string;
@@ -194,7 +194,7 @@ export function createDevWallet(options: DevWalletOptions = {}): DevWallet {
         throw normalizeWalletError(error);
       }
     },
-    async signAndSendTransaction(tx: PaymentTransaction) {
+    async signAndSendTransaction(tx: WalletTransaction) {
       try {
         const account = await selected();
         const call = tx.actions[0];

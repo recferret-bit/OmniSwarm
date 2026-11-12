@@ -18,7 +18,7 @@ test('the five v2 pages match their snapshots', () => {
   matchSnapshot('v2-report.html', read(dir, 'report.html'));
   matchSnapshot('v2-findings-by-model.html', read(dir, 'findings-by-model.html'));
   matchSnapshot('v2-reviewers.html', read(dir, 'reviewers.html'));
-  matchSnapshot('v2-reviewer-key-zai-glm-5-3.html', read(dir, 'reviewers/key-zai-glm-5-3/report.html'));
+  matchSnapshot('v2-reviewer-nearai-deepseek-ai-deepseek-v4.html', read(dir, 'reviewers/nearai-deepseek-ai-deepseek-v4/report.html'));
   const gap = renderV2({ before: (d) => fs.rmSync(path.join(d, 'general-review.json')) });
   matchSnapshot('v2-report-no-general-review.html', read(gap, 'report.html'));
 });

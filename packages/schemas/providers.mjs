@@ -24,22 +24,6 @@ export { ACCOUNT_PRESET_PREFIX, MODEL_ID_PATTERN, accountPresetName, accountPres
 
 const WIRING = Object.freeze({
   local: { keyEnv: null, envAllowlist: [] },
-  zai: {
-    baseUrl: 'https://api.z.ai/api/paas/v4',
-    baseUrlEnv: 'ZAI_BASE_URL',
-    keyEnv: 'ZAI_API_KEY',
-    envAllowlist: ['ZAI_API_KEY', 'ZAI_BASE_URL'],
-    extraBody: { reasoning_effort: 'high' },
-    headers: {},
-  },
-  openrouter: {
-    baseUrl: 'https://openrouter.ai/api/v1',
-    baseUrlEnv: null,
-    keyEnv: 'OPENROUTER_API_KEY',
-    envAllowlist: ['OPENROUTER_API_KEY'],
-    extraBody: { provider: { require_parameters: true, data_collection: 'deny' } },
-    headers: { 'HTTP-Referer': 'https://omniswarm.dev', 'X-OpenRouter-Title': 'OmniSwarm' },
-  },
   nearai: {
     baseUrl: 'https://cloud-api.near.ai/v1',
     baseUrlEnv: null,
@@ -80,11 +64,6 @@ export function accountProviders() {
   return PROVIDERS.filter((provider) => provider.keySources.includes('account'));
 }
 
-/** Providers whose key the operator saves on the admin page. */
-export function adminProviders() {
-  return PROVIDERS.filter((provider) => provider.keySources.includes('admin-page'));
-}
-
 /** Every key-related variable of every API provider. Nothing else of this kind may reach the engine. */
 export function providerEnvNames() {
   return [...new Set(apiProviders().flatMap((provider) => provider.envAllowlist))].sort();
@@ -98,9 +77,6 @@ export function specFor(providerId, model) {
   return `${provider.specPrefix}${model}`;
 }
 
-// CLI reviewers that borrow an API provider's key (cli:claude-zai uses the Z.AI key through Claude Code).
-const CLI_KEY_BORROWERS = Object.freeze({ 'claude-zai': 'zai' });
-
 /** The provider a reviewer spec runs on: `local`, an API provider id, or null (scripted, unknown). */
 export function providerOfSpec(spec) {
   const text = String(spec || '').replace(/#.*$/, '');
@@ -109,13 +85,10 @@ export function providerOfSpec(spec) {
   return null;
 }
 
-/** Variables the process running this spec may need (the borrowed key of a CLI like claude-zai included). */
+/** Variables the process running this spec may need. A `cli:` reviewer uses its own login and needs none. */
 export function envForSpec(spec) {
   const text = String(spec || '').replace(/#.*$/, '');
-  if (text.startsWith('cli:')) {
-    const borrowed = CLI_KEY_BORROWERS[text.split(':')[1] ?? ''];
-    return borrowed ? [...providerById(borrowed).envAllowlist] : [];
-  }
+  if (text.startsWith('cli:')) return [];
   const id = providerOfSpec(text);
   return id ? [...providerById(id).envAllowlist] : [];
 }

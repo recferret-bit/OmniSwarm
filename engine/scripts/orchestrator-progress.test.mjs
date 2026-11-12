@@ -135,7 +135,7 @@ test('the terminal prints a banner per phase and a status line on change, at mos
   p.phaseEnd('prepare');
   assert.equal(p.refresh().phase, 'prepare', 'between phases the headline keeps the phase that ended');
   p.phaseStart('review');
-  assert.deepEqual(lines, ['  == Preparing sandbox · 0% · 0s', '  == Review · 10% · 0s'], 'one banner per phase, no duplicate status line');
+  assert.deepEqual(lines, ['\n  ══ Preparing sandbox · 0% · 0s ══', '\n  ══ Review · 10% · 0s ══'], 'one banner per phase, no duplicate status line');
   spend(out, 'claude', 's3:1', 4);
   c.advance(6_000);
   p.refresh();
@@ -256,8 +256,68 @@ test('the sticky line is only for a terminal, replaces status lines, and the fin
   spend(out, 'claude', 's3:1', 5);
   p.refresh();
   assert.ok(rows.length >= 2, 'the sticky row follows every change');
-  assert.deepEqual(lines, ['  == Review · 10% · 0s'], 'only the banner is printed while running');
+  assert.deepEqual(lines, ['\n  ══ Review · 10% · 0s ══'], 'only the banner is printed while running');
   p.finish('finished');
   assert.equal(rows.at(-1), 'END');
-  assert.match(lines.at(-1), /^  progress 100% · finished/);
+  assert.match(lines.at(-1), /^\n  progress 100% · finished/);
+});
+
+test('a phase with no events still ticks: the sticky row redraws with a spinner and the elapsed time', () => {
+  const rows = [];
+  const sticky = { set: (line) => rows.push(line), end: () => rows.push('END') };
+  const c = clock();
+  const ticks = [];
+  let cleared = null;
+  const timer = (fn, ms) => { ticks.push({ fn, ms }); return { id: 'tick', unref() {} }; };
+  const p = createProgress({ output: temp(), jobs: [job('claude', 'pending')], budgets, sticky, now: c.now, timer, clearTimer: (id) => { cleared = id; } });
+  p.refresh();
+  p.phaseStart('prepare');
+  assert.match(rows.at(-1), /Preparing sandbox · 0s/, 'a phase start redraws the row at once, even within a second of the last one');
+  assert.equal(ticks.length, 1);
+  assert.equal(ticks[0].ms, 1_000);
+  c.advance(7_000);
+  ticks[0].fn();
+  c.advance(1_000);
+  ticks[0].fn();
+  const [a, b] = rows.slice(-2);
+  assert.match(a, /^\S progress 0% · Preparing sandbox · 7s/);
+  assert.match(b, /^\S progress 0% · Preparing sandbox · 8s/);
+  assert.notEqual(a[0], b[0], 'the spinner frame moves');
+  p.finish('failed');
+  assert.equal(cleared.id, 'tick', 'finish stops the ticker');
+  const before = rows.length;
+  ticks[0].fn();
+  assert.equal(rows.length, before, 'no redraw after the run ended');
+});
+
+test('without a sticky row the ticker still prints the once-an-interval status line', () => {
+  const lines = [];
+  const c = clock();
+  const ticks = [];
+  const p = createProgress({ output: temp(), jobs: [job('claude', 'pending')], budgets, print: (line) => lines.push(line), now: c.now, timer: (fn, ms) => { ticks.push({ fn, ms }); return null; } });
+  p.phaseStart('prepare');
+  assert.equal(ticks[0].ms, 5_000);
+  c.advance(30_000);
+  ticks[0].fn();
+  assert.equal(lines.length, 1, 'no line before the interval');
+  c.advance(30_000);
+  ticks[0].fn();
+  assert.match(lines.at(-1), /^  progress 0% · Preparing sandbox · 1m00s/);
+});
+
+test('the sticky row cuts the activity note to the terminal width instead of chopping the line', () => {
+  const rows = [];
+  const sticky = { width: 70, set: (l) => rows.push(l), end() {} };
+  const c = clock();
+  const p = createProgress({ output: temp(), jobs: [job('claude', 'pending')], budgets, sticky, now: c.now, tickMs: 0 });
+  p.phaseStart('prepare');
+  p.detail('npm-install.log 10s ago');
+  c.advance(2_000);
+  p.refresh();
+  assert.ok(rows.at(-1).length <= 68, rows.at(-1));
+  assert.match(rows.at(-1), /^\S progress 0% · Preparing sandbox · \d+s · reviewers done 0\/1/, 'the status part is never cut');
+  sticky.width = 200;
+  c.advance(2_000);
+  p.refresh();
+  assert.match(rows.at(-1), /npm-install\.log 10s ago$/);
 });

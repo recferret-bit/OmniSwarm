@@ -5,7 +5,7 @@ import os from 'node:os';
 import test from 'node:test';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { LIMITS, hash, backendStatus, createSnapshot, disposeSnapshot, requireOwnedSnapshot, createJob, validateOutput } from './worker-isolation.mjs';
+import { LIMITS, hash, backendStatus, describeSourceReadError, createSnapshot, disposeSnapshot, requireOwnedSnapshot, createJob, validateOutput } from './worker-isolation.mjs';
 import { runtimeDigest, transition, recordBlockedRun } from './worker-supervisor.mjs';
 
 const scripts = path.dirname(fileURLToPath(import.meta.url));
@@ -35,8 +35,10 @@ test('snapshots record explicit omissions without copying named credentials or l
 test('snapshots keep what existing tests and dependency installs read, and drop only root-level non-source trees', (t) => {
   const source = fixture(t);
   const put = (rel, text = 'x\n') => { fs.mkdirSync(path.dirname(path.join(source, rel)), { recursive: true }); fs.writeFileSync(path.join(source, rel), text); };
-  const kept = ['.dockerignore', 'app/package-lock.json', 'app/test/fixtures/cases.json', 'app/public/robots.txt', 'app/public/media/logo.svg', 'app/src/style.css', 'app/src/social/feed.ts', 'app/src/http/openapi/schema.ts', 'app/test/docs/as-built.ts'];
-  const dropped = ['docs/spec.json', 'social/post.json', 'tests/audit/runtime/package.json', 'app/README.md', 'app/dist/bundle.js'];
+  // A source file that shares a documentation name (security.py, notice.ts) is code: the target's tests import it.
+  const namedLikeDocs = ['app/integrations/security.py', 'app/src/notice.ts', 'app/src/Notice.tsx', 'app/src/license.rs', 'app/src/authors.go', '.github/workflows/security.yml', 'app/config/security.json'];
+  const kept = ['.dockerignore', 'app/package-lock.json', 'app/test/fixtures/cases.json', 'app/public/robots.txt', 'app/public/media/logo.svg', 'app/src/style.css', 'app/src/social/feed.ts', 'app/src/http/openapi/schema.ts', 'app/test/docs/as-built.ts', ...namedLikeDocs];
+  const dropped = ['docs/spec.json', 'social/post.json', 'tests/audit/runtime/package.json', 'app/README.md', 'app/dist/bundle.js', 'SECURITY.md', 'app/LICENSE', 'app/NOTICE.txt', 'app/README.zh-CN.md', 'app/CHANGELOG.html'];
   for (const rel of [...kept, ...dropped]) put(rel);
   const snapshot = createSnapshot(source);
   t.after(() => disposeSnapshot(snapshot));
@@ -234,4 +236,26 @@ test('plan-only selection preserves requested models without launching a backend
   assert.match(run.stdout, /codex=requested-model/);
   assert.match(run.stdout, /persistent ACP sessions/);
   assert.equal(fs.readdirSync(source).length, 1);
+});
+
+test('snapshot read failures name the directory and explain macOS privacy blocks', (t) => {
+  const eperm = Object.assign(new Error('EPERM: operation not permitted, opendir'), { code: 'EPERM', syscall: 'opendir' });
+  const mac = describeSourceReadError(eperm, '/Users/op/Downloads/repo', { platform: 'darwin', home: '/Users/op' });
+  assert.equal(mac.code, 'EPERM');
+  assert.equal(mac.cause, eperm);
+  assert.match(mac.message, /cannot read audit source \/Users\/op\/Downloads\/repo: EPERM/);
+  assert.match(mac.message, /\/Users\/op\/Downloads is a macOS privacy-protected folder/);
+  assert.match(mac.message, /Files and Folders \(or Full Disk Access\)/);
+  assert.doesNotMatch(describeSourceReadError(eperm, '/srv/repo', { platform: 'linux', home: '/home/op' }).message, /macOS/);
+  const other = Object.assign(new Error('nope'), { code: 'ENOENT' });
+  assert.equal(describeSourceReadError(other, '/x'), other, 'unrelated errors pass through unchanged');
+
+  if (process.getuid?.() === 0) return; // root ignores directory modes
+  const root = fixture(t);
+  const locked = path.join(root, 'locked');
+  fs.mkdirSync(locked);
+  fs.chmodSync(locked, 0o000);
+  try {
+    assert.throws(() => createSnapshot(root), (err) => err.code === 'EACCES' && err.message.includes(fs.realpathSync(root)) && err.message.includes('locked'));
+  } finally { fs.chmodSync(locked, 0o700); }
 });

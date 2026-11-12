@@ -7,7 +7,7 @@ import { costLedger } from './bridge-budget.mjs';
 import { runReviewerPasses } from './reviewer-pass-loop.mjs';
 import { budgetHealth } from './verification-health.mjs';
 
-const REVIEWER = 'key-zai-glm-5-3';
+const REVIEWER = 'nearai-deepseek-ai-deepseek-v4';
 const BUDGETS = { passes: 2, toolBudget: 5, maxCostUsd: 1 };
 const usage = (out, surface, pass) => JSON.parse(fs.readFileSync(path.join(out, 'harness', 'usage', REVIEWER, `${surface}-pass-${pass}.json`), 'utf8'));
 

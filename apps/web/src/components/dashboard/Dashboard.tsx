@@ -2,11 +2,12 @@
 
 import Link from 'next/link';
 import { useEffect, useState, type FormEvent } from 'react';
-import { api, requestReportHref, type AccountKeyView } from '@/lib/api/client';
+import { api, requestReportHref, type AccountKeyView, type SessionAccount } from '@/lib/api/client';
 import { messageFor, toAppError, type AppErrorCode } from '@/lib/api/errors';
 import type { PipelineMode } from '@/lib/api/schema.gen';
 import { parseRepoInput } from '@/lib/repo';
 import { type MyRequest } from '@/stores/my-requests';
+import { SignInPanel } from '../auth/SignIn';
 import { statusLabel } from '../request/Timeline';
 import { Alert } from '../ui/Alert';
 import { Button } from '../ui/Button';
@@ -17,14 +18,25 @@ import { PipelineModeChecks, parseSavedPipelineMode } from '../flow/PipelineMode
 import { ScopeChecks } from '../flow/ScopeChecks';
 import { phaseLabel } from '../request/ProgressPanel';
 import { AccountKeyPanel, keyReady } from '../account/AccountKeyPanel';
+import { ReportTabs } from '../report/ReportTabs';
+import { Donate } from '../support/Donate';
 
-type Pending = 'login' | 'logout' | 'submit' | null;
+type Pending = 'logout' | 'submit' | null;
+type DashTab = 'settings' | 'review' | 'history';
+
+// The only way to review in the cloud: the signed-in account's own NEAR AI Cloud key (provider catalog `nearai`).
+const OWN_PROVIDER = 'nearai';
+export const OWN_KEY_PROMPT = 'Paste your NEAR AI Cloud API key to run reviews. You pay NEAR AI directly; OmniSwarm charges nothing.';
+
+function displayName(session: SessionAccount): string {
+  return session.label || session.account;
+}
 
 function Row({ row }: { row: MyRequest }) {
   const tone = row.status === 'done' ? 'good' : row.status === 'failed' || row.status === 'refunded' ? 'bad' : 'info';
   return (
     <li className="request-row">
-      <Link href={`/r/${row.requestId}`} className="request-row__repo">{row.theme ? `${row.repo} · ${row.theme}` : row.repo}</Link>
+      <Link href={`/dashboard/requests/${row.requestId}`} className="request-row__repo">{row.theme ? `${row.repo} · ${row.theme}` : row.repo}</Link>
       <Pill tone={tone}>{statusLabel(row.status)}</Pill>
       {row.status === 'running' && row.progress ? <span className="muted">{phaseLabel(row.progress.phase)} · {Math.round(row.progress.percent ?? 0)}%</span> : null}
       <time className="muted" dateTime={row.createdAt}>{new Date(row.createdAt).toLocaleString()}</time>
@@ -35,38 +47,34 @@ function Row({ row }: { row: MyRequest }) {
 
 export function Dashboard() {
   const [phase, setPhase] = useState<'loading' | 'anonymous' | 'ready'>('loading');
-  const [account, setAccount] = useState<string | null>(null);
+  const [name, setName] = useState<string | null>(null);
   const [requests, setRequests] = useState<MyRequest[]>([]);
   const [error, setError] = useState<AppErrorCode | null>(null);
   const [detail, setDetail] = useState<string | null>(null);
   const [pending, setPending] = useState<Pending>(null);
-  const [login, setLogin] = useState('');
-  const [password, setPassword] = useState('');
   const [repo, setRepo] = useState('');
   const [repoError, setRepoError] = useState<string | null>(null);
-  const [models, setModels] = useState<string[]>([]);
   const [scopes, setScopes] = useState<string[]>(['full']);
   const [pipelineMode, setPipelineMode] = useState<PipelineMode>('full');
-  // Providers that take the account's own key (provider catalog; today NEAR AI Cloud). `panel` is the operator's panel.
-  const [own, setOwn] = useState<AccountKeyView[]>([]);
-  const [source, setSource] = useState<string>('panel');
-  const chosen = own.find((view) => view.provider === source);
-  const replace = (next: AccountKeyView) => setOwn((current) => current.map((view) => (view.provider === next.provider ? next : view)));
-  const extras = [
-    ['opus', 'Opus 5.5'],
-    ['sol', 'Sol 6.1'],
-    ['argon', 'Argon 4'],
-    ['grok', 'Grok 4.7'],
-  ] as const;
+  // The account's own NEAR AI Cloud key and models: the only source. null until loaded; there is no hosted panel.
+  const [own, setOwn] = useState<AccountKeyView | null>(null);
+  const [ownError, setOwnError] = useState(false);
+  const [tab, setTab] = useState<DashTab>('review');
+  const ready = keyReady(own ?? undefined);
 
   const loadOwn = async () => {
+    setOwnError(false);
     try {
       const { providers } = await api.listAccountKeys();
-      setOwn(providers);
-      // An account's own key is the main source: the first ready one becomes the default.
-      const ready = providers.find(keyReady);
-      if (ready) setSource(ready.provider);
-    } catch { /* the panels stay hidden; submitting the panel review still works */ }
+      const view = providers.find((item) => item.provider === OWN_PROVIDER) ?? null;
+      setOwn(view);
+      if (!view) setOwnError(true);
+      // No key or no model yet: open the key panel first.
+      else if (!keyReady(view)) setTab((current) => (current === 'review' ? 'settings' : current));
+    } catch {
+      setOwn(null);
+      setOwnError(true);
+    }
   };
 
   useEffect(() => {
@@ -75,7 +83,7 @@ export function Dashboard() {
       try {
         const session = await api.session();
         if (!live) return;
-        setAccount(session.account);
+        setName(displayName(session));
         setPhase('ready');
         void loadOwn();
         try {
@@ -88,7 +96,7 @@ export function Dashboard() {
         if (!live) return;
         const code = toAppError(caught).code;
         if (code !== 'UNAUTHORIZED') setError(code);
-        setPhase('anonymous');
+        setPhase((current) => (current === 'ready' ? current : 'anonymous'));
       }
     })();
     try {
@@ -113,24 +121,16 @@ export function Dashboard() {
     return () => window.clearInterval(timer);
   }, [phase]);
 
-  const signIn = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (pending) return;
-    setPending('login');
+  const onSignedIn = async (session: SessionAccount) => {
+    setName(displayName(session));
+    setPhase('ready');
     setError(null);
+    void loadOwn();
     try {
-      const session = await api.login({ login, password });
-      setAccount(session.account);
-      setPhase('ready');
-      void loadOwn();
-      setLogin('');
-      setPassword('');
       const listed = await api.listMine();
       setRequests(listed.requests);
     } catch (caught) {
       setError(toAppError(caught).code);
-    } finally {
-      setPending(null);
     }
   };
 
@@ -140,12 +140,13 @@ export function Dashboard() {
     setError(null);
     try {
       await api.logout();
-      setAccount(null);
+      setName(null);
       setRequests([]);
       setRepo('');
       setRepoError(null);
-      setOwn([]);
-      setSource('panel');
+      setOwn(null);
+      setOwnError(false);
+      setTab('review');
       setPhase('anonymous');
     } catch (caught) {
       setError(toAppError(caught).code);
@@ -157,7 +158,7 @@ export function Dashboard() {
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (pending) return;
-    if (scopes.length === 0) return;
+    if (scopes.length === 0 || !ready) return;
     if (!parseRepoInput(repo)) {
       setRepoError(messageFor('REPO_INVALID'));
       return;
@@ -168,14 +169,11 @@ export function Dashboard() {
     setRepoError(null);
     try {
       const modeOpt = pipelineMode !== 'full' ? { pipelineMode } : {};
-      await api.createDashboardJob(
-        source !== 'panel'
-          ? { repo: repo.trim(), scopes, source, ...modeOpt }
-          : { repo: repo.trim(), models, scopes, ...modeOpt },
-      );
+      await api.createDashboardJob({ repo: repo.trim(), scopes, source: OWN_PROVIDER, ...modeOpt });
       setRepo('');
       const listed = await api.listMine();
       setRequests(listed.requests);
+      setTab('history');
     } catch (caught) {
       const appError = toAppError(caught);
       if (appError.code === 'REPO_INVALID') setRepoError(messageFor(appError.code));
@@ -187,92 +185,82 @@ export function Dashboard() {
 
   if (phase === 'loading') return <p role="status">Loading…</p>;
 
-  if (phase === 'anonymous' || !account) {
+  if (phase === 'anonymous' || !name) {
     return (
-      <Panel title="Sign in">
-        <form className="quote-form" onSubmit={(event) => void signIn(event)} noValidate>
-          <Field
-            label="Login"
-            name="login"
-            autoComplete="username"
-            autoFocus
-            value={login}
-            onChange={(event) => setLogin(event.target.value)}
-            required
-          />
-          <Field
-            label="Password"
-            name="password"
-            type="password"
-            autoComplete="current-password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            required
-          />
-          {error ? <Alert>{messageFor(error)}</Alert> : null}
-          <Button type="submit" busy={pending === 'login'}>Sign in</Button>
-        </form>
-        <p className="muted">Development sign-in is <code>operator</code> / <code>operator</code>. NEAR sign-in replaces this later.</p>
-      </Panel>
+      <>
+        {error ? <Alert>{messageFor(error)}</Alert> : null}
+        <SignInPanel onSignedIn={(session) => { void onSignedIn(session); }} />
+      </>
     );
   }
 
   return (
-    <Panel title="Request a review">
+    <>
       <div className="request-row">
-        <span>Signed in as <strong>{account}</strong></span>
+        <span>Signed in as <strong>{name}</strong></span>
         <Button variant="secondary" onClick={() => void signOut()} busy={pending === 'logout'}>Log out</Button>
       </div>
-      <form className="quote-form" onSubmit={(event) => void submit(event)} noValidate>
-        <Field
-          label="GitHub repository"
-          name="repo"
-          placeholder="owner/name or https://github.com/owner/name"
-          autoComplete="off"
-          spellCheck={false}
-          value={repo}
-          onChange={(event) => { setRepo(event.target.value); setRepoError(null); }}
-          error={repoError}
-          required
-        />
-        <ScopeChecks selected={scopes} onChange={setScopes} />
-        <PipelineModeChecks name="dashboard-pipeline-mode" value={pipelineMode} onChange={setPipelineMode} />
-        <fieldset className="quote-form">
-          <legend>Review with</legend>
-          {own.map((view) => (
-            <label key={view.provider}>
-              <input type="radio" name="source" value={view.provider} checked={source === view.provider} onChange={() => setSource(view.provider)} />
-              {' '}{view.label} (your key){keyReady(view) ? ` · ${view.models.length} model${view.models.length === 1 ? '' : 's'}` : ' · save a key and a model below'}
-            </label>
-          ))}
-          <label>
-            <input type="radio" name="source" value="panel" checked={source === 'panel'} onChange={() => setSource('panel')} />
-            {' '}Hosted panel (Z.AI and OpenRouter)
-          </label>
-        </fieldset>
-        <fieldset className="quote-form" hidden={source !== 'panel'} disabled={source !== 'panel'}>
-          <legend>Models</legend>
-          <p className="muted">GLM 5.3 on Z.AI orchestrates. Qwen on OpenRouter reviews with it. Add any of these.</p>
-          {extras.map(([id, label]) => (
-            <label key={id}>
-              <input
-                type="checkbox"
-                name="models"
-                value={id}
-                checked={models.includes(id)}
-                onChange={(event) => setModels((current) => event.target.checked ? [...current, id] : current.filter((item) => item !== id))}
-              />
-              {' '}{label}
-            </label>
-          ))}
-        </fieldset>
-        <Button type="submit" busy={pending === 'submit'} disabled={pending !== null || scopes.length === 0 || (source !== 'panel' && !keyReady(chosen))}>Submit</Button>
-      </form>
-      {own.map((view) => <AccountKeyPanel key={view.provider} view={view} onChange={replace} />)}
-      {detail ? <Alert>{detail}</Alert> : error ? <Alert>{messageFor(error)}</Alert> : null}
-      {requests.length === 0 ? <p>No reviews yet.</p> : (
-        <ul className="request-list" aria-label="Your reviews">{requests.map((row) => <Row key={row.requestId} row={row} />)}</ul>
-      )}
-    </Panel>
+      <ReportTabs
+        label="Dashboard"
+        selected={tab}
+        onSelect={(id) => setTab(id as DashTab)}
+        tabs={[
+          {
+            id: 'review',
+            label: 'New review',
+            content: (
+              <form className="quote-form" onSubmit={(event) => void submit(event)} noValidate>
+                <Field
+                  label="GitHub repository"
+                  name="repo"
+                  placeholder="owner/name or https://github.com/owner/name"
+                  autoComplete="off"
+                  spellCheck={false}
+                  value={repo}
+                  onChange={(event) => { setRepo(event.target.value); setRepoError(null); }}
+                  error={repoError}
+                  required
+                />
+                <ScopeChecks selected={scopes} onChange={setScopes} />
+                <PipelineModeChecks name="dashboard-pipeline-mode" value={pipelineMode} onChange={setPipelineMode} />
+                {ready && own ? (
+                  <p className="muted" data-testid="review-source">
+                    Reviews run on your {own.label} key with {own.models.length} model{own.models.length === 1 ? '' : 's'}; {own.models[0]} orchestrates.
+                    You pay NEAR AI directly; OmniSwarm charges nothing.
+                  </p>
+                ) : (
+                  <div className="flow-step" data-testid="review-source">
+                    <p>{OWN_KEY_PROMPT}</p>
+                    <Button type="button" variant="secondary" onClick={() => setTab('settings')}>Add your NEAR AI key</Button>
+                  </div>
+                )}
+                <Button type="submit" busy={pending === 'submit'} disabled={pending !== null || scopes.length === 0 || !ready}>Submit</Button>
+                {detail ? <Alert>{detail}</Alert> : error ? <Alert>{messageFor(error)}</Alert> : null}
+              </form>
+            ),
+          },
+          {
+            id: 'history',
+            label: 'Review history',
+            content: requests.length === 0 ? <p>No reviews yet.</p> : (
+              <ul className="request-list" aria-label="Request history">{requests.map((row) => <Row key={row.requestId} row={row} />)}</ul>
+            ),
+          },
+          {
+            id: 'settings',
+            label: 'Settings',
+            content: (
+              <>
+                <p>{OWN_KEY_PROMPT}</p>
+                <p className="muted">Your key is stored encrypted, shown only as a fingerprint, and used for your own reviews only. Save at least one model; the first one orchestrates.</p>
+                {own ? <AccountKeyPanel view={own} onChange={setOwn} /> : null}
+                {ownError ? <Alert>Your NEAR AI Cloud key settings could not be loaded. Reload the page to try again.</Alert> : null}
+              </>
+            ),
+          },
+        ]}
+      />
+      <Donate variant="footer" />
+    </>
   );
 }

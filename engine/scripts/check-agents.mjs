@@ -1,7 +1,6 @@
 #!/usr/bin/env node
-// Offline presence check for API-provider (catalog), claude-zai and scripted reviewers.
+// Offline presence check for API-provider (catalog) and scripted reviewers.
 // Prints one row and never prints a key value. Exit 0 when every named reviewer is present.
-import { resolveExecutable } from './agent-launch.mjs';
 import { claudeMaxTurnsSupport, grokMaxTurnsSupport } from './provider-cli.mjs';
 import { families } from './reviewer-families.mjs';
 import { parseReviewerSpec } from './reviewer-registry.mjs';
@@ -18,12 +17,6 @@ export function checkReviewerRow(spec, env = process.env) {
   const reviewer = typeof spec === 'string' ? parseReviewerSpec(spec) : spec;
   if (reviewer.family === 'scripted') return { ok: true, line: 'scripted: ok' };
   const keyName = families.has(reviewer.family) ? families.fingerprintEnv(reviewer) : null;
-  if (reviewer.family === 'cli' && reviewer.provider === 'claude-zai') {
-    const cli = Boolean(resolveExecutable('claude', env));
-    const key = Boolean(env[keyName]);
-    if (cli && key) return { ok: true, line: `cli:claude-zai: claude CLI found, ${keyName} present` };
-    return { ok: false, line: `cli:claude-zai: ${cli ? `${keyName} missing` : 'claude CLI missing'}` };
-  }
   if (keyName && reviewer.family !== 'cli') {
     const label = reviewer.family === 'key' ? `key:${reviewer.provider}` : reviewer.family;
     if (!env[keyName]) return { ok: false, line: `${label}: ${keyName} missing` };

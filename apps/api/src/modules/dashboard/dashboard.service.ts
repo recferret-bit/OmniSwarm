@@ -1,6 +1,8 @@
-// Password-dashboard reviews. They become ordinary request rows and reach the worker only through
-// markPaid. The mock ledger is paid 0 yocto. On the sandbox network a real request_review is signed
-// by the seeded bob key for the configured price. Other NEAR networks stay refused.
+// Dashboard reviews. Each runs as preset `account-<provider>` on the signed-in account's own provider key
+// and saved models; the operator holds no provider key for them. They become ordinary request rows and reach the worker
+// only through markPaid. The account is never charged: the mock ledger is paid 0 yocto, and on the local
+// sandbox network the seeded bob dev key (not the account) signs request_review for the configured price so
+// the registry contract's flow runs end to end. Other NEAR networks stay refused.
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -16,10 +18,8 @@ import { assertAccountCapacity } from '../requests/create-request.service.ts';
 import { markPaid } from '../payments/payment.service.ts';
 import { checkRepo, priceFor } from '../quote/quote.service.ts';
 import { parseGitHubInput } from '../quote/repo-url.ts';
-import { providerById, providerOfSpec } from '@omniswarm/schemas/providers';
-import { jobSpecs, panelPresetName } from '../../worker/panel.ts';
+import { accountPresetProvider, accountProviders } from '@omniswarm/schemas/providers';
 import { normalizeScopes, type ReviewScope } from '../../worker/themes.ts';
-import { providerStatus } from '../providers/secrets.ts';
 import { accountPreset } from '../providers/account-keys.ts';
 import { requestReviewOnSandbox } from './sandbox-payer.ts';
 
@@ -38,32 +38,23 @@ function reportFile(config: Config, id: string): string {
   return file;
 }
 
-export async function createDashboardJob(
-  deps: DashboardDeps,
-  account: string,
-  repoInput: string,
-  models: readonly string[] = [],
-  scopes: readonly string[] = [],
-  source = 'panel',
-  pipelineMode: 'full' | 'step-by-step' | 'stage-1' = 'full',
-) {
+export interface DashboardJobInput {
+  repo: string;
+  scopes?: readonly string[];
+  /** An account-key provider id; defaults to the first one in the catalog (today `nearai`). */
+  source?: string;
+  pipelineMode?: 'full' | 'step-by-step' | 'stage-1';
+}
+
+export async function createDashboardJob(deps: DashboardDeps, account: string, input: DashboardJobInput) {
   assertDashboardChain(deps.config);
-  let preset: string;
-  let accountModels: string[] | null = null;
-  if (source !== 'panel') {
-    // The account's own provider key and models replace the operator's Z.AI and OpenRouter panel.
-    if (models.length) fail('VALIDATION_ERROR', 'Panel models cannot be combined with a review on your own key');
-    ({ preset, models: accountModels } = await accountPreset(deps, account, source));
-  } else {
-    preset = panelPresetName(models);
-    // Every provider the panel runs on needs its operator key on the admin page.
-    const keys = providerStatus(deps.config.providerSecretsFile ?? '');
-    const needed = [...new Set(jobSpecs(preset, null).map(providerOfSpec))].map((id) => providerById(id ?? ''));
-    if (needed.some((provider) => !provider || !keys[provider.id]?.set)) {
-      fail('PRESET_NOT_ALLOWED', `Set the ${needed.map((provider) => provider?.label).join(' and ')} keys on the admin page before queueing a review`);
-    }
-  }
-  const scope: ReviewScope = normalizeScopes(scopes);
+  const source = input.source ?? accountProviders()[0]?.id;
+  if (!source) fail('PRESET_NOT_ALLOWED', 'No provider takes account keys');
+  const pipelineMode = input.pipelineMode ?? 'full';
+  const repoInput = input.repo;
+  // The account's own provider key and models: refused until the account saved both.
+  const { preset, models: accountModels } = await accountPreset(deps, account, source);
+  const scope: ReviewScope = normalizeScopes(input.scopes ?? []);
   const parsed = parseGitHubInput(repoInput);
   const depth = await queueDepth(deps.pool);
   if (depth >= deps.config.intake.maxQueue) fail('QUEUE_FULL', 'The review queue is full; try again later');
@@ -117,6 +108,11 @@ async function queueContinuationRequest(
   if (!parent || parent.account !== account) fail('REQUEST_NOT_FOUND', 'Request not found');
   if (parent.status !== 'done') {
     fail('INVALID_TRANSITION', `Request is ${parent.status}; pipeline steps can only continue a finished review`);
+  }
+  // A follow-up step runs on its parent's preset: the account's own key, or a preset the operator still allows.
+  // An older review on a preset that no longer exists (the removed operator-key panel) cannot be continued.
+  if (!accountPresetProvider(parent.preset) && !deps.config.intake.allowedPresets.includes(parent.preset)) {
+    fail('PRESET_NOT_ALLOWED', 'This review ran on a preset that is no longer offered and cannot be continued');
   }
   const depth = await queueDepth(deps.pool);
   if (depth >= deps.config.intake.maxQueue) fail('QUEUE_FULL', 'The review queue is full; try again later');

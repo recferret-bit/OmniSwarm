@@ -7,16 +7,16 @@
   "surface": "s1",
   "agents": [
     "cli-claude-opus",
-    "key-zai-glm-5-3",
-    "openrouter-qwen-qwen3-8-max-0902",
-    "openrouter-anthropic-claude-opus-5-5",
+    "nearai-deepseek-ai-deepseek-v4",
+    "nearai-qwen-qwen3-8-max",
+    "nearai-meta-llama-llama-5-70b",
     "scripted-baseline"
   ],
   "models": {
     "cli-claude-opus": "opus",
-    "key-zai-glm-5-3": "glm-5.3",
-    "openrouter-qwen-qwen3-8-max-0902": "qwen/qwen3.8-max-0902",
-    "openrouter-anthropic-claude-opus-5-5": "anthropic/claude-opus-5.5",
+    "nearai-deepseek-ai-deepseek-v4": "deepseek-ai/DeepSeek-V4",
+    "nearai-qwen-qwen3-8-max": "Qwen/Qwen3.8-Max",
+    "nearai-meta-llama-llama-5-70b": "meta-llama/Llama-5-70B",
     "scripted-baseline": "baseline"
   },
   "reviewers": [
@@ -28,25 +28,25 @@
       "model": "opus"
     },
     {
-      "id": "key-zai-glm-5-3",
-      "family": "key",
-      "provider": "zai",
-      "vendor": "zai",
-      "model": "glm-5.3"
+      "id": "nearai-deepseek-ai-deepseek-v4",
+      "family": "nearai",
+      "provider": "nearai",
+      "vendor": "deepseek",
+      "model": "deepseek-ai/DeepSeek-V4"
     },
     {
-      "id": "openrouter-qwen-qwen3-8-max-0902",
-      "family": "openrouter",
-      "provider": "openrouter",
+      "id": "nearai-qwen-qwen3-8-max",
+      "family": "nearai",
+      "provider": "nearai",
       "vendor": "alibaba",
-      "model": "qwen/qwen3.8-max-0902"
+      "model": "Qwen/Qwen3.8-Max"
     },
     {
-      "id": "openrouter-anthropic-claude-opus-5-5",
-      "family": "openrouter",
-      "provider": "openrouter",
-      "vendor": "anthropic",
-      "model": "anthropic/claude-opus-5.5"
+      "id": "nearai-meta-llama-llama-5-70b",
+      "family": "nearai",
+      "provider": "nearai",
+      "vendor": "meta",
+      "model": "meta-llama/Llama-5-70B"
     },
     {
       "id": "scripted-baseline",
@@ -58,23 +58,23 @@
   ],
   "auditors": [
     "cli-claude-opus-s1-auth",
-    "key-zai-glm-5-3-s1-auth",
-    "openrouter-qwen-qwen3-8-max-0902-s1-auth",
-    "openrouter-anthropic-claude-opus-5-5-s1-auth",
+    "nearai-deepseek-ai-deepseek-v4-s1-auth",
+    "nearai-qwen-qwen3-8-max-s1-auth",
+    "nearai-meta-llama-llama-5-70b-s1-auth",
     "scripted-baseline-s1-auth"
   ],
   "workerExits": {
     "cli-claude-opus-s1-auth": 0,
-    "key-zai-glm-5-3-s1-auth": 0,
-    "openrouter-qwen-qwen3-8-max-0902-s1-auth": 0,
-    "openrouter-anthropic-claude-opus-5-5-s1-auth": 0,
+    "nearai-deepseek-ai-deepseek-v4-s1-auth": 0,
+    "nearai-qwen-qwen3-8-max-s1-auth": 0,
+    "nearai-meta-llama-llama-5-70b-s1-auth": 0,
     "scripted-baseline-s1-auth": 0
   },
   "crosscheckExits": {
     "cli-claude-opus": 0,
-    "key-zai-glm-5-3": 0,
-    "openrouter-qwen-qwen3-8-max-0902": 0,
-    "openrouter-anthropic-claude-opus-5-5": 0,
+    "nearai-deepseek-ai-deepseek-v4": 0,
+    "nearai-qwen-qwen3-8-max": 0,
+    "nearai-meta-llama-llama-5-70b": 0,
     "scripted-baseline": 0
   },
   "stageFailures": []

@@ -44,7 +44,8 @@ export interface Config {
   /** Both null unless the operator set them. The login module owns any non-production fallback. */
   dashboard: { login: string | null; password: string | null };
   adminBasic: { user: string | null; password: string | null };
-  providerSecretsFile: string | null;
+  /** The admin page's free-checks switch file (REVIEW_SETTINGS_FILE), or null. */
+  reviewSettingsFile: string | null;
   /** Seals accounts' own provider keys. Empty when neither ACCOUNT_KEYS_SECRET nor (outside production) SESSION_SECRET is set. */
   accountKeysSecret: string;
 }
@@ -117,7 +118,7 @@ function adapterIssues(raw: RawEnv, role: Role): Issue[] {
   if (presets.some((preset) => preset.startsWith(ACCOUNT_PRESET_PREFIX) && !accountPresetProvider(preset))) {
     issues.push({ key: 'ALLOWED_PRESETS', message: 'names an account- preset for a provider that does not take account keys' });
   }
-  if (hosted.startsWith(ACCOUNT_PRESET_PREFIX)) issues.push({ key: 'HOSTED_PRESET', message: 'cannot be an account- preset (the hosted panel runs on operator keys)' });
+  if (hosted.startsWith(ACCOUNT_PRESET_PREFIX)) issues.push({ key: 'HOSTED_PRESET', message: 'cannot be an account- preset (an account- preset runs on one account\'s own key, never as the default)' });
   if (raw.ENGINE_TIMEOUT_S >= raw.QUEUE_EXPIRE_S) issues.push({ key: 'ENGINE_TIMEOUT_S', message: 'must be below QUEUE_EXPIRE_S' });
   return issues;
 }
@@ -198,7 +199,7 @@ function build(raw: RawEnv): Config {
     localMode: raw.LOCAL_MODE ?? (raw.NODE_ENV !== 'production'),
     dashboard: { login: raw.DASHBOARD_LOGIN ?? null, password: raw.DASHBOARD_PASSWORD ?? null },
     adminBasic: { user: raw.ADMIN_BASIC_USER ?? null, password: raw.ADMIN_BASIC_PASSWORD ?? null },
-    providerSecretsFile: raw.PROVIDER_SECRETS_FILE ?? null,
+    reviewSettingsFile: raw.REVIEW_SETTINGS_FILE ?? null,
     accountKeysSecret: raw.ACCOUNT_KEYS_SECRET ?? (raw.NODE_ENV === 'production' ? '' : raw.SESSION_SECRET ?? ''),
   };
 }

@@ -8,7 +8,7 @@ import { accountPresetName, accountProviders, isModelId, providerById, type Prov
 import type { Db } from '../../db/pool.ts';
 import { findAccountKey, saveAccountKey } from '../../db/repositories/account-keys.ts';
 import { fail } from '../../shared/errors.ts';
-import { open, seal } from './secrets.ts';
+import { open, seal } from './seal.ts';
 
 export const MAX_ACCOUNT_MODELS = 6;
 

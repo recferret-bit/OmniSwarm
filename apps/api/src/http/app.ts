@@ -13,7 +13,7 @@ import { authRoutes } from '../modules/auth/auth.routes.ts';
 import { dashboardRoutes } from '../modules/dashboard/dashboard.routes.ts';
 import { guardRoutes } from '../modules/guard/guard.routes.ts';
 import { localRoutes } from '../modules/operator/local.routes.ts';
-import { providerRoutes } from '../modules/providers/routes.ts';
+import { operatorRoutes } from '../modules/providers/operator.routes.ts';
 import { accountProviderRoutes } from '../modules/providers/account.routes.ts';
 import { healthRoutes } from '../modules/health/health.routes.ts';
 import { ledgerRoutes } from '../modules/ledger/ledger.routes.ts';
@@ -76,7 +76,7 @@ export async function buildApp(deps: ApiDeps, options: { sseKeepAliveMs?: number
   await app.register(cookie, { secret: http.sessionSecret });
   await registerRateLimit(app, deps.pool);
   await registerDocs(app);
-  for (const routes of [healthRoutes, authRoutes, quoteRoutes, requestRoutes, paymentRoutes, guardRoutes, ledgerRoutes, reportRoutes, dashboardRoutes, localRoutes, providerRoutes, accountProviderRoutes]) {
+  for (const routes of [healthRoutes, authRoutes, quoteRoutes, requestRoutes, paymentRoutes, guardRoutes, ledgerRoutes, reportRoutes, dashboardRoutes, localRoutes, operatorRoutes, accountProviderRoutes]) {
     await app.register(routes, { deps });
   }
   await app.register(eventRoutes, { deps, ...(options.sseKeepAliveMs ? { keepAliveMs: options.sseKeepAliveMs } : {}) });

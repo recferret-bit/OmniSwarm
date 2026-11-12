@@ -153,6 +153,9 @@ services:
         NEXT_PUBLIC_INTAKE_RECIPIENT: ${NEXT_PUBLIC_INTAKE_RECIPIENT:?set NEXT_PUBLIC_INTAKE_RECIPIENT}
         NEXT_PUBLIC_RPC_URL: ${NEXT_PUBLIC_RPC_URL:?set NEXT_PUBLIC_RPC_URL}
         NEXT_PUBLIC_EXPLORER_URL: ${NEXT_PUBLIC_EXPLORER_URL:-https://testnet.nearblocks.io}
+        # Optional: empty hides the donation section; empty contract = the network's USDC.
+        NEXT_PUBLIC_DONATION_ACCOUNT: ${NEXT_PUBLIC_DONATION_ACCOUNT:-}
+        NEXT_PUBLIC_DONATION_USDC_CONTRACT: ${NEXT_PUBLIC_DONATION_USDC_CONTRACT:-}
     environment:
       PORT: "3000"
       HOSTNAME: 0.0.0.0

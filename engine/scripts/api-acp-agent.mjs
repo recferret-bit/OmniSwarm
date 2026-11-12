@@ -1,5 +1,5 @@
 // ACP adapter around OmniSwarm's own tool loop. The parent speaks ACP; this process speaks MCP to the
-// bridge it spawns and (for key/openrouter) HTTPS to the provider. Scripted reviewers use the same
+// bridge it spawns and (for API providers such as nearai) HTTPS to the provider. Scripted reviewers use the same
 // process and the same bridge, with no provider request.
 import crypto from 'node:crypto';
 import fs from 'node:fs';

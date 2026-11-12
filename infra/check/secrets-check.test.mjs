@@ -30,11 +30,13 @@ function fill(file, values) {
   }).join('\n');
 }
 
-function ownerDir({ stack = {}, worker = {}, key = { account_id: 'operator.alice.testnet', public_key: 'ed25519:pub', private_key: 'ed25519:priv' } } = {}) {
+// providers.env.example declares no variable (hosted reviews run on accounts' own keys); `providers` adds
+// lines an older deploy may have left in the owner's copy.
+function ownerDir({ stack = {}, worker = {}, providers = '', key = { account_id: 'operator.alice.testnet', public_key: 'ed25519:pub', private_key: 'ed25519:priv' } } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'omniswarm-secrets-'));
   fs.writeFileSync(path.join(dir, 'stack.env'), fill('stack.env', { ...STACK, ...stack }));
   fs.writeFileSync(path.join(dir, 'worker.env'), fill('worker.env', { ...WORKER, ...worker }));
-  fs.writeFileSync(path.join(dir, 'providers.env'), fill('providers.env', { ZAI_API_KEY: 'zai-key-value', OPENROUTER_API_KEY: 'or-key-value' }));
+  fs.writeFileSync(path.join(dir, 'providers.env'), fill('providers.env', {}) + providers);
   if (key) fs.writeFileSync(path.join(dir, 'operator-key.json'), JSON.stringify(key));
   fs.copyFileSync(new URL('../../engine/omniswarm.config.example.json', import.meta.url), path.join(dir, 'omniswarm.config.json'));
   return dir;
@@ -46,14 +48,28 @@ test('a consistent set passes and prints names with fingerprints, never values',
   assert.ok(lines.includes(`stack.env: SESSION_SECRET ${fingerprint(SESSION)}`), lines.join('\n'));
   assert.ok(lines.includes('stack.env: GITHUB_TOKEN (empty)'));
   assert.ok(lines.some((l) => l.startsWith('operator-key.json: file sha256:')));
+  assert.ok(lines.includes('stack.env: NEXT_PUBLIC_DONATION_ACCOUNT (empty)'), 'donations are optional');
   const printed = lines.join('\n');
-  for (const secret of [PASSWORD, SESSION, 'zai-key-value', 'ed25519:priv']) assert.ok(!printed.includes(secret), `printed ${secret}`);
+  for (const secret of [PASSWORD, SESSION, 'ed25519:priv']) assert.ok(!printed.includes(secret), `printed ${secret}`);
+});
+
+test('a provider key left in providers.env is refused by name and fingerprint, never by value', () => {
+  const { errors, lines } = checkSecrets(ownerDir({ providers: 'NEARAI_API_KEY=leftover-key-value\n' }));
+  assert.ok(errors.includes('providers.env: NEARAI_API_KEY is set; OmniSwarm holds no operator provider key (users bring their own NEAR AI key), so remove it'), errors.join('\n'));
+  assert.ok(lines.includes(`providers.env: NEARAI_API_KEY ${fingerprint('leftover-key-value')}`), lines.join('\n'));
+  assert.ok(!lines.join('\n').includes('leftover-key-value'));
 });
 
 test('NEXT_PUBLIC_CONTRACT_ID must equal CONTRACT_ID, and the worker must agree with the stack', () => {
   const { errors } = checkSecrets(ownerDir({ stack: { NEXT_PUBLIC_CONTRACT_ID: 'review-registry.bob.testnet' }, worker: { HOSTED_PRESET: 'demo' } }));
   assert.ok(errors.some((e) => e.startsWith('stack.env NEXT_PUBLIC_CONTRACT_ID must equal stack.env CONTRACT_ID')), errors.join('\n'));
   assert.ok(errors.includes('worker.env HOSTED_PRESET must equal stack.env HOSTED_PRESET'), errors.join('\n'));
+});
+
+test('the optional donation recipient must be on the stack\'s network', () => {
+  assert.deepEqual(checkSecrets(ownerDir({ stack: { NEXT_PUBLIC_DONATION_ACCOUNT: 'support.alice.testnet' } })).errors, []);
+  const { errors } = checkSecrets(ownerDir({ stack: { NEXT_PUBLIC_DONATION_ACCOUNT: 'support.near' } }));
+  assert.ok(errors.includes('stack.env NEXT_PUBLIC_DONATION_ACCOUNT support.near is not a testnet account but NETWORK=testnet'), errors.join('\n'));
 });
 
 test('the worker DATABASE_URL must carry POSTGRES_PASSWORD and point at loopback', () => {
@@ -85,7 +101,7 @@ test('secrets.sh --dry-run plans a 0600 root install per file over ssh and print
     assert.match(run.stdout, new RegExp(`would install /etc/omniswarm/${name.replace('.', '\\.')} \\(sha256:[0-9a-f]{12}\\)`));
   }
   assert.match(run.stdout, /docker inspect/);
-  for (const secret of [PASSWORD, SESSION, 'zai-key-value', 'ed25519:priv']) assert.ok(!run.stdout.includes(secret), `printed ${secret}`);
+  for (const secret of [PASSWORD, SESSION, 'ed25519:priv']) assert.ok(!run.stdout.includes(secret), `printed ${secret}`);
   const bad = ownerDir({ stack: { NEXT_PUBLIC_CONTRACT_ID: 'review-registry.bob.testnet' } });
   const refused = spawnSync('bash', [script, '--dry-run', 'secrets-host.invalid', '--from', bad], { encoding: 'utf8' });
   assert.equal(refused.status, 1);

@@ -3,7 +3,6 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import AdminPage from './page';
 
-const keys = { zai: { set: true, fingerprint: 'abcdwxyz' }, openrouter: { set: false, fingerprint: null } };
 const activity = {
   freeChecks: true,
   jobs: [
@@ -25,7 +24,6 @@ function json(body: unknown, status = 200): Response {
 describe('<AdminPage>', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
-      if (url.endsWith('/providers') && (!init?.method || init.method === 'GET')) return json(keys);
       if (url.endsWith('/activity')) return json(activity);
       if (url.endsWith('/settings') && init?.method === 'PUT') return json({ freeChecks: false });
       return json({}, 404);
@@ -55,9 +53,8 @@ describe('<AdminPage>', () => {
     expect(within(table).getByText('Queued')).toBeInTheDocument();
 
     await user.click(screen.getByRole('tab', { name: 'Settings' }));
-    expect(screen.getByLabelText('Z.AI API key')).toBeInTheDocument();
-    expect(screen.getByLabelText('OpenRouter API key')).toBeInTheDocument();
-    expect(screen.getByText('abcdwxyz')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /Provider keys/ })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/API key/)).not.toBeInTheDocument();
     expect(screen.getByRole('radio', { name: /Allow free checks/ })).toBeChecked();
 
     await user.click(screen.getByRole('radio', { name: /Require payment/ }));
@@ -66,5 +63,6 @@ describe('<AdminPage>', () => {
       body: JSON.stringify({ freeChecks: false }),
     }));
     expect(await screen.findByText('Payment is required before a review is queued.')).toBeInTheDocument();
+    expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes('/api/operator/providers'))).toBe(false);
   });
 });

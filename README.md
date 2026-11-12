@@ -1,6 +1,6 @@
 # OmniSwarm
 
-OmniSwarm reviews the source of a repository you are authorized to review with several AI models at once and writes one evidence-backed report. Each reviewer (Claude, Codex, Grok and AGY through their own CLIs, or API models through OpenRouter, Z.ai or NEAR AI Cloud) reads a sealed snapshot of the source through a restricted MCP bridge inside an offline Docker sandbox, runs only the repository's own existing tests, and submits findings that cite `file:line`. Peers cross-check each other's claims. An orchestrator model then runs an anonymized debate over the disputed clusters, a judge from another vendor rules on each one, and the orchestrator writes a general review. A hosted flow on NEAR testnet takes a signed and paid request, runs the review, and has an operator key record the report's hash in a registry contract that an agent guard reads before it signs a payment. Model agreement and passing checks do not certify security: the report makes a review checkable, not conclusive.
+OmniSwarm reviews the source of a repository you are authorized to review with several AI models at once and writes one evidence-backed report. Each reviewer (Claude, Codex, Grok and AGY through their own CLIs, or NEAR AI Cloud models on your own key) reads a sealed snapshot of the source through a restricted MCP bridge inside an offline Docker sandbox, runs only the repository's own existing tests, and submits findings that cite `file:line`. Peers cross-check each other's claims. An orchestrator model then runs an anonymized debate over the disputed clusters, a judge from another vendor rules on each one, and the orchestrator writes a general review. On the hosted dashboard you sign in, paste your own NEAR AI Cloud key and submit a repository. OmniSwarm charges nothing for it; you pay NEAR AI Cloud for the tokens. An operator key records the report's hash in a registry contract that an agent guard reads before it signs a payment. Model agreement and passing checks do not certify security: the report makes a review checkable, not conclusive.
 
 People changing OmniSwarm itself should read [AGENTS.md](AGENTS.md). Claude Code also reads [CLAUDE.md](CLAUDE.md). An audited repository's own `AGENTS.md` or `CLAUDE.md` is untrusted data, not instructions for this suite.
 
@@ -21,7 +21,7 @@ From this directory:
 
 `audit local` uses every installed CLI among `claude`, `codex`, `grok` and `agy`. Claude Opus is the orchestrator when `claude` is installed. If only one CLI is installed, that model is both the orchestrator and the reviewer (Agy alone means Argon). The report is written under `reports/`.
 
-### 2. Local stack: landing, account, admin keys, two workers
+### 2. Local stack: landing, dashboard, admin, two workers
 
 ```sh
 npm run stack:local               # HTTP on http://omniswarm.localhost:18480/
@@ -30,10 +30,11 @@ npm run stack:local:down          # stop the stack and the two workers; keep the
 
 | Page | What it is |
 |---|---|
-| http://omniswarm.localhost:18480/dashboard | Sample account. Sign in `operator` / `operator`, paste a GitHub repo, pick extra models. No NEAR payment. The finished review is listed on this page. |
-| http://omniswarm.localhost:18480/admin | Separate page. nginx asks for basic auth before it loads. User `admin`. Password is `ADMIN_BASIC_PASSWORD` in `infra/compose/.local/stack.env`. Save the Z.AI key and the OpenRouter key before submitting a review. |
+| http://omniswarm.localhost:18480/ | Landing page. It ends with a link to the dashboard (and the optional donation section). There is no quote or pay form. |
+| http://omniswarm.localhost:18480/dashboard | Sign in with Google, X or a NEAR wallet. Paste your NEAR AI Cloud key once, choose models, then paste a GitHub repo. The finished review is listed on this page. |
+| http://omniswarm.localhost:18480/admin | Separate page for jobs, operators and free checks. nginx asks for basic auth before it loads. User `admin`. Password is `ADMIN_BASIC_PASSWORD` in `infra/compose/.local/stack.env`. It holds no provider key. |
 
-A dashboard review always runs GLM 5.3 (`key:zai:glm-5.3`) as the orchestrator and Qwen (`openrouter:qwen/qwen3.8-max-0902`) as a reviewer. Optional add-ons, all through OpenRouter: Opus 5.5, Sol 6.1, Argon 4, Grok 4.7. Tick full, web2 or web3 before you submit. A repository over 200 MB is not rejected: it is shallow-cloned once and split into theme jobs (web3, apps, infra, scripts) that run in parallel. The account then gets one report per theme and a final report that links them. The stack starts two host workers (`infra/compose/workers.sh`). Each takes one job, so two reviews run at once. Logs are in `infra/compose/.local/workers/`. The workers use the host Docker daemon to start the sandbox. The API containers do not receive the Docker socket.
+A dashboard review runs only on your own NEAR AI Cloud key (preset `account-nearai`). The first model you chose orchestrates and every model reviews. OmniSwarm takes no fee. Tick full, web2 or web3 before you submit. A repository over 200 MB is not rejected: it is shallow-cloned once and split into theme jobs (web3, apps, infra, scripts) that run in parallel. The account then gets one report per theme and a final report that links them. The stack starts two host workers (`infra/compose/workers.sh`). Each takes one job, so two reviews run at once. Logs are in `infra/compose/.local/workers/`. The workers use the host Docker daemon to start the sandbox. The API containers do not receive the Docker socket.
 
 The edge is plain HTTP on loopback port 18480. Production nginx, on a real host, stays HTTPS.
 
@@ -87,12 +88,12 @@ You should see `DEMO — not a review`, then `Demo report saved to: reports/<tim
 The report's health reads `incomplete`. That is expected and correct: the host demo has no test catalog and no scanners, so verification stays incomplete.
 
 <!-- screener
-run: ./bin/audit run --repo engine/scripts/demo-fixture --reviewers nearai:deepseek-ai/DeepSeek-V4,nearai:zai-org/GLM-5.3 --orchestrator nearai:deepseek-ai/DeepSeek-V4 --plan
+run: ./bin/audit run --repo engine/scripts/demo-fixture --reviewers nearai:deepseek-ai/DeepSeek-V4,nearai:Qwen/Qwen3.8-Max --orchestrator nearai:deepseek-ai/DeepSeek-V4 --plan
 you should see: Orchestrator: nearai:deepseek-ai/DeepSeek-V4
 -->
 
 ```sh
-./bin/audit run --repo engine/scripts/demo-fixture --reviewers nearai:deepseek-ai/DeepSeek-V4,nearai:zai-org/GLM-5.3 --orchestrator nearai:deepseek-ai/DeepSeek-V4 --plan
+./bin/audit run --repo engine/scripts/demo-fixture --reviewers nearai:deepseek-ai/DeepSeek-V4,nearai:Qwen/Qwen3.8-Max --orchestrator nearai:deepseek-ai/DeepSeek-V4 --plan
 ```
 
 Switching provider is only a change of reviewer specs. This prints the plan for two NEAR AI Cloud models (family `nearai`, `env NEARAI_API_KEY`, transport `api-acp`) and ends with `Orchestrator: nearai:deepseek-ai/DeepSeek-V4`. It makes no model call and needs no key; the model ids are examples, so list yours with `curl -H "Authorization: Bearer $NEARAI_API_KEY" https://cloud-api.near.ai/v1/models`. A real run needs `NEARAI_API_KEY` and `OMNI_LIVE=1`; `./bin/audit local --provider nearai --models <m,...>` is the short form. See [docs/providers.md](docs/providers.md).
@@ -147,9 +148,9 @@ cp engine/omniswarm.config.example.json omniswarm.config.json
 | Preset | Reviewers | Orchestrator |
 |---|---|---|
 | `local-subscriptions` | `cli:claude:opus`, `cli:codex:gpt-6.1-sol`, `cli:grok:grok-4.7`, `cli:agy:gemini-4-argon-high` | `recommended` |
-| `api-only` | `key:zai:glm-5.3`, `openrouter:qwen/qwen3.8-max-0902`, cost ceiling 25 USD | `recommended` |
-| `mixed` | the four CLIs plus `openrouter:qwen/qwen3.8-max-0902` and `key:zai:glm-5.3` | `recommended` |
-| `hosted` | Z.ai and five OpenRouter models, round-robin, 25 USD ceiling | `openrouter:anthropic/claude-opus-5.5`, alternate judge `openrouter:openai/gpt-6.1-sol` |
+| `api-only` | `nearai:deepseek-ai/DeepSeek-V4`, `nearai:Qwen/Qwen3.8-Max`, cost ceiling 25 USD | `nearai:deepseek-ai/DeepSeek-V4` |
+| `mixed` | the four CLIs plus `nearai:Qwen/Qwen3.8-Max` and `nearai:deepseek-ai/DeepSeek-V4` | `recommended` |
+| `hosted` | six NEAR AI Cloud models, round-robin, 25 USD ceiling. Used only by the dormant paid wallet flow | `nearai:meta-llama/Llama-5-70B`, alternate judge `nearai:openai/gpt-oss-120b` |
 | `demo` | the four scripted reviewers | `scripted:judge` (refused outside the bundled fixtures) |
 
 Useful flags (all in `./bin/audit --help`): `--reviewers <family>:<provider>:<model>,…`, `--assign matrix|round-robin`, `--surface s1..s6|all`, `--passes <1-5>` (default 2), `--tool-budget <5-200>` (default 40 inspection calls per pass, plus 3 to submit), `--max-cost-usd <usd>`, `--orchestrator <spec|recommended>` (without it there is no debate), `--alternate-judge <spec>`, `--debate-rounds <1-3>` (default 2), `--debate-max-clusters <n>` (default 25), `--debate-tool-budget <n>` (default 12), `--debate-turn-ms <n>` (default 180000), `--debate-phase-ms <n>` (default 900000), `--resume-from <report>` with `--restart-failed`.
@@ -157,13 +158,13 @@ Useful flags (all in `./bin/audit --help`): `--reviewers <family>:<provider>:<mo
 ### Provider keys
 
 - `cli:` reviewers use the official CLI logins you already have. No key is read.
-- The four providers (local CLIs, Z.AI, OpenRouter, NEAR AI Cloud) are separate and described once, in the provider catalog [`packages/schemas/providers.mjs`](packages/schemas/providers.mjs). See [docs/providers.md](docs/providers.md) to switch or add one.
-- `key:zai:` reads `ZAI_API_KEY` (and optional `ZAI_BASE_URL`); `openrouter:` reads `OPENROUTER_API_KEY`; `nearai:<model>` reads `NEARAI_API_KEY` (NEAR AI Cloud, `https://cloud-api.near.ai/v1`). Set them in your own shell. Each reviewer process gets only its own provider's variables. Keys never reach the MCP bridge or the sandbox.
-- One API provider locally: `export NEARAI_API_KEY=... OMNI_LIVE=1` (`OMNI_LIVE=1` is the explicit opt-in to real, billed calls) then `./bin/audit local --provider nearai --models <model>[,<model>...]` (shorthand `--nearai <model,...>`; also `--provider zai` or `--provider openrouter`; add `--with-clis` to include your installed CLIs). The first model orchestrates and all of them review.
-- Your own NEAR AI key on the web: on the local stack's `/dashboard` (or `/me` after a wallet request) save the key and choose models, then pick "NEAR AI Cloud (your key)". It needs no Z.AI or OpenRouter key. A hosted deploy offers it in the wallet signing step only when the operator sets `ALLOWED_PRESETS=<hosted>,account-nearai` and `ACCOUNT_KEYS_SECRET`; no hosted deploy has run it yet.
+- The two providers (local CLIs and NEAR AI Cloud) are separate and described once, in the provider catalog [`packages/schemas/providers.mjs`](packages/schemas/providers.mjs). See [docs/providers.md](docs/providers.md) to switch or add one.
+- `nearai:<model>` reads `NEARAI_API_KEY` (NEAR AI Cloud, `https://cloud-api.near.ai/v1`). Set it in your own shell. Each reviewer process gets only its own provider's variables. Keys never reach the MCP bridge or the sandbox.
+- NEAR AI Cloud locally: `export NEARAI_API_KEY=... OMNI_LIVE=1` (`OMNI_LIVE=1` is the explicit opt-in to real, billed calls) then `./bin/audit local --provider nearai --models <model>[,<model>...]` (shorthand `--nearai <model,...>`; add `--with-clis` to include your installed CLIs). The first model orchestrates and all of them review.
+- Your own NEAR AI key on the web: sign in on `/dashboard`, save the key and choose models. It is the only way to use a cloud model on the hosted service: the operator holds no provider key and pays for no review. A hosted deploy needs `ACCOUNT_KEYS_SECRET`; no hosted deploy has run it yet.
 - Reports record only a `keyFingerprint` (first 4 and last 4 hex characters of the key's sha256), never the key.
 - `./bin/audit check-agents --reviewers <list>` checks that the needed variables are set without printing them.
-- **Cost and data:** `key:`, `openrouter:` and `nearai:` reviewers send the target's source to that provider and are billed per token. OpenRouter requests carry `data_collection: "deny"`, which asks OpenRouter to route only to providers that do not store or train on prompts. Use `--max-cost-usd` to cap spend; a provider response without `usage.cost` is priced only from `prices.<provider>.<model>` in `omniswarm.config.json`, so without one the ceiling does not bind that provider (no NEAR AI price is configured). OmniSwarm does not verify NEAR AI Cloud's TEE attestation yet.
+- **Cost and data:** `nearai:` reviewers send the target's source to NEAR AI Cloud, billed per token to the key's owner. Use `--max-cost-usd` to cap spend; a provider response without `usage.cost` is priced only from `prices.<provider>.<model>` in `omniswarm.config.json`, so without one the ceiling does not bind that provider (no NEAR AI price is configured). OmniSwarm does not verify NEAR AI Cloud's TEE attestation yet.
 
 ### What a run writes
 
@@ -196,7 +197,7 @@ To inspect, verify or regenerate a report without calling a model:
 flowchart TB
     Source[Sealed source snapshot] --> Prepare[Static scans and sandbox preparation]
     Prepare --> Sandbox[Verified offline Docker sandbox]
-    Orchestrator[Host orchestrator] --> Reviewers[Reviewer sessions: CLI, key, OpenRouter, scripted]
+    Orchestrator[Host orchestrator] --> Reviewers[Reviewer sessions: CLI, NEAR AI, scripted]
     Reviewers --> Bridge[Restricted MCP bridge]
     Bridge -->|Read source and run fixed existing tests| Sandbox
     Bridge -->|Submit findings| Commit[Canonical report commits]
@@ -216,7 +217,7 @@ Stack detection uses production manifests and source only: Python, Node / TypeSc
 
 ## Hosted flow on NEAR testnet
 
-The intake API (`apps/api`) and the web app (`apps/web`) implement this sequence:
+The paid wallet flow below is dormant. The landing page no longer shows a quote, sign or pay form; it links to `/dashboard`, where a signed-in user reviews on their own NEAR AI Cloud key. The intake API (`apps/api`) and the contract still implement this sequence, and the dashboard reuses steps 7 to 10 (on the local sandbox the seeded payer pays for the request):
 
 | Step | Who | What happens | Code |
 |---|---|---|---|
@@ -241,7 +242,8 @@ near contract call-function as-read-only <contract-id> get_attestation json-args
 **Status.** Every step above is covered by tests on mocks: a mock chain in Postgres, recorded GitHub answers, a mock engine runner, MSW in the browser and a mock wallet (`CHAIN_ADAPTER`, `GITHUB_ADAPTER`, `ENGINE_RUNNER`, `NEXT_PUBLIC_API_MOCK`, `NEXT_PUBLIC_WALLET`). Nothing has run against testnet yet, there is no hosted demo URL yet, and these known gaps remain:
 
 - The web app's report page calls `GET /api/reports/:id`, which only the MSW mock serves; the API does not register that route.
-- `npm run stack:local` serves HTTP on `http://omniswarm.localhost:18480/`. It defaults to the local NEAR sandbox: the home page pays `request_review` with the dev wallet, and the two host workers use `ENGINE_RUNNER=mock` so that scripted review can finish. `NEAR_LOCAL=0` keeps the mock chain, `ENGINE_RUNNER=cli`, and `HOSTED_PRESET=panel`. Panel dashboard jobs still ask for the Z.AI and OpenRouter keys on `/admin` before they queue; a review on your own NEAR AI key does not. `OMNI_LIVE=1 LOCAL_ENGINE_RUNNER=cli npm run stack:local` keeps the sandbox chain but runs real models, so a dashboard review is paid, reviewed and attested on the local sandbox (the home-page scripted quote is then refused). On the sandbox, the dashboard pays with the seeded `bob.test.near` key and the worker writes the recorded report.
+- Dashboard jobs run only on the mock chain and the local sandbox. On a testnet deploy the API refuses them (`assertDashboardChain` in `apps/api/src/modules/dashboard/dashboard.service.ts`: "Dashboard jobs use the mock chain until NEAR sign-in is connected"), so the hosted dashboard cannot run a review yet.
+- `npm run stack:local` serves HTTP on `http://omniswarm.localhost:18480/`. It defaults to the local NEAR sandbox, and the two host workers use `ENGINE_RUNNER=mock` so a dashboard review finishes with the recorded report and no model call. `NEAR_LOCAL=0` keeps the mock chain and `ENGINE_RUNNER=cli`. `OMNI_LIVE=1 LOCAL_ENGINE_RUNNER=cli npm run stack:local` keeps the sandbox chain but runs real models on the account's NEAR AI key, so a dashboard review is paid, reviewed and attested on the local sandbox. On the sandbox, the dashboard pays with the seeded `bob.test.near` key.
 
 ## NEAR
 
@@ -282,10 +284,19 @@ Default debate rounds: 2. debate precision 1 beats union 0.76 and majority 0.92;
 
 - **Real versus mock.** Real and tested offline: the review engine, the bridge and sandbox, the per-reviewer reports, the debate and general review, the report pages, the registry contract on near-sdk's mock VM, the guard, the API and worker on a mock chain, the web app on mocks. Not yet run: anything on testnet (deploy, payment, attestation, guard reads), a review with real models of this repository (see [docs/hackathon/dogfood.md](docs/hackathon/dogfood.md)), a review with a real `nearai:` model (the NEAR AI Cloud path has unit, replay-style and Postgres integration tests only), a live golden eval, a hosted demo.
 - **The demo is not a review.** Its reviewers are scripted, its verification is incomplete, and with `--no-docker` it runs no sandbox, no tests and no scanners.
-- **Where source goes.** `cli:` reviewers send the target source to the vendor behind that CLI subscription. `key:` and `openrouter:` reviewers send it to Z.ai or OpenRouter and its upstream provider. `nearai:` reviewers send it to NEAR AI Cloud; OmniSwarm does not yet verify its TEE attestation, so treat it like any other API provider. Scripted reviewers send nothing.
+- **Where source goes.** `cli:` reviewers send the target source to the vendor behind that CLI subscription. `nearai:` reviewers send it to NEAR AI Cloud; OmniSwarm does not yet verify its TEE attestation, so treat it like any other API provider. Scripted reviewers send nothing.
 - **AI-written code.** Most commits since the baseline were written with AI coding agents under the owner's direction; 233 of the 343 commits after `94551b9` carry a `Co-Authored-By: Claude` trailer at the time of writing (recount at the tag: `git log 94551b9..HEAD --grep='Co-Authored-By: Claude' --oneline | wc -l` and `git rev-list --count 94551b9..HEAD`).
 - **Main libraries.** Engine: `@agentclientprotocol/claude-agent-acp` 0.92.0, `@agentclientprotocol/codex-acp` 2.2.2. API: Fastify 5.12.8, zod 4.6.7, pg-boss 12.38.0, pg 8.23.1, near-api-js 7.4.0, pino 10.4.0. Web: Next.js 16.4.4, React 19.3.1, Zustand 5.0.16, `@hot-labs/near-connect` 0.12.0, MSW 3.0.3 (mock mode only). Contract: `near-sdk` 5.30.0. Exact versions are in the lockfiles.
 - Model agreement and passing checks do not certify security.
+
+## Support the project
+
+OmniSwarm charges users nothing. A hosted review runs on your own NEAR AI Cloud key, so you pay NEAR AI Cloud for the tokens and nobody else. If the project helps you, you can send an optional donation in NEAR USDC. It pays for the infrastructure (the host, the domain, RPC and storage for reports) and the maintainers' coffee. A donation buys nothing: no priority, no review, no feature.
+
+- **Where:** the user dashboard and the end of the landing page. The section is hidden unless the operator sets `NEXT_PUBLIC_DONATION_ACCOUNT` (the recipient NEAR account) at web build time.
+- **How:** pick 5 USDC (a coffee), 25 (a day of infrastructure), 100 (a month of a sandbox runner) or any amount. Your wallet signs one NEP-141 `ft_transfer` on the USDC contract, `{receiver_id: <recipient>, amount: <6-decimal units>, memo: "OmniSwarm donation"}`, with exactly 1 yoctoNEAR attached. The transfer goes from your wallet to the recipient; the OmniSwarm API does not take part.
+- **Which contract:** the network's native USDC by default (mainnet `17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1`, testnet `3e2210e1184b45b64c8a434c0a7e7b23cc04ea7eb7a6c3c32520d03d4afcb8af`, none on the local sandbox). `NEXT_PUBLIC_DONATION_USDC_CONTRACT` overrides it.
+- **Recipient:** must be storage-registered on that USDC contract, or the transfer fails. The owner's steps are in [docs/ops/OWNER_TASKS.md](docs/ops/OWNER_TASKS.md).
 
 ## Verification and tests
 
@@ -309,7 +320,7 @@ For the NEAR hackathon the baseline is every commit up to `94551b9` (2026-10-17)
 
 Built in the window, by wave tag (what each wave delivered is tracked in [docs/plan/waves/](docs/plan/waves/), and the review of all waves with its fixes is in [docs/plan/review-2026-11-03/](docs/plan/review-2026-11-03/FIXES.md)):
 
-- `wave-01`, `wave-03`: reviewer families (`cli`, `key`, `openrouter`, `scripted`), presets, the reviewer table and `--plan`, the scripted demo.
+- `wave-01`, `wave-03`: reviewer families (`cli`, `key`, `scripted`, and an OpenRouter family removed on 2026-11-12), presets, the reviewer table and `--plan`, the scripted demo.
 - `wave-02`: sandbox hardening.
 - `wave-04`, `wave-05`: fixed passes, tool budgets, cost ceiling, per-reviewer reports.
 - `wave-06`, `wave-07`: debate, cross-vendor judge, general review, golden eval, report v2 pages.
@@ -318,7 +329,7 @@ Built in the window, by wave tag (what each wave delivered is tracked in [docs/p
 - `wave-11`: the landing and review web app.
 - `wave-12`: compose, nginx, systemd and deploy scripts.
 - `wave-13`: the agent guard and its attack demo.
-- Untagged (2026-11-12): the provider catalog (`packages/schemas/providers.mjs`), the `nearai:` reviewer family (NEAR AI Cloud), `audit local --provider/--nearai`, and accounts' own NEAR AI keys (dashboard, `/me`, the wallet request on `account-nearai`).
+- Untagged (2026-11-12): the provider catalog (`packages/schemas/providers.mjs`), the `nearai:` reviewer family (NEAR AI Cloud), `audit local --provider/--nearai`, and accounts' own NEAR AI keys (dashboard, the wallet request on `account-nearai`). Then: Z.AI and OpenRouter removed, hosted reviews only on the user's own NEAR AI key, optional NEAR USDC donations ([OD-26](docs/spec/DECISIONS.md)).
 
 Judges weigh the NEAR integration built in the window: the registry contract, NEP-413 requests, the payment and attestation path, the guard, and NEAR AI Cloud as a reviewer provider.
 

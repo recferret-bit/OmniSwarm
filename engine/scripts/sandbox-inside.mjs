@@ -96,7 +96,11 @@ async function runHarness() {
   if (!fs.existsSync('/opt/audit/harness.mjs')) return;
   const hArgs = ['/opt/audit/harness.mjs', '--target', '/work/src', '--out', path.join(outDir, 'harness-leads')];
   if (fast) hArgs.push('--no-deps');
-  const hRes = await run('node', hArgs, { cwd: '/work/src', timeoutMs: Math.min(240_000, Math.max(15_000, timeLeft())), env: CARGO_ENV });
+  // The scanners run side by side and semgrep alone needs minutes on a few thousand files (240s cut it off on a
+  // mid-sized repository), so the scan gets up to 20 minutes of the preparation budget. The harness is told its
+  // limit and ends semgrep before it is reached.
+  const budgetMs = Math.min(20 * 60_000, Math.max(15_000, timeLeft()));
+  const hRes = await run('node', hArgs, { cwd: '/work/src', timeoutMs: budgetMs, env: { ...CARGO_ENV, AUDIT_HARNESS_BUDGET_MS: String(budgetMs) } });
   log('harness', hRes);
   if (!reviewOnly) return;
   try {

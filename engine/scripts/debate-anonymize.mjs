@@ -17,8 +17,9 @@ export function anonymize(ids, seed = 1, clusterId = '') {
 // Free-text scrub for arguments: model, vendor, provider and reviewer names become "a reviewer".
 export function stripIdentity(text, names = []) {
   const extra = names.filter(Boolean).map((name) => String(name).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  // Vendor names stay scrubbed even where no provider of that name exists: `zai` is the vendor of GLM models on NEAR AI.
   // Model-family words are matched as whole words so ordinary text survives ("SOL" the token is not scrubbed).
-  const families = ['opus', 'sonnet', 'haiku', 'chatgpt', 'gpt-?\\d[\\w.-]*', 'deepseek', 'mistral', 'llama', 'kimi', 'antigravity', 'openrouter', 'nearai'].map((word) => `\\b${word}\\b`);
+  const families = ['opus', 'sonnet', 'haiku', 'chatgpt', 'gpt-?\\d[\\w.-]*', 'deepseek', 'mistral', 'llama', 'kimi', 'antigravity', 'nearai'].map((word) => `\\b${word}\\b`);
   const pattern = new RegExp(['claude', 'codex', 'grok', 'glm', 'qwen', 'gemini', 'anthropic', 'openai', 'alibaba', 'xai', 'zai', 'scripted-[a-z]+', ...families, ...extra].join('|'), 'gi');
   return String(text || '').replace(pattern, 'a reviewer');
 }

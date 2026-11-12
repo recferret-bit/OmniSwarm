@@ -75,7 +75,7 @@ test('the example config is valid and every preset resolves', () => {
     const r = resolveRunConfig({ flags: { config: example, preset } });
     assert.ok(r.reviewers.length >= 2, preset);
   }
-  assert.equal(resolveRunConfig({ flags: { config: example, preset: 'hosted' } }).alternateJudge.id, 'openrouter-openai-gpt-6-1-sol');
+  assert.equal(resolveRunConfig({ flags: { config: example, preset: 'hosted' } }).alternateJudge.id, 'nearai-openai-gpt-oss-120b');
 });
 
 test('more than eight reviewers fall back to round-robin with a warning', (t) => {

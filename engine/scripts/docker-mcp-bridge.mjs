@@ -3,7 +3,7 @@
  * docker-mcp-bridge.mjs
  *
  * Model Context Protocol (MCP) stdio bridge between one reviewer session (any family: cli, key,
- * openrouter, scripted) and the one-shot Docker audit container.
+ * nearai, scripted) and the one-shot Docker audit container.
  *
  * Reviewers get the role's fixed tools only: read-only browsing and search of the sealed source,
  * catalogued existing tests (rebuilt by the runner, no caller commands), and the role's submit tool.

@@ -46,7 +46,8 @@ export const envSchema = z.object({
   // Admin page (HTTP basic). Separate from the sample-account session.
   ADMIN_BASIC_USER: z.string().min(1).optional(),
   ADMIN_BASIC_PASSWORD: z.string().min(8).optional(),
-  PROVIDER_SECRETS_FILE: absPath.optional(),
+  // The admin page's free-checks switch (a boolean, not a secret). Unset: free checks are off and cannot be turned on.
+  REVIEW_SETTINGS_FILE: absPath.optional(),
   // Seals accounts' own provider keys (account_provider_key). The API and the workers both need it; unset
   // outside production falls back to SESSION_SECRET. Production requires it once an account- preset is allowed.
   ACCOUNT_KEYS_SECRET: z.string().min(32, 'must be at least 32 characters').optional(),
@@ -66,8 +67,8 @@ export const envSchema = z.object({
   ETA_MINUTES_PER_JOB: int(1, 1440).default(15),
   REPO_ALLOWLIST: list,
   REPO_DENYLIST: list,
-  // The preset every request signs and the worker runs (engine omniswarm.config.json). Defaults to
-  // `hosted` (API-key reviewers, OD-04); production must name it. `scripted` runs only with the mock engine.
+  // The preset a signed (wallet) request names and the worker runs (engine omniswarm.config.json). Defaults to
+  // `hosted` (OD-04); production must name it. `scripted` runs only with the mock engine.
   HOSTED_PRESET: z.string().regex(PRESET).optional(),
   ALLOWED_PRESETS: list,
   RATE_LIMIT_PER_MINUTE: int(1, 10_000).default(30),

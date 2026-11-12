@@ -1,15 +1,15 @@
-import { RequestFlow } from '@/components/flow/RequestFlow';
 import { ExampleReview } from '@/components/landing/ExampleReview';
 import { ReportStill } from '@/components/report/ReportStill';
 import '@/components/report/report-still.css';
 import { Features } from '@/components/landing/Features';
+import { GetStarted } from '@/components/landing/GetStarted';
 import { Hero } from '@/components/landing/Hero';
 import { HowItWorks } from '@/components/landing/HowItWorks';
 import { NetWave } from '@/components/landing/NetWave';
 import { Now } from '@/components/landing/Now';
-import { Pricing } from '@/components/landing/Pricing';
 import { Roadmap } from '@/components/landing/Roadmap';
 import { Trust } from '@/components/landing/Trust';
+import { Donate } from '@/components/support/Donate';
 import '@/design/css/landing.css';
 
 export default function HomePage() {
@@ -33,12 +33,9 @@ export default function HomePage() {
       <Now />
       <Roadmap />
       <Trust />
-      <Pricing />
-      <div className="land-section">
-        <div className="container-wide review-center">
-          <RequestFlow />
-        </div>
-      </div>
+      <GetStarted />
+      {/* Optional support, always last. Renders nothing until NEXT_PUBLIC_DONATION_ACCOUNT is set. */}
+      <Donate />
     </div>
   );
 }
