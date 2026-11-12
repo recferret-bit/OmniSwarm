@@ -36,7 +36,7 @@ export function apiAcpInvocation(workDir, config, env) {
 }
 
 const MAX_LINE = 4 * 1024 * 1024;
-const SUBMIT_TOOLS = new Set(['submit_audit_report', 'submit_crosscheck_report']);
+const SUBMIT_TOOLS = new Set(['submit_audit_report', 'submit_crosscheck_report', 'submit_debate_turn', 'submit_adjudication', 'submit_general_review', 'submit_stage_advice']);
 
 // MCP client for the bridge child. Lines are capped like agent-rpc.mjs, and every pending call is
 // rejected when the bridge exits, so a dead bridge ends the turn instead of hanging it.
@@ -145,7 +145,8 @@ export class ApiAcpAgent {
     const id = `${name}-${this.state.turns}-${crypto.randomBytes(3).toString('hex')}`;
     this.update({ sessionUpdate: 'tool_call', toolCallId: id, title: name, status: 'in_progress' });
     const result = await this.mcp.request('tools/call', { name, arguments: args });
-    const text = toolResultText(result);
+    const rawText = toolResultText(result);
+    const text = result?.isError && !rawText.startsWith('Tool error:') ? `Tool error: ${rawText}` : rawText;
     if (SUBMIT_TOOLS.has(name)) this.submitAccepted = this.submitAccepted || !result?.isError;
     this.update({ sessionUpdate: 'tool_call_update', toolCallId: id, title: name, status: result?.isError ? 'failed' : 'completed' });
     return text;

@@ -1,0 +1,5 @@
+{
+  "reviewers": ["cli:claude:opus", "cli:codex:gpt-5.5"],
+  "pipelineMode": "step-by-step",
+  "concurrency": 2
+}

@@ -33,6 +33,9 @@ import { assertResumable } from './orchestrator-resume.mjs';
 import { createExecute } from './orchestrator-session.mjs';
 import { crosscheckPhase, reviewPhase, servedModels } from './orchestrator-review.mjs';
 import { checkBridgeAgents } from './agent-presence.mjs';
+import { runStageAdvice } from './orchestrator-advice.mjs';
+import { persistHarnessEvidence, storeStage1Evidence, syncPipelineProgress, writeStage1Artifacts } from './orchestrator-pipeline.mjs';
+import { renderReport } from './generate-html-report.mjs';
 
 export { buildAuditorPrompt } from './orchestrator-prompts.mjs';
 export { savedTurnCompleted } from './orchestrator-resume.mjs';
@@ -110,12 +113,17 @@ function writeInitialRecords(run) {
   // Reviewers, judges, orchestrator choice and budgets are recorded at plan time (harness/reviewers.json) and in
   // meta.json. `models` stays populated for every reviewer so reports and tools that read the old map keep working.
   run.initialMeta = {
-    name: request.name || path.basename(request.target), mode: request.mode || 'local', source: request.source || request.target, surface: surfaceArg, ...(run.scope && run.scope !== 'full' ? { scope: run.scope } : {}),
+    name: request.name || path.basename(request.target), mode: request.mode || 'local', source: request.source || request.target,
+    ...(request.ref ? { ref: request.ref } : {}), ...(request.commit ? { commit: request.commit } : {}),
+    surface: surfaceArg, ...(run.scope && run.scope !== 'full' ? { scope: run.scope } : {}),
     agents: request.agents, models: request.models, reviewers: published, orchestrator, assign, budgets, auditors: jobs.map((job) => job.name),
     workerExits: run.workerExits, crosscheckExits: run.crosscheckExits, stageFailures: run.stageFailures, finalized: false, sandboxHardening: 1,
     workflow: REVIEW_WORKFLOW, agentTransport: 'acp_v1', submissionAuthority: 'mcp_commit', ...(isDemo(request) ? { demo: true } : {}),
+    ...(run.pipelineMode ? { pipelineMode: run.pipelineMode, concurrency: run.concurrency, debatesCompleted: false } : {}),
   };
-  writeReportFile(output, 'harness/reviewers.json', `${JSON.stringify({ version: 1, reviewers: published, judges: run.publishedJudges, orchestrator, alternateJudge: request.alternateJudge || null, assign, budgets, preset: request.preset || null }, null, 2)}\n`);
+  fs.mkdirSync(path.join(output, 'harness', 'host'), { recursive: true, mode: 0o700 });
+  writeReportFile(output, 'harness/host/target.json', `${JSON.stringify({ version: 1, target: request.target, mode: request.mode || 'local', source: request.source || null, ref: request.ref || null, commit: request.commit || null }, null, 2)}\n`);
+  writeReportFile(output, 'harness/reviewers.json', `${JSON.stringify({ version: 1, reviewers: published, judges: run.publishedJudges, orchestrator, alternateJudge: request.alternateJudge || null, assign, budgets, preset: request.preset || null, ...(run.pipelineMode ? { pipelineMode: run.pipelineMode, concurrency: run.concurrency } : {}) }, null, 2)}\n`);
   writeReportFile(output, 'meta.json', JSON.stringify(run.initialMeta, null, 2));
   run.saveWorkers();
 }
@@ -125,6 +133,8 @@ function createRun(request, output, sealed, planned, options) {
   const cancellation = new AbortController();
   const run = {
     request, output, ...sealed, ...planned, review, startSandbox, cancellation, signal: cancellation.signal,
+    pipelineMode: request.pipelineMode || null,
+    concurrency: Math.max(1, Number(request.concurrency) || 1),
     reviewerById: new Map([...planned.judges, ...planned.reviewers].map((r) => [r.id, r])),
     published: publishReviewers(planned.reviewers, process.env),
     publishedJudges: publishReviewers(planned.judges, process.env),
@@ -173,22 +183,72 @@ async function testsPhase(run) {
   }
 }
 
+async function postReviewPipeline(run) {
+  if (!run.pipelineMode) return;
+  const maxClusters = run.budgets?.debate?.maxClusters || 25;
+  const served = servedModels(run.jobs);
+  const stage1Meta = {
+    ...run.initialMeta,
+    reviewers: run.published.map((r) => (served[r.id] ? { ...r, servedModel: served[r.id] } : r)),
+    ref: run.request.ref || null,
+    commit: run.request.commit || null,
+    date: new Date().toISOString(),
+    finalized: true,
+    providerFailures: run.providerFailures,
+    pipelineMode: run.pipelineMode,
+    debatesCompleted: false,
+    stage1DefersDebates: true,
+    isolation: { policy: 'docker_mcp_bridge', sourceDigest: run.sourceDigest, liveTransport: 'docker_mcp_stdio', privateOutputs: 'validated', workerManifest: 'workers.json' },
+  };
+  let advice = null;
+  try {
+    writeReportFile(run.output, 'meta.json', `${JSON.stringify(stage1Meta, null, 2)}\n`);
+    let health = await renderReport(run.output);
+    const evidence = storeStage1Evidence(run.output, run.request.target, maxClusters);
+    if ((run.pipelineMode === 'step-by-step' || run.pipelineMode === 'full') && !run.cancellation.signal.aborted) {
+      console.log('  == Step 2 · Frontier orchestrator quality & debate advice');
+      advice = await runStageAdvice({
+        out: run.output,
+        target: run.request.target,
+        orchestrator: run.request.orchestrator,
+        execute: run.execute,
+        budgets: run.budgets,
+        stageFailures: run.stageFailures,
+        maxClusters,
+        meta: stage1Meta,
+        health,
+      });
+    }
+    const findings = readReportJson(run.output, 'findings-and-scores.json');
+    writeStage1Artifacts({ out: run.output, meta: stage1Meta, findings, health, advice, evidence });
+    syncPipelineProgress({ out: run.output, pipelineMode: run.pipelineMode, meta: stage1Meta, health, advice });
+    health = await renderReport(run.output);
+    if (advice) writeStage1Artifacts({ out: run.output, meta: stage1Meta, findings, health, advice, evidence });
+  } catch { /* finalized again in reportPhase + orchestrate.sh */ } finally {
+    writeReportFile(run.output, 'meta.json', JSON.stringify(run.initialMeta, null, 2));
+  }
+}
+
 function reportPhase(run) {
   const { request, output } = run;
   writeReportFile(output, 'workers.json', `${JSON.stringify({ version: 1, runId: crypto.randomUUID(), policy: 'docker_mcp_bridge', sourceDigest: run.sourceDigest, jobs: run.jobs }, null, 2)}\n`);
   const served = servedModels(run.jobs);
+  const debatesCompleted = fs.existsSync(path.join(output, 'debate', 'adjudication.json'));
   const finalMeta = {
     ...run.initialMeta, reviewers: run.published.map((r) => (served[r.id] ? { ...r, servedModel: served[r.id] } : r)),
     ref: request.ref || null, commit: request.commit || null, date: new Date().toISOString(), finalized: true, providerFailures: run.providerFailures,
+    ...(run.pipelineMode ? { pipelineMode: run.pipelineMode, concurrency: run.concurrency, debatesCompleted } : {}),
     ...(run.resumeRoot ? { resumedFrom: run.resumeRoot } : {}),
     isolation: { policy: 'docker_mcp_bridge', sourceDigest: run.sourceDigest, liveTransport: 'docker_mcp_stdio', privateOutputs: 'validated', workerManifest: 'workers.json' },
   };
   writeReportFile(output, 'meta.json', `${JSON.stringify(finalMeta, null, 2)}\n`);
+  if (fs.existsSync(path.join(output, 'evidence'))) persistHarnessEvidence(output);
 }
 
 function phaseContext(run, cleanupSignal) {
   return {
     request: run.request, output: run.output, reviewers: run.reviewers, jobs: run.jobs, assign: run.assign, budgets: run.budgets, surfaceArg: run.surfaceArg,
+    concurrency: run.concurrency,
     stageFailures: run.stageFailures, providerFailures: run.providerFailures, workerExits: run.workerExits, crosscheckExits: run.crosscheckExits,
     cancellation: run.cancellation, get session() { return run.session; }, execute: run.execute,
     progress: run.progress,
@@ -213,7 +273,11 @@ export function trackPhases(phases, progress) {
   return phases.map((phase) => ({
     ...phase,
     async run(ctx) {
-      if (phase.stub) { progress.phaseEnd(phase.name, 'skipped'); return phase.run(ctx); }
+      const deferDebates = ctx.request?.pipelineMode === 'stage-1' || ctx.request?.pipelineMode === 'step-by-step';
+      if (phase.stub || (deferDebates && (phase.name === 'crosscheck' || DEBATE_PHASES.has(phase.name)))) {
+        progress.phaseEnd(phase.name, 'skipped');
+        return phase.stub ? phase.run(ctx) : undefined;
+      }
       progress.phaseStart(phase.name);
       try { await phase.run(ctx); }
       catch (error) { progress.phaseEnd(phase.name, 'failed'); throw error; }
@@ -234,7 +298,16 @@ export async function runOrchestratedAudit(request, options = {}) {
     const cleanupSignal = () => { run.cancellation.abort(); };
     process.on('SIGINT', cleanupSignal);
     process.on('SIGTERM', cleanupSignal);
-    const builtin = { prepare: () => preparePhase(run), tests: () => testsPhase(run), review: () => reviewPhase(run), crosscheck: () => crosscheckPhase(run), report: async () => reportPhase(run) };
+    const builtin = {
+      prepare: () => preparePhase(run),
+      tests: () => testsPhase(run),
+      review: async () => { await reviewPhase(run); await postReviewPipeline(run); },
+      crosscheck: async () => {
+        if (run.pipelineMode === 'stage-1' || run.pipelineMode === 'step-by-step') return;
+        await crosscheckPhase(run);
+      },
+      report: async () => reportPhase(run),
+    };
     const ctx = phaseContext(run, cleanupSignal);
     const outcome = await runPhases(trackPhases(await loadPhases({ builtin, dir: options.phasesDir }), run.progress), ctx);
     const cancelled = run.cancellation.signal.aborted && !run.sandboxFailure;

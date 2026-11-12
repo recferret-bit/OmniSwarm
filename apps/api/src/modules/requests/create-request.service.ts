@@ -19,7 +19,14 @@ import { accountPreset } from '../providers/account-keys.ts';
 import { accountPresetProvider } from '@omniswarm/schemas/providers';
 
 export interface CreateDeps { config: Config; pool: Pool; clock: Clock; chain: ChainPort; github: GitHubPort }
-export interface CreateBody { accountId: string; publicKey: string; signature: string; message: string; nonce: string }
+export interface CreateBody {
+  accountId: string;
+  publicKey: string;
+  signature: string;
+  message: string;
+  nonce: string;
+  pipelineMode?: 'full' | 'step-by-step' | 'stage-1';
+}
 export interface Created { requestId: string; requestHash: string; priceYocto: string; contractId: string }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -97,7 +104,8 @@ export async function createRequest(deps: CreateDeps, body: CreateBody): Promise
     refuseNonce(await consumeNonce(client, body.nonce, now));
     await insertRequest(client, {
       id, account: message.account, repo: checked.repo, commitSha: message.commit, network: message.network,
-      preset: message.preset, deployed: message.deployed, requestHash: hash, priceYocto, now, models: own?.models ?? null,
+      preset: message.preset, deployed: message.deployed, requestHash: hash, priceYocto, now,
+      models: own?.models ?? null, pipelineMode: body.pipelineMode ?? 'full',
     });
   });
   return { requestId: id, requestHash: hash, priceYocto, contractId: deps.config.intake.contractId };

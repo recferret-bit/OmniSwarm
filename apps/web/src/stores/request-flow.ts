@@ -5,7 +5,7 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { api as defaultApi, type Api } from '@/lib/api/client';
 import type { AppErrorCode } from '@/lib/api/errors';
-import type { CreateRequestResponse, QuoteResponse } from '@/lib/api/schema.gen';
+import type { CreateRequestResponse, PipelineMode, QuoteResponse } from '@/lib/api/schema.gen';
 import { getConnector, type WalletConnector } from '@/lib/near/connector';
 import { flowActions, INITIAL_FLOW } from './request-flow-actions';
 
@@ -36,7 +36,7 @@ export interface FlowData {
 export interface FlowState extends FlowData {
   requestQuote(input: string, deployed?: string): Promise<void>;
   /** `preset` overrides the quote's hosted preset, for example `account-nearai` (the account's own provider key). */
-  sign(accountId: string, preset?: string): Promise<void>;
+  sign(accountId: string, preset?: string, pipelineMode?: PipelineMode): Promise<void>;
   pay(): Promise<void>;
   confirm(): Promise<void>;
   reset(): void;

@@ -32,9 +32,11 @@ while [[ $# -gt 0 ]]; do
     --name) TARGET_NAME="$2"; shift 2 ;;
     --surface) SURFACE="$2"; shift 2 ;;
     --scope) SCOPE="$2"; shift 2 ;;
-    --agents|--reviewers|--config|--preset|--assign|--orchestrator|--alternate-judge|--passes|--tool-budget|--max-cost-usd|--debate-rounds|--debate-max-clusters|--debate-tool-budget|--debate-turn-ms|--debate-phase-ms|--model|--models|--model-claude|--model-grok|--model-agy|--model-codex)
+    --agents|--reviewers|--config|--preset|--assign|--orchestrator|--alternate-judge|--passes|--tool-budget|--max-cost-usd|--debate-rounds|--debate-max-clusters|--debate-tool-budget|--debate-turn-ms|--debate-phase-ms|--pipeline|--concurrency|--model|--models|--model-claude|--model-grok|--model-agy|--model-codex)
       [ $# -ge 2 ] || { echo "orchestrate: $1 needs a value" >&2; exit 1; }
       RC_ARGS+=("$1" "$2"); shift 2 ;;
+    --step-by-step|--no-debate)
+      RC_ARGS+=("$1"); shift ;;
     --mode) TARGET_MODE="$2"; shift 2 ;;
     --source) TARGET_SOURCE="$2"; shift 2 ;;
     --ref) TARGET_REF="$2"; shift 2 ;;
@@ -93,6 +95,9 @@ finalize_html() {
   if [ "$HTML_DONE" -eq 0 ] && [ "${OMNI_DEMO_HOST:-0}" != "1" ] && [ -n "$OUTPUT_DIR" ] && [ -f "$OUTPUT_DIR/meta.json" ]; then
     HTML_DONE=1
     node "$SCRIPT_DIR/generate-html-report.mjs" "$OUTPUT_DIR" || [ "${code:-0}" -ne 0 ] || code=2
+    if [ "${BLOCKED:-${AUDIT_BLOCKED_RUN:-0}}" != "1" ]; then
+      node "$SCRIPT_DIR/debate-step-cli.mjs" finalize "$OUTPUT_DIR" --target "$TARGET_DIR" >/dev/null 2>&1 || true
+    fi
   fi
 }
 cleanup_exit() {
@@ -131,6 +136,22 @@ fi
 [ "$PLAN" -eq 0 ] || exit 0
 
 umask 077
+if [ -f "$OUTPUT_DIR/.omni-continue-pipeline.json" ] && [ -f "$OUTPUT_DIR/pipeline-progress.json" ]; then
+  { IFS= read -r CONT_ACTION; IFS= read -r CONT_ROUNDS; } < <(node -e '
+    const fs = require("node:fs");
+    const d = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+    const a = d.action === "advise" || Number(d.rounds) === 0 ? "advise" : "debate";
+    const r = Number.isInteger(d.rounds) && d.rounds >= 1 && d.rounds <= 5 ? String(d.rounds) : "1";
+    process.stdout.write(a + "\n" + r + "\n");
+  ' "$OUTPUT_DIR/.omni-continue-pipeline.json")
+  rm -f -- "$OUTPUT_DIR/.omni-continue-pipeline.json"
+  code=0
+  CONT_ARGS=("$CONT_ACTION" "$OUTPUT_DIR" --repo "$TARGET_DIR")
+  [ "$CONT_ACTION" = "debate" ] && CONT_ARGS+=(--rounds "$CONT_ROUNDS")
+  node "$SCRIPT_DIR/debate-step-cli.mjs" "${CONT_ARGS[@]}" ${RC_ARGS[@]+"${RC_ARGS[@]}"} || code=$?
+  finalize_html
+  exit "$code"
+fi
 if [ -d "$OUTPUT_DIR" ] && [ -n "$(ls -A "$OUTPUT_DIR")" ]; then
   echo "orchestrate: output directory must be empty; stale reports are not current evidence" >&2
   exit 2
@@ -141,7 +162,7 @@ const fs = require("node:fs");
 const [file, resolved, target, out, name, mode, source, ref, commit, surface, rpc, resumeFrom, testArtifacts, restartFailed, scope] = process.argv.slice(1);
 const r = JSON.parse(fs.readFileSync(resolved, "utf8"));
 const models = Object.fromEntries(r.reviewers.map((x) => [x.id, x.model]));
-fs.writeFileSync(file, JSON.stringify({target, out, name, mode, source, ref, commit, surface, scope: scope || "full", agents: r.reviewers.map((x) => x.id), models, reviewers: r.reviewers, orchestrator: r.orchestrator, alternateJudge: r.alternateJudge, assign: r.assign, budgets: r.budgets, prices: r.prices || null, preset: r.preset, rpc: rpc || "", resumeFrom: resumeFrom || null, testArtifacts: testArtifacts || null, restartFailed: restartFailed === "1"}), {mode: 0o600});
+fs.writeFileSync(file, JSON.stringify({target, out, name, mode, source, ref, commit, surface, scope: scope || "full", agents: r.reviewers.map((x) => x.id), models, reviewers: r.reviewers, orchestrator: r.orchestrator, alternateJudge: r.alternateJudge, assign: r.assign, pipelineMode: r.pipelineMode || "full", concurrency: r.concurrency || 1, budgets: r.budgets, prices: r.prices || null, preset: r.preset, rpc: rpc || "", resumeFrom: resumeFrom || null, testArtifacts: testArtifacts || null, restartFailed: restartFailed === "1"}), {mode: 0o600});
 ' "$REQUEST_FILE" "$RESOLVED_FILE" "$TARGET_DIR" "$OUTPUT_DIR" "$TARGET_NAME" "$TARGET_MODE" "$TARGET_SOURCE" "$TARGET_REF" "$TARGET_COMMIT" "$SURFACE" "$RPC" "$RESUME_FROM" "$TEST_ARTIFACTS" "$RESTART_FAILED" "$SCOPE"
 
 code=0

@@ -17,6 +17,7 @@ import { sha256Json } from './hash-util.mjs';
 import { MAX_REPORT_BYTES as MAX_BYTES, readReportJson, readReportText, writeReportFile } from './report-files.mjs';
 import { adapterOf, citation, filledText as text, validCrosscheckRow, validateAuditor } from './report-contract-auditor.mjs';
 import { reviewerReportErrors, runRecordErrors, sourceReadDigestProblem } from './report-contract-health.mjs';
+import { stage1DefersDebates } from './report-incompletion.mjs';
 
 export { readReportJson, readReportText, writeReportFile };
 export { adapterOf, citation, validCrosscheckRow, validateAuditor, sourceReadDigestProblem };
@@ -55,6 +56,14 @@ function normalizeMeta(meta, errors) {
     const ok = Array.isArray(meta.reviewers) && meta.reviewers.length && meta.reviewers.every(validPublishedReviewer)
       && JSON.stringify(meta.reviewers.map((r) => r.id).sort()) === JSON.stringify([...meta.agents].sort());
     if (!ok) { errors.push('Invalid reviewer inventory.'); delete meta.reviewers; }
+  }
+  if (meta.pipelineMode != null && !['full', 'step-by-step', 'stage-1'].includes(meta.pipelineMode)) {
+    errors.push('Invalid pipelineMode metadata.');
+    delete meta.pipelineMode;
+  }
+  if (meta.debatesCompleted != null && typeof meta.debatesCompleted !== 'boolean') {
+    errors.push('Invalid debatesCompleted metadata.');
+    delete meta.debatesCompleted;
   }
   if (meta.finalized !== true || !Array.isArray(meta.stageFailures) || !meta.stageFailures.every((s) => typeof s === 'string') || !record(meta.crosscheckExits) || !record(meta.workerExits)) {
     errors.push('Missing or invalid finalized stage/exit metadata.');
@@ -150,6 +159,7 @@ function loadAuditorReports(root, meta, expected, explain, errors) {
 // Every reviewer with peer claims owes a validated cross-check; a cross-check with nothing assigned is unexpected.
 // Peers follow the orchestrator's rule (crosscheck.mjs peerClaims): another reviewer AND another vendor.
 function crosscheckAssignments(root, meta, reports, explain, errors) {
+  if (stage1DefersDebates(meta)) return {};
   const assignments = {};
   const reviewers = reviewersOfMeta(meta);
   const vendorOf = (id) => reviewers.find((r) => r.id === id)?.vendor ?? null;
@@ -169,9 +179,11 @@ function crosscheckAssignments(root, meta, reports, explain, errors) {
   return assignments;
 }
 
-export function loadAuditors(root) {
+export function loadAuditors(root, options = {}) {
   const errors = [];
-  const meta = readMeta(root, errors);
+  const meta = options?.meta && typeof options.meta === 'object' && !Array.isArray(options.meta)
+    ? structuredClone(options.meta)
+    : readMeta(root, errors);
   normalizeMeta(meta, errors);
   const expected = expectedInventory(meta, errors);
   const explain = failureExplainer(root, meta);

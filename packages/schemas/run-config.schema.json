@@ -13,6 +13,8 @@
     "assign": { "enum": ["matrix", "round-robin"] },
     "passes": { "type": "integer", "minimum": 1, "maximum": 5 },
     "toolBudget": { "type": "integer", "minimum": 5, "maximum": 200 },
+    "pipelineMode": { "enum": ["full", "step-by-step", "stage-1"] },
+    "concurrency": { "type": "integer", "minimum": 1, "maximum": 8 },
     "debate": { "$ref": "#/$defs/debate" },
     "maxCostUsd": { "type": "number", "minimum": 0 },
     "grace": { "const": 3 },
@@ -66,6 +68,8 @@
         "assign": { "enum": ["matrix", "round-robin"] },
         "passes": { "type": "integer", "minimum": 1, "maximum": 5 },
         "toolBudget": { "type": "integer", "minimum": 5, "maximum": 200 },
+        "pipelineMode": { "enum": ["full", "step-by-step", "stage-1"] },
+        "concurrency": { "type": "integer", "minimum": 1, "maximum": 8 },
         "debate": { "$ref": "#/$defs/debate" },
         "maxCostUsd": { "type": "number", "minimum": 0 }
       }

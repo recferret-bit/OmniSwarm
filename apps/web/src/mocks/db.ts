@@ -1,6 +1,7 @@
 // Dev/e2e only. In-memory intake + chain state shared by the MSW handlers and the
 // mock wallet, mirrored to sessionStorage so a reload or a deep link to /r/<id>
 // keeps the same requests and local jobs. Never imported by a production build.
+import type { PipelineMode } from '@/lib/api/schema.gen';
 import type { OnChainAttestation } from '@/lib/near/rpc';
 
 export const MOCK_ERRORS = [
@@ -23,6 +24,9 @@ export interface MockRequest {
   fails: boolean;
   attestTx: string | null;
   refundTx: string | null;
+  pipelineMode?: PipelineMode;
+  roundsCompleted?: number;
+  parentId?: string | null;
 }
 
 export interface MockTx {
@@ -58,6 +62,8 @@ export interface LocalJob {
   error: string | null;
   createdAt: number;
   pdfReady: boolean;
+  pipelineMode?: PipelineMode;
+  roundsCompleted?: number;
 }
 
 export interface MockState {

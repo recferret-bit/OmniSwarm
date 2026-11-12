@@ -23,6 +23,18 @@ function spendLedger(ctx) {
   return reportDir && reviewerId && budgetedRole(ctx.role) ? { reportDir, reviewerId } : null;
 }
 
+function roleSubmitTool(ctx) {
+  if (ctx.role === 'crosscheck') return 'submit_crosscheck_report';
+  if (ctx.role === 'debater') return 'submit_debate_turn';
+  if (ctx.role === 'orchestrator') {
+    const auditor = bridgeArg(ctx.bridgeArgs, '--auditor') || '';
+    if (/-general-review$/.test(auditor)) return 'submit_general_review';
+    if (/-stage-advice$/.test(auditor)) return 'submit_stage_advice';
+    return 'submit_adjudication';
+  }
+  return 'submit_audit_report';
+}
+
 export function buildApiLaunch(reviewer, ctx, preset) {
   const env = ctx.env || process.env;
   if (!env[preset.keyEnv]) throw new SessionError('setup_error', `${preset.keyEnv} missing`);
@@ -36,7 +48,7 @@ export function buildApiLaunch(reviewer, ctx, preset) {
     extraBody: preset.extraBody,
     maxTurns: ctx.maxTurns || (ctx.toolBudget ? ctx.toolBudget + 3 : 40),
     // The last turn forces this role's submit tool (W04-09).
-    submitTool: ctx.role === 'crosscheck' ? 'submit_crosscheck_report' : 'submit_audit_report',
+    submitTool: roleSubmitTool(ctx),
     maxCostUsd: ctx.maxCostUsd ?? null,
     spendLedger: spendLedger(ctx),
     prices: ctx.prices || null,

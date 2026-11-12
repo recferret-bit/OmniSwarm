@@ -25,6 +25,18 @@ export function toolDefinitions() {
     submitTool('submit_general_review', 'Commit the executive summary and open disagreements of the adjudicated clusters.', {
       executiveSummary: strProp(), openDisagreements: { type: 'array', items: disagreement },
     }, ['executiveSummary', 'openDisagreements']),
+    submitTool('submit_stage_advice', 'Commit the Step 2 frontier evaluation of Stage 1 review quality, gaps, and debate depth recommendation.', {
+      qualityRating: { type: 'string', enum: ['strong', 'adequate', 'degraded', 'incomplete'] },
+      qualitySummary: strProp(),
+      coverageGaps: { type: 'array', items: strProp() },
+      issues: { type: 'array', items: strProp() },
+      debateNeeded: { type: 'boolean' },
+      recommendedDepth: { type: 'string', enum: ['none', 'shallow', 'standard', 'deep'] },
+      recommendedRounds: { type: 'integer', minimum: 0, maximum: 3 },
+      focusClusterIds: { type: 'array', items: strProp() },
+      rationale: strProp(),
+      nextSteps: { type: 'array', items: strProp() },
+    }, ['qualityRating', 'qualitySummary', 'debateNeeded', 'recommendedDepth', 'recommendedRounds', 'rationale', 'nextSteps']),
   ];
 }
 
@@ -92,8 +104,57 @@ async function submitGeneralReview(ctx, raw) {
   return `General review committed. Hash: ${hash}. Finish with a short acknowledgement.`;
 }
 
+async function submitStageAdvice(ctx, raw) {
+  const identity = requireRole(ctx, role);
+  const task = assignmentOf(ctx);
+  if (task.kind !== 'stage-advice') throw new Error('This session was not assigned stage advice');
+  const args = unwrapReportJson(raw);
+  const canonicalByUpper = new Map((task.clusterIds || []).map((id) => [String(id).toUpperCase(), String(id)]));
+  const focus = [];
+  for (const rawId of Array.isArray(args.focusClusterIds) ? args.focusClusterIds : []) {
+    const key = String(rawId).trim().toUpperCase();
+    if (!key) continue;
+    const canonical = canonicalByUpper.get(key);
+    if (!canonical) throw refuse('unknown_cluster_in_advice', `focusClusterIds names ${rawId}, which is not in Stage 1 clusters`);
+    if (!focus.includes(canonical)) focus.push(canonical);
+  }
+  const debateNeeded = Boolean(args.debateNeeded);
+  const recommendedRounds = debateNeeded ? Math.max(1, Math.min(3, Number(args.recommendedRounds) || 1)) : 0;
+  const recommendedDepth = debateNeeded
+    ? (['shallow', 'standard', 'deep'].includes(args.recommendedDepth) ? args.recommendedDepth : (recommendedRounds === 1 ? 'shallow' : recommendedRounds === 2 ? 'standard' : 'deep'))
+    : 'none';
+  const texts = [args.qualitySummary, args.rationale, ...(args.coverageGaps || []), ...(args.issues || []), ...(args.nextSteps || [])].filter((t) => typeof t === 'string');
+  for (const t of texts) {
+    if (CERTIFIES.test(t)) throw refuse('certification_in_stage_advice', 'stage advice evaluates review quality and debate need; it must not certify the target as secure or safe to deploy');
+  }
+  const body = {
+    stage: 'stage-2-advice',
+    quality: {
+      rating: args.qualityRating,
+      summary: String(args.qualitySummary || '').trim(),
+      coverageGaps: Array.isArray(args.coverageGaps) ? args.coverageGaps.map((s) => String(s).trim()).filter(Boolean).slice(0, 64) : [],
+      issues: Array.isArray(args.issues) ? args.issues.map((s) => String(s).trim()).filter(Boolean).slice(0, 64) : [],
+    },
+    debateAdvice: {
+      debateNeeded,
+      recommendedDepth,
+      recommendedRounds,
+      focusClusterIds: focus.slice(0, 32),
+      rationale: String(args.rationale || '').trim(),
+    },
+    nextSteps: (Array.isArray(args.nextSteps) ? args.nextSteps.map((s) => String(s).trim()).filter(Boolean) : []).slice(0, 16),
+    generatedBy: { mode: 'model', orchestrator: task.orchestrator || identity.agent },
+    disclaimer: 'Model agreement and passing checks do not certify security.',
+  };
+  const check = validate('orchestrator-advice', body);
+  if (!check.ok) throw new Error(`Invalid orchestrator advice: ${check.errors[0]}`);
+  const hash = commitInbox(ctx.reportDir, identity.name, 'stage-advice', body);
+  return `Stage advice committed. Hash: ${hash}. Finish with a short acknowledgement.`;
+}
+
 export const handlers = {
-  ...budgetedReadHandlers((task) => (task.kind === 'general-review' ? 'submit_general_review' : 'submit_adjudication')),
+  ...budgetedReadHandlers((task) => (task.kind === 'general-review' ? 'submit_general_review' : task.kind === 'stage-advice' ? 'submit_stage_advice' : 'submit_adjudication')),
   submit_adjudication: submitAdjudication,
   submit_general_review: submitGeneralReview,
+  submit_stage_advice: submitStageAdvice,
 };

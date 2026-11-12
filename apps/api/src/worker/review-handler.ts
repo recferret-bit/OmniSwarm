@@ -100,6 +100,7 @@ interface Prepared { configFile?: string; providerEnv: Record<string, string>; p
  */
 export async function prepareProviders(deps: Pick<HandlerDeps, 'config' | 'pool'>, row: RequestRow, root: string): Promise<Prepared | { failed: string }> {
   const accountProvider = accountPresetProvider(row.preset);
+  const pipelineOpts = row.pipeline_mode && row.pipeline_mode !== 'full' ? { pipelineMode: row.pipeline_mode } : undefined;
   const write = (doc: Record<string, unknown>) => {
     const file = path.join(root, 'panel.config.json');
     fs.writeFileSync(file, `${JSON.stringify(doc)}\n`, { mode: 0o600 });
@@ -109,20 +110,56 @@ export async function prepareProviders(deps: Pick<HandlerDeps, 'config' | 'pool'
     const provider = providerById(accountProvider);
     const key = await readAccountKey(deps.pool, deps.config.accountKeysSecret, row.account, accountProvider);
     if (!provider?.keyEnv || !key || !row.models?.length) return { failed: `${accountProvider}_account_key_or_models_missing` };
-    const configFile = write(accountConfigDocument(row.preset, row.models));
+    const configFile = write(accountConfigDocument(row.preset, row.models, pipelineOpts));
     return { configFile, providerEnv: { [provider.keyEnv]: key }, providerScope: [...provider.envAllowlist] };
   }
   const providerEnv = readProviderEnv(deps.config.providerSecretsFile ?? '', deps.config.http.sessionSecret);
   if (isPanelPreset(row.preset)) {
     const providerScope = [...new Set(jobSpecs(row.preset, null).flatMap(envForSpec))];
-    return { configFile: write(panelConfigDocument(row.preset)), providerEnv, providerScope };
+    return { configFile: write(panelConfigDocument(row.preset, pipelineOpts)), providerEnv, providerScope };
   }
   // A configured hosted preset (omniswarm.config.json): its own specs decide the scope too.
   try {
-    return { providerEnv, providerScope: resolvePreset(deps.config.engine.configPath, row.preset).envNames };
+    const resolved = resolvePreset(deps.config.engine.configPath, row.preset);
+    let configFile: string | undefined;
+    if (pipelineOpts?.pipelineMode && fs.existsSync(deps.config.engine.configPath)) {
+      const raw = JSON.parse(fs.readFileSync(deps.config.engine.configPath, 'utf8')) as Record<string, unknown>;
+      const presets = (raw.presets ?? {}) as Record<string, Record<string, unknown>>;
+      configFile = write({
+        ...raw,
+        pipelineMode: pipelineOpts.pipelineMode,
+        presets: {
+          ...presets,
+          ...(presets[row.preset] ? { [row.preset]: { ...presets[row.preset], pipelineMode: pipelineOpts.pipelineMode } } : {}),
+        },
+      });
+    }
+    return { ...(configFile ? { configFile } : {}), providerEnv, providerScope: resolved.envNames };
   } catch {
     return { providerEnv };
   }
+}
+
+function seedFromParentReport(deps: HandlerDeps, parentId: string, destDir: string): boolean {
+  const attempt = completedAttempt(deps.config.storage.runsRoot, parentId);
+  const published = readPublished(deps.config.storage.reportsRoot, parentId);
+  const src = attempt?.out && fs.existsSync(attempt.out) ? attempt.out : published?.dir && fs.existsSync(published.dir) ? published.dir : null;
+  if (!src) return false;
+  const copyUnlocked = (from: string, to: string) => {
+    fs.mkdirSync(to, { recursive: true, mode: 0o700 });
+    for (const entry of fs.readdirSync(from, { withFileTypes: true })) {
+      if (entry.name === 'published.json' || entry.name === 'report.pdf') continue;
+      const srcChild = path.join(from, entry.name);
+      const dstChild = path.join(to, entry.name);
+      if (entry.isDirectory()) copyUnlocked(srcChild, dstChild);
+      else if (entry.isFile()) {
+        fs.copyFileSync(srcChild, dstChild);
+        fs.chmodSync(dstChild, 0o600);
+      }
+    }
+  };
+  copyUnlocked(src, destDir);
+  return true;
 }
 
 async function runEngine(deps: HandlerDeps, row: RequestRow, attempt: number, signal: AbortSignal): Promise<{ outcome: Outcome; out: string }> {
@@ -138,8 +175,21 @@ async function runEngine(deps: HandlerDeps, row: RequestRow, attempt: number, si
     const prepared = await prepareProviders(deps, row, dirs.root);
     if ('failed' in prepared) return { outcome: { kind: 'infra_failed', cause: prepared.failed }, out: dirs.out };
     const { configFile, providerEnv, providerScope } = prepared;
+    const isContinuationStep = Boolean(row.parent_id && row.debate_rounds !== null && row.debate_rounds !== undefined && row.debate_rounds >= 0);
+    if (isContinuationStep && row.parent_id) {
+      if (!seedFromParentReport(deps, row.parent_id, dirs.out)) {
+        return { outcome: { kind: 'infra_failed', cause: 'parent_report_missing' }, out: dirs.out };
+      }
+      const contMarker = {
+        action: row.debate_rounds === 0 ? 'advise' : 'debate',
+        rounds: row.debate_rounds ?? 0,
+      };
+      fs.writeFileSync(path.join(dirs.out, '.omni-continue-pipeline.json'), `${JSON.stringify(contMarker)}\n`, { mode: 0o600 });
+    }
     const result = await deps.engine.run({
       repo: row.repo, commitSha: row.commit_sha, preset: row.preset, outDir: dirs.out, logPath: dirs.log, configFile, providerEnv, providerScope,
+      ...(row.pipeline_mode ? { pipelineMode: row.pipeline_mode } : {}),
+      ...(isContinuationStep && row.debate_rounds !== null ? { debateRounds: row.debate_rounds } : {}),
       ...(row.slice_path ? { sourceDir: row.slice_path } : {}),
     }, abort.signal);
     recordResult(dirs, result);

@@ -16,7 +16,10 @@ import type { Logger } from '../../shared/logger.ts';
 import { checkRepo } from '../quote/quote.service.ts';
 import { parseGitHubInput } from '../quote/repo-url.ts';
 import { progressFromSnapshot } from '../../worker/progress-detail.ts';
-import { assertNormalizedAbsolute, launchLocalJob, localAuditArgv, localAuditCommand, type LocalLaunch } from './local-audit.ts';
+import { readPipelineSummary, type PipelineMode } from '../requests/pipeline-view.ts';
+import {
+  assertNormalizedAbsolute, launchLocalJob, localAdviseArgv, localAuditArgv, localAuditCommand, localDebateArgv, type LocalLaunch,
+} from './local-audit.ts';
 
 const LOOPBACK = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
 
@@ -75,11 +78,15 @@ export function localJobListItem(row: OperatorJobRow) {
 export function localJobView(config: Config, row: OperatorJobRow) {
   // The engine's live snapshot from the job's own out dir: the same progress object a hosted request carries.
   const progress = row.status !== 'queued' && row.out_dir ? progressFromSnapshot(row.out_dir) : null;
+  const pipeline = row.out_dir ? readPipelineSummary(row.out_dir, row.pipeline_mode) : null;
+  const showMode = (row.pipeline_mode && row.pipeline_mode !== 'full') || Boolean(pipeline);
   return {
     id: row.id, kind: row.kind, source: row.source, ref: row.ref, commitSha: row.commit_sha, status: row.status,
     error: row.error, createdAt: iso(row.created_at), pdfReady: row.status === 'done' && pdfReady(pdfPath(config, row.id)),
     // progressFromSnapshot copies only the schema's fields, as the worker does for a hosted request.
     ...(progress ? { progress: progress as z.infer<typeof progressSchema> } : {}),
+    ...(showMode ? { pipelineMode: row.pipeline_mode ?? 'full' } : {}),
+    ...(pipeline ? { pipeline } : {}),
   };
 }
 
@@ -92,10 +99,14 @@ async function mark(deps: LocalDeps, id: string, status: OperatorStatus, error?:
   }
 }
 
-export async function createLocalJob(deps: LocalDeps, body: { path: string } | { github: string }) {
+export async function createLocalJob(
+  deps: LocalDeps,
+  body: ({ path: string } | { github: string }) & { pipelineMode?: PipelineMode; concurrency?: number },
+) {
   const id = crypto.randomUUID();
   const now = deps.clock.now();
   const outDir = outDirFor(deps.config, id);
+  const pipelineMode: PipelineMode = body.pipelineMode ?? 'full';
   let kind: 'path' | 'github';
   let source: string;
   let ref: string | null = null;
@@ -104,7 +115,7 @@ export async function createLocalJob(deps: LocalDeps, body: { path: string } | {
   if ('path' in body) {
     source = resolveLocalDirectory(body.path);
     kind = 'path';
-    args = localAuditArgv({ kind: 'path', target: source, outDir });
+    args = localAuditArgv({ kind: 'path', target: source, outDir, pipelineMode, concurrency: body.concurrency });
   } else {
     const parsed = parseGitHubInput(body.github);
     const checked = await checkRepo({ config: deps.config, db: deps.pool, github: deps.github }, parsed.repo, parsed.ref);
@@ -112,16 +123,53 @@ export async function createLocalJob(deps: LocalDeps, body: { path: string } | {
     source = checked.repo;
     ref = parsed.ref;
     commitSha = checked.commitSha;
-    args = localAuditArgv({ kind: 'github', repo: checked.repo, ref: checked.commitSha, outDir });
+    args = localAuditArgv({ kind: 'github', repo: checked.repo, ref: checked.commitSha, outDir, pipelineMode, concurrency: body.concurrency });
   }
   fs.mkdirSync(outDir, { recursive: true });
-  await insertOperatorJob(deps.pool, { id, kind, source, ref, commitSha, outDir, now });
+  await insertOperatorJob(deps.pool, { id, kind, source, ref, commitSha, outDir, pipelineMode, now });
   const launch: LocalLaunch = {
     id, kind, argv: localAuditCommand(deps.config.engine.root, args), outDir, cwd: deps.config.engine.root, engineRoot: deps.config.engine.root,
     mark: (status, error) => mark(deps, id, status, error),
   };
   launchLocalJob(launch);
   return localJobCreated({ id, kind, source });
+}
+
+export async function adviseLocalJob(deps: LocalDeps, id: string) {
+  const row = await findOperatorJob(deps.pool, id);
+  if (!row || !row.out_dir) fail('NOT_FOUND', 'Job not found');
+  if (row.status !== 'done') {
+    fail('INVALID_TRANSITION', `Job is ${row.status}; Step 2 advice can only run on a finished job`);
+  }
+  const args = localAdviseArgv({ outDir: row.out_dir, target: row.kind === 'path' ? row.source : null });
+  await updateOperatorJob(deps.pool, id, { status: 'queued', error: null, now: deps.clock.now() });
+  try { fs.rmSync(pdfPath(deps.config, id), { force: true }); } catch { /* ignore */ }
+  const launch: LocalLaunch = {
+    id, kind: row.kind, argv: localAuditCommand(deps.config.engine.root, args), outDir: row.out_dir,
+    cwd: deps.config.engine.root, engineRoot: deps.config.engine.root,
+    mark: (status, error) => mark(deps, id, status, error),
+  };
+  launchLocalJob(launch);
+  return localJobCreated({ id, kind: row.kind, source: row.source });
+}
+
+export async function continueLocalJobDebate(deps: LocalDeps, id: string, rounds = 1) {
+  const row = await findOperatorJob(deps.pool, id);
+  if (!row || !row.out_dir) fail('NOT_FOUND', 'Job not found');
+  if (row.status !== 'done') {
+    fail('INVALID_TRANSITION', `Job is ${row.status}; debate rounds can only continue a finished job`);
+  }
+  const args = localDebateArgv({ outDir: row.out_dir, rounds, target: row.kind === 'path' ? row.source : null });
+  await updateOperatorJob(deps.pool, id, { status: 'queued', error: null, now: deps.clock.now() });
+  // Remove previous PDF stub so ensureReportPdf regenerates after the new debate round completes
+  try { fs.rmSync(pdfPath(deps.config, id), { force: true }); } catch { /* ignore */ }
+  const launch: LocalLaunch = {
+    id, kind: row.kind, argv: localAuditCommand(deps.config.engine.root, args), outDir: row.out_dir,
+    cwd: deps.config.engine.root, engineRoot: deps.config.engine.root,
+    mark: (status, error) => mark(deps, id, status, error),
+  };
+  launchLocalJob(launch);
+  return localJobCreated({ id, kind: row.kind, source: row.source });
 }
 
 export async function listLocalJobs(deps: LocalDeps) {

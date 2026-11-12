@@ -15,6 +15,51 @@
     "timestamp": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:.]+Z$"},
     "status": {"enum": ["awaiting_payment", "queued", "running", "publishing", "done", "failed", "refunded", "expired"]},
     "severity": {"enum": ["critical", "high", "medium", "low", "info", "none"]},
+    "pipeline-mode": {"enum": ["full", "step-by-step", "stage-1"]},
+    "pipeline-summary": {
+      "type": "object",
+      "required": ["pipelineMode", "currentStage", "noDebates", "roundsCompleted", "canRunMoreRounds"],
+      "additionalProperties": false,
+      "properties": {
+        "pipelineMode": {"$ref": "#/$defs/pipeline-mode"},
+        "currentStage": {"enum": ["stage-1", "stage-2-advice", "stage-3-debate", "completed"]},
+        "noDebates": {"type": "boolean"},
+        "roundsCompleted": {"type": "integer", "minimum": 0},
+        "canRunMoreRounds": {"type": "boolean"},
+        "advice": {
+          "type": "object",
+          "required": ["debateNeeded", "recommendedDepth", "recommendedRounds", "qualityRating", "summary"],
+          "additionalProperties": false,
+          "properties": {
+            "debateNeeded": {"type": "boolean"},
+            "recommendedDepth": {"enum": ["none", "shallow", "standard", "deep"]},
+            "recommendedRounds": {"type": "integer", "minimum": 0, "maximum": 3},
+            "qualityRating": {"enum": ["strong", "adequate", "degraded", "incomplete"]},
+            "summary": {"type": "string", "minLength": 1}
+          }
+        },
+        "incompletionNotes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["category", "code", "source", "reason", "impact"],
+            "additionalProperties": false,
+            "properties": {
+              "category": {"type": "string", "minLength": 1},
+              "code": {"type": "string", "minLength": 1},
+              "source": {"type": "string", "minLength": 1},
+              "reason": {"type": "string", "minLength": 1},
+              "impact": {"type": "string", "minLength": 1},
+              "nextStep": {"type": "string", "minLength": 1}
+            }
+          }
+        },
+        "nextRoundRequestIds": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/uuid"}
+        }
+      }
+    },
     "error-code": {
       "enum": ["VALIDATION_ERROR", "REPO_INVALID", "REPO_NOT_FOUND", "REPO_PRIVATE", "REPO_ARCHIVED", "REPO_TOO_LARGE", "REPO_DENIED", "QUEUE_FULL", "NONCE_EXPIRED", "NONCE_USED", "NONCE_UNKNOWN", "SIG_INVALID", "KEY_NOT_FULL_ACCESS", "ACCOUNT_MISMATCH", "MESSAGE_INVALID", "PAYMENT_NOT_FOUND", "PAYMENT_MISMATCH", "TX_ALREADY_USED", "ACTIVE_REQUEST_EXISTS", "RATE_LIMITED", "UNAUTHORIZED", "FORBIDDEN", "NOT_FOUND", "CHAIN_UNAVAILABLE", "GITHUB_UNAVAILABLE", "INTERNAL", "REF_NOT_FOUND", "REF_CHANGED", "NETWORK_DISABLED", "PRESET_NOT_ALLOWED", "PAYLOAD_TOO_LARGE", "PAYMENT_SIGNER_MISMATCH", "INVALID_TRANSITION", "REFUND_NOT_ALLOWED", "REQUEST_NOT_FOUND"]
     },
@@ -78,7 +123,8 @@
         "publicKey": {"type": "string", "pattern": "^ed25519:[1-9A-HJ-NP-Za-km-z]{32,64}$"},
         "signature": {"type": "string", "minLength": 1, "maxLength": 512},
         "message": {"type": "string", "minLength": 1, "maxLength": 4096},
-        "nonce": {"$ref": "#/$defs/nonce"}
+        "nonce": {"$ref": "#/$defs/nonce"},
+        "pipelineMode": {"$ref": "#/$defs/pipeline-mode"}
       }
     },
     "create-request-response": {
@@ -213,6 +259,8 @@
         "reportUrl": {"type": "string", "pattern": "^https?://[^\\s]+$"},
         "reportSha256": {"$ref": "#/$defs/sha256-hex"},
         "incomplete": {"type": "boolean", "description": "The report was published with report-health state incomplete"},
+        "pipelineMode": {"$ref": "#/$defs/pipeline-mode"},
+        "pipeline": {"$ref": "#/$defs/pipeline-summary"},
         "attestTx": {"type": "string", "minLength": 1},
         "refundTx": {"type": "string", "minLength": 1},
         "failureCause": {"type": "string", "minLength": 1},
@@ -334,6 +382,10 @@
         "reportSha256": {"$ref": "#/$defs/sha256-hex"},
         "reviewers": {"type": "array", "items": {"type": "string"}},
         "generalReviewUrl": {"type": "string", "pattern": "^https?://[^\\s]+$"},
+        "stage1Url": {"type": "string", "pattern": "^https?://[^\\s]+$"},
+        "adviceUrl": {"type": "string", "pattern": "^https?://[^\\s]+$"},
+        "pipelineUrl": {"type": "string", "pattern": "^https?://[^\\s]+$"},
+        "roundUrls": {"type": "array", "items": {"type": "string", "pattern": "^https?://[^\\s]+$"}},
         "attestation": {"$ref": "attestation.schema.json"},
         "receipt": {"$ref": "#/$defs/receipt"}
       }

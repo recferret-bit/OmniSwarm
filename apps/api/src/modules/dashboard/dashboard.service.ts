@@ -38,7 +38,15 @@ function reportFile(config: Config, id: string): string {
   return file;
 }
 
-export async function createDashboardJob(deps: DashboardDeps, account: string, repoInput: string, models: readonly string[] = [], scopes: readonly string[] = [], source = 'panel') {
+export async function createDashboardJob(
+  deps: DashboardDeps,
+  account: string,
+  repoInput: string,
+  models: readonly string[] = [],
+  scopes: readonly string[] = [],
+  source = 'panel',
+  pipelineMode: 'full' | 'step-by-step' | 'stage-1' = 'full',
+) {
   assertDashboardChain(deps.config);
   let preset: string;
   let accountModels: string[] | null = null;
@@ -68,7 +76,7 @@ export async function createDashboardJob(deps: DashboardDeps, account: string, r
   const priceYocto = onSandbox ? priceFor(deps.config, 'sandbox') : '0';
   await insertRequest(deps.pool, {
     id, account, repo: checked.repo, commitSha: checked.commitSha, network: deps.config.intake.network,
-    preset, deployed: null, requestHash, priceYocto, now, scope, models: accountModels,
+    preset, deployed: null, requestHash, priceYocto, now, scope, models: accountModels, pipelineMode,
   });
   let txHash: string;
   if (onSandbox) {
@@ -90,6 +98,91 @@ export async function createDashboardJob(deps: DashboardDeps, account: string, r
   if (!row) fail('INTERNAL', 'Request was not stored');
   await markPaid(deps, row, { txHash, amountYocto: BigInt(priceYocto), actor: 'api', event: 'payment_verified' });
   return { requestId: id, repo: checked.repo, commitSha: checked.commitSha, status: 'queued' as const };
+}
+
+/**
+ * Queues an iterative debate round continuation on a finished request owned by `account`.
+ * Creates a linked child request (`parent_id = parent.id`, `debate_rounds = rounds`) so the
+ * worker seeds from the parent's Stage 1 / prior round report, runs only the requested debate
+ * round(s), and publishes + attests a fresh immutable report.
+ */
+async function queueContinuationRequest(
+  deps: DashboardDeps,
+  account: string,
+  parentId: string,
+  rounds: number,
+) {
+  assertDashboardChain(deps.config);
+  const parent = await findRequest(deps.pool, parentId);
+  if (!parent || parent.account !== account) fail('REQUEST_NOT_FOUND', 'Request not found');
+  if (parent.status !== 'done') {
+    fail('INVALID_TRANSITION', `Request is ${parent.status}; pipeline steps can only continue a finished review`);
+  }
+  const depth = await queueDepth(deps.pool);
+  if (depth >= deps.config.intake.maxQueue) fail('QUEUE_FULL', 'The review queue is full; try again later');
+  const now = deps.clock.now();
+  await assertAccountCapacity(deps.pool, deps.config, account, now);
+  const id = crypto.randomUUID();
+  const requestHash = crypto.createHash('sha256').update(`debate:${account}:${parent.id}:${rounds}:${id}`).digest('hex');
+  const onSandbox = deps.config.chain.adapter === 'near' && deps.config.intake.network === 'sandbox';
+  const priceYocto = onSandbox ? priceFor(deps.config, 'sandbox') : '0';
+  await insertRequest(deps.pool, {
+    id,
+    account,
+    repo: parent.repo,
+    commitSha: parent.commit_sha,
+    network: parent.network,
+    preset: parent.preset,
+    deployed: parent.deployed,
+    requestHash,
+    priceYocto,
+    now,
+    scope: parent.scope,
+    models: parent.models,
+    pipelineMode: 'step-by-step',
+    parentId: parent.id,
+    debateRounds: rounds,
+  });
+  let txHash: string;
+  if (onSandbox) {
+    const paid = await requestReviewOnSandbox({
+      network: deps.config.intake.network,
+      rpcUrls: deps.config.chain.rpcUrls,
+      contractId: deps.config.intake.contractId,
+      requestHash,
+      depositYocto: priceYocto,
+    });
+    txHash = paid.txHash;
+  } else {
+    const { payRequestReview } = await import('../../chain/mock/mock-ledger.ts');
+    txHash = await payRequestReview(deps.pool, {
+      signer: account, receiver: deps.config.intake.contractId, requestHash, depositYocto: '0',
+    });
+  }
+  const row = await findRequest(deps.pool, id);
+  if (!row) fail('INTERNAL', 'Request was not stored');
+  await markPaid(deps, row, { txHash, amountYocto: BigInt(priceYocto), actor: 'api', event: 'payment_verified' });
+  return { requestId: id, repo: parent.repo, commitSha: parent.commit_sha, status: 'queued' as const };
+}
+
+export async function adviseDashboardRequest(
+  deps: DashboardDeps,
+  account: string,
+  parentId: string,
+) {
+  return queueContinuationRequest(deps, account, parentId, 0);
+}
+
+export async function continueDashboardDebate(
+  deps: DashboardDeps,
+  account: string,
+  parentId: string,
+  rounds = 1,
+) {
+  if (!Number.isInteger(rounds) || rounds < 1 || rounds > 5) {
+    fail('VALIDATION_ERROR', 'Debate rounds per step must be between 1 and 5');
+  }
+  return queueContinuationRequest(deps, account, parentId, rounds);
 }
 
 /** The caller's own finished report, or REQUEST_NOT_FOUND / NOT_FOUND. The id is the only path segment. */

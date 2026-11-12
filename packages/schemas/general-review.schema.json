@@ -73,8 +73,24 @@
         "orchestrator": { "type": "string", "minLength": 1 },
         "passes": { "type": "integer", "minimum": 1 },
         "toolBudget": { "type": "integer", "minimum": 1 },
-        "debateRounds": { "type": "integer", "minimum": 0, "maximum": 3 },
+        "debateRounds": { "type": "integer", "minimum": 0, "maximum": 20 },
         "judgeAssignment": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "incompletionNotes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["category", "code", "source", "reason", "impact"],
+        "additionalProperties": false,
+        "properties": {
+          "category": { "enum": ["debate_arguing", "timeout", "provider_error", "usage_limit", "budget_exhausted", "crosscheck_gap", "sandbox_verification", "stage_failure"] },
+          "code": { "type": "string", "minLength": 1 },
+          "source": { "type": "string", "minLength": 1 },
+          "reason": { "type": "string", "minLength": 1 },
+          "impact": { "type": "string", "minLength": 1 },
+          "nextStep": { "type": "string", "minLength": 1 }
+        }
       }
     },
     "disclaimer": { "const": "Model agreement and passing checks do not certify security." }

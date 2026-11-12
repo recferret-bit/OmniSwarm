@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { parseSavedPipelineMode } from './PipelineModeChecks';
 import { Alert } from '../ui/Alert';
 import { Button } from '../ui/Button';
 
@@ -14,15 +15,17 @@ export function FreeQueue({ repo }: { repo: string }) {
     setPending(true);
     setError(null);
     let scopes = ['full'];
+    let pipelineMode = parseSavedPipelineMode(null);
     try {
       const saved = JSON.parse(sessionStorage.getItem('omniswarm-scope') ?? '[]') as unknown;
       if (Array.isArray(saved) && saved.every((item) => typeof item === 'string') && saved.length) scopes = saved;
-    } catch { /* keep full */ }
+      pipelineMode = parseSavedPipelineMode(sessionStorage.getItem('omniswarm-pipeline-mode'));
+    } catch { /* keep defaults */ }
     try {
       const response = await fetch('/api/free/jobs', {
         method: 'POST', credentials: 'include',
         headers: { accept: 'application/json', 'content-type': 'application/json' },
-        body: JSON.stringify({ repo, scopes }),
+        body: JSON.stringify({ repo, scopes, ...(pipelineMode !== 'full' ? { pipelineMode } : {}) }),
       });
       const body = await response.json() as { requestId?: string; error?: { message?: string } };
       if (!response.ok || !body.requestId) throw new Error(body.error?.message ?? 'The review was not queued');

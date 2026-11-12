@@ -22,6 +22,10 @@ export interface EngineRunInput {
    * panel job never carries a provider it does not run.
    */
   providerScope?: string[];
+  /** Pipeline execution mode for initial reviews (`full`, `step-by-step`, or `stage-1`). */
+  pipelineMode?: 'full' | 'step-by-step' | 'stage-1';
+  /** When set on a follow-up request, runs N additional iterative debate rounds on `outDir` (seeded from parent). */
+  debateRounds?: number;
 }
 
 export interface EngineRunResult {

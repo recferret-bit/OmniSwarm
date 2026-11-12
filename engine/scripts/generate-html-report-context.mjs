@@ -57,6 +57,29 @@ function surfacesOf(findings) {
   }));
 }
 
+function stepArtifactsOf(reportDir) {
+  const exists = (rel) => fs.existsSync(path.join(reportDir, rel));
+  let entries = [];
+  try { entries = fs.readdirSync(reportDir); } catch { entries = []; }
+  const roundNums = entries
+    .map((f) => f.match(/^audit_round_(\d+)\.html$/)?.[1])
+    .filter(Boolean)
+    .map(Number)
+    .sort((a, b) => a - b);
+  return {
+    stage1Html: exists('audit_stage_1.html') ? 'audit_stage_1.html' : null,
+    stage1Json: exists('audit_stage_1.json') ? 'audit_stage_1.json' : null,
+    adviceHtml: exists('audit_stage_2_advice.html') ? 'audit_stage_2_advice.html' : null,
+    adviceJson: exists('orchestrator-advice.json') ? 'orchestrator-advice.json' : null,
+    progressJson: exists('pipeline-progress.json') ? 'pipeline-progress.json' : null,
+    rounds: roundNums.map((round) => ({
+      round,
+      html: `audit_round_${round}.html`,
+      json: exists(`audit_round_${round}.json`) ? `audit_round_${round}.json` : null,
+    })),
+  };
+}
+
 export function loadContext(reportDir) {
   const findings = readReportJson(reportDir, 'findings-and-scores.json', MAX);
   const { meta, reports, health: currentHealth } = loadAuditors(reportDir);
@@ -80,5 +103,8 @@ export function loadContext(reportDir) {
     reviewComplete: health.reviewState ? health.reviewState === 'validated_outputs' : complete,
     profile: readJsonOr(reportDir, 'harness/stack-profile.json', null, MAX),
     catalog: readJsonOr(reportDir, 'harness/existing-tests.json', { tests: [] }, MAX),
+    pipelineProgress: readJsonOr(reportDir, 'pipeline-progress.json', null, MAX),
+    orchestratorAdvice: readJsonOr(reportDir, 'orchestrator-advice.json', null, MAX),
+    stepArtifacts: stepArtifactsOf(reportDir),
   };
 }

@@ -62,10 +62,11 @@ const create = http.post('/api/requests', async ({ request }) => {
   if (message.account !== body.accountId) return apiError('ACCOUNT_MISMATCH', 401, 'Signed account does not match accountId');
   if (message.nonce !== body.nonce) return apiError('SIG_INVALID', 401, 'Signed nonce does not match');
   const hash = await requestHash(body.message);
-  const row = {
+  const row: MockRequest = {
     id: uuid(), account: body.accountId, repo: message.repo, commit: message.commit, deployed: message.deployed, requestHash: hash,
     priceYocto: MOCK_PRICE_YOCTO, createdAt: clock.now(), paidAt: null, txHash: null,
     fails: takeError('REVIEW_FAILED'), attestTx: null, refundTx: null,
+    ...(body.pipelineMode ? { pipelineMode: body.pipelineMode } : {}),
   };
   updateState((state) => {
     state.nonces[body.nonce] = { ...nonce, used: true };
@@ -103,9 +104,53 @@ const payment = http.post<{ id: string }>('/api/requests/:id/payment', async ({ 
   return HttpResponse.json(paidState(row));
 });
 
+const advise = http.post<{ id: string }>('/api/requests/:id/advise', async ({ params }) => {
+  const state = readState();
+  if (!state.session) return apiError('UNAUTHORIZED', 401, 'Sign in required');
+  const parent = state.requests.find((item) => item.id === params.id && item.account === state.session);
+  if (!parent) return apiError('REQUEST_NOT_FOUND', 404, 'Request not found');
+  if (snapshotAt(parent, clock.now()).status !== 'done') return apiError('INVALID_TRANSITION', 409, 'Request is not done');
+  const childId = uuid();
+  const childHash = await requestHash(JSON.stringify({ parent: parent.id, child: childId, rounds: 0 }));
+  const now = clock.now();
+  const child: MockRequest = {
+    id: childId, account: parent.account, repo: parent.repo, commit: parent.commit, deployed: parent.deployed,
+    requestHash: childHash, priceYocto: '0', createdAt: now, paidAt: now, txHash: null,
+    fails: false, attestTx: null, refundTx: null, pipelineMode: 'step-by-step',
+    roundsCompleted: 0, parentId: parent.id,
+  };
+  updateState((next) => { next.requests.unshift(child); });
+  return HttpResponse.json({
+    requestId: child.id, parentRequestId: parent.id, repo: child.repo, commitSha: child.commit, rounds: 0, status: 'queued',
+  }, { status: 201 });
+});
+
+const debate = http.post<{ id: string }>('/api/requests/:id/debate', async ({ params, request }) => {
+  const state = readState();
+  if (!state.session) return apiError('UNAUTHORIZED', 401, 'Sign in required');
+  const parent = state.requests.find((item) => item.id === params.id && item.account === state.session);
+  if (!parent) return apiError('REQUEST_NOT_FOUND', 404, 'Request not found');
+  if (snapshotAt(parent, clock.now()).status !== 'done') return apiError('INVALID_TRANSITION', 409, 'Request is not done');
+  const body = (await request.json().catch(() => ({}))) as { rounds?: number };
+  const rounds = typeof body?.rounds === 'number' && Number.isInteger(body.rounds) && body.rounds >= 1 && body.rounds <= 5 ? body.rounds : 1;
+  const childId = uuid();
+  const childHash = await requestHash(JSON.stringify({ parent: parent.id, child: childId, rounds }));
+  const now = clock.now();
+  const child: MockRequest = {
+    id: childId, account: parent.account, repo: parent.repo, commit: parent.commit, deployed: parent.deployed,
+    requestHash: childHash, priceYocto: '0', createdAt: now, paidAt: now, txHash: null,
+    fails: false, attestTx: null, refundTx: null, pipelineMode: 'step-by-step',
+    roundsCompleted: (parent.roundsCompleted ?? 0) + rounds, parentId: parent.id,
+  };
+  updateState((next) => { next.requests.unshift(child); });
+  return HttpResponse.json({
+    requestId: child.id, parentRequestId: parent.id, repo: child.repo, commitSha: child.commit, rounds, status: 'queued',
+  }, { status: 201 });
+});
+
 const health = http.get('/api/health', () => HttpResponse.json({
   ok: true, network: env.network, queueDepth: readState().requests.filter((row) => row.paidAt !== null).length,
   workers: 1, chain: { rpc: true, contract: true },
 }));
 
-export const intakeHandlers = [challenge, quote, create, payment, health];
+export const intakeHandlers = [challenge, quote, create, payment, advise, debate, health];

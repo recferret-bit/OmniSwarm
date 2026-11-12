@@ -1,5 +1,7 @@
 // The report-v2 inputs every section reads: debate/, general-review.*, reviewers/index.json. Size-capped reads,
 // because report directories hold target-influenced text. Not a section (exports no `section`).
+import fs from 'node:fs';
+import path from 'node:path';
 import { listJsonFiles, readJsonOr } from './report-util-files.mjs';
 import { readReportText } from './report-files.mjs';
 
@@ -31,10 +33,35 @@ export function loadV2Data(reportDir) {
   let markdown = '';
   try { markdown = readReportText(reportDir, 'general-review.md', 1024 * 1024); } catch { /* the section says the review is missing */ }
   const index = readJsonOr(reportDir, 'reviewers/index.json', null);
+  let roundNumbers = [1, 2, 3];
+  const iterationRoundNumbers = [];
+  try {
+    const debateDir = path.join(reportDir, 'debate');
+    if (fs.existsSync(debateDir)) {
+      const found = fs.readdirSync(debateDir)
+        .map((name) => /^round-([1-9][0-9]?)$/.exec(name))
+        .filter(Boolean)
+        .map((m) => Number(m[1]))
+        .sort((a, b) => a - b);
+      if (found.length) roundNumbers = found;
+      const iterDir = path.join(debateDir, 'iterations');
+      if (fs.existsSync(iterDir)) {
+        const iterFound = fs.readdirSync(iterDir)
+          .map((name) => /^round-([1-9][0-9]*)$/.exec(name))
+          .filter(Boolean)
+          .map((m) => Number(m[1]))
+          .filter((n) => n >= 4)
+          .sort((a, b) => a - b);
+        iterationRoundNumbers.push(...iterFound);
+      }
+    }
+  } catch { /* fall back to 1..3 */ }
+  const baseRounds = roundNumbers.flatMap((n) => listJsonFiles(reportDir, `debate/round-${n}`));
+  const iterRounds = iterationRoundNumbers.flatMap((n) => listJsonFiles(reportDir, `debate/iterations/round-${n}`).map((turn) => ({ ...turn, round: n })));
   return {
     reportDir, clusters, coverageGaps: uniqueGaps(clusters, clustersFile), general, markdown, index,
     byCluster: new Map((Array.isArray(adjudication) ? adjudication : []).map((row) => [row.clusterId, row])),
-    rounds: [1, 2, 3].flatMap((n) => listJsonFiles(reportDir, `debate/round-${n}`)),
+    rounds: [...baseRounds, ...iterRounds],
     citations: readJsonOr(reportDir, 'debate/citations.json', []),
     people: reviewersFromIndex(index),
   };

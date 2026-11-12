@@ -213,7 +213,9 @@ function mergeChecks(parts: Receipt['check'][]): Receipt['check'] {
 /** A split parent publishes an empty index. The paid receipt is the sum of its done slices. */
 async function withSlices(deps: ReportIndexDeps, row: RequestRow, receipt: Receipt): Promise<Receipt> {
   if (receipt.reviewers.length > 0 || receipt.check.total > 0) return receipt;
-  const children = (await listThemes(deps.pool, row.id)).filter((child) => child.id !== row.id && child.status === 'done');
+  const children = (await listThemes(deps.pool, row.id)).filter(
+    (child) => child.id !== row.id && (child.debate_rounds === null || child.debate_rounds === undefined) && child.status === 'done',
+  );
   if (!children.length) return receipt;
   const reviewers: ReceiptReviewer[] = [];
   const checks: Receipt['check'][] = [];
@@ -253,6 +255,10 @@ export interface ReportIndexBody {
   reportSha256?: string;
   reviewers?: string[];
   generalReviewUrl?: string;
+  stage1Url?: string;
+  adviceUrl?: string;
+  pipelineUrl?: string;
+  roundUrls?: string[];
   attestation?: ReturnType<typeof attestationDto>;
   receipt?: Receipt;
 }
@@ -269,7 +275,17 @@ export async function reportIndex(deps: ReportIndexDeps, requestId: string): Pro
   if (row.status !== 'done' || !row.report_sha256 || !row.report_url) fail('NOT_FOUND', 'Report not published yet');
   const base = `${deps.config.storage.reportsBaseUrl}/${row.id}`;
   const published = readPublished(deps.config.storage.reportsRoot, row.id);
-  const hasGeneral = published?.files.includes('general-review.json') ?? false;
+  const files = published?.files ?? [];
+  const hasGeneral = files.includes('general-review.json');
+  const hasStage1 = files.includes('audit_stage_1.html');
+  const hasAdviceHtml = files.includes('audit_stage_2_advice.html');
+  const hasAdviceJson = files.includes('orchestrator-advice.json');
+  const hasPipeline = files.includes('pipeline-progress.json');
+  const roundUrls = files
+    .map((f) => /^audit_round_(\d+)\.html$/.exec(f))
+    .filter((m): m is RegExpExecArray => Boolean(m))
+    .sort((a, b) => Number(a[1]) - Number(b[1]))
+    .map((m) => `${base}/${m[0]}`);
   const reviewers = published && fs.existsSync(published.dir) ? reviewersOf(published.dir) : [];
   const attestation = await deps.chain.getAttestation(row.request_hash);
   const dir = published && fs.existsSync(published.dir) ? published.dir : null;
@@ -277,6 +293,10 @@ export async function reportIndex(deps: ReportIndexDeps, requestId: string): Pro
     requestId: row.id, reportUrl: row.report_url, reportSha256: row.report_sha256,
     ...(reviewers.length ? { reviewers } : {}),
     ...(hasGeneral ? { generalReviewUrl: `${base}/general-review.json` } : {}),
+    ...(hasStage1 ? { stage1Url: `${base}/audit_stage_1.html` } : {}),
+    ...(hasAdviceHtml ? { adviceUrl: `${base}/audit_stage_2_advice.html` } : hasAdviceJson ? { adviceUrl: `${base}/orchestrator-advice.json` } : {}),
+    ...(hasPipeline ? { pipelineUrl: `${base}/pipeline-progress.json` } : {}),
+    ...(roundUrls.length ? { roundUrls } : {}),
     ...(attestation ? { attestation: attestationDto(attestation) } : {}),
     ...(paid ? { receipt: await withSlices(deps, row, receiptFor(row, paid, dir, attestation)) } : {}),
   };

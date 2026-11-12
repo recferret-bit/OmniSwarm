@@ -3,8 +3,10 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { api, localReportHref, type LocalJobDetail, type LocalJobRequest } from '@/lib/api/client';
 import { messageFor, toAppError, type AppErrorCode } from '@/lib/api/errors';
-import type { Status } from '@/lib/api/schema.gen';
+import type { PipelineMode, Status } from '@/lib/api/schema.gen';
 import { parseRepoInput } from '@/lib/repo';
+import { PipelineModeChecks } from '../flow/PipelineModeChecks';
+import { PipelinePanel } from '../request/PipelinePanel';
 import { ProgressPanel } from '../request/ProgressPanel';
 import { statusLabel } from '../request/Timeline';
 import { Alert } from '../ui/Alert';
@@ -28,6 +30,7 @@ function toneOf(status: string): Tone {
 export function LocalJobs() {
   const [path, setPath] = useState('');
   const [github, setGithub] = useState('');
+  const [pipelineMode, setPipelineMode] = useState<PipelineMode>('full');
   const [pathError, setPathError] = useState<string | null>(null);
   const [githubError, setGithubError] = useState<string | null>(null);
   const [error, setError] = useState<AppErrorCode | null>(null);
@@ -85,13 +88,14 @@ export function LocalJobs() {
       setGithubError(message);
       return;
     }
+    const modeOpt = pipelineMode !== 'full' ? { pipelineMode } : {};
     if (pathValue) {
       if (!pathValue.startsWith('/')) {
         setPathError('Use an absolute path.');
         setGithubError(null);
         return;
       }
-      void send({ path: pathValue });
+      void send({ path: pathValue, ...modeOpt });
       return;
     }
     if (!parseRepoInput(githubValue)) {
@@ -99,7 +103,7 @@ export function LocalJobs() {
       setGithubError(messageFor('REPO_INVALID'));
       return;
     }
-    void send({ github: githubValue });
+    void send({ github: githubValue, ...modeOpt });
   };
 
   return (
@@ -133,6 +137,7 @@ export function LocalJobs() {
             error={githubError}
           />
         </div>
+        <PipelineModeChecks name="local-pipeline-mode" value={pipelineMode} onChange={setPipelineMode} />
         <Button type="submit" busy={pending}>Submit</Button>
       </form>
       {error ? <Alert>{messageFor(error)}</Alert> : null}
@@ -146,6 +151,22 @@ export function LocalJobs() {
               {job.status === 'done' && job.pdfReady ? <a href={localReportHref(job.id)}>Download PDF</a> : null}
               {/* Live while running; kept after a failure so it shows where the run stopped. */}
               {job.progress && (job.status === 'running' || job.status === 'failed') ? <div className="request-row__progress"><ProgressPanel progress={job.progress} status={job.status} /></div> : null}
+              {job.pipeline ? (
+                <div className="request-row__progress">
+                  <PipelinePanel
+                    pipeline={job.pipeline}
+                    canContinue={job.status === 'done'}
+                    onAdvise={async () => {
+                      await api.adviseLocalJob(job.id);
+                      await load();
+                    }}
+                    onContinue={async (rounds) => {
+                      await api.continueLocalJobDebate(job.id, { rounds });
+                      await load();
+                    }}
+                  />
+                </div>
+              ) : null}
             </li>
           ))}
         </ul>

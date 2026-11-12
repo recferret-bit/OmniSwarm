@@ -12,6 +12,7 @@ export type Timestamp = string;
 export type Status =
   'awaiting_payment' | 'queued' | 'running' | 'publishing' | 'done' | 'failed' | 'refunded' | 'expired';
 export type Severity = 'critical' | 'high' | 'medium' | 'low' | 'info' | 'none';
+export type PipelineMode = 'full' | 'step-by-step' | 'stage-1';
 export type ErrorCode =
   | 'VALIDATION_ERROR'
   | 'REPO_INVALID'
@@ -77,6 +78,8 @@ export interface IntakeApi {
   timestamp?: Timestamp;
   status?: Status;
   severity?: Severity;
+  'pipeline-mode'?: PipelineMode;
+  'pipeline-summary'?: PipelineSummary;
   'error-code'?: ErrorCode;
   'error-response'?: ErrorResponse;
   'challenge-request'?: ChallengeRequest;
@@ -105,6 +108,29 @@ export interface IntakeApi {
   'admin-refund-response'?: AdminRefundResponse;
   'ready-response'?: ReadyResponse;
   attestation?: Attestation;
+}
+export interface PipelineSummary {
+  pipelineMode: PipelineMode;
+  currentStage: 'stage-1' | 'stage-2-advice' | 'stage-3-debate' | 'completed';
+  noDebates: boolean;
+  roundsCompleted: number;
+  canRunMoreRounds: boolean;
+  advice?: {
+    debateNeeded: boolean;
+    recommendedDepth: 'none' | 'shallow' | 'standard' | 'deep';
+    recommendedRounds: number;
+    qualityRating: 'strong' | 'adequate' | 'degraded' | 'incomplete';
+    summary: string;
+  };
+  incompletionNotes?: {
+    category: string;
+    code: string;
+    source: string;
+    reason: string;
+    impact: string;
+    nextStep?: string;
+  }[];
+  nextRoundRequestIds?: Uuid[];
 }
 export interface ErrorResponse {
   error: {
@@ -141,6 +167,7 @@ export interface CreateRequestBody {
   signature: string;
   message: string;
   nonce: Nonce;
+  pipelineMode?: PipelineMode;
 }
 export interface CreateRequestResponse {
   requestId: Uuid;
@@ -239,6 +266,8 @@ export interface RequestStatusResponse {
    * The report was published with report-health state incomplete
    */
   incomplete?: boolean;
+  pipelineMode?: PipelineMode;
+  pipeline?: PipelineSummary;
   attestTx?: string;
   refundTx?: string;
   failureCause?: string;
@@ -324,6 +353,10 @@ export interface ReportIndexResponse {
   reportSha256?: Sha256Hex;
   reviewers?: string[];
   generalReviewUrl?: string;
+  stage1Url?: string;
+  adviceUrl?: string;
+  pipelineUrl?: string;
+  roundUrls?: string[];
   attestation?: Attestation;
   receipt?: Receipt;
 }

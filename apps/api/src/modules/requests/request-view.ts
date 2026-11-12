@@ -2,10 +2,11 @@
 import type { Db } from '../../db/pool.ts';
 import { timeline } from '../../db/repositories/audit.ts';
 import { latestProgress, type ProgressRow } from '../../db/repositories/progress.ts';
-import { findRequest, listByAccount, queuePosition } from '../../db/repositories/requests.ts';
+import { findRequest, listByAccount, listThemes, queuePosition } from '../../db/repositories/requests.ts';
 import type { z } from 'zod';
 import type { progressDetail } from '../../http/schemas.ts';
 import { iso } from '../../shared/clock.ts';
+import { findLatestReportDir, readPipelineSummary } from './pipeline-view.ts';
 
 type ProgressDetailDto = z.infer<typeof progressDetail>;
 import { fail } from '../../shared/errors.ts';
@@ -21,10 +22,21 @@ export function progressDto(row: ProgressRow) {
   };
 }
 
-export async function viewRequest(db: Db, id: string) {
+export async function viewRequest(db: Db, id: string, storage?: { reportsRoot: string; runsRoot: string }) {
   const row = await findRequest(db, id);
   if (!row) fail('REQUEST_NOT_FOUND', 'Request not found');
-  const [progress, position, events] = await Promise.all([latestProgress(db, id), queuePosition(db, id), timeline(db, id)]);
+  const [progress, position, events, children] = await Promise.all([
+    latestProgress(db, id),
+    queuePosition(db, id),
+    timeline(db, id),
+    listThemes(db, id),
+  ]);
+  const nextRoundRequestIds = children
+    .filter((c) => c.id !== id && c.debate_rounds !== null && c.debate_rounds !== undefined && c.debate_rounds >= 0)
+    .map((c) => c.id);
+  const dir = storage ? findLatestReportDir(storage.reportsRoot, storage.runsRoot, id) : null;
+  const pipeline = readPipelineSummary(dir, row.pipeline_mode, nextRoundRequestIds);
+  const showMode = (row.pipeline_mode && row.pipeline_mode !== 'full') || Boolean(pipeline);
   return {
     status: row.status,
     ...(progress ? { progress: progressDto(progress) } : {}),
@@ -32,6 +44,8 @@ export async function viewRequest(db: Db, id: string) {
     ...(row.report_url ? { reportUrl: row.report_url } : {}),
     ...(row.report_sha256 ? { reportSha256: row.report_sha256 } : {}),
     ...(row.incomplete !== null ? { incomplete: row.incomplete } : {}),
+    ...(showMode ? { pipelineMode: row.pipeline_mode ?? 'full' } : {}),
+    ...(pipeline ? { pipeline } : {}),
     ...(row.attest_tx ? { attestTx: row.attest_tx } : {}),
     ...(row.refund_tx ? { refundTx: row.refund_tx } : {}),
     ...(row.failure_cause ? { failureCause: row.failure_cause } : {}),

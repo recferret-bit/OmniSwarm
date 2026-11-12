@@ -53,7 +53,7 @@ export function alternateJudgeLine({ orchestrator, alternateJudge, reviewers }) 
     : `Alternate judge: none (no run reviewer of another vendor than ${orchestrator.vendor}; its clusters stay DISPUTED, no_independent_judge)`;
 }
 
-export function renderPlan({ reviewers, assign, budgets, orchestrator, alternateJudge, warnings = [], surfaceArg = 'all', scope = 'full', env = process.env }) {
+export function renderPlan({ reviewers, assign, budgets, orchestrator, alternateJudge, pipelineMode = 'full', concurrency = 1, warnings = [], surfaceArg = 'all', scope = 'full', env = process.env }) {
   const jobs = assignJobs({ reviewers, surfaceArg, assign, scope });
   const surfaces = selectSurfaces(surfaceArg, scope);
   const pad = (v, n) => String(v).padEnd(n);
@@ -76,6 +76,14 @@ export function renderPlan({ reviewers, assign, budgets, orchestrator, alternate
   const debate = { ...DEFAULTS.debate, ...(budgets.debate || {}) };
   lines.push('', `Budgets: passes ${budgets.passes}; tool budget ${budgets.toolBudget} per pass; debate rounds ${debate.rounds} (max 3); debate cluster cap ${debate.maxClusters}; debate tool budget ${debate.toolBudget} per turn; debate turn limit ${Math.round(debate.turnMs / 1000)}s; debate phase limit ${Math.round(debate.phaseMs / 60000)}min; max cost ${budgets.maxCostUsd == null ? 'unset' : `$${budgets.maxCostUsd} per reviewer (run-wide)`}`);
   lines.push(`Pass roles: ${passRoles(budgets.passes).join(', ')}. Worst case ${worst} calls.`);
+  if ((pipelineMode && pipelineMode !== 'full') || (concurrency && concurrency > 1)) {
+    const modeNote = pipelineMode === 'stage-1'
+      ? 'Stage 1 only (no debates)'
+      : pipelineMode === 'step-by-step'
+        ? 'Step-by-step (Stage 1 + Frontier Orchestrator Advice; debates optional/iterative)'
+        : 'Full run (Stage 1 + Frontier Advice + Debates)';
+    lines.push(`Pipeline: ${pipelineMode || 'full'} — ${modeNote}; concurrency ${concurrency || 1}.`);
+  }
   for (const r of reviewers) {
     const roles = passRoles(Math.min(budgets.passes, 2)).join(', ');
     const declaresMaxTurns = r.family === 'cli' && families.get('cli').providers[r.provider]?.maxTurnsFlag === true;

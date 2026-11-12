@@ -41,12 +41,21 @@ function watchLifecycle(info, closePromise, isStopping) {
   return { lost, monitor };
 }
 
-export async function startOneShotDocker({ target, out }) {
+export async function startOneShotDocker({ target, out, preserveHarness = false, skipPrep = false }) {
   const holdDir = fs.mkdtempSync(path.join(os.tmpdir(), 'audit-hold-'));
   const holdFile = path.join(holdDir, 'hold.lock');
   const readyFile = path.join(holdDir, 'ready.json');
   fs.writeFileSync(holdFile, 'hold\n');
-  const args = [SANDBOX_SCRIPT, '--review-only', '--target', target, '--out', out, '--hold-file', holdFile, '--ready-file', readyFile];
+  const args = [
+    SANDBOX_SCRIPT,
+    '--review-only',
+    ...(preserveHarness || skipPrep ? ['--preserve-harness'] : []),
+    ...(skipPrep ? ['--skip-prep'] : []),
+    '--target', target,
+    '--out', out,
+    '--hold-file', holdFile,
+    '--ready-file', readyFile,
+  ];
   const child = spawn('bash', args, { stdio: ['ignore', 'inherit', 'inherit'], env: sandboxEnv() });
   let closed = false, stopping = false, exitCode = null;
   const closePromise = new Promise((resolve) => child.on('close', (code) => { closed = true; exitCode = code ?? 1; resolve(exitCode); }));

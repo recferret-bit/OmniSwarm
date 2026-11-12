@@ -27,8 +27,35 @@ export const quoteResponse = z.strictObject({
   sizeKb: z.int().min(0).optional(), large: z.boolean().optional(), freeChecks: z.boolean().optional(),
 });
 
+export const pipelineMode = z.enum(['full', 'step-by-step', 'stage-1']);
+
+export const pipelineSummary = z.strictObject({
+  pipelineMode,
+  currentStage: z.enum(['stage-1', 'stage-2-advice', 'stage-3-debate', 'completed']),
+  noDebates: z.boolean(),
+  roundsCompleted: z.int().min(0),
+  canRunMoreRounds: z.boolean(),
+  advice: z.strictObject({
+    debateNeeded: z.boolean(),
+    recommendedDepth: z.enum(['none', 'shallow', 'standard', 'deep']),
+    recommendedRounds: z.int().min(0).max(3),
+    qualityRating: z.enum(['strong', 'adequate', 'degraded', 'incomplete']),
+    summary: z.string().min(1),
+  }).optional(),
+  incompletionNotes: z.array(z.strictObject({
+    category: z.string().min(1),
+    code: z.string().min(1),
+    source: z.string().min(1),
+    reason: z.string().min(1),
+    impact: z.string().min(1),
+    nextStep: z.string().min(1).optional(),
+  })).optional(),
+  nextRoundRequestIds: z.array(uuid).optional(),
+});
+
 export const createRequestBody = z.strictObject({
   accountId, publicKey, signature: z.string().min(1).max(512), message: z.string().min(1).max(4096), nonce,
+  pipelineMode: pipelineMode.optional(),
 });
 export const createRequestResponse = z.strictObject({ requestId: uuid, requestHash: sha256Hex, priceYocto: yocto, contractId: accountId });
 
@@ -65,7 +92,8 @@ export const progress = z.strictObject({
 
 export const requestStatusResponse = z.strictObject({
   status, progress: progress.optional(), position: z.int().min(1).optional(), reportUrl: reportLink.optional(), reportSha256: sha256Hex.optional(),
-  incomplete: z.boolean().optional(), attestTx: z.string().min(1).optional(), refundTx: z.string().min(1).optional(),
+  incomplete: z.boolean().optional(), pipelineMode: pipelineMode.optional(), pipeline: pipelineSummary.optional(),
+  attestTx: z.string().min(1).optional(), refundTx: z.string().min(1).optional(),
   failureCause: z.string().min(1).optional(),
   timeline: z.array(z.strictObject({ event: z.string().min(1), at: timestamp })).optional(), createdAt: timestamp,
 });
@@ -84,6 +112,8 @@ export const dashboardJobBody = z.strictObject({
   repo: z.string().min(1).max(300),
   models: z.array(z.enum(['opus', 'sol', 'argon', 'grok'])).max(4).optional(),
   scopes: z.array(z.enum(['full', 'web2', 'web3'])).max(3).optional(),
+  pipelineMode: pipelineMode.optional(),
+  concurrency: z.int().min(1).max(8).optional(),
   /**
    * `panel` (default) runs the operator's Z.AI and OpenRouter panel. A provider id whose catalog entry takes
    * account keys (today `nearai`) runs on the signed-in account's own key and saved models (preset
@@ -92,12 +122,13 @@ export const dashboardJobBody = z.strictObject({
   source: z.enum(['panel', ...accountProviders().map((provider) => provider.id)] as [string, ...string[]]).optional(),
 });
 export const dashboardJobResponse = z.strictObject({ requestId: uuid, repo, commitSha, status: z.literal('queued') });
+export const debateStepBody = z.strictObject({ rounds: z.int().min(1).max(5).optional() }).nullish();
 
 const operatorKind = z.enum(['path', 'github']);
 const operatorStatus = z.enum(['queued', 'running', 'done', 'failed']);
 export const localJobBody = z.union([
-  z.strictObject({ path: z.string().min(1).max(4096) }),
-  z.strictObject({ github: z.string().min(1).max(300) }),
+  z.strictObject({ path: z.string().min(1).max(4096), pipelineMode: pipelineMode.optional(), concurrency: z.int().min(1).max(8).optional() }),
+  z.strictObject({ github: z.string().min(1).max(300), pipelineMode: pipelineMode.optional(), concurrency: z.int().min(1).max(8).optional() }),
 ]);
 export const localJobCreated = z.strictObject({ id: uuid, kind: operatorKind, source: z.string().min(1), status: z.literal('queued') });
 export const localJobListResponse = z.strictObject({
@@ -105,7 +136,8 @@ export const localJobListResponse = z.strictObject({
 });
 export const localJobResponse = z.strictObject({
   id: uuid, kind: operatorKind, source: z.string().min(1), ref: z.string().min(1).nullable(), commitSha: commitSha.nullable(),
-  status: operatorStatus, error: z.string().min(1).nullable(), createdAt: timestamp, pdfReady: z.boolean(), progress: progress.optional(),
+  status: operatorStatus, error: z.string().min(1).nullable(), createdAt: timestamp, pdfReady: z.boolean(),
+  progress: progress.optional(), pipelineMode: pipelineMode.optional(), pipeline: pipelineSummary.optional(),
 });
 
 export const guardQuery = z.strictObject({ account: accountId, network: network.optional() });
@@ -170,7 +202,9 @@ export const receipt = z.strictObject({
 
 export const reportIndexResponse = z.strictObject({
   requestId: uuid, reportUrl: reportLink.optional(), reportSha256: sha256Hex.optional(), reviewers: z.array(z.string()).optional(),
-  generalReviewUrl: reportLink.optional(), attestation: attestation.optional(), receipt: receipt.optional(),
+  generalReviewUrl: reportLink.optional(), stage1Url: reportLink.optional(), adviceUrl: reportLink.optional(),
+  pipelineUrl: reportLink.optional(), roundUrls: z.array(reportLink).optional(),
+  attestation: attestation.optional(), receipt: receipt.optional(),
 });
 
 export const ledgerResponse = z.strictObject({

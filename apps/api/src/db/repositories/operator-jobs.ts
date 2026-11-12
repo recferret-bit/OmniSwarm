@@ -13,19 +13,21 @@ export interface OperatorJobRow {
   status: OperatorStatus;
   out_dir: string | null;
   error: string | null;
+  pipeline_mode?: 'full' | 'step-by-step' | 'stage-1';
   created_at: Date;
   updated_at: Date;
 }
 
 export interface NewOperatorJob {
   id: string; kind: OperatorKind; source: string; ref: string | null; commitSha: string | null; outDir: string; now: Date;
+  pipelineMode?: 'full' | 'step-by-step' | 'stage-1';
 }
 
 export async function insertOperatorJob(db: Db, row: NewOperatorJob): Promise<void> {
   await db.query(
-    `INSERT INTO operator_job (id, kind, source, ref, commit_sha, status, out_dir, error, created_at, updated_at)
-     VALUES ($1, $2, $3, $4, $5, 'queued', $6, NULL, $7, $7)`,
-    [row.id, row.kind, row.source, row.ref, row.commitSha, row.outDir, row.now]);
+    `INSERT INTO operator_job (id, kind, source, ref, commit_sha, status, out_dir, error, pipeline_mode, created_at, updated_at)
+     VALUES ($1, $2, $3, $4, $5, 'queued', $6, NULL, $7, $8, $8)`,
+    [row.id, row.kind, row.source, row.ref, row.commitSha, row.outDir, row.pipelineMode ?? 'full', row.now]);
 }
 
 export async function findOperatorJob(db: Db, id: string): Promise<OperatorJobRow | null> {

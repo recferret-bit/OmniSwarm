@@ -57,17 +57,64 @@ function assertFlags(argv: string[], flags: readonly string[]): void {
   }
 }
 
-export function localAuditArgv(input: { kind: 'path'; target: string; outDir: string } | { kind: 'github'; repo: string; ref: string; outDir: string }): string[] {
+const PIPELINE_MODES = new Set(['full', 'step-by-step', 'stage-1']);
+
+export type LocalAuditInput =
+  | { kind: 'path'; target: string; outDir: string; pipelineMode?: 'full' | 'step-by-step' | 'stage-1'; concurrency?: number }
+  | { kind: 'github'; repo: string; ref: string; outDir: string; pipelineMode?: 'full' | 'step-by-step' | 'stage-1'; concurrency?: number };
+
+export function localAuditArgv(input: LocalAuditInput): string[] {
   const outDir = assertNormalizedAbsolute(input.outDir);
+  const extra: string[] = [];
+  const extraFlags: string[] = [];
+  if (input.pipelineMode !== undefined && input.pipelineMode !== 'full') {
+    if (!PIPELINE_MODES.has(input.pipelineMode)) fail('VALIDATION_ERROR', 'Review arguments were rejected');
+    extra.push('--pipeline', input.pipelineMode);
+    extraFlags.push('--pipeline');
+  }
+  if (input.concurrency !== undefined && input.concurrency !== 1) {
+    if (!Number.isInteger(input.concurrency) || input.concurrency < 1 || input.concurrency > 8) {
+      fail('VALIDATION_ERROR', 'Review arguments were rejected');
+    }
+    extra.push('--concurrency', String(input.concurrency));
+    extraFlags.push('--concurrency');
+  }
   if (input.kind === 'path') {
     const target = assertNormalizedAbsolute(input.target);
-    const argv = ['run', '--repo', target, '--reviewers', 'scripted:baseline', '--passes', '1', '--tool-budget', '10', '--out', outDir];
-    assertFlags(argv, ['--repo', '--reviewers', '--passes', '--tool-budget', '--out']);
+    const argv = ['run', '--repo', target, '--reviewers', 'scripted:baseline', '--passes', '1', '--tool-budget', '10', '--out', outDir, ...extra];
+    assertFlags(argv, ['--repo', '--reviewers', '--passes', '--tool-budget', '--out', ...extraFlags]);
     return argv;
   }
   if (!repoSchema.safeParse(input.repo).success || !SHA.test(input.ref)) fail('VALIDATION_ERROR', 'Review arguments were rejected');
-  const argv = ['run', '--github', input.repo, '--ref', input.ref, '--reviewers', 'scripted:baseline', '--passes', '1', '--tool-budget', '10', '--out', outDir];
-  assertFlags(argv, ['--github', '--ref', '--reviewers', '--passes', '--tool-budget', '--out']);
+  const argv = ['run', '--github', input.repo, '--ref', input.ref, '--reviewers', 'scripted:baseline', '--passes', '1', '--tool-budget', '10', '--out', outDir, ...extra];
+  assertFlags(argv, ['--github', '--ref', '--reviewers', '--passes', '--tool-budget', '--out', ...extraFlags]);
+  return argv;
+}
+
+export function localAdviseArgv(input: { outDir: string; target?: string | null }): string[] {
+  const outDir = assertNormalizedAbsolute(input.outDir);
+  if (input.target) {
+    const target = assertNormalizedAbsolute(input.target);
+    const argv = ['advise', outDir, '--repo', target];
+    assertFlags(argv, ['--repo']);
+    return argv;
+  }
+  return ['advise', outDir];
+}
+
+export function localDebateArgv(input: { outDir: string; rounds: number; target?: string | null }): string[] {
+  const outDir = assertNormalizedAbsolute(input.outDir);
+  if (!Number.isInteger(input.rounds) || input.rounds < 1 || input.rounds > 5) {
+    fail('VALIDATION_ERROR', 'Debate rounds per step must be between 1 and 5');
+  }
+  if (input.target) {
+    const target = assertNormalizedAbsolute(input.target);
+    const argv = ['debate', outDir, '--rounds', String(input.rounds), '--repo', target];
+    assertFlags(argv, ['--rounds', '--repo']);
+    return argv;
+  }
+  const argv = ['debate', outDir, '--rounds', String(input.rounds)];
+  assertFlags(argv, ['--rounds']);
   return argv;
 }
 

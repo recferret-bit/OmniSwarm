@@ -9,7 +9,7 @@ import { apiProviders } from '../../packages/schemas/providers.mjs';
 
 export const RETRY_STATUSES = new Set([429, 500, 502, 503, 504]);
 export const MAX_ATTEMPTS = 4;
-const SUBMIT_TOOLS = new Set(['submit_audit_report', 'submit_crosscheck_report']);
+const SUBMIT_TOOLS = new Set(['submit_audit_report', 'submit_crosscheck_report', 'submit_debate_turn', 'submit_adjudication', 'submit_general_review', 'submit_stage_advice']);
 
 // One preset per API provider, built from the provider catalog (packages/schemas/providers.mjs). A provider's
 // base URL is fixed unless the catalog names an operator override (baseUrlEnv).
@@ -111,7 +111,7 @@ async function runCalls(calls, callTool, messages) {
       catch (error) { text = `Tool error: ${error.message || error}`; }
     }
     messages.push({ role: 'tool', tool_call_id: call.id, content: text });
-    if (SUBMIT_TOOLS.has(call.name)) submitted = true;
+    if (SUBMIT_TOOLS.has(call.name) && !text.startsWith('Tool error:')) submitted = true;
   }
   return submitted;
 }

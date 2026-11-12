@@ -11,7 +11,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { analyzeStackAndPlans, renderReviewPlansMarkdown } from './audit-plans.mjs';
-import { scannerChecks, missingScanner, setScannerOutputDir, depScan, writeTools } from './harness-scanners.mjs';
+import { scannerChecks, missingScanner, setScannerOutputDir, runAllScanners } from './harness-scanners.mjs';
 import { solanaStack, writeConfig, writeEvm, writeNear, writeSolana, writePython, writeNode, writeWeb } from './harness-leads.mjs';
 import { SOLANA_PATTERNS, NEAR_CONTRACT_PATTERNS, NEAR_CLIENT_PATTERNS, EVM_CONTRACT_PATTERNS, EVM_CLIENT_PATTERNS } from './harness-patterns-chain.mjs';
 import { PY_PATTERNS, NODE_PATTERNS } from './harness-patterns-app.mjs';
@@ -45,9 +45,15 @@ async function scan(target, outDir, noDeps) {
   const python = writePython(root, stackProfile.ecosystems);
   const node = writeNode(root, stackProfile.ecosystems);
   const reviewPlansMd = renderReviewPlansMarkdown(stackProfile);
-  const deps = noDeps ? '# Dependency leads\n\nSkipped (--no-deps).\n' : await depScan(root);
-  if (noDeps) for (const tool of ['gitleaks', 'semgrep', 'osv-scanner', 'cargo-audit', 'npm-audit', 'python-deps', 'node-deps']) missingScanner(tool, 'Skipped (--no-deps)');
-  const tools = noDeps ? '# Scanner leads\n\nSkipped (--no-deps).\n' : await writeTools(root, outDir);
+  let deps;
+  let tools;
+  if (noDeps) {
+    deps = '# Dependency leads\n\nSkipped (--no-deps).\n';
+    for (const tool of ['gitleaks', 'semgrep', 'osv-scanner', 'cargo-audit', 'npm-audit', 'python-deps', 'node-deps']) missingScanner(tool, 'Skipped (--no-deps)');
+    tools = '# Scanner leads\n\nSkipped (--no-deps).\n';
+  } else {
+    ({ deps, tools } = await runAllScanners(root, outDir));
+  }
   fs.writeFileSync(path.join(outDir, 'scanner-results.json'), JSON.stringify({ version: 1, rustsecRevision: fs.existsSync('/opt/audit-scanners/rustsec-revision.txt') ? fs.readFileSync('/opt/audit-scanners/rustsec-revision.txt', 'utf8').trim() : null, databases: fs.existsSync('/opt/audit-scanners/databases.sha256') ? fs.readFileSync('/opt/audit-scanners/databases.sha256', 'utf8') : null, preparedAt: fs.existsSync('/opt/audit-scanners/prepared-at.txt') ? fs.readFileSync('/opt/audit-scanners/prepared-at.txt', 'utf8').trim() : null, rules: fs.existsSync('/opt/audit-scanners/rules.sha256') ? fs.readFileSync('/opt/audit-scanners/rules.sha256', 'utf8') : null, checks: scannerChecks }, null, 2));
   fs.writeFileSync(path.join(outDir, 'solana.md'), solana.body);
   fs.writeFileSync(path.join(outDir, 'near.md'), near.body);

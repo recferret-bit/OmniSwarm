@@ -1,7 +1,7 @@
 // The request-flow transitions. Each action reads the current step, calls the
 // API or the wallet, and lands on the next step or on an error with its stage.
 import { AppError, toAppError } from '@/lib/api/errors';
-import type { QuoteResponse } from '@/lib/api/schema.gen';
+import type { PipelineMode, QuoteResponse } from '@/lib/api/schema.gen';
 import { env } from '@/lib/env';
 import { normalizeWalletError } from '@/lib/near/connector';
 import { buildSignedRequest } from '@/lib/near/nep413';
@@ -18,7 +18,7 @@ export const INITIAL_FLOW: FlowData = {
 };
 
 // Challenge -> canonical message -> wallet signMessage -> POST /api/requests.
-async function signAndCreate(deps: FlowDeps, quote: QuoteResponse, accountId: string, deployed: string | null, preset?: string) {
+async function signAndCreate(deps: FlowDeps, quote: QuoteResponse, accountId: string, deployed: string | null, preset?: string, pipelineMode?: PipelineMode) {
   const challenge = await deps.api.challenge();
   const built = await buildSignedRequest({
     account: accountId, commit: quote.commitSha, deployed, network: env.network,
@@ -30,6 +30,7 @@ async function signAndCreate(deps: FlowDeps, quote: QuoteResponse, accountId: st
   if (signed.accountId && signed.accountId !== accountId) throw new AppError('ACCOUNT_MISMATCH');
   const request = await deps.api.createRequest({
     accountId, publicKey: signed.publicKey, signature: signed.signature, message: built.message, nonce: challenge.nonce,
+    ...(pipelineMode && pipelineMode !== 'full' ? { pipelineMode } : {}),
   });
   if (request.requestHash !== built.requestHash) throw new AppError('MESSAGE_INVALID', 'The API returned a different request hash');
   const record: SignedRequest = { message: built.message, requestHash: built.requestHash, signature: signed.signature, publicKey: signed.publicKey, nonce: challenge.nonce };
@@ -51,13 +52,13 @@ export function flowActions(deps: FlowDeps, set: Set, get: Get): Omit<FlowState,
         fail('quote', error, 'idle');
       }
     },
-    async sign(accountId, preset) {
+    async sign(accountId, preset, pipelineMode) {
       const { quote, deployed } = get();
       if (!quote) return;
       set({ step: 'signing', error: null });
       for (let attempt = 0; ; attempt += 1) {
         try {
-          return set({ step: 'created', ...(await signAndCreate(deps, quote, accountId, deployed, preset)) });
+          return set({ step: 'created', ...(await signAndCreate(deps, quote, accountId, deployed, preset, pipelineMode)) });
         } catch (error) {
           // An expired challenge restarts once with a fresh nonce (W11-12).
           if (attempt === 0 && toAppError(error).code === 'NONCE_EXPIRED') continue;

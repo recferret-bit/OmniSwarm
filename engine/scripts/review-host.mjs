@@ -15,6 +15,7 @@ import { writeReportFile } from './report-files.mjs';
 import { REVIEW_WORKFLOW } from './review-workflow.mjs';
 import { families } from './reviewer-families.mjs';
 import { publishReviewers } from './reviewer-publish.mjs';
+import { runProviderQueues } from './orchestrator-review.mjs';
 import { runReviewerPasses } from './reviewer-pass-loop.mjs';
 import { assignJobs, defaultAssign } from './reviewer-plan-assign.mjs';
 import { DEMO_FIXTURE } from './scripted-strategies.mjs';
@@ -53,6 +54,8 @@ function writePlanRecords(run) {
     name: 'demo-fixture', mode: 'local', source: DEMO_FIXTURE, surface: run.surfaceArg, demo: true,
     agents: published.map((r) => r.id), models: Object.fromEntries(published.map((r) => [r.id, r.model])),
     reviewers: published, assign, budgets, preset: request.preset || null, auditors: jobs.map((job) => job.name),
+    ...(request.orchestrator ? { orchestrator: request.orchestrator } : {}),
+    ...(request.pipelineMode ? { pipelineMode: request.pipelineMode, concurrency: Math.max(1, Number(request.concurrency) || 1), debatesCompleted: false } : {}),
     workerExits: Object.fromEntries(jobs.map((job) => [job.name, null])), crosscheckExits: {}, stageFailures: [],
     finalized: false, sandboxHardening: 1, workflow: REVIEW_WORKFLOW, submissionAuthority: 'mcp_commit',
   };
@@ -102,8 +105,14 @@ export async function runHostReview(request, env = process.env) {
     jobs: assignJobs({ reviewers, surfaceArg, assign }), files: briefFiles(seen.files), healthRows: [], ceilings: new Set(),
   };
   writePlanRecords(run);
-  const workers = [];
-  for (const job of run.jobs) workers.push(await reviewHostJob(run, job, env));
+  const workers = new Array(run.jobs.length);
+  const indexedJobs = run.jobs.map((job, idx) => ({ ...job, adapter: job.reviewer.id, idx }));
+  await runProviderQueues(
+    [...new Set(reviewers.map((r) => r.id))],
+    indexedJobs,
+    async (job) => { workers[job.idx] = await reviewHostJob(run, job, env); },
+    request.concurrency || 1,
+  );
   const health = budgetHealth(run.healthRows);
   writeReportFile(out, 'harness/budget-health.json', `${JSON.stringify(health, null, 2)}\n`);
   writeReportFile(out, 'workers.json', `${JSON.stringify({ version: 1, policy: 'demo_host_bridge', sourceDigest: seen.digest, jobs: workers }, null, 2)}\n`);

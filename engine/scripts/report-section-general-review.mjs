@@ -26,10 +26,13 @@ function safeMarkdown(markdown) {
 function details(general) {
   const coverage = (general?.coverage || []).map((row) => `<tr><td>${esc(row.surface)}</td><td>${row.covered ? 'yes' : 'no'}</td><td>${esc((row.gaps || []).join(', '))}</td></tr>`).join('');
   const disagreements = (general?.openDisagreements || []).map((row) => `<li>${esc(row.clusterId)}: ${esc(row.summary)}</li>`).join('');
+  const incompletion = Array.isArray(general?.incompletionNotes) && general.incompletionNotes.length
+    ? `<h3>Incompletion causes and security impact</h3><ul>${general.incompletionNotes.map((n) => `<li><strong>[${esc(n.category)}]</strong> ${esc(n.reason)} — <em>Impact:</em> ${esc(n.impact)}</li>`).join('')}</ul>`
+    : '';
   const m = general?.methodology;
   const method = m ? `<p>Reviewers ${esc((m.reviewers || []).join(', '))}. Orchestrator ${esc(m.orchestrator)}. Passes ${esc(m.passes)}. Tool budget ${esc(m.toolBudget)}. Debate rounds ${esc(m.debateRounds)}.${(m.judgeAssignment || []).length ? ` Judges: ${esc(m.judgeAssignment.join('; '))}.` : ''}</p>` : '';
   const contrib = (general?.contributions || []).map((row) => `<tr><td>${esc(row.reviewerId)}</td><td>${esc(row.uniqueConfirmed)}</td><td>${esc(row.refuted)}</td><td>${esc(row.toolCalls)}</td><td>${row.costUsd == null ? '—' : esc(row.costUsd)}</td></tr>`).join('');
-  return `<h3>Coverage and gaps</h3><table><thead><tr><th>Surface</th><th>Covered</th><th>Gaps</th></tr></thead><tbody>${coverage}</tbody></table>${disagreements ? `<h3>Open disagreements</h3><ul>${disagreements}</ul>` : ''}${method}<h3>Contributions</h3><table><thead><tr><th>Reviewer</th><th>Unique confirmed</th><th>Refuted</th><th>Tool calls</th><th>Cost</th></tr></thead><tbody>${contrib}</tbody></table>`;
+  return `<h3>Coverage and gaps</h3><table><thead><tr><th>Surface</th><th>Covered</th><th>Gaps</th></tr></thead><tbody>${coverage}</tbody></table>${disagreements ? `<h3>Open disagreements</h3><ul>${disagreements}</ul>` : ''}${incompletion}${method}<h3>Contributions</h3><table><thead><tr><th>Reviewer</th><th>Unique confirmed</th><th>Refuted</th><th>Tool calls</th><th>Cost</th></tr></thead><tbody>${contrib}</tbody></table>`;
 }
 
 export const section = {

@@ -10,6 +10,7 @@ import { chainEvents } from '../../src/chain/mock/mock-ledger.ts';
 import { withTransaction } from '../../src/db/pool.ts';
 import { findRequest } from '../../src/db/repositories/requests.ts';
 import { enqueueReview, JobContractError } from '../../src/queue/review-queue.ts';
+import { writeProviderSecrets } from '../../src/modules/providers/secrets.ts';
 import { APP_ROOT } from '../../src/shared/paths.ts';
 import { call, conforms, queuedRequest } from '../helpers/flow.ts';
 import { NEEDS_DB } from '../helpers/db.ts';
@@ -185,6 +186,75 @@ describe('review worker (mock engine, mock chain)', NEEDS_DB, () => {
     const [a, b] = await runWindows(api, pair.map((q) => q.requestId));
     assert.ok(a!.start < b!.end && b!.start < a!.end, 'overlapping runs');
     for (const q of pair) assert.ok(fs.existsSync(path.join(t.config.storage.runsRoot, q.requestId, '0', 'report')));
+  });
+
+  test('step-by-step cloud pipeline: Stage 1 -> Step 2 Advise -> Step 3 Debate rounds publish artifacts and URLs', async () => {
+    const secretsFile = path.join(t.config.storage.runsRoot, 'providers.json');
+    fs.mkdirSync(path.dirname(secretsFile), { recursive: true });
+    writeProviderSecrets(secretsFile, t.env.SESSION_SECRET!, { zai: 'zai-test-0000', openrouter: 'or-test-0000' });
+    const envWithProviders = { ...t.env, PROVIDER_SECRETS_FILE: secretsFile, MOCK_ENGINE_STEP_MS: '20' };
+    const apiStep = await startApi(envWithProviders);
+    const worker = await startWorkerInProcess(envWithProviders);
+    try {
+      const login = await call(apiStep.base, '/api/login', { method: 'POST', body: { login: 'operator', password: 'operator' } });
+      assert.equal(login.status, 200);
+      const cookie = login.headers.get('set-cookie')?.split(';')[0] ?? '';
+
+      // 1. Stage 1 only (no debates, no advice yet)
+      const created = await call(apiStep.base, '/api/dashboard/jobs', {
+        method: 'POST',
+        cookie,
+        body: { repo: 'near/near-sdk-rs', pipelineMode: 'stage-1' },
+      });
+      assert.equal(created.status, 201, JSON.stringify(created.body));
+      const stage1Id = created.body.requestId as string;
+      assert.equal((await settled(apiStep, stage1Id)).status, 'done');
+
+      const s1Status = await call(apiStep.base, `/api/requests/${stage1Id}`);
+      conforms('request-status-response', s1Status.body);
+      assert.equal(s1Status.body.pipeline?.currentStage, 'stage-1');
+      assert.equal(s1Status.body.pipeline?.noDebates, true);
+      assert.equal(s1Status.body.pipeline?.advice, undefined);
+
+      // 2. Step 2 Frontier Orchestrator Advice
+      const advised = await call(apiStep.base, `/api/requests/${stage1Id}/advise`, { method: 'POST', cookie });
+      assert.equal(advised.status, 201, JSON.stringify(advised.body));
+      const adviseId = advised.body.requestId as string;
+      assert.equal((await settled(apiStep, adviseId)).status, 'done');
+
+      const s1AfterAdvise = await call(apiStep.base, `/api/requests/${stage1Id}`);
+      assert.deepEqual(s1AfterAdvise.body.pipeline?.nextRoundRequestIds, [adviseId]);
+
+      const s2Status = await call(apiStep.base, `/api/requests/${adviseId}`);
+      conforms('request-status-response', s2Status.body);
+      assert.equal(s2Status.body.pipeline?.currentStage, 'stage-2-advice');
+      assert.equal(s2Status.body.pipeline?.advice?.debateNeeded, true);
+
+      // 3. Step 3 Iterative Debate (+2 rounds)
+      const debated = await call(apiStep.base, `/api/requests/${adviseId}/debate`, { method: 'POST', cookie, body: { rounds: 2 } });
+      assert.equal(debated.status, 201, JSON.stringify(debated.body));
+      const round2Id = debated.body.requestId as string;
+      assert.equal((await settled(apiStep, round2Id)).status, 'done');
+
+      const s2AfterDebate = await call(apiStep.base, `/api/requests/${adviseId}`);
+      assert.deepEqual(s2AfterDebate.body.pipeline?.nextRoundRequestIds, [round2Id]);
+
+      const s3Status = await call(apiStep.base, `/api/requests/${round2Id}`);
+      conforms('request-status-response', s3Status.body);
+      assert.equal(s3Status.body.pipeline?.currentStage, 'stage-3-debate');
+      assert.equal(s3Status.body.pipeline?.roundsCompleted, 2);
+      assert.equal(s3Status.body.pipeline?.noDebates, false);
+
+      const reportIdx = await call(apiStep.base, `/api/reports/${round2Id}`);
+      conforms('report-index-response', reportIdx.body);
+      assert.ok(reportIdx.body.stage1Url?.endsWith('/audit_stage_1.html'));
+      assert.ok(reportIdx.body.adviceUrl?.endsWith('/audit_stage_2_advice.html'));
+      assert.ok(reportIdx.body.pipelineUrl?.endsWith('/pipeline-progress.json'));
+      assert.equal(reportIdx.body.roundUrls?.length, 2);
+    } finally {
+      await worker.close();
+      await apiStep.close();
+    }
   });
 });
 

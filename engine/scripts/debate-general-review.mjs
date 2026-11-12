@@ -43,7 +43,7 @@ function contributions(reviewers, rows, clusters, usage) {
 }
 
 // input: {rows, clusters, gaps, scope, failedSurfaces, reviewers, usage, methodology, summary}
-export function composeGeneralReview({ rows, clusters, gaps, scope, failedSurfaces = new Set(), reviewers, usage = new Map(), methodology, summary }) {
+export function composeGeneralReview({ rows, clusters, gaps, scope, failedSurfaces = new Set(), reviewers, usage = new Map(), methodology, summary, incompletionNotes = null }) {
   const disputed = rows.filter((row) => row.finalStatus === 'DISPUTED');
   const worded = new Map((summary.openDisagreements || []).map((row) => [row.clusterId, row.summary]));
   const general = {
@@ -54,6 +54,7 @@ export function composeGeneralReview({ rows, clusters, gaps, scope, failedSurfac
     openDisagreements: disputed.map((row) => ({ clusterId: row.clusterId, summary: worded.get(row.clusterId) || row.rationale })),
     contributions: contributions(reviewers, rows, clusters, usage),
     methodology,
+    ...(Array.isArray(incompletionNotes) ? { incompletionNotes } : {}),
     disclaimer: DISCLAIMER,
   };
   const check = validate('general-review', general);
@@ -102,6 +103,12 @@ export function generalReviewMarkdown(general) {
     lines.push('', '## Coverage & limitations', '');
     if (summaryLimit) lines.push(`- ${summaryLimit}`);
     lines.push(...limitRows.map((row) => `- ${row.surface}: ${row.covered ? 'covered' : 'incomplete'}${row.gaps?.length ? ` (gaps: ${row.gaps.join(', ')})` : ''}`));
+  }
+  if (Array.isArray(general.incompletionNotes) && general.incompletionNotes.length) {
+    lines.push('', '## Incompletion reasons & impact', '');
+    for (const note of general.incompletionNotes) {
+      lines.push(`- **[${note.category}] ${note.source}** — ${note.reason} *Impact:* ${note.impact}`);
+    }
   }
   lines.push('', '## Contributions', '', '| Reviewer | Unique confirmed | Refuted | Tool calls | Cost USD |', '|---|---|---|---|---|');
   lines.push(...general.contributions.map((row) => `| ${row.reviewerId} | ${row.uniqueConfirmed} | ${row.refuted} | ${row.toolCalls} | ${row.costUsd ?? '—'} |`));

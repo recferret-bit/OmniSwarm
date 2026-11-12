@@ -6,6 +6,7 @@ import { debateStage } from './debate-run.mjs';
 export const phase = {
   name: 'debate',
   async run(ctx) {
+    if (ctx.request?.pipelineMode === 'stage-1' || ctx.request?.pipelineMode === 'step-by-step') return;
     const plan = debatePlan(ctx);
     if (!plan) return;
     if (process.env.OMNI_FAULT === 'debate-round-2') throw stageError('debate-round-2', 'injected fault: debate-round-2');

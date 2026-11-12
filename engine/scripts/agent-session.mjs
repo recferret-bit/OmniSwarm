@@ -40,7 +40,10 @@ const ROLE_TOOLS = {
   auditor: { submit: () => 'submit_audit_report', reads: REVIEW_READS },
   crosscheck: { submit: () => 'submit_crosscheck_report', reads: REVIEW_READS },
   debater: { submit: () => 'submit_debate_turn', reads: DEBATE_READS },
-  orchestrator: { submit: name => (/-general-review$/.test(String(name)) ? 'submit_general_review' : 'submit_adjudication'), reads: DEBATE_READS },
+  orchestrator: {
+    submit: name => (/-general-review$/.test(String(name)) ? 'submit_general_review' : /-stage-advice$/.test(String(name)) ? 'submit_stage_advice' : 'submit_adjudication'),
+    reads: DEBATE_READS,
+  },
 };
 const toolsOf = role => ROLE_TOOLS[role] || ROLE_TOOLS.auditor;
 const submitTool = (role, name) => toolsOf(role).submit(name);

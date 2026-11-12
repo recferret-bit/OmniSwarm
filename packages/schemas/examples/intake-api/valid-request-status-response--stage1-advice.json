@@ -1,0 +1,33 @@
+{
+  "status": "done",
+  "pipelineMode": "step-by-step",
+  "pipeline": {
+    "pipelineMode": "step-by-step",
+    "currentStage": "stage-2-advice",
+    "noDebates": true,
+    "roundsCompleted": 0,
+    "canRunMoreRounds": true,
+    "advice": {
+      "qualityRating": "adequate",
+      "debateNeeded": true,
+      "recommendedDepth": "shallow",
+      "recommendedRounds": 1,
+      "summary": "2 disputed high-severity findings benefit from 1 debate round."
+    },
+    "incompletionNotes": [
+      {
+        "category": "timeout",
+        "code": "TIMEOUT",
+        "source": "grok",
+        "reason": "Reviewer grok timed out after 900s.",
+        "impact": "Assigned surfaces lack grok's independent pass.",
+        "nextStep": "Re-run failed sessions or review uncovered surfaces."
+      }
+    ],
+    "nextRoundRequestIds": []
+  },
+  "reportUrl": "https://reports.example.org/3f2b8c1e-5d4a-4b7e-9c1a-2e6f0a8b4d10/",
+  "reportSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "attestTx": "55555555555555555555555555555555555555555555",
+  "createdAt": "2026-11-05T12:00:00Z"
+}

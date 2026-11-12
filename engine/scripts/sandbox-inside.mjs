@@ -12,6 +12,8 @@ import { outDir, publish, put, save, timeLeft } from './sandbox-inside-state.mjs
 
 const reviewOnly = process.env.SANDBOX_REVIEW_ONLY === '1';
 const fast = process.env.SANDBOX_FAST === '1';
+const skipPrep = process.env.SANDBOX_SKIP_PREP === '1';
+const skipScanners = process.env.SANDBOX_SKIP_SCANNERS === '1';
 
 // A Python project (dependency manifest in the directory or an ancestor) that has pytest-style tests.
 function hasPythonTests(root) {
@@ -123,25 +125,27 @@ async function main() {
       process.env.CARGO_HOME = '/work/cargo';
       process.env.CARGO_NET_OFFLINE = 'true';
     }
-    const tree = plan('/work/src');
-    await prepareDependencies(tree);
-    for (const row of assess(tree)) {
-      if (row.result === 'impossible') put(row.id, 'impossible', row.detail);
-    }
-    const want = new Set(assess(tree).filter((row) => row.result === 'pending').map((row) => row.id));
-    const fetchNode = reviewOnly && !fast && tree.npmLocks.items.length > 0;
-    if (fetchNode) want.delete('npm-install');
-    if (reviewOnly) {
-      for (const id of want) put(id, 'impossible', 'Source security review: target builds, install hooks, active scans and tests are disabled during networked preparation. Existing tests may run through the fixed MCP catalog after network disconnection.');
-    } else if (!fast) {
-      await runOwnedChecks(tree, want);
-    } else {
-      for (const id of want) put(id, 'impossible', 'Skipped in fast mode (SANDBOX_FAST=1).');
-    }
-    await runHarness();
-    // After the scanners, so gitleaks, semgrep and osv-scanner never see node_modules.
-    if (fetchNode) {
-      try { await npmFetch(tree.npmLocks.items); } catch (err) { put('npm-install', 'failed', err.message || String(err)); }
+    if (!skipPrep) {
+      const tree = plan('/work/src');
+      await prepareDependencies(tree);
+      for (const row of assess(tree)) {
+        if (row.result === 'impossible') put(row.id, 'impossible', row.detail);
+      }
+      const want = new Set(assess(tree).filter((row) => row.result === 'pending').map((row) => row.id));
+      const fetchNode = reviewOnly && !fast && tree.npmLocks.items.length > 0;
+      if (fetchNode) want.delete('npm-install');
+      if (reviewOnly) {
+        for (const id of want) put(id, 'impossible', 'Source security review: target builds, install hooks, active scans and tests are disabled during networked preparation. Existing tests may run through the fixed MCP catalog after network disconnection.');
+      } else if (!fast) {
+        await runOwnedChecks(tree, want);
+      } else {
+        for (const id of want) put(id, 'impossible', 'Skipped in fast mode (SANDBOX_FAST=1).');
+      }
+      if (!skipScanners) await runHarness();
+      // After the scanners, so gitleaks, semgrep and osv-scanner never see node_modules.
+      if (fetchNode) {
+        try { await npmFetch(tree.npmLocks.items); } catch (err) { put('npm-install', 'failed', err.message || String(err)); }
+      }
     }
     save();
     publish('checks.done', { ready: true, timestamp: new Date().toISOString() });

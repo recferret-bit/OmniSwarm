@@ -14,8 +14,8 @@ const ROLE_NAME = {
   auditor: (id) => `${id}-s[1-6]-(?:auth|input|logic|config|deps|client)`,
   crosscheck: (id) => `crosscheck-${id}`,
   // `-devil` marks the devil's advocate turn, a second session of the same reviewer in round 1.
-  debater: (id) => `${id}-debate-cluster-[1-9][0-9]{0,3}-r(?:[1-3]|1-devil)`,
-  orchestrator: (id) => `${id}-(?:judge-cluster-[1-9][0-9]{0,3}|general-review)`,
+  debater: (id) => `${id}-debate-cluster-[1-9][0-9]{0,3}-r(?:[123]|1-devil|[23]-i(?:[4-9]|1[0-9]|20))`,
+  orchestrator: (id) => `${id}-(?:judge-cluster-[1-9][0-9]{0,3}|general-review|stage-advice)`,
 };
 const SUBMISSION_ROLES = new Set(['auditor', 'crosscheck']);
 const anyName = new RegExp(`^(?:${Object.values(ROLE_NAME).map((name) => name(REVIEWER_ID_PATTERN)).join('|')})$`);

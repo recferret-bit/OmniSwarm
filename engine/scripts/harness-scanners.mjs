@@ -11,7 +11,10 @@ import { walk, rel } from './harness-walk.mjs';
 const MAX_LOCKS = 4;
 export const scannerChecks = [];
 let scannerOutputDir;
-export function setScannerOutputDir(dir) { scannerOutputDir = dir; }
+export function setScannerOutputDir(dir) {
+  scannerOutputDir = dir;
+  scannerChecks.length = 0;
+}
 export const missingScanner = (tool, detail, state = 'blocked') => scannerChecks.push({ tool, state, detail });
 function recordScanner(tool, result, scope = '.') {
   const evidenceFile = `scanner-output-${tool}-${scannerChecks.length}.json`;
@@ -50,8 +53,16 @@ function findLocks(root, name) {
   return out;
 }
 
-export async function depScan(root) {
-  const lines = ['# Dependency leads', '', 'Advisories only. A vulnerable crate is a finding when the program or the server can reach it.', ''];
+function createSerialLane() {
+  let tail = Promise.resolve();
+  return (fn) => {
+    const next = tail.then(fn, fn);
+    tail = next.catch(() => {});
+    return next;
+  };
+}
+
+async function prepareDepScan(root, runOsv = (fn) => fn()) {
   const cargo = findLocks(root, 'Cargo.lock');
   const npm = findLocks(root, 'package-lock.json');
   const other = [];
@@ -59,41 +70,90 @@ export async function depScan(root) {
     if (findLocks(root, name).length) other.push(name);
   }
   const cargoHome = process.env.CARGO_HOME || path.join(process.env.HOME || '', '.cargo');
-  if (!cargo.length) { lines.push('cargo-audit: no Cargo.lock'); missingScanner('cargo-audit', 'No Cargo.lock', 'not_applicable'); }
-  else if (!fs.existsSync('/opt/audit-scanners/advisory-db') && !fs.existsSync(path.join(cargoHome, 'advisory-db')) && !fs.existsSync(path.join(process.env.HOME || '', '.cargo/advisory-db'))) {
-    missingScanner('cargo-audit', 'RustSec database unavailable');
-    lines.push('cargo-audit: RustSec DB not cached at ~/.cargo/advisory-db (no fetch on an untrusted tree). Run `cargo audit` once in a trusted repo, then re-run.');
-  } else {
-    for (const lock of cargo) {
-      const r = await runCmd('cargo-audit', ['audit', '--file', lock, '--no-fetch', '--format', 'json', ...(fs.existsSync('/opt/audit-scanners/advisory-db') ? ['--db', '/opt/audit-scanners/advisory-db'] : [])], '/tmp', 60_000, cleanEnv());
-      lines.push(`## cargo-audit ${rel(root, lock)} (exit ${r.code})`);
-      lines.push(recordScanner('cargo-audit', r, rel(root, lock)) ? summariseCargo(r.stdout, r.stderr) : 'FAILED: scanner did not produce a valid advisory result.');
-      lines.push('');
-    }
-  }
-  if (!npm.length) { lines.push('npm audit: no package-lock.json'); missingScanner('npm-audit', 'No package-lock.json', 'not_applicable'); }
-  else {
-    // npm refuses to load one file as both user and global config, so each gets its own empty file.
-    const npmConfig = fs.mkdtempSync(path.join(os.tmpdir(), 'audit-npm-config-'));
-    for (const name of ['user', 'global']) fs.writeFileSync(path.join(npmConfig, name), '', { mode: 0o600 });
-    try {
-      for (const lock of npm) {
-        const dir = path.dirname(lock);
-        const r = await runCmd('npm', [
+  const hasAdvisoryDb = fs.existsSync('/opt/audit-scanners/advisory-db')
+    || fs.existsSync(path.join(cargoHome, 'advisory-db'))
+    || fs.existsSync(path.join(process.env.HOME || '', '.cargo/advisory-db'));
+  const dbArgs = fs.existsSync('/opt/audit-scanners/advisory-db') ? ['--db', '/opt/audit-scanners/advisory-db'] : [];
+
+  const cargoPromise = (cargo.length && hasAdvisoryDb)
+    ? Promise.all(cargo.map((lock) => runCmd(
+      'cargo-audit',
+      ['audit', '--file', lock, '--no-fetch', '--format', 'json', ...dbArgs],
+      '/tmp',
+      60_000,
+      cleanEnv(),
+    )))
+    : Promise.resolve([]);
+
+  const npmPromise = npm.length
+    ? (async () => {
+      // npm refuses to load one file as both user and global config, so each gets its own empty file.
+      const npmConfig = fs.mkdtempSync(path.join(os.tmpdir(), 'audit-npm-config-'));
+      for (const name of ['user', 'global']) fs.writeFileSync(path.join(npmConfig, name), '', { mode: 0o600 });
+      try {
+        return await Promise.all(npm.map((lock) => runCmd('npm', [
           'audit', '--package-lock-only', '--json', '--registry', 'https://registry.npmjs.org',
           '--userconfig', path.join(npmConfig, 'user'), '--globalconfig', path.join(npmConfig, 'global'),
-        ], dir, 60_000, cleanEnv({ npm_config_ignore_scripts: 'true' }));
+        ], path.dirname(lock), 60_000, cleanEnv({ npm_config_ignore_scripts: 'true' }))));
+      } finally {
+        fs.rmSync(npmConfig, { recursive: true, force: true });
+      }
+    })()
+    : Promise.resolve([]);
+
+  const py = analysePythonDeps(root);
+  const resolved = process.env.OMNI_RESOLVED_PYTHON_REQS || '/work/resolved/requirements.txt';
+  const runPyResolved = Boolean(py.applicable && py.unresolved && fs.existsSync(resolved) && which('osv-scanner'));
+  const pyResolvedPromise = runPyResolved
+    ? runOsv(() => runCmd('osv-scanner', ['scan', 'source', '--no-resolve', '--offline-vulnerabilities', '--format', 'json', '-L', `requirements.txt:${resolved}`], '/tmp', 120_000, cleanEnv()))
+    : Promise.resolve(null);
+
+  const [cargoResults, npmResults, pyResolvedResult] = await Promise.all([
+    cargoPromise,
+    npmPromise,
+    pyResolvedPromise,
+  ]);
+
+  return () => {
+    const lines = ['# Dependency leads', '', 'Advisories only. A vulnerable crate is a finding when the program or the server can reach it.', ''];
+    if (!cargo.length) {
+      lines.push('cargo-audit: no Cargo.lock');
+      missingScanner('cargo-audit', 'No Cargo.lock', 'not_applicable');
+    } else if (!hasAdvisoryDb) {
+      missingScanner('cargo-audit', 'RustSec database unavailable');
+      lines.push('cargo-audit: RustSec DB not cached at ~/.cargo/advisory-db (no fetch on an untrusted tree). Run `cargo audit` once in a trusted repo, then re-run.');
+    } else {
+      for (let i = 0; i < cargo.length; i++) {
+        const lock = cargo[i];
+        const r = cargoResults[i];
+        lines.push(`## cargo-audit ${rel(root, lock)} (exit ${r.code})`);
+        lines.push(recordScanner('cargo-audit', r, rel(root, lock)) ? summariseCargo(r.stdout, r.stderr) : 'FAILED: scanner did not produce a valid advisory result.');
+        lines.push('');
+      }
+    }
+    if (!npm.length) {
+      lines.push('npm audit: no package-lock.json');
+      missingScanner('npm-audit', 'No package-lock.json', 'not_applicable');
+    } else {
+      for (let i = 0; i < npm.length; i++) {
+        const lock = npm[i];
+        const r = npmResults[i];
         lines.push(`## npm audit ${rel(root, lock)} (exit ${r.code})`);
         lines.push(recordScanner('npm-audit', r, rel(root, lock)) ? summariseNpm(r.stdout, r.stderr) : 'FAILED: scanner did not produce a valid advisory result.');
         lines.push('');
       }
-    } finally { fs.rmSync(npmConfig, { recursive: true, force: true }); }
-  }
-  reportNode(root, lines);
-  await reportPython(root, lines);
-  if (other.length) lines.push(`Lockfiles with no dedicated scanner in this harness: ${other.join(', ')}. osv-scanner covers these when it is on PATH (see tools.md).`);
-  lines.push('This lead scan does not build, install, or send traffic. The disposable sandbox writes sandbox.md. A row there marked impossible was not covered.');
-  return lines.join('\n') + '\n';
+    }
+    reportNode(root, lines);
+    reportPythonSync(py, pyResolvedResult, lines);
+    if (other.length) lines.push(`Lockfiles with no dedicated scanner in this harness: ${other.join(', ')}. osv-scanner covers these when it is on PATH (see tools.md).`);
+    lines.push('This lead scan does not build, install, or send traffic. The disposable sandbox writes sandbox.md. A row there marked impossible was not covered.');
+    return lines.join('\n') + '\n';
+  };
+}
+
+export async function depScan(root) {
+  const commit = await prepareDepScan(root);
+  return commit();
 }
 
 function reportNode(root, lines) {
@@ -114,20 +174,17 @@ function reportNode(root, lines) {
   lines.push('');
 }
 
-async function reportPython(root, lines) {
-  const py = analysePythonDeps(root);
+function reportPythonSync(py, pyResolvedResult, lines) {
   if (!py.applicable) { lines.push('python-deps: no Python dependency manifest'); missingScanner('python-deps', 'No Python dependency manifest', 'not_applicable'); return; }
   lines.push('## python dependency resolvability');
   lines.push(`Requirement files: ${py.requirements.join(', ') || 'none'}. Lockfiles: ${py.lockfiles.join(', ') || 'none'}. pyproject without lockfile: ${py.unlockedProjects.join(', ') || 'none'}.`);
   for (const row of [...py.unpinned.slice(0, 20)]) lines.push(`- unpinned ${row}`);
   for (const row of py.risky.slice(0, 20)) lines.push(`- non-index or editable source ${row}`);
   // The sandbox resolves loose requirements to exact wheels (uv pip compile) before reviewers start; scanning that set closes the gap as of resolution time.
-  const resolved = '/work/resolved/requirements.txt';
   let resolvedScan = false;
-  if (py.unresolved && fs.existsSync(resolved) && which('osv-scanner')) {
-    const r = await runCmd('osv-scanner', ['scan', 'source', '--no-resolve', '--offline-vulnerabilities', '--format', 'json', '-L', `requirements.txt:${resolved}`], '/tmp', 120_000, cleanEnv());
-    resolvedScan = recordScanner('osv-scanner', r, 'resolved python requirements (/work/resolved/requirements.txt)');
-    lines.push(`Resolved set scan (exit ${r.code}): ${resolvedScan ? summariseOsv(r.stdout) : 'FAILED: scanner did not produce a valid advisory result.'}`);
+  if (pyResolvedResult) {
+    resolvedScan = recordScanner('osv-scanner', pyResolvedResult, 'resolved python requirements (/work/resolved/requirements.txt)');
+    lines.push(`Resolved set scan (exit ${pyResolvedResult.code}): ${resolvedScan ? summariseOsv(pyResolvedResult.stdout) : 'FAILED: scanner did not produce a valid advisory result.'}`);
   }
   if (py.unresolved && resolvedScan) {
     recordScanner('python-deps', { code: 0, stdout: JSON.stringify({ pythonDeps: { unresolved: py.unresolved, resolvedScan: true, requirements: py.requirements } }), stderr: '' });
@@ -250,51 +307,95 @@ async function gitleaksConfig() {
   return file;
 }
 
-export async function writeTools(root, outDir) {
-  const lines = [
-    '# Scanner leads',
-    '',
-    'Official tools only, and never the target\'s own rules or allowlist. A hit is a lead. A missing tool is not a clean result.',
-    '',
-  ];
+async function prepareWriteTools(root, outDir, runOsv = (fn) => fn()) {
   const report = path.join(outDir, 'gitleaks.json');
-  if (!which('gitleaks')) { lines.push('gitleaks: not on PATH. Secret scan fell back to the regex in web.md.'); missingScanner('gitleaks', 'Executable unavailable'); }
-  else {
-    const config = await gitleaksConfig();
-    if (!config) {
-      missingScanner('gitleaks', 'Trusted rules unavailable');
-      lines.push('gitleaks: not started — trusted upstream rules unavailable. Target configuration is not a fallback.');
-    } else {
+  const hasGitleaks = Boolean(which('gitleaks'));
+  const hasSemgrep = Boolean(which('semgrep'));
+  const hasOsv = Boolean(which('osv-scanner'));
+
+  const gitleaksPromise = hasGitleaks
+    ? (async () => {
+      const config = await gitleaksConfig();
+      if (!config) return { config: '', result: null, raw: '' };
       const args = ['detect', '--source', root, '--no-git', '--redact=100', '--no-banner', '--ignore-gitleaks-allow', '--report-format', 'json', '--report-path', report, '--exit-code', '0', '--config', config];
       const r = await runCmd('gitleaks', args, '/tmp', 120_000, cleanEnv());
-      lines.push(`## gitleaks (exit ${r.code})`);
-      lines.push(`Rules: upstream gitleaks default for the installed version (${path.basename(config)}). A .gitleaks.toml in the tree is not used.`);
       const raw = fs.existsSync(report) ? fs.readFileSync(report, 'utf8') : r.stdout;
-      lines.push(recordScanner('gitleaks', { ...r, stdout: raw }) ? summariseGitleaks(raw) : 'FAILED: scanner did not produce a valid secret scan result.');
-      lines.push('');
-    }
-  }
-  if (!which('semgrep')) { lines.push('semgrep: not on PATH. SAST fell back to the regex in web.md.'); missingScanner('semgrep', 'Executable unavailable'); }
-  else {
-    const r = await runCmd('semgrep', [
+      return { config, result: r, raw };
+    })()
+    : Promise.resolve(null);
+
+  const semgrepPromise = hasSemgrep
+    ? runCmd('semgrep', [
       'scan', '--metrics=off', '--disable-version-check', '--json', '--timeout=30',
       '--config=/opt/audit-scanners/semgrep-rules', '--disable-nosem', '--no-git-ignore',
       '--exclude=node_modules', '--exclude=target', '--exclude=dist', '--exclude=harness-fixtures',
       root,
-    ], '/tmp', 180_000, cleanEnv({ SEMGREP_SEND_METRICS: 'off' }));
-    lines.push(`## semgrep pinned upstream OWASP and Solidity security rules (exit ${r.code})`);
-    lines.push(recordScanner('semgrep', r) ? summariseSemgrep(r.stdout, root) : 'FAILED: scanner did not produce a complete SAST result.');
-    lines.push('');
-  }
-  if (!which('osv-scanner')) { lines.push('osv-scanner: not on PATH.'); missingScanner('osv-scanner', 'Executable unavailable'); }
-  else {
-    const r = await runCmd('osv-scanner', [
+    ], '/tmp', 180_000, cleanEnv({ SEMGREP_SEND_METRICS: 'off' }))
+    : Promise.resolve(null);
+
+  const osvPromise = hasOsv
+    ? runOsv(() => runCmd('osv-scanner', [
       'scan', 'source', '--recursive', '--no-resolve', '--allow-no-lockfiles', '--offline-vulnerabilities', '--format', 'json', root,
-    ], '/tmp', 120_000, cleanEnv());
-    lines.push(`## osv-scanner (exit ${r.code})`);
-    lines.push('Lockfiles only (`--no-resolve`). Call analysis is off in this lead scan. The sandbox runs it when a Cargo.lock is present; see sandbox.md.');
-    lines.push(recordScanner('osv-scanner', r) ? summariseOsv(r.stdout) : 'FAILED: scanner did not produce a valid advisory result.');
-    lines.push('');
-  }
-  return lines.join('\n') + '\n';
+    ], '/tmp', 120_000, cleanEnv()))
+    : Promise.resolve(null);
+
+  const [gitleaksOut, semgrepRes, osvRes] = await Promise.all([
+    gitleaksPromise,
+    semgrepPromise,
+    osvPromise,
+  ]);
+
+  return () => {
+    const lines = [
+      '# Scanner leads',
+      '',
+      'Official tools only, and never the target\'s own rules or allowlist. A hit is a lead. A missing tool is not a clean result.',
+      '',
+    ];
+    if (!hasGitleaks) {
+      lines.push('gitleaks: not on PATH. Secret scan fell back to the regex in web.md.');
+      missingScanner('gitleaks', 'Executable unavailable');
+    } else if (!gitleaksOut.config) {
+      missingScanner('gitleaks', 'Trusted rules unavailable');
+      lines.push('gitleaks: not started — trusted upstream rules unavailable. Target configuration is not a fallback.');
+    } else {
+      const { config, result: r, raw } = gitleaksOut;
+      lines.push(`## gitleaks (exit ${r.code})`);
+      lines.push(`Rules: upstream gitleaks default for the installed version (${path.basename(config)}). A .gitleaks.toml in the tree is not used.`);
+      lines.push(recordScanner('gitleaks', { ...r, stdout: raw }) ? summariseGitleaks(raw) : 'FAILED: scanner did not produce a valid secret scan result.');
+      lines.push('');
+    }
+    if (!hasSemgrep) {
+      lines.push('semgrep: not on PATH. SAST fell back to the regex in web.md.');
+      missingScanner('semgrep', 'Executable unavailable');
+    } else {
+      lines.push(`## semgrep pinned upstream OWASP and Solidity security rules (exit ${semgrepRes.code})`);
+      lines.push(recordScanner('semgrep', semgrepRes) ? summariseSemgrep(semgrepRes.stdout, root) : 'FAILED: scanner did not produce a complete SAST result.');
+      lines.push('');
+    }
+    if (!hasOsv) {
+      lines.push('osv-scanner: not on PATH.');
+      missingScanner('osv-scanner', 'Executable unavailable');
+    } else {
+      lines.push(`## osv-scanner (exit ${osvRes.code})`);
+      lines.push('Lockfiles only (`--no-resolve`). Call analysis is off in this lead scan. The sandbox runs it when a Cargo.lock is present; see sandbox.md.');
+      lines.push(recordScanner('osv-scanner', osvRes) ? summariseOsv(osvRes.stdout) : 'FAILED: scanner did not produce a valid advisory result.');
+      lines.push('');
+    }
+    return lines.join('\n') + '\n';
+  };
+}
+
+export async function writeTools(root, outDir) {
+  const commit = await prepareWriteTools(root, outDir);
+  return commit();
+}
+
+export async function runAllScanners(root, outDir) {
+  const runOsv = createSerialLane();
+  const [commitDeps, commitTools] = await Promise.all([
+    prepareDepScan(root, runOsv),
+    prepareWriteTools(root, outDir, runOsv),
+  ]);
+  return { deps: commitDeps(), tools: commitTools() };
 }

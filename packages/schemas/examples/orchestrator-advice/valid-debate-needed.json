@@ -1,0 +1,24 @@
+{
+  "stage": "stage-2-advice",
+  "quality": {
+    "rating": "adequate",
+    "summary": "Stage 1 covered S1 and S3 across two independent vendors; CLUSTER-1 remains single-source.",
+    "coverageGaps": ["Foundry unit tests were not executed in the offline sandbox."],
+    "issues": ["CLUSTER-1 lacks cross-vendor corroboration on the withdraw guard."]
+  },
+  "debateAdvice": {
+    "debateNeeded": true,
+    "recommendedDepth": "standard",
+    "recommendedRounds": 2,
+    "focusClusterIds": ["CLUSTER-1"],
+    "rationale": "CLUSTER-1 is a high-severity single-model finding with conflicting guard interpretations."
+  },
+  "nextSteps": [
+    "Run 2 debate rounds focused on CLUSTER-1 (`./bin/audit debate <report-dir> --rounds 2`)."
+  ],
+  "generatedBy": {
+    "mode": "model",
+    "orchestrator": "cli:claude:opus"
+  },
+  "disclaimer": "Model agreement and passing checks do not certify security."
+}

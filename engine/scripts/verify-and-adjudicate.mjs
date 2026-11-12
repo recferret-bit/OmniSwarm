@@ -32,6 +32,7 @@ import { vendorsAgree } from './debate-cluster.mjs';
 import { loadAuditors, readReportJson, validCrosscheckRow, writeReportFile } from './report-contract.mjs';
 import { reviewersOfMeta, vendorOfJob } from './reviewer-registry.mjs';
 import { mergeDebateOutcome } from './verify-and-adjudicate-debate.mjs';
+import { buildIncompletionNotes, stage1DefersDebates } from './report-incompletion.mjs';
 import { newestReportDir } from './report-util-files.mjs';
 
 const SEVERITY_WEIGHT = {
@@ -185,6 +186,8 @@ export async function adjudicate(reportDir) {
   health.security = { state: open.length ? 'review_required' : 'not_certified', unresolvedClaims: open.length, note: 'Valid reports and passing tests do not certify security or accept residual risks.' };
   if (health.errors.length > initialErrorCount) health.reviewState = 'incomplete';
   health.state = health.errors.length ? 'incomplete' : 'validated_outputs';
+  health.stage = stage1DefersDebates(meta) ? 'stage-1-no-debates' : 'debated';
+  health.incompletionNotes = buildIncompletionNotes(reportDir, { meta, health });
   writeReportFile(reportDir, 'report-health.json', `${JSON.stringify(health, null, 2)}\n`);
   return { scoredFindings, health, verifiedSafe: allVerifiedSafe, exitCode: health.state === 'incomplete' ? 2 : 0, auditorCount: reports.length };
 }
@@ -206,6 +209,13 @@ export function printSummary(reportDir, { scoredFindings, health, auditorCount }
       ? 'INCOMPLETE VERIFICATION: review outputs validated, but required execution coverage has gaps; this is not a security pass.'
       : 'INCOMPLETE: missing, failed or invalid review outputs; zero findings is not a clean audit.');
     for (const error of health.errors) console.error(`  - ${error}`);
+    if (Array.isArray(health.incompletionNotes) && health.incompletionNotes.length) {
+      console.error('\nIncompletion causes & security impact:');
+      for (const note of health.incompletionNotes) {
+        console.error(`  * [${note.category}] ${note.reason}`);
+        console.error(`    Impact: ${note.impact}`);
+      }
+    }
   }
 }
 

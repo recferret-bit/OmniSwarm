@@ -14,12 +14,16 @@ TARGET=""
 OUT=""
 RPC=""
 REVIEW_ONLY=0
+PRESERVE_HARNESS=0
+SKIP_PREP=0
 HOLD_FILE=""
 READY_FILE=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --review-only) REVIEW_ONLY=1; shift ;;
+    --preserve-harness) PRESERVE_HARNESS=1; shift ;;
+    --skip-prep) SKIP_PREP=1; PRESERVE_HARNESS=1; shift ;;
     --target) TARGET="$2"; shift 2 ;;
     --out) OUT="$2"; shift 2 ;;
     --rpc) RPC="$2"; shift 2 ;;
@@ -41,6 +45,7 @@ RUN="$HARNESS/sandbox-run"
 HOSTDIR="$HARNESS/host"
 SANDBOX_MD="$HARNESS/sandbox.md"
 SUMMARY="$HARNESS/summary.md"
+rm -rf "$RUN"
 mkdir -p "$RUN" "$HOSTDIR"
 chmod 700 "$HOSTDIR" || true
 
@@ -83,16 +88,20 @@ render() {
   capture_logs
   if [ -d "$RUN/harness-leads" ]; then
     for f in "$RUN/harness-leads"/*.md "$RUN/harness-leads"/*.json; do
-      [ -f "$f" ] && cp -f "$f" "$HARNESS/" 2>/dev/null || true
+      [ -f "$f" ] || continue
+      if [ "$PRESERVE_HARNESS" -eq 1 ] && [ -e "$HARNESS/$(basename "$f")" ]; then continue; fi
+      cp -f "$f" "$HARNESS/" 2>/dev/null || true
     done
   fi
-  if [ ! -s "$RUN/results.json" ]; then
-    tail="$(tail -n 4 "$RUN/container-console.log" 2>/dev/null | tr '\n' ' ' | cut -c1-240 || true)"
-    msg="The sandbox produced no results."
-    if [ -n "$tail" ]; then msg="The sandbox produced no results. ${tail}"; fi
-    node "$LIB" blocked "$RUN/results.json" "$msg" || true
+  if [ "$PRESERVE_HARNESS" -eq 0 ] || [ ! -s "$SANDBOX_MD" ]; then
+    if [ ! -s "$RUN/results.json" ]; then
+      tail="$(tail -n 4 "$RUN/container-console.log" 2>/dev/null | tr '\n' ' ' | cut -c1-240 || true)"
+      msg="The sandbox produced no results."
+      if [ -n "$tail" ]; then msg="The sandbox produced no results. ${tail}"; fi
+      node "$LIB" blocked "$RUN/results.json" "$msg" || true
+    fi
+    node "$LIB" render "$RUN/results.json" "$SANDBOX_MD" "$SUMMARY" || true
   fi
-  node "$LIB" render "$RUN/results.json" "$SANDBOX_MD" "$SUMMARY" || true
   mkdir -p "$RUN/harness"
   for f in "$HARNESS"/*.md "$HARNESS"/*.json; do
     [ -f "$f" ] && cp -f "$f" "$RUN/harness/" 2>/dev/null || true
@@ -158,8 +167,8 @@ chmod -R a+rX "$STAGE/src" || true
 node "$LIB" plan "$STAGE/src" > "$RUN/plan.json"
 node "$LIB" assess "$RUN/plan.json" > "$RUN/assess.json"
 
-if [ "${SANDBOX_FAST:-0}" = "1" ] && docker image inspect audit-sandbox:local >/dev/null 2>&1; then
-  printf 'Inert fixture: using the preprovisioned local sandbox image. No image build attempted.\n' >"$RUN/image.log"
+if { [ "${SANDBOX_FAST:-0}" = "1" ] || [ "$PRESERVE_HARNESS" -eq 1 ]; } && docker image inspect audit-sandbox:local >/dev/null 2>&1; then
+  printf 'Using the preprovisioned local sandbox image. No image build attempted.\n' >"$RUN/image.log"
 elif ! docker build -t audit-sandbox:local -f "$AUDIT_ROOT/docker/sandbox.Dockerfile" "$AUDIT_ROOT/docker" >"$RUN/image.log" 2>&1; then
   tail -n 20 "$RUN/image.log" >&2 || true
   note_blocked "The sandbox image failed to build. See harness/sandbox-run/image.log."
@@ -169,31 +178,33 @@ OSV_CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/omniswarm-audit/osv"
 OSV_MOUNTS=()
 TOOLS_DIR=""
 
-# Host downloads the extra OSV databases. The seed is only the lockfiles.
-# The target container never gets a route to the OSV API.
-mkdir -p "$RUN/osv-seed" "$OSV_CACHE"
-SEEDED="$(node "$LIB" osv-seed "$RUN/plan.json" "$STAGE/src" "$RUN/osv-seed" 2>/dev/null || echo 0)"
-if [ "${SEEDED:-0}" != "0" ]; then
-  docker run --rm --name "$OSVFETCH" \
-    --cap-drop ALL \
-    --security-opt no-new-privileges \
-    --pids-limit 128 \
-    --memory 1g \
-    -e XDG_CACHE_HOME=/cache \
-    -v "$OSV_CACHE":/cache \
-    -v "$RUN/osv-seed":/seed:ro \
-    --entrypoint osv-scanner \
-    audit-sandbox:local \
-    scan source --download-offline-databases --offline -r /seed \
-    >"$RUN/osv-prefetch.log" 2>&1 || true
-fi
-if [ -d "$OSV_CACHE/osv-scalibr" ]; then
-  for dir in "$OSV_CACHE/osv-scalibr"/*; do
-    [ -d "$dir" ] || continue
-    base="$(basename "$dir")"
-    case "$base" in crates.io|npm) continue ;; esac
-    OSV_MOUNTS+=(-v "$dir:/opt/osv-cache/osv-scalibr/$base:ro")
-  done
+if [ "$SKIP_PREP" -eq 0 ]; then
+  # Host downloads the extra OSV databases. The seed is only the lockfiles.
+  # The target container never gets a route to the OSV API.
+  mkdir -p "$RUN/osv-seed" "$OSV_CACHE"
+  SEEDED="$(node "$LIB" osv-seed "$RUN/plan.json" "$STAGE/src" "$RUN/osv-seed" 2>/dev/null || echo 0)"
+  if [ "${SEEDED:-0}" != "0" ]; then
+    docker run --rm --name "$OSVFETCH" \
+      --cap-drop ALL \
+      --security-opt no-new-privileges \
+      --pids-limit 128 \
+      --memory 1g \
+      -e XDG_CACHE_HOME=/cache \
+      -v "$OSV_CACHE":/cache \
+      -v "$RUN/osv-seed":/seed:ro \
+      --entrypoint osv-scanner \
+      audit-sandbox:local \
+      scan source --download-offline-databases --offline -r /seed \
+      >"$RUN/osv-prefetch.log" 2>&1 || true
+  fi
+  if [ -d "$OSV_CACHE/osv-scalibr" ]; then
+    for dir in "$OSV_CACHE/osv-scalibr"/*; do
+      [ -d "$dir" ] || continue
+      base="$(basename "$dir")"
+      case "$base" in crates.io|npm) continue ;; esac
+      OSV_MOUNTS+=(-v "$dir:/opt/osv-cache/osv-scalibr/$base:ro")
+    done
+  fi
 fi
 
 # Platform-tools are fetched by the Solana Foundation image on the host
@@ -245,43 +256,53 @@ if [ "$REVIEW_ONLY" -eq 0 ]; then
   fi
 fi
 
-docker network create --internal "$NET" >/dev/null
-docker network create "$OUTNET" >/dev/null
 docker volume create "$VOL" >/dev/null
 VOLUME_READY=1
 
-docker run -d --name "$PROXY" \
-  --network "$OUTNET" \
-  --cap-drop ALL \
-  --security-opt no-new-privileges \
-  --pids-limit 64 \
-  --memory 256m \
-  --read-only \
-  --tmpfs /tmp \
-  --user node \
-  -e PORT=3128 \
-  -v "$SCRIPT_DIR/sandbox-proxy.mjs:/opt/audit/sandbox-proxy.mjs:ro" \
-  -v "$SCRIPT_DIR/sandbox-lib.mjs:/opt/audit/sandbox-lib.mjs:ro" \
-  -v "$SCRIPT_DIR/sandbox-net.mjs:/opt/audit/sandbox-net.mjs:ro" \
-  -v "$SCRIPT_DIR/sandbox-tree.mjs:/opt/audit/sandbox-tree.mjs:ro" \
-  -v "$SCRIPT_DIR/sandbox-artifacts.mjs:/opt/audit/sandbox-artifacts.mjs:ro" \
-  -w /opt/audit \
-  node:24-bookworm-slim \
-  node /opt/audit/sandbox-proxy.mjs >/dev/null
+SBX_NET="none"
+if [ "$SKIP_PREP" -eq 0 ]; then
+  docker network create --internal "$NET" >/dev/null
+  docker network create "$OUTNET" >/dev/null
+  SBX_NET="$NET"
 
-docker network connect "$NET" "$PROXY"
-PROXY_IP="$(docker inspect -f "{{(index .NetworkSettings.Networks \"$NET\").IPAddress}}" "$PROXY")"
-if [ -z "$PROXY_IP" ] || [ "$PROXY_IP" = "invalid IP" ]; then
-  note_blocked "The allowlist proxy has no address on the internal network."
+  docker run -d --name "$PROXY" \
+    --network "$OUTNET" \
+    --cap-drop ALL \
+    --security-opt no-new-privileges \
+    --pids-limit 64 \
+    --memory 256m \
+    --read-only \
+    --tmpfs /tmp \
+    --user node \
+    -e PORT=3128 \
+    -v "$SCRIPT_DIR/sandbox-proxy.mjs:/opt/audit/sandbox-proxy.mjs:ro" \
+    -v "$SCRIPT_DIR/sandbox-lib.mjs:/opt/audit/sandbox-lib.mjs:ro" \
+    -v "$SCRIPT_DIR/sandbox-net.mjs:/opt/audit/sandbox-net.mjs:ro" \
+    -v "$SCRIPT_DIR/sandbox-tree.mjs:/opt/audit/sandbox-tree.mjs:ro" \
+    -v "$SCRIPT_DIR/sandbox-artifacts.mjs:/opt/audit/sandbox-artifacts.mjs:ro" \
+    -w /opt/audit \
+    node:24-bookworm-slim \
+    node /opt/audit/sandbox-proxy.mjs >/dev/null
+
+  docker network connect "$NET" "$PROXY"
+  PROXY_IP="$(docker inspect -f "{{(index .NetworkSettings.Networks \"$NET\").IPAddress}}" "$PROXY")"
+  if [ -z "$PROXY_IP" ] || [ "$PROXY_IP" = "invalid IP" ]; then
+    note_blocked "The allowlist proxy has no address on the internal network."
+  fi
+
+  export HTTP_PROXY="http://${PROXY_IP}:3128"
+  export HTTPS_PROXY="$HTTP_PROXY"
+  export http_proxy="$HTTP_PROXY"
+  export https_proxy="$HTTP_PROXY"
+  export NO_PROXY="localhost,127.0.0.1"
+  export no_proxy="$NO_PROXY"
 fi
-
-export HTTP_PROXY="http://${PROXY_IP}:3128"
-export HTTPS_PROXY="$HTTP_PROXY"
-export http_proxy="$HTTP_PROXY"
-export https_proxy="$HTTP_PROXY"
-export NO_PROXY="localhost,127.0.0.1"
-export no_proxy="$NO_PROXY"
 export GIT_TERMINAL_PROMPT=0
+
+SKIP_SCANNERS=0
+if [ "$PRESERVE_HARNESS" -eq 1 ] && [ -s "$HARNESS/scanner-results.json" ]; then
+  SKIP_SCANNERS=1
+fi
 
 ZAP_PENDING=0
 if [ "$REVIEW_ONLY" -eq 0 ] && node -e 'const r=JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8")); process.exit(r.some(c=>c.id==="zap"&&c.result==="pending")?0:1)' "$RUN/assess.json"; then
@@ -311,7 +332,7 @@ if ! docker run --rm --name "$INIT" \
 fi
 
 if ! docker run -d --name "$SBX" \
-  --network "$NET" \
+  --network "$SBX_NET" \
   --user 10001:10001 \
   --cap-drop ALL \
   --security-opt no-new-privileges \
@@ -332,6 +353,8 @@ if ! docker run -d --name "$SBX" \
   -e SANDBOX_REVIEW_ONLY="$REVIEW_ONLY" \
   -e SANDBOX_HOLD="${HOLD_FILE:+1}" \
   -e SANDBOX_FAST="${SANDBOX_FAST:-0}" \
+  -e SANDBOX_SKIP_PREP="$SKIP_PREP" \
+  -e SANDBOX_SKIP_SCANNERS="$SKIP_SCANNERS" \
   -e HTTP_PROXY -e HTTPS_PROXY -e http_proxy -e https_proxy -e NO_PROXY -e no_proxy \
   -e CARGO_HOME=/work/cargo \
   -e CARGO_TARGET_DIR=/work/target \
@@ -401,7 +424,7 @@ for ((i=0; i<1600; i++)); do
   fi
   if [ -n "$HOLD_FILE" ] && [ -f "$RUN/checks.done" ]; then break; fi
   if ! running; then break; fi
-  sleep 2
+  if [ "$SKIP_PREP" -eq 1 ]; then sleep 0.3; else sleep 2; fi
 done
 
 if [ -z "$HOLD_FILE" ]; then
@@ -511,9 +534,11 @@ export_files
 
 if [ -n "$HOLD_FILE" ] && running; then
   # Airgap the one-shot container before agentic CLIs attach via MCP bridge.
-  docker network disconnect "$NET" "$PROXY" >/dev/null 2>&1 || true
-  docker rm -f "$PROXY" >/dev/null 2>&1 || true
-  docker network disconnect "$NET" "$SBX" >/dev/null 2>&1 || true
+  if [ "$SKIP_PREP" -eq 0 ]; then
+    docker network disconnect "$NET" "$PROXY" >/dev/null 2>&1 || true
+    docker rm -f "$PROXY" >/dev/null 2>&1 || true
+    docker network disconnect "$NET" "$SBX" >/dev/null 2>&1 || true
+  fi
   # Refuse handoff if disconnect failed; no reviewer receives a networked sandbox.
   if ! docker inspect --format '{{json .NetworkSettings.Networks}}' "$SBX" | node -e '
     let data = "";

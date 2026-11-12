@@ -16,10 +16,21 @@ import { budgetHealth } from './verification-health.mjs';
 const PROVIDER_BLOCKS = ['usage_limit', 'auth_required', 'provider_policy'];
 const failureOf = (reason) => ({ reason, message: FAILURE_MESSAGES[reason] });
 
-export async function runProviderQueues(agents, jobs, execute) {
-  // Drain every provider before reporting an unexpected error or removing the sandbox.
+export async function runProviderQueues(agents, jobs, execute, concurrency = 1) {
+  const width = Math.max(1, Math.min(8, Number(concurrency) || 1));
+  // Drain every provider in parallel, with up to `width` concurrent jobs per provider.
   const results = await Promise.allSettled(agents.map(async (agent) => {
-    for (const job of jobs.filter((job) => job.adapter === agent)) await execute(job);
+    const queue = jobs.filter((job) => job.adapter === agent);
+    let cursor = 0;
+    const workers = Array.from({ length: Math.min(width, Math.max(1, queue.length)) }, async () => {
+      while (cursor < queue.length) {
+        const job = queue[cursor++];
+        if (job) await execute(job);
+      }
+    });
+    const laneResults = await Promise.allSettled(workers);
+    const failedLane = laneResults.find((r) => r.status === 'rejected');
+    if (failedLane) throw failedLane.reason;
   }));
   const failure = results.find((result) => result.status === 'rejected');
   if (failure) throw failure.reason;
@@ -92,7 +103,8 @@ async function reviewJob(run, job) {
 }
 
 export async function reviewPhase(run) {
-  console.log(`      Running ${run.jobs.length} surface audit job(s) in parallel across [${run.request.agents.join(', ')}] via MCP bridge (one active job per provider)...`);
+  const concurrency = run.request?.concurrency || 1;
+  console.log(`      Running ${run.jobs.length} surface audit job(s) in parallel across [${run.request.agents.join(', ')}] via MCP bridge (${concurrency} active job(s) per provider)...`);
   await runProviderQueues(run.request.agents, run.jobs, async (job) => {
     if (skipJob(run, job)) { run.saveWorkers(); return; }
     try { await reviewJob(run, job); }
@@ -104,7 +116,7 @@ export async function reviewPhase(run) {
       run.stageFailures.push(`auditor_error:${job.name}`);
       console.error(`  <- [${job.name}] ${job.failure.message} See ${path.relative(run.output, path.join(run.output, hostLogRel(job.name)))}.`);
     } finally { run.saveWorkers(); }
-  });
+  }, concurrency);
   if (run.budgets) writeReportFile(run.output, 'harness/budget-health.json', `${JSON.stringify(budgetHealth(run.budgetRows), null, 2)}\n`);
 }
 

@@ -2,12 +2,12 @@ import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import type { ApiDeps } from '../../http/deps.ts';
 import { perMinute } from '../../http/plugins/rate-limit.ts';
 import {
-  dashboardJobBody, dashboardJobResponse, errorResponse, loginBody, requestParams, sessionResponse,
+  dashboardJobBody, dashboardJobResponse, debateStepBody, errorResponse, loginBody, requestParams, sessionResponse,
 } from '../../http/schemas.ts';
 import { requireAccount, setSession } from '../auth/session.ts';
 import { authenticateDashboard } from './credentials.ts';
 import { readReviewSettings, settingsPath } from '../providers/settings.ts';
-import { createDashboardJob, readDashboardReportPdf } from './dashboard.service.ts';
+import { adviseDashboardRequest, continueDashboardDebate, createDashboardJob, readDashboardReportPdf } from './dashboard.service.ts';
 import { fail } from '../../shared/errors.ts';
 
 export const dashboardRoutes: FastifyPluginAsyncZod<{ deps: ApiDeps }> = async (app, { deps }) => {
@@ -44,7 +44,10 @@ export const dashboardRoutes: FastifyPluginAsyncZod<{ deps: ApiDeps }> = async (
     if (request.cookies.sid) {
       try { account = requireAccount(request, deps.clock.now()); } catch { account = 'guest'; }
     }
-    return reply.code(201).send(await createDashboardJob(deps, account, request.body.repo, request.body.models ?? [], request.body.scopes ?? [], request.body.source ?? 'panel'));
+    return reply.code(201).send(await createDashboardJob(
+      deps, account, request.body.repo, request.body.models ?? [], request.body.scopes ?? [],
+      request.body.source ?? 'panel', request.body.pipelineMode ?? 'full',
+    ));
   });
 
   app.post('/api/dashboard/jobs', {
@@ -56,7 +59,60 @@ export const dashboardRoutes: FastifyPluginAsyncZod<{ deps: ApiDeps }> = async (
     },
   }, async (request, reply) => {
     const account = requireAccount(request, deps.clock.now());
-    return reply.code(201).send(await createDashboardJob(deps, account, request.body.repo, request.body.models ?? [], request.body.scopes ?? [], request.body.source ?? 'panel'));
+    return reply.code(201).send(await createDashboardJob(
+      deps, account, request.body.repo, request.body.models ?? [], request.body.scopes ?? [],
+      request.body.source ?? 'panel', request.body.pipelineMode ?? 'full',
+    ));
+  });
+
+  app.post('/api/dashboard/jobs/:id/advise', {
+    config: perMinute(deps.config.http.rateLimitPerMinute),
+    schema: {
+      summary: 'Queue Step 2 Frontier Orchestrator quality and debate advice on a Stage 1 review',
+      params: requestParams,
+      response: { 201: dashboardJobResponse, 400: errorResponse, 401: errorResponse, 403: errorResponse, 404: errorResponse, 409: errorResponse, 503: errorResponse },
+    },
+  }, async (request, reply) => {
+    const account = requireAccount(request, deps.clock.now());
+    return reply.code(201).send(await adviseDashboardRequest(deps, account, request.params.id));
+  });
+
+  app.post('/api/dashboard/jobs/:id/debate', {
+    config: perMinute(deps.config.http.rateLimitPerMinute),
+    schema: {
+      summary: 'Queue additional iterative debate round(s) on a finished review',
+      params: requestParams,
+      body: debateStepBody,
+      response: { 201: dashboardJobResponse, 400: errorResponse, 401: errorResponse, 403: errorResponse, 404: errorResponse, 409: errorResponse, 503: errorResponse },
+    },
+  }, async (request, reply) => {
+    const account = requireAccount(request, deps.clock.now());
+    return reply.code(201).send(await continueDashboardDebate(deps, account, request.params.id, request.body?.rounds ?? 1));
+  });
+
+  app.post('/api/requests/:id/advise', {
+    config: perMinute(deps.config.http.rateLimitPerMinute),
+    schema: {
+      summary: "Queue Step 2 Frontier Orchestrator quality and debate advice on the signed-in account's Stage 1 review",
+      params: requestParams,
+      response: { 201: dashboardJobResponse, 400: errorResponse, 401: errorResponse, 403: errorResponse, 404: errorResponse, 409: errorResponse, 503: errorResponse },
+    },
+  }, async (request, reply) => {
+    const account = requireAccount(request, deps.clock.now());
+    return reply.code(201).send(await adviseDashboardRequest(deps, account, request.params.id));
+  });
+
+  app.post('/api/requests/:id/debate', {
+    config: perMinute(deps.config.http.rateLimitPerMinute),
+    schema: {
+      summary: "Queue additional iterative debate round(s) on the signed-in account's finished review",
+      params: requestParams,
+      body: debateStepBody,
+      response: { 201: dashboardJobResponse, 400: errorResponse, 401: errorResponse, 403: errorResponse, 404: errorResponse, 409: errorResponse, 503: errorResponse },
+    },
+  }, async (request, reply) => {
+    const account = requireAccount(request, deps.clock.now());
+    return reply.code(201).send(await continueDashboardDebate(deps, account, request.params.id, request.body?.rounds ?? 1));
   });
 
   app.get('/api/requests/:id/report.pdf', {

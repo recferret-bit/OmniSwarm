@@ -3,10 +3,12 @@
 import { useEffect, useState } from 'react';
 import { accountPresetName } from '@omniswarm/schemas/providers-public';
 import { api, type AccountKeyView } from '@/lib/api/client';
+import type { PipelineMode } from '@/lib/api/schema.gen';
 import { selectCanSign, useRequestFlow } from '@/stores/request-flow';
 import { selectAccountId, useWallet } from '@/stores/wallet';
 import { keyReady } from '../account/AccountKeyPanel';
 import { Button } from '../ui/Button';
+import { PipelineModeChecks, parseSavedPipelineMode } from './PipelineModeChecks';
 
 /**
  * Own-key providers this wallet's account can sign a request on: signed in as the same account (sid cookie
@@ -39,6 +41,13 @@ export function SignStep() {
   const sign = useRequestFlow((state) => state.sign);
   const own = useOwnKeys(accountId);
   const [choice, setChoice] = useState<string>('panel');
+  const [pipelineMode, setPipelineMode] = useState<PipelineMode>(() => {
+    try {
+      return parseSavedPipelineMode(sessionStorage.getItem('omniswarm-pipeline-mode'));
+    } catch {
+      return 'full';
+    }
+  });
 
   if (!canSign && !signing) return null;
   if (!accountId) {
@@ -67,8 +76,9 @@ export function SignStep() {
           ))}
         </fieldset>
       ) : null}
+      <PipelineModeChecks name="sign-pipeline-mode" value={pipelineMode} onChange={setPipelineMode} />
       <p>Your wallet signs the request message (NEP-413). No transaction is sent yet.</p>
-      <Button busy={signing} onClick={() => void sign(accountId, selected ? accountPresetName(selected.provider) : undefined)}>Sign request</Button>
+      <Button busy={signing} onClick={() => void sign(accountId, selected ? accountPresetName(selected.provider) : undefined, pipelineMode !== 'full' ? pipelineMode : undefined)}>Sign request</Button>
     </div>
   );
 }

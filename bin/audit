@@ -43,8 +43,10 @@ parse_flags() {
       --scope) SCOPE="${2:?--scope needs full, web2, web3 or infra}"; shift 2 ;;
       --out|-o) OUT_DIR="${2:?$1 needs a path}"; shift 2 ;;
       --agents|-a) REVIEWER_ARGS+=(--agents "${2:?$1 needs a list}"); shift 2 ;;
-      --reviewers|--config|--preset|--assign|--orchestrator|--alternate-judge|--passes|--tool-budget|--max-cost-usd|--debate-rounds|--debate-max-clusters|--debate-tool-budget|--debate-turn-ms|--debate-phase-ms|--model|--models|--model-claude|--model-grok|--model-agy|--model-codex)
+      --reviewers|--config|--preset|--assign|--orchestrator|--alternate-judge|--passes|--tool-budget|--max-cost-usd|--debate-rounds|--debate-max-clusters|--debate-tool-budget|--debate-turn-ms|--debate-phase-ms|--pipeline|--concurrency|--model|--models|--model-claude|--model-grok|--model-agy|--model-codex)
         REVIEWER_ARGS+=("$1" "${2:?$1 needs a value}"); shift 2 ;;
+      --step-by-step|--no-debate)
+        REVIEWER_ARGS+=("$1"); shift ;;
       --claude-model|--grok-model|--agy-model|--codex-model)
         agent="${1#--}"; REVIEWER_ARGS+=("--model-${agent%-model}" "${2:?$1 needs a value}"); shift 2 ;;
       --plan) PLAN=1; shift ;;
@@ -110,6 +112,9 @@ case "$COMMAND" in
     ;;
   local)
     node "$AUDIT_ROOT/scripts/local-cli.mjs" "$@"
+    ;;
+  step|advise|debate)
+    node "$AUDIT_ROOT/scripts/debate-step-cli.mjs" "$COMMAND" "$@"
     ;;
   run)
     parse_flags "$@"
@@ -182,6 +187,12 @@ Usage:
   audit report [<report-dir>]    Show findings and risk scores
   audit html   [<report-dir>]    Regenerate report.html and findings-by-model.html
   audit pdf    [<report-dir>]    Print report.html and findings-by-model.html to PDF with local headless Chrome
+  audit step   [<report-dir>] [--rounds <1-5>] [--repo <path>] [--orchestrator <spec>] [--concurrency <1-8>]
+      Advance an iterative audit to its next stage: Step 2 Frontier Orchestrator Advice, then Step 3 Debate round(s).
+  audit advise [<report-dir>] [--repo <path>] [--orchestrator <spec>]
+      Run or refresh Step 2 Frontier Orchestrator quality & debate advice on a Stage 1 report directory.
+  audit debate [<report-dir>] [--rounds <1-5>] [--repo <path>] [--orchestrator <spec>] [--concurrency <1-8>]
+      Run N additional debate round(s) (default 1) on an existing report directory, saving audit_round_<n>.* and updating pipeline-progress.json.
   (<report-dir> defaults to the newest directory under reports/)
 
   audit check-model-cli --all | --provider <claude|codex-native|grok-native|grok-docker>
@@ -212,6 +223,10 @@ Options (run):
   --alternate-judge <spec>            judge for a cluster whose authors share the orchestrator's vendor
                            (default: the first run reviewer of another vendor; with none the cluster stays DISPUTED)
   --debate-rounds <n>      debate rounds, 1-3 (default 2, the golden-eval rule in engine/eval/RESULTS.md)
+  --pipeline <mode>        full (Stage 1 + Frontier Advice + Debates, default), step-by-step (Stage 1 + Frontier Advice, optional iterative debates), or stage-1 (Stage 1 only, no debates)
+  --step-by-step           shorthand for --pipeline step-by-step
+  --no-debate              shorthand for --pipeline stage-1
+  --concurrency <n>        parallel worker lanes per provider and across debate/adjudication clusters, 1-8 (default 3)
   --debate-max-clusters <n>  clusters debated, 1-500 (default 25); the rest are listed as coverage gaps
   --debate-tool-budget <n> read calls per debate turn or judgement, 1-100 (default 12), plus its submit
   --debate-turn-ms <n>     wall clock per debate turn, judgement, or general review, 15000-600000 (default 180000). The session is aborted

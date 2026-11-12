@@ -11,6 +11,8 @@ import type {
   HealthResponse,
   PaymentRequest,
   PaymentResponse,
+  PipelineMode,
+  PipelineSummary,
   Progress,
   QuoteRequest,
   QuoteResponse,
@@ -73,6 +75,8 @@ export interface DashboardJobCreated {
   status: 'queued';
 }
 
+export type DebateStepCreated = DashboardJobCreated;
+
 /**
  * This account's own key for one provider whose catalog entry takes account keys (packages/schemas/providers.mjs;
  * today NEAR AI Cloud). The key is never returned, only its fingerprint.
@@ -93,13 +97,17 @@ export interface ModelList {
   models: string[];
 }
 
-export type LocalJobRequest = { path: string } | { github: string };
+export type LocalJobRequest = ({ path: string } | { github: string }) & {
+  pipelineMode?: PipelineMode;
+  concurrency?: number;
+};
 
 export interface LocalJobCreated {
   id: string;
   kind: 'path' | 'github';
   source: string;
   status: string;
+  pipelineMode?: PipelineMode;
 }
 
 export interface LocalJobSummary {
@@ -107,6 +115,7 @@ export interface LocalJobSummary {
   kind: 'path' | 'github';
   source: string;
   status: string;
+  pipelineMode?: PipelineMode;
   createdAt: string;
 }
 
@@ -115,6 +124,7 @@ export interface LocalJobDetail extends LocalJobSummary {
   commitSha: string | null;
   error: string | null;
   pdfReady: boolean;
+  pipeline?: PipelineSummary | null;
   /** The engine's live snapshot, as on a hosted request. Absent while queued or for an engine that writes none. */
   progress?: Progress;
 }
@@ -139,13 +149,19 @@ export const api = {
   login: (body: LoginRequest) => call<SessionAccount>('POST', '/login', body),
   logout: () => call<void>('POST', '/logout'),
   session: () => call<SessionAccount>('GET', '/session'),
-  createDashboardJob: (body: { repo: string; models?: string[]; scopes?: string[]; source?: string }) => call<DashboardJobCreated>('POST', '/dashboard/jobs', body),
+  createDashboardJob: (body: { repo: string; models?: string[]; scopes?: string[]; source?: string; pipelineMode?: PipelineMode }) => call<DashboardJobCreated>('POST', '/dashboard/jobs', body),
+  adviseRequest: (requestId: string) => call<DebateStepCreated>('POST', `/requests/${id(requestId)}/advise`, {}),
+  continueDebate: (requestId: string, body: { rounds?: number } = {}) => call<DebateStepCreated>('POST', `/requests/${id(requestId)}/debate`, body),
+  adviseDashboardJob: (requestId: string) => call<DebateStepCreated>('POST', `/dashboard/jobs/${id(requestId)}/advise`, {}),
+  continueDashboardDebate: (requestId: string, body: { rounds?: number } = {}) => call<DebateStepCreated>('POST', `/dashboard/jobs/${id(requestId)}/debate`, body),
   listAccountKeys: () => call<{ providers: AccountKeyView[] }>('GET', '/account/providers'),
   saveAccountKey: (provider: string, body: { key?: string; models?: string[] }) => call<AccountKeyView>('PUT', `/account/providers/${id(provider)}`, body),
   listProviderModels: (provider: string) => call<ModelList>('GET', `/account/providers/${id(provider)}/models`),
   createLocalJob: (body: LocalJobRequest) => call<LocalJobCreated>('POST', '/local/jobs', body),
   listLocalJobs: () => call<{ jobs: LocalJobSummary[] }>('GET', '/local/jobs'),
   getLocalJob: (jobId: string) => call<LocalJobDetail>('GET', `/local/jobs/${id(jobId)}`),
+  adviseLocalJob: (jobId: string) => call<{ id: string; status: string }>('POST', `/local/jobs/${id(jobId)}/advise`, {}),
+  continueLocalJobDebate: (jobId: string, body: { rounds?: number } = {}) => call<{ id: string; status: string }>('POST', `/local/jobs/${id(jobId)}/debate`, body),
 };
 
 export type Api = typeof api;

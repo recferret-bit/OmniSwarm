@@ -23,7 +23,7 @@ export const requestRoutes: FastifyPluginAsyncZod<{ deps: ApiDeps }> = async (ap
 
   app.get('/api/requests/:id', {
     schema: { summary: 'Read one request (public; the id is an unguessable UUIDv4)', params: requestParams, response: { 200: requestStatusResponse, 404: errorResponse } },
-  }, async (request) => viewRequest(deps.pool, request.params.id));
+  }, async (request) => viewRequest(deps.pool, request.params.id, deps.config.storage));
 
   app.get('/api/requests', {
     schema: { summary: "List the signed-in account's requests", querystring: listQuery, response: { 200: requestListResponse, 401: errorResponse } },

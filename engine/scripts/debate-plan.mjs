@@ -82,19 +82,20 @@ function partialSurfacesOf(ctx) {
 
 // A plan with no bridge: scripted reviewers and the scripted judge only, on an OmniSwarm fixture. Used by the
 // host demo (claims loaded from its report dir) and the golden eval (claims passed in).
-export function offlinePlan({ out, sourceRoot, claims, controls, reviewers, rounds = DEBATE_DEFAULTS.rounds, scope = ['S1'], manifest = null, maxClusters = DEBATE_DEFAULTS.maxClusters }) {
+export function offlinePlan({ out, sourceRoot, claims, controls, reviewers, rounds = DEBATE_DEFAULTS.rounds, startRound = 1, priorState = null, prebuiltClusters = null, concurrency = 1, scope = ['S1'], manifest = null, maxClusters = DEBATE_DEFAULTS.maxClusters, incompletionNotes = null }) {
   if (!isFixtureTarget(sourceRoot)) throw stageError(SCRIPTED_JUDGE_REFUSAL, `${SCRIPTED_JUDGE_REFUSAL}: the offline debate runs only on OmniSwarm fixtures`);
   if (!claims) ({ claims, controls, reviewers } = loadClaims(out));
   const orchestrator = { id: 'scripted-judge', family: 'scripted', provider: 'judge', vendor: 'scripted', model: 'judge' };
   const reader = sourceReader(sourceRoot, manifest);
   return {
-    out, reader, claims, reviewers, orchestrator, alternate: null, rounds, maxClusters,
+    out, reader, claims, reviewers, orchestrator, alternate: null, rounds, startRound, priorState, prebuiltClusters, concurrency, maxClusters,
     turnMs: DEBATE_DEFAULTS.turnMs, phaseMs: DEBATE_DEFAULTS.phaseMs, seed: 1,
     vendors: new Map(reviewers.map((r) => [r.id, r.vendor])),
     voices: voicesFor(reviewers, { claims, controls, reader, bridge: null }),
     judgeVoice: () => async () => ({ unavailable: 'no_bridge_offline' }),
     summaryVoice: async ({ rows }) => rulesSummary(rows),
     scope, failedSurfaces: new Set(), partialSurfaces: [], usage: usageOf(out, reviewers),
+    incompletionNotes,
     methodology: { reviewers: reviewers.map((r) => r.id), orchestrator: 'scripted:judge', passes: 1, toolBudget: 40, debateRounds: rounds },
   };
 }
@@ -114,7 +115,9 @@ export function debatePlan(ctx, env = process.env) {
   const reviewers = ctx.reviewers?.length ? ctx.reviewers : metaReviewers;
   return {
     out: ctx.output, reader, claims, reviewers, orchestrator, alternate: ctx.request.alternateJudge || null,
-    rounds: debate.rounds, maxClusters: debate.maxClusters, turnMs: debate.turnMs, phaseMs: debate.phaseMs,
+    rounds: debate.rounds, startRound: ctx.startRound || 1, priorState: ctx.priorState || null,
+    prebuiltClusters: ctx.prebuiltClusters || null, concurrency: ctx.request?.concurrency || 1,
+    maxClusters: debate.maxClusters, turnMs: debate.turnMs, phaseMs: debate.phaseMs,
     signal: ctx.cancellation?.signal, seed: 1,
     prior: crosscheckPrior(ctx.output, reader),
     onProgress: ctx.progress ? (name, done, total) => ctx.progress.counter(name, done, total) : null,

@@ -50,6 +50,18 @@ export function RequestReport({ id, attestTx }: { id: string; attestTx?: string 
       <Panel id="sections" title="Sections">
         {state.phase === 'done' ? <ReportContents findings={state.result.findings} general={state.result.general} reviewers={index.reviewers} /> : <p>Loading the report…</p>}
       </Panel>
+      {index.stage1Url || index.adviceUrl || index.pipelineUrl || (index.roundUrls && index.roundUrls.length > 0) ? (
+        <Panel id="pipeline-artifacts" title="Pipeline artifacts">
+          <ul>
+            {index.stage1Url ? <li><a href={index.stage1Url} target="_blank" rel="noreferrer">Stage 1 report (no debates)</a></li> : null}
+            {index.adviceUrl ? <li><a href={index.adviceUrl} target="_blank" rel="noreferrer">Frontier orchestrator advice</a></li> : null}
+            {index.pipelineUrl ? <li><a href={index.pipelineUrl} target="_blank" rel="noreferrer">Pipeline progress JSON</a></li> : null}
+            {(index.roundUrls ?? []).map((url, idx) => (
+              <li key={url}><a href={url} target="_blank" rel="noreferrer">Debate round {idx + 1} report</a></li>
+            ))}
+          </ul>
+        </Panel>
+      ) : null}
       <Panel id="frame" title="Published report">
         <ReportFrame src={index.reportUrl} title="OmniSwarm report" />
       </Panel>

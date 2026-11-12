@@ -1,0 +1,5 @@
+{
+  "reviewers": ["cli:claude:opus"],
+  "pipelineMode": "mystery-mode",
+  "concurrency": 99
+}

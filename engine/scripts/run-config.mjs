@@ -14,7 +14,14 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 // The repository root (engine/scripts/../..), where operators keep omniswarm.config.json.
 export const ROOT = path.resolve(HERE, '../..');
 export const CONFIG_NAME = 'omniswarm.config.json';
-export const DEFAULTS = Object.freeze({ passes: 2, toolBudget: 40, debate: Object.freeze({ rounds: 2, toolBudget: 12, maxClusters: 25, turnMs: 180000, phaseMs: 900000 }) });
+export const PIPELINE_MODES = Object.freeze(['full', 'step-by-step', 'stage-1']);
+export const DEFAULTS = Object.freeze({
+  passes: 2,
+  toolBudget: 40,
+  pipelineMode: 'full',
+  concurrency: 3,
+  debate: Object.freeze({ rounds: 2, toolBudget: 12, maxClusters: 25, turnMs: 180000, phaseMs: 900000 }),
+});
 export const MATRIX_LIMIT = 8;
 const LEGACY_AGENTS = Object.keys(CLI_DEFAULT_MODELS);
 
@@ -123,6 +130,10 @@ export function resolveRunConfig({ flags = {}, root = ROOT, explicitConfig = fla
 
   const dollars = (name, value) => { const n = typeof value === 'string' && value.trim() === '' ? NaN : Number(value); if (!Number.isFinite(n) || n < 0) throw new ConfigError(`${name} must be a number of US dollars, 0 or more (got ${String(value).slice(0, 40)})`); return n; };
   const debate = debateSettings(flags, pick('debate'));
+  const pipelineMode = flags.pipelineMode ?? pick('pipelineMode') ?? DEFAULTS.pipelineMode;
+  if (!PIPELINE_MODES.includes(pipelineMode)) throw new ConfigError(`--pipeline must be one of: ${PIPELINE_MODES.join(', ')}`);
+  const concurrency = integerFlag('--concurrency', flags.concurrency) ?? pick('concurrency') ?? DEFAULTS.concurrency;
+  if (!Number.isInteger(concurrency) || concurrency < 1 || concurrency > 8) throw new ConfigError('--concurrency must be 1–8');
   const merged = {
     reviewers: reviewers.map(formatReviewerSpec),
     ...(flags.orchestrator || pick('orchestrator') ? { orchestrator: flags.orchestrator || pick('orchestrator') } : {}),
@@ -131,6 +142,8 @@ export function resolveRunConfig({ flags = {}, root = ROOT, explicitConfig = fla
     passes: integerFlag('--passes', flags.passes) ?? pick('passes') ?? DEFAULTS.passes,
     toolBudget: integerFlag('--tool-budget', flags.toolBudget) ?? pick('toolBudget') ?? DEFAULTS.toolBudget,
     grace: 3,
+    pipelineMode,
+    concurrency,
     ...(debate ? { debate } : {}),
     ...(flags.maxCostUsd !== undefined ? { maxCostUsd: dollars('--max-cost-usd', flags.maxCostUsd) } : pick('maxCostUsd') !== undefined ? { maxCostUsd: dollars('maxCostUsd', pick('maxCostUsd')) } : {}),
     ...(pick('prices') ? { prices: pick('prices') } : {}),
@@ -155,6 +168,8 @@ export function resolveRunConfig({ flags = {}, root = ROOT, explicitConfig = fla
     orchestrator: merged.orchestrator === 'recommended' ? 'recommended' : merged.orchestrator ? parseReviewerSpec(merged.orchestrator) : null,
     alternateJudge: merged.alternateJudge ? parseReviewerSpec(merged.alternateJudge) : null,
     assign,
+    pipelineMode: merged.pipelineMode,
+    concurrency: merged.concurrency,
     budgets: { passes: merged.passes, toolBudget: merged.toolBudget, debate: { ...DEFAULTS.debate, ...(merged.debate || {}) }, maxCostUsd: merged.maxCostUsd ?? null },
     prices: merged.prices || null,
     preset: flags.preset || null,
@@ -166,14 +181,21 @@ export function resolveRunConfig({ flags = {}, root = ROOT, explicitConfig = fla
 // ---- CLI: node run-config.mjs resolve [flags] -> JSON on stdout, errors on stderr, exit 2 ----
 export function parseFlags(argv) {
   const flags = { modelByAgent: {} };
+  const setPipeline = (mode) => {
+    if (flags.pipelineMode && flags.pipelineMode !== mode) throw new ConfigError(`conflicting pipeline mode flags (${flags.pipelineMode} vs ${mode})`);
+    flags.pipelineMode = mode;
+  };
   const take = (i) => { if (i + 1 >= argv.length) throw new ConfigError(`${argv[i]} needs a value`); return argv[i + 1]; };
-  for (let i = 0; i < argv.length; i += 2) {
+  for (let i = 0; i < argv.length;) {
     const arg = argv[i];
-    const key = { '--config': 'config', '--preset': 'preset', '--reviewers': 'reviewers', '--agents': 'agents', '--model': 'model', '--models': 'models', '--assign': 'assign', '--orchestrator': 'orchestrator', '--alternate-judge': 'alternateJudge', '--passes': 'passes', '--tool-budget': 'toolBudget', '--max-cost-usd': 'maxCostUsd', '--debate-rounds': 'debateRounds', '--debate-max-clusters': 'debateMaxClusters', '--debate-tool-budget': 'debateToolBudget', '--debate-turn-ms': 'debateTurnMs', '--debate-phase-ms': 'debatePhaseMs', '--target': 'target' }[arg];
-    if (key) { flags[key] = take(i); continue; }
+    if (arg === '--step-by-step') { setPipeline('step-by-step'); i += 1; continue; }
+    if (arg === '--no-debate') { setPipeline('stage-1'); i += 1; continue; }
+    if (arg === '--pipeline') { setPipeline(take(i)); i += 2; continue; }
+    const key = { '--config': 'config', '--preset': 'preset', '--reviewers': 'reviewers', '--agents': 'agents', '--model': 'model', '--models': 'models', '--assign': 'assign', '--orchestrator': 'orchestrator', '--alternate-judge': 'alternateJudge', '--passes': 'passes', '--tool-budget': 'toolBudget', '--max-cost-usd': 'maxCostUsd', '--debate-rounds': 'debateRounds', '--debate-max-clusters': 'debateMaxClusters', '--debate-tool-budget': 'debateToolBudget', '--debate-turn-ms': 'debateTurnMs', '--debate-phase-ms': 'debatePhaseMs', '--concurrency': 'concurrency', '--target': 'target' }[arg];
+    if (key) { flags[key] = take(i); i += 2; continue; }
     // --claude-model <slug> (the planned spelling) and --model-claude <slug> (alias) set one vendor's model.
     const perAgent = /^--([a-z]+)-model$/.exec(arg)?.[1] || /^--model-([a-z]+)$/.exec(arg)?.[1];
-    if (perAgent && Object.hasOwn(CLI_DEFAULT_MODELS, perAgent)) { flags.modelByAgent[perAgent] = take(i); continue; }
+    if (perAgent && Object.hasOwn(CLI_DEFAULT_MODELS, perAgent)) { flags.modelByAgent[perAgent] = take(i); i += 2; continue; }
     throw new ConfigError(`unknown option ${arg}`);
   }
   return flags;

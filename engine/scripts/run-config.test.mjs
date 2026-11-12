@@ -15,6 +15,7 @@ test('without flags or file the legacy four cli reviewers keep round-robin and O
   const r = resolveRunConfig({ flags: {}, root: tmp(t) });
   assert.deepEqual(r.reviewers.map((x) => x.id), ['cli-claude-opus', 'cli-grok-grok-4-7', 'cli-agy-gemini-4-argon-high', 'cli-codex-gpt-6-1-sol']);
   assert.equal(r.assign, 'round-robin');
+  assert.equal(r.concurrency, 3);
   assert.deepEqual([r.budgets.passes, r.budgets.toolBudget, r.budgets.debate.rounds], [2, 40, 2]);
 });
 

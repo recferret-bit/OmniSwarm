@@ -50,7 +50,9 @@ export function selectLocalPanel(installed) {
 }
 
 const API_IDS = () => apiProviders().map((provider) => provider.id).join(', ');
+const PIPELINE_MODES = ['full', 'step-by-step', 'stage-1'];
 const USAGE = 'usage: audit local [--repo <directory> | --github <owner/repo or url>] [--scope full|web2|web3|infra] '
+  + '[--pipeline full|step-by-step|stage-1 | --step-by-step | --no-debate] [--concurrency <1-8>] '
   + '[--provider <zai|openrouter|nearai> --models <model,...> | --nearai <model,...>] [--with-clis]';
 
 /** One API provider's panel: every named model reviews, the first orchestrates. `withClis` adds installed CLIs as reviewers. */
@@ -69,11 +71,31 @@ function modelList(flag, value) {
 }
 
 export function parseLocalArgs(argv) {
-  const result = { repo: '', github: '', scope: '', provider: '', models: [], withClis: false };
+  const result = { repo: '', github: '', scope: '', provider: '', models: [], withClis: false, pipelineMode: '', concurrency: 0 };
+  const setPipeline = (mode) => {
+    if (!PIPELINE_MODES.includes(mode)) throw new Error(`--pipeline must be one of: ${PIPELINE_MODES.join(', ')}`);
+    if (result.pipelineMode && result.pipelineMode !== mode) throw new Error(`conflicting pipeline flags (${result.pipelineMode} vs ${mode})`);
+    result.pipelineMode = mode;
+  };
   for (let i = 0; i < argv.length; i += 1) {
     const flag = argv[i];
     const value = argv[i + 1];
     if (flag === '--with-clis') { result.withClis = true; continue; }
+    if (flag === '--step-by-step') { setPipeline('step-by-step'); continue; }
+    if (flag === '--no-debate') { setPipeline('stage-1'); continue; }
+    if (flag === '--pipeline') {
+      if (!value || value.startsWith('-')) throw new Error(`--pipeline needs one of: ${PIPELINE_MODES.join(', ')}`);
+      setPipeline(value);
+      i += 1;
+      continue;
+    }
+    if (flag === '--concurrency') {
+      const n = Number(value);
+      if (!value || !Number.isInteger(n) || n < 1 || n > 8) throw new Error('--concurrency must be an integer 1–8');
+      result.concurrency = n;
+      i += 1;
+      continue;
+    }
     if (flag === '--nearai') {
       if (result.provider && result.provider !== 'nearai') throw new Error('--nearai cannot be combined with another --provider');
       result.provider = 'nearai';
@@ -112,7 +134,9 @@ export function parseLocalArgs(argv) {
 export function localAuditArgs(panel, target) {
   const args = ['run', ...(target.github ? ['--github', target.github] : ['--repo', target.repo || '.']),
     '--reviewers', panel.reviewers.join(','), '--orchestrator', panel.orchestrator, '--assign', 'matrix',
-    ...(target.scope ? ['--scope', target.scope] : [])];
+    ...(target.scope ? ['--scope', target.scope] : []),
+    ...(target.pipelineMode ? ['--pipeline', target.pipelineMode] : []),
+    ...(target.concurrency ? ['--concurrency', String(target.concurrency)] : [])];
   return args;
 }
 

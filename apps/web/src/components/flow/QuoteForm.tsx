@@ -2,16 +2,19 @@
 
 import { useState, type FormEvent } from 'react';
 import { messageFor } from '@/lib/api/errors';
+import type { PipelineMode } from '@/lib/api/schema.gen';
 import { isAccountId } from '@/lib/repo';
 import { selectBusy, useRequestFlow } from '@/stores/request-flow';
 import { Button } from '../ui/Button';
 import { Field } from '../ui/Field';
+import { PipelineModeChecks } from './PipelineModeChecks';
 import { ScopeChecks } from './ScopeChecks';
 
 export function QuoteForm() {
   const [repo, setRepo] = useState('');
   const [deployed, setDeployed] = useState('');
   const [scopes, setScopes] = useState<string[]>(['full']);
+  const [pipelineMode, setPipelineMode] = useState<PipelineMode>('full');
   const requestQuote = useRequestFlow((state) => state.requestQuote);
   const busy = useRequestFlow(selectBusy);
   const quoting = useRequestFlow((state) => state.step === 'quoting');
@@ -22,6 +25,7 @@ export function QuoteForm() {
     event.preventDefault();
     if (deployedError || scopes.length === 0) return;
     sessionStorage.setItem('omniswarm-scope', JSON.stringify(scopes));
+    sessionStorage.setItem('omniswarm-pipeline-mode', pipelineMode);
     sessionStorage.setItem('omniswarm-repo', repo.trim());
     void requestQuote(repo, deployed);
   };
@@ -50,6 +54,7 @@ export function QuoteForm() {
         error={deployedError}
       />
       <ScopeChecks selected={scopes} onChange={setScopes} />
+      <PipelineModeChecks name="quote-pipeline-mode" value={pipelineMode} onChange={setPipelineMode} />
       <Button type="submit" busy={quoting} disabled={busy || scopes.length === 0}>Get quote</Button>
     </form>
   );

@@ -17,12 +17,33 @@ export async function statusOf(row: MockRequest): Promise<RequestStatusResponse>
   const settled = await settle(row);
   const snapshot = snapshotAt(settled, clock.now());
   const body: RequestStatusResponse = { status: snapshot.status, createdAt: stamp(settled.createdAt) };
+  if (settled.pipelineMode) body.pipelineMode = settled.pipelineMode;
   if (snapshot.progress) body.progress = snapshot.progress;
   if (snapshot.status === 'done') {
     const attestation = readState().attestations[settled.requestHash];
     body.reportUrl = `${reportBase(settled.id)}report.html`;
     if (attestation) body.reportSha256 = attestation.report_sha256;
     if (settled.attestTx) body.attestTx = settled.attestTx;
+    if (settled.pipelineMode || settled.roundsCompleted) {
+      const mode = settled.pipelineMode ?? 'full';
+      const rounds = settled.roundsCompleted ?? (mode === 'full' ? 2 : 0);
+      const nextRoundRequestIds = readState().requests.filter((item) => item.parentId === settled.id).map((item) => item.id);
+      body.pipeline = {
+        pipelineMode: mode,
+        currentStage: rounds > 0 ? 'stage-3-debate' : mode === 'stage-1' ? 'stage-1' : mode === 'step-by-step' ? 'stage-2-advice' : 'completed',
+        noDebates: rounds === 0,
+        roundsCompleted: rounds,
+        canRunMoreRounds: rounds < 20,
+        advice: {
+          debateNeeded: rounds === 0,
+          recommendedDepth: rounds === 0 ? 'shallow' : 'none',
+          recommendedRounds: rounds === 0 ? 1 : 0,
+          qualityRating: 'adequate',
+          summary: rounds === 0 ? 'Stage 1 pass complete; 1 debate round recommended on disputed claims.' : `Completed ${rounds} debate round(s).`,
+        },
+        ...(nextRoundRequestIds.length > 0 ? { nextRoundRequestIds } : {}),
+      };
+    }
   }
   if (snapshot.status === 'refunded' && settled.refundTx) body.refundTx = settled.refundTx;
   return body;

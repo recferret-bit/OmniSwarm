@@ -1,0 +1,12 @@
+{
+  "version": 99,
+  "pipelineMode": "unknown",
+  "currentStage": "stage-1",
+  "completedSteps": [],
+  "evidence": { "stored": true, "dir": "wrong", "claimsCount": -1, "clustersCount": 0, "files": [] },
+  "stage1": { "completed": true, "noDebates": true, "artifacts": [], "findingsCount": 0 },
+  "advice": null,
+  "debate": { "optional": false, "roundsCompleted": 0, "queuedClusters": 0, "unresolvedClusters": 0, "converged": false, "canRunMoreRounds": false, "rounds": [] },
+  "incompletionNotes": [],
+  "updatedAt": ""
+}

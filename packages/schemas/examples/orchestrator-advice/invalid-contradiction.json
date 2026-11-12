@@ -1,0 +1,22 @@
+{
+  "stage": "stage-2-advice",
+  "quality": {
+    "rating": "strong",
+    "summary": "Contradictory debate fields.",
+    "coverageGaps": [],
+    "issues": []
+  },
+  "debateAdvice": {
+    "debateNeeded": false,
+    "recommendedDepth": "deep",
+    "recommendedRounds": 3,
+    "focusClusterIds": ["CLUSTER-1"],
+    "rationale": "Contradiction: debateNeeded=false cannot request 3 deep rounds."
+  },
+  "nextSteps": ["None"],
+  "generatedBy": {
+    "mode": "model",
+    "orchestrator": "cli:claude:opus"
+  },
+  "disclaimer": "Model agreement and passing checks do not certify security."
+}

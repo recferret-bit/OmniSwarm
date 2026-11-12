@@ -4,11 +4,17 @@ import { disclosure, esc, prose } from './report-cards.mjs';
 
 export const incompleteLabelOf = (ctx) => (ctx.reviewComplete ? 'INCOMPLETE VERIFICATION' : 'INCOMPLETE REVIEW');
 
+function incompletionDetails(health, complete) {
+  const notes = Array.isArray(health?.incompletionNotes) ? health.incompletionNotes : [];
+  if (complete || !notes.length) return '';
+  return `<div class="incompletion-notes"><h4>Why this audit is incomplete &amp; security impact</h4><ul class="validation-errors">${notes.map((n) => `<li><strong>[${esc(n.category)}${n.source ? ` · ${esc(n.source)}` : ''}]</strong> ${esc(n.reason)}<br><small><strong>Impact:</strong> ${esc(n.impact)}${n.nextStep ? ` · <strong>Next:</strong> ${esc(n.nextStep)}` : ''}</small></li>`).join('')}</ul></div>`;
+}
+
 export function validationDetails(ctx, modelRows) {
   const { complete, health, sourceLine, meta } = ctx;
   const requested = modelRows.map((row) => `<tr><td><strong>${esc(row.key)}</strong></td><td>${esc(row.label)}</td><td>${row.available ? 'Valid outputs available' : 'no valid outputs'}</td></tr>`).join('');
   return `<p class="note"><strong>${complete ? 'OUTPUTS VALIDATED — NOT A CLEAN-AUDIT CERTIFICATE' : incompleteLabelOf(ctx)}</strong>. These are unverified model assertions. No authenticated execution evidence or served-model/provider attestation was collected. Zero findings is not proof of safety.</p>
-  ${(health.errors || []).length ? `<ul class="validation-errors">${health.errors.map((error) => `<li>${esc(error)}</li>`).join('')}</ul>` : ''}
+  ${(health.errors || []).length ? `<ul class="validation-errors">${health.errors.map((error) => `<li>${esc(error)}</li>`).join('')}</ul>` : ''}${incompletionDetails(health, complete)}
   <p class="note">Agreement means matching titles and citations across asserted adapters. First-pass independence and served-provider identity are not enforced. Peer verdicts are model statements; priority scores are heuristic.</p>
   <div class="table-scroll"><table><caption class="meta-label">Requested models · served identity unverified</caption><thead><tr><th>Adapter</th><th>Requested model</th><th>Output</th></tr></thead><tbody>${requested}</tbody></table></div>
   ${sourceLine ? `<p class="note">Captured source: <code>${esc(sourceLine)}</code></p>` : ''}

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState, type FormEvent } from 'react';
 import { api, requestReportHref, type AccountKeyView } from '@/lib/api/client';
 import { messageFor, toAppError, type AppErrorCode } from '@/lib/api/errors';
+import type { PipelineMode } from '@/lib/api/schema.gen';
 import { parseRepoInput } from '@/lib/repo';
 import { type MyRequest } from '@/stores/my-requests';
 import { statusLabel } from '../request/Timeline';
@@ -12,6 +13,7 @@ import { Button } from '../ui/Button';
 import { Field } from '../ui/Field';
 import { Panel } from '../ui/Panel';
 import { Pill } from '../ui/Pill';
+import { PipelineModeChecks, parseSavedPipelineMode } from '../flow/PipelineModeChecks';
 import { ScopeChecks } from '../flow/ScopeChecks';
 import { phaseLabel } from '../request/ProgressPanel';
 import { AccountKeyPanel, keyReady } from '../account/AccountKeyPanel';
@@ -44,6 +46,7 @@ export function Dashboard() {
   const [repoError, setRepoError] = useState<string | null>(null);
   const [models, setModels] = useState<string[]>([]);
   const [scopes, setScopes] = useState<string[]>(['full']);
+  const [pipelineMode, setPipelineMode] = useState<PipelineMode>('full');
   // Providers that take the account's own key (provider catalog; today NEAR AI Cloud). `panel` is the operator's panel.
   const [own, setOwn] = useState<AccountKeyView[]>([]);
   const [source, setSource] = useState<string>('panel');
@@ -91,7 +94,9 @@ export function Dashboard() {
     try {
       const savedRepo = sessionStorage.getItem('omniswarm-repo');
       const savedScope = sessionStorage.getItem('omniswarm-scope');
+      const savedPipeline = sessionStorage.getItem('omniswarm-pipeline-mode');
       if (savedRepo) setRepo(savedRepo);
+      if (savedPipeline) setPipelineMode(parseSavedPipelineMode(savedPipeline));
       if (savedScope) {
         const parsed = JSON.parse(savedScope) as unknown;
         if (Array.isArray(parsed) && parsed.every((item) => typeof item === 'string')) setScopes(parsed);
@@ -162,7 +167,12 @@ export function Dashboard() {
     setDetail(null);
     setRepoError(null);
     try {
-      await api.createDashboardJob(source !== 'panel' ? { repo: repo.trim(), scopes, source } : { repo: repo.trim(), models, scopes });
+      const modeOpt = pipelineMode !== 'full' ? { pipelineMode } : {};
+      await api.createDashboardJob(
+        source !== 'panel'
+          ? { repo: repo.trim(), scopes, source, ...modeOpt }
+          : { repo: repo.trim(), models, scopes, ...modeOpt },
+      );
       setRepo('');
       const listed = await api.listMine();
       setRequests(listed.requests);
@@ -226,6 +236,7 @@ export function Dashboard() {
           required
         />
         <ScopeChecks selected={scopes} onChange={setScopes} />
+        <PipelineModeChecks name="dashboard-pipeline-mode" value={pipelineMode} onChange={setPipelineMode} />
         <fieldset className="quote-form">
           <legend>Review with</legend>
           {own.map((view) => (

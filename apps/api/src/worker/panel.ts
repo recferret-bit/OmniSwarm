@@ -39,14 +39,28 @@ export function panelSpecs(name: string): { reviewers: string[]; orchestrator: s
   return { reviewers, orchestrator: PANEL_MODELS.zai.spec, alternateJudge: PANEL_MODELS.qwen.spec };
 }
 
+export interface PanelRunOptions {
+  pipelineMode?: 'full' | 'step-by-step' | 'stage-1';
+  concurrency?: number;
+}
+
 /** Config file the engine reads for one panel job (OMNI_RUN_CONFIG). */
-export function panelConfigDocument(name: string): Record<string, unknown> {
+export function panelConfigDocument(name: string, opts?: PanelRunOptions): Record<string, unknown> {
   const { reviewers, orchestrator, alternateJudge } = panelSpecs(name);
+  const pipelineExtra = opts?.pipelineMode && opts.pipelineMode !== 'full' ? { pipelineMode: opts.pipelineMode } : {};
+  const resolvedConcurrency = opts?.concurrency ?? 3;
+  const concurrencyExtra = resolvedConcurrency > 1 ? { concurrency: resolvedConcurrency } : {};
   return {
     reviewers,
     orchestrator,
+    ...pipelineExtra,
+    ...concurrencyExtra,
     presets: {
-      [name]: { reviewers, orchestrator, alternateJudge, assign: 'matrix', passes: 2, toolBudget: 30, maxCostUsd: 25 },
+      [name]: {
+        reviewers, orchestrator, alternateJudge, assign: 'matrix', passes: 2, toolBudget: 30, maxCostUsd: 25,
+        ...pipelineExtra,
+        ...concurrencyExtra,
+      },
     },
   };
 }
@@ -57,19 +71,26 @@ export function panelConfigDocument(name: string): Record<string, unknown> {
  * there is none. `maxCostUsd` only binds when the provider reports usage.cost or omniswarm.config.json has
  * prices.<provider>.<model> (engine applyPrice); otherwise spend is not bounded by it.
  */
-export function accountConfigDocument(preset: string, models: readonly string[]): Record<string, unknown> {
+export function accountConfigDocument(preset: string, models: readonly string[], opts?: PanelRunOptions): Record<string, unknown> {
   const provider = accountPresetProvider(preset);
   if (!provider) throw new Error(`preset ${preset} is not an account preset`);
   if (models.length === 0) throw new Error('an account review needs at least one model');
   const reviewers = models.map((model) => specFor(provider, model));
   const orchestrator = reviewers[0] as string;
   const alternateJudge = reviewers[1];
+  const pipelineExtra = opts?.pipelineMode && opts.pipelineMode !== 'full' ? { pipelineMode: opts.pipelineMode } : {};
+  const resolvedConcurrency = opts?.concurrency ?? 3;
+  const concurrencyExtra = resolvedConcurrency > 1 ? { concurrency: resolvedConcurrency } : {};
   return {
     reviewers,
     orchestrator,
+    ...pipelineExtra,
+    ...concurrencyExtra,
     presets: {
       [preset]: {
         reviewers, orchestrator, ...(alternateJudge ? { alternateJudge } : {}), assign: 'matrix', passes: 2, toolBudget: 30, maxCostUsd: 25,
+        ...pipelineExtra,
+        ...concurrencyExtra,
       },
     },
   };

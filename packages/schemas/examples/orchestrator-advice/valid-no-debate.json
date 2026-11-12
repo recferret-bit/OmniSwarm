@@ -1,0 +1,25 @@
+{
+  "stage": "stage-2-advice",
+  "quality": {
+    "rating": "strong",
+    "summary": "All Stage 1 findings achieved cross-vendor consensus with verified source quotes.",
+    "coverageGaps": [],
+    "issues": []
+  },
+  "debateAdvice": {
+    "debateNeeded": false,
+    "recommendedDepth": "none",
+    "recommendedRounds": 0,
+    "focusClusterIds": [],
+    "rationale": "Every cluster already has independent multi-vendor agreement; adversarial rounds would add latency without changing status."
+  },
+  "nextSteps": [
+    "Review Stage 1 artifacts directly; no debate rounds are required."
+  ],
+  "generatedBy": {
+    "mode": "rules_fallback",
+    "orchestrator": "scripted:judge",
+    "fallbackReason": "scripted_orchestrator"
+  },
+  "disclaimer": "Model agreement and passing checks do not certify security."
+}

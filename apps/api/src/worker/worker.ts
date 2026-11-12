@@ -55,7 +55,7 @@ async function workReviews(boss: PgBoss, deps: WorkerDeps, shutdown: AbortSignal
       const result = await handleReview({ ...deps, log }, data, {
         lastAttempt: job.retryCount >= job.retryLimit, signal: AbortSignal.any([job.signal, shutdown]),
       });
-      if (existing?.parent_id) {
+      if (existing?.parent_id && existing.theme) {
         const final = await finalReportDir(deps.pool, deps.config, existing.parent_id);
         if (final) {
           const published = publishReport({

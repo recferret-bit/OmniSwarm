@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://omniswarm.dev/schemas/pipeline-progress.schema.json",
+  "title": "pipeline-progress",
+  "description": "Step-by-step audit pipeline state and iterative debate round history stored in the report folder root.",
+  "type": "object",
+  "required": ["version", "pipelineMode", "currentStage", "completedSteps", "evidence", "stage1", "advice", "debate", "incompletionNotes", "updatedAt"],
+  "additionalProperties": false,
+  "properties": {
+    "version": { "const": 1 },
+    "pipelineMode": { "enum": ["full", "step-by-step", "stage-1"] },
+    "currentStage": { "enum": ["stage-1", "stage-2-advice", "stage-3-debate", "completed"] },
+    "completedSteps": {
+      "type": "array",
+      "items": { "enum": ["stage-1", "stage-2-advice", "stage-3-debate"] }
+    },
+    "evidence": {
+      "type": "object",
+      "required": ["stored", "dir", "claimsCount", "clustersCount", "files"],
+      "additionalProperties": false,
+      "properties": {
+        "stored": { "type": "boolean" },
+        "dir": { "const": "evidence" },
+        "claimsCount": { "type": "integer", "minimum": 0 },
+        "clustersCount": { "type": "integer", "minimum": 0 },
+        "files": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "stage1": {
+      "type": "object",
+      "required": ["completed", "noDebates", "artifacts", "findingsCount"],
+      "additionalProperties": false,
+      "properties": {
+        "completed": { "type": "boolean" },
+        "noDebates": { "type": "boolean" },
+        "artifacts": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "findingsCount": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "advice": {
+      "type": ["object", "null"],
+      "required": ["debateNeeded", "recommendedDepth", "recommendedRounds", "qualityRating", "artifacts"],
+      "additionalProperties": false,
+      "properties": {
+        "debateNeeded": { "type": "boolean" },
+        "recommendedDepth": { "enum": ["none", "shallow", "standard", "deep"] },
+        "recommendedRounds": { "type": "integer", "minimum": 0, "maximum": 3 },
+        "qualityRating": { "enum": ["strong", "adequate", "degraded", "incomplete"] },
+        "artifacts": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "debate": {
+      "type": "object",
+      "required": ["optional", "roundsCompleted", "queuedClusters", "unresolvedClusters", "converged", "canRunMoreRounds", "rounds"],
+      "additionalProperties": false,
+      "properties": {
+        "optional": { "const": true },
+        "roundsCompleted": { "type": "integer", "minimum": 0 },
+        "queuedClusters": { "type": "integer", "minimum": 0 },
+        "unresolvedClusters": { "type": "integer", "minimum": 0 },
+        "converged": { "type": "boolean" },
+        "canRunMoreRounds": { "type": "boolean" },
+        "rounds": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["round", "turnsCount", "unansweredTurns", "disputedCount", "artifacts", "completedAt"],
+            "additionalProperties": false,
+            "properties": {
+              "round": { "type": "integer", "minimum": 1 },
+              "turnsCount": { "type": "integer", "minimum": 0 },
+              "unansweredTurns": { "type": "integer", "minimum": 0 },
+              "disputedCount": { "type": "integer", "minimum": 0 },
+              "artifacts": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+              "completedAt": { "type": "string", "minLength": 1 }
+            }
+          }
+        }
+      }
+    },
+    "incompletionNotes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["category", "code", "source", "reason", "impact"],
+        "additionalProperties": false,
+        "properties": {
+          "category": { "enum": ["debate_arguing", "timeout", "provider_error", "usage_limit", "budget_exhausted", "crosscheck_gap", "sandbox_verification", "stage_failure"] },
+          "code": { "type": "string", "minLength": 1 },
+          "source": { "type": "string", "minLength": 1 },
+          "reason": { "type": "string", "minLength": 1 },
+          "impact": { "type": "string", "minLength": 1 },
+          "nextStep": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "updatedAt": { "type": "string", "minLength": 1 }
+  }
+}

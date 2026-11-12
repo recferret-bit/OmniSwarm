@@ -33,8 +33,10 @@ async function session(ctx, { name, agent, role, prompt, assignment, kind, signa
 
 export function bridgeVoice(ctx, reviewer, budget = DEBATE_TOOL_BUDGET) {
   return async ({ role, round, cluster, turns, anonId, signal }) => {
-    const name = `${reviewer.id}-debate-${cluster.id.toLowerCase()}-r${round}${role === 'devil' ? '-devil' : ''}`;
-    const assignment = { kind: 'debate-turn', clusterId: cluster.id, round, role, anonId, budget };
+    const schemaRound = round <= 3 ? round : (role === 'defend' ? 2 : 3);
+    const suffix = round > 3 ? `-i${round}` : (role === 'devil' ? '-devil' : '');
+    const name = `${reviewer.id}-debate-${cluster.id.toLowerCase()}-r${schemaRound}${suffix}`;
+    const assignment = { kind: 'debate-turn', clusterId: cluster.id, round: schemaRound, role, anonId, budget };
     const prompt = renderDebateBrief(TEMPLATE[role], { cluster, turns: turns.filter((t) => !t.discarded).map(publicTurn), anonId, round, budget });
     const { body, reason } = await session(ctx, { name, agent: reviewer.id, role: 'debater', prompt, assignment, kind: 'debate-turn', signal });
     return body ? { verdict: body.verdict, citations: body.citations, argument: body.argument } : { unavailable: reason };
