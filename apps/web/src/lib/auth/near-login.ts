@@ -1,12 +1,12 @@
-// Sign-in only. near-connect cannot reach the local sandbox, so this is always
-// testnet. Payments keep using getConnector() (the dev wallet when NEXT_PUBLIC_WALLET=local).
+// NEAR wallet sign-in: a NEP-413 signMessage over a server challenge. It signs
+// nothing that moves funds and sends no transaction.
 import { api, type SessionAccount } from '@/lib/api/client';
 import { AppError } from '@/lib/api/errors';
 import { env } from '@/lib/env';
 import { normalizeWalletError } from '@/lib/near/connector';
 import { decodeChallengeNonce } from '@/lib/near/nep413';
 
-const LOGIN_NETWORK = 'testnet' as const;
+const LOGIN_NETWORK = 'mainnet' as const;
 
 export function nearLoginMessage(accountId: string, nonce: string): string {
   return JSON.stringify({ account: accountId, kind: 'login', nonce, v: 1 });
@@ -16,7 +16,7 @@ export async function signInWithNear(): Promise<SessionAccount> {
   const { NearConnector } = await import('@hot-labs/near-connect');
   const connector = new NearConnector({
     network: LOGIN_NETWORK,
-    features: { signMessage: true, signAndSendTransaction: true },
+    features: { signMessage: true },
   });
   try {
     const wallet = await connector.connect();
@@ -26,7 +26,7 @@ export async function signInWithNear(): Promise<SessionAccount> {
     const challenge = await api.challenge();
     const signed = await wallet.signMessage({
       message: nearLoginMessage(accountId, challenge.nonce),
-      recipient: env.intakeRecipient,
+      recipient: env.loginRecipient,
       nonce: decodeChallengeNonce(challenge.nonce),
       network: LOGIN_NETWORK,
       signerId: accountId,

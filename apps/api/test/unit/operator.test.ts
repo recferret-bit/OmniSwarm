@@ -6,15 +6,14 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { loadConfig } from '../../src/config/load.ts';
 import { authenticateDashboard, passwordsMatch } from '../../src/modules/dashboard/credentials.ts';
-import { assertDashboardChain } from '../../src/modules/dashboard/dashboard.service.ts';
 import { assertNormalizedAbsolute, localAuditArgv, localAuditCommand, localAuditEnv, localExitStatus } from '../../src/modules/operator/local-audit.ts';
 import { assertLocalOperator, resolveLocalDirectory } from '../../src/modules/operator/local-job.service.ts';
-import { parseGitHubInput } from '../../src/modules/quote/repo-url.ts';
+import { parseGitHubInput } from '../../src/github/repo-url.ts';
 import { AppError } from '../../src/shared/errors.ts';
 import { ensureReportPdf, reportPdfBytes } from '../../src/shared/report-pdf.ts';
 
 const BASE = {
-  DATABASE_URL: 'postgres://u:p@127.0.0.1:1/db', SESSION_SECRET: 's'.repeat(40), INTAKE_RECIPIENT: 'omniswarm.testnet', CONTRACT_ID: 'registry.testnet',
+  DATABASE_URL: 'postgres://u:p@127.0.0.1:1/db', SESSION_SECRET: 's'.repeat(40),
 };
 
 function appError(fn: () => unknown): AppError {
@@ -35,11 +34,11 @@ test('dashboard password has no env default; local mode follows NODE_ENV unless 
   assert.equal(loadConfig('api', { ...BASE, LOCAL_MODE: '0' }).localMode, false);
   assert.equal(loadConfig('api', { ...BASE, LOCAL_MODE: '1' }).localMode, true);
   const prod = loadConfig('api', {
-    ...BASE, NODE_ENV: 'production', ADMIN_TOKEN: 't'.repeat(40), RPC_URLS: 'https://rpc.example', HOSTED_PRESET: 'hosted',
+    ...BASE, NODE_ENV: 'production', RPC_URLS: 'https://rpc.example', ACCOUNT_KEYS_SECRET: 'a'.repeat(40),
   });
   assert.equal(prod.localMode, false);
   assert.equal(prod.dashboard.password, null);
-  assert.equal(loadConfig('api', { ...BASE, NODE_ENV: 'production', ADMIN_TOKEN: 't'.repeat(40), RPC_URLS: 'https://rpc.example', HOSTED_PRESET: 'hosted', LOCAL_MODE: '1' }).localMode, true);
+  assert.equal(loadConfig('api', { ...BASE, NODE_ENV: 'production', RPC_URLS: 'https://rpc.example', ACCOUNT_KEYS_SECRET: 'a'.repeat(40), LOCAL_MODE: '1' }).localMode, true);
 });
 
 test('login compare: right password, wrong password, and a different length', () => {
@@ -115,8 +114,6 @@ test('loopback gate: local mode and 127.0.0.1, ::1, or ::ffff:127.0.0.1 only', (
   assert.equal(appError(() => assertLocalOperator(on, '10.1.2.3')).code, 'FORBIDDEN');
   assert.equal(appError(() => assertLocalOperator(on, '0.0.0.0')).code, 'FORBIDDEN');
   assert.equal(appError(() => assertLocalOperator({ localMode: false }, '127.0.0.1')).code, 'FORBIDDEN');
-  assert.equal(appError(() => assertDashboardChain({ chain: { adapter: 'near' } })).message, 'Dashboard jobs use the mock chain until NEAR sign-in is connected');
-  assert.doesNotThrow(() => assertDashboardChain({ chain: { adapter: 'mock' } }));
 });
 
 test('github input accepts owner/name and github.com URLs', () => {

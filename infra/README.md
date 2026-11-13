@@ -4,7 +4,7 @@
 **Owning waves:** W12 (remote host and deploy).
 **Owned subpaths:** `infra/` (`compose/`, `nginx/`, `systemd/`, `hosts/`, `deploy/`, `env/`, `check/`, `bin/`, `test/`), `.github/workflows/deploy.yml`, `docs/ops/`, `SECURITY.md`, plus `apps/api/Dockerfile` and `apps/web/Dockerfile`.
 **Gate command:** `npm run check:infra` (`bash infra/check.sh`).
-**Boundary:** NEAR RPC, wallets, payments, the GitHub API and the queue live only in `apps/`, `contracts/` and `infra/`. `engine/scripts/`, `engine/docker/`, `engine/native/` and `engine/skills/` stay the offline review engine (AGENTS.md, "Tracks and boundaries"). The sandbox never receives a key.
+**Boundary:** NEAR wallet sign-in, donations, the GitHub API and the queue live only in `apps/` and `infra/`. `engine/scripts/`, `engine/docker/`, `engine/native/` and `engine/skills/` stay the offline review engine (AGENTS.md, "Tracks and boundaries"). The sandbox never receives a key.
 
 ## What runs where
 
@@ -22,7 +22,7 @@ One Linux VM (OD-13):
 | health check + repair + alerts, retention, log hygiene | systemd timers | `systemd/omniswarm-{health,prune,log-hygiene}.*` | |
 | host firewall (nftables) | systemd `omniswarm-firewall` | `hosts/omniswarm.nft`, installed by `deploy/provision.sh` | |
 
-API containers have no host port. nginx resolves `api` and `web` through Docker's DNS on every request (`resolver 127.0.0.11 valid=2s`, `proxy_pass http://$omni_api`), so new replicas get traffic without a reload, and a stopping replica's refused connections are retried on another one. The edge rate limits (`limit_req`) live in nginx, so they hold for any number of API replicas. nginx overwrites `X-Forwarded-For`/`X-Real-IP` with the client address, which is why the API runs with `TRUST_PROXY=true`. The admin listener is `ADMIN_HOST=127.0.0.1` inside the api container: it is never published or proxied, and `/api/admin` is denied at the edge. Reach it with `docker compose exec api ...`.
+API containers have no host port. nginx resolves `api` and `web` through Docker's DNS on every request (`resolver 127.0.0.11 valid=2s`, `proxy_pass http://$omni_api`), so new replicas get traffic without a reload, and a stopping replica's refused connections are retried on another one. The edge rate limits (`limit_req`) live in nginx, so they hold for any number of API replicas. nginx overwrites `X-Forwarded-For`/`X-Real-IP` with the client address, which is why the API runs with `TRUST_PROXY=true`. The API serves only the public app (no admin listener); `/api/admin` is denied at the edge anyway, and nginx basic auth protects `/admin` and `/api/operator/`.
 
 ### Docker access (why the worker is a systemd unit)
 
@@ -36,7 +36,7 @@ The worker spawns `./bin/audit`, which builds and runs the review sandbox on the
 | `compose/compose.prod.yml` | prod: `80/443` public, Postgres `127.0.0.1:5432`, certbot (run-only profile) |
 | `compose/compose.dev.yml` | dev: loopback HTTP port from `env/dev.env.example` |
 | `compose/compose.stub.yml` | check only: stub api/web (`test/stub/`) |
-| `compose/dev-env.sh`, `compose/local.sh` | local state (random secrets) and `up`/`down`/`reset`. The local edge is HTTP |
+| `compose/dev-env.sh`, `compose/local.sh`, `compose/workers.sh` | local state (random secrets), `up`/`down`/`reset`, and the two host workers (mock engine, or the real engine with `OMNI_LIVE=1`). The local edge is HTTP |
 | `nginx/nginx.conf`, `nginx/templates/`, `nginx/snippets/` | edge config. The template is rendered by the nginx image (`OMNI_*` names only) |
 | `systemd/` | worker template + target; backup, renewal, health, prune and log-hygiene timers |
 | `hosts/` | host config `provision.sh` installs: `daemon.json`, `omniswarm.nft` + its unit, sshd, fail2ban, journald, unattended-upgrades |
@@ -56,36 +56,32 @@ The worker spawns `./bin/audit`, which builds and runs the review sandbox on the
 
 | File on the host (`root:root 0600`) | Example | Read by | Holds |
 |---|---|---|---|
-| `/etc/omniswarm/stack.env` | `env/stack.env.example` | `docker compose --env-file` only | hostnames, `POSTGRES_PASSWORD`, `SESSION_SECRET`, `ADMIN_TOKEN`, `GITHUB_TOKEN`, API settings, web build args (including the optional `NEXT_PUBLIC_DONATION_ACCOUNT` and `NEXT_PUBLIC_DONATION_USDC_CONTRACT`) |
-| `/etc/omniswarm/worker.env` | `env/worker.env.example` | systemd, for the worker units | `DATABASE_URL` (127.0.0.1), `WORKER_CONCURRENCY`, `REPORTS_ROOT`, chain settings |
+| `/etc/omniswarm/stack.env` | `env/stack.env.example` | `docker compose --env-file` only | hostnames, `POSTGRES_PASSWORD`, `SESSION_SECRET`, `ACCOUNT_KEYS_SECRET`, `GITHUB_TOKEN`, `KEY_VERIFIER`, `RPC_URLS` (a mainnet NEAR RPC for wallet sign-in; treat it as a secret if the URL carries a key), API settings, web build args (including the optional `NEXT_PUBLIC_DONATION_ACCOUNT` and `NEXT_PUBLIC_DONATION_USDC_CONTRACT`) |
+| `/etc/omniswarm/worker.env` | `env/worker.env.example` | systemd, for the worker units | `DATABASE_URL` (127.0.0.1), `WORKER_CONCURRENCY`, `REPORTS_ROOT`, `OMNI_LIVE` |
 | `/etc/omniswarm/providers.env` | `env/providers.env.example` | systemd, for the worker units | nothing. It stays empty: a hosted review runs only on the account's own NEAR AI key (`account-nearai`), sealed under `ACCOUNT_KEYS_SECRET` (`worker.env`). The file exists because the unit loads it |
-| `/etc/omniswarm/operator-key.json` | (W10) | systemd `LoadCredential=` → worker only (`OPERATOR_KEY_FILE=%d/operator-key`) | function-call key |
 | `/etc/omniswarm/ops.env` | `env/ops.env.example` | systemd, for the health, prune and log-hygiene timers | alert webhook, heartbeat URL, thresholds |
-| `/etc/omniswarm/omniswarm.config.json` (optional) | `engine/omniswarm.config.example.json` | `release.sh` copies it into each release; the worker resolves `HOSTED_PRESET` from it | engine presets (not secret) |
+| `/etc/omniswarm/omniswarm.config.json` (optional) | `engine/omniswarm.config.example.json` | `release.sh` copies it into each release; the engine reads it for reviewer defaults and prices | engine presets (not secret) |
 
-- Empty values in the examples must be set by the owner. Every compose reference to one is `${VAR:?}`, so `docker compose up` refuses to start without it. The gate proves this for each variable separately. The exceptions are optional and read as `${VAR:-}`: `GITHUB_TOKEN`, `ALLOWED_PRESETS`, `ACCOUNT_KEYS_SECRET` (`secrets-check.mjs` requires it only when `ALLOWED_PRESETS` names an `account-` preset, but no account can save its NEAR AI key without it, so set it) and the two donation build args (an empty recipient hides the donation section).
-- Compose maps each value into the services that read it. Nothing is passed through wholesale. Provider keys never reach a container, and `SESSION_SECRET`/`ADMIN_TOKEN` reach only `api` (`check/compose-policy.mjs`).
+- Empty values in the examples must be set by the owner. Every compose reference to one is `${VAR:?}`, so `docker compose up` refuses to start without it. The gate proves this for each variable separately. `ACCOUNT_KEYS_SECRET` and `RPC_URLS` are read as `${VAR:-}` by compose (the local stack runs without them) but `secrets-check.mjs` requires both in production. The other optional ones are `GITHUB_TOKEN` and the two donation build args (an empty recipient hides the donation section).
+- Compose maps each value into the services that read it. Nothing is passed through wholesale. Provider keys never reach a container, and `SESSION_SECRET`/`ACCOUNT_KEYS_SECRET` reach only `api` (`check/compose-policy.mjs`).
 - `check/env-contract.mjs` checks the contract both ways. Every variable a compose file reads is declared, every declared variable is read, examples carry no secret value, and every variable in `apps/api/.env.example` is delivered somewhere. Variables infra sets that `apps/api/.env.example` does not declare are warnings. They become errors with `OMNI_ENV_CONTRACT=strict`.
 - `ops.env.example` is in the contract too. Its names are `OMNI_*`, each is read by an `infra/deploy` script, and URLs stay empty.
 - Keep the owner's filled copies outside the repo (`~/.omniswarm/env/`). Install them with `infra/deploy/secrets.sh [--dry-run] <ssh-host>`. It runs `secrets-check.mjs` first, which refuses:
   - a missing or empty value (the optional ones above may stay empty)
-  - `NEXT_PUBLIC_CONTRACT_ID` different from `CONTRACT_ID`
   - a worker that disagrees with the stack
   - a `DATABASE_URL` without `POSTGRES_PASSWORD`
-  - a placeholder contract id
-  - a donation recipient on another network than `NETWORK`
+  - a `.testnet` donation recipient (mainnet only)
   - any variable in `providers.env`
   - short secrets
-  - the contract account's key in place of the operator's
 
-  Then it streams each file to `/etc/omniswarm/<name>` (`root:root 0600`, via a temp name and a rename) and compares hashes. It prints names and fingerprints only. At the end it lists any provider or operator variable found inside a running api container: there must be none. `docs/ops/OWNER_TASKS.md` walks through every value.
+  Then it streams each file to `/etc/omniswarm/<name>` (`root:root 0600`, via a temp name and a rename) and compares hashes. It prints names and fingerprints only. At the end it lists any provider-key variable found inside a running api container: there must be none. `docs/ops/OWNER_TASKS.md` walks through every value.
 
 ## Deploy, rollback, scale
 
 ```sh
 infra/deploy/deploy.sh --dry-run <ssh-host> wave-12          # print the plan, contact nothing
 infra/deploy/deploy.sh <ssh-host> wave-12 --api-replicas 2 --workers 2
-infra/deploy/smoke.sh --network testnet <domain>              # 10 checks, exit 1 on any failure
+infra/deploy/smoke.sh <domain>              # 10 checks, exit 1 on any failure
 infra/deploy/deploy.sh <ssh-host> --rollback
 ```
 
@@ -202,7 +198,7 @@ The stub (`test/stub/`) stands in for the apps because the bring-up must not dep
 | sshd keys only | `sudo sshd -T \| grep -E '^(passwordauthentication\|permitrootlogin\|kbdinteractiveauthentication)'` shows `no`, `without-password`, `no`. From outside, `ssh -o PubkeyAuthentication=no <host>` is refused |
 | fail2ban | `sudo fail2ban-client status sshd` |
 | Secrets root-only | `sudo stat -c '%a %U' /etc/omniswarm /etc/omniswarm/*` shows `700 root` and `600 root`. `sudo -u omniswarm cat /etc/omniswarm/providers.env` is denied |
-| Keys never in a container | `secrets.sh` post-check; `docker inspect` of the api container lists no `*_API_KEY` or operator key |
+| Keys never in a container | `secrets.sh` post-check; `docker inspect` of the api container lists no `*_API_KEY` |
 | Swap off | `swapon --show` prints nothing |
 | Unattended security upgrades | `systemctl is-enabled unattended-upgrades`; `/var/log/unattended-upgrades/` |
 
@@ -216,7 +212,7 @@ The stub (`test/stub/`) stands in for the apps because the bring-up must not dep
 |---|---|---|
 | `omniswarm-health.timer`, every minute | `deploy/health.sh` | Checks `/api/health` and `/api/ready` through nginx on 127.0.0.1, the worker units and pg-boss's live-worker count, and disk use (alarm at 80 %). After 2 failed runs in a row it restarts unhealthy containers, starts stopped ones (`up --no-recreate`) or resets failed workers, and alerts once. It alerts once more on recovery. Green runs ping `OMNI_HEARTBEAT_URL`. See `docs/ops/UPTIME.md` |
 | `omniswarm-prune.timer`, daily | `deploy/prune.sh` | Removes engine staging leftovers older than 2 days, images of releases no longer on disk, and dangling images and build cache older than 7 days. `RUNS_ROOT` and orphaned published reports are left to the worker's own hygiene (`apps/api`, `KEEP_RUNS`) |
-| `omniswarm-log-hygiene.timer`, daily | `deploy/log-hygiene.sh` | Searches 24 h of the `omniswarm-*` journal, every compose container's log, and recent engine `worker.log` files. It looks for the exact values of the secrets in `/etc/omniswarm` (and the operator key), and for GitHub-token, provider-key, env-assigned provider-key (`tools/secret-shapes.txt`), NEAR-secret-key and PEM shapes. It prints `HIT <rule> in <source>`, never the text, and alerts |
+| `omniswarm-log-hygiene.timer`, daily | `deploy/log-hygiene.sh` | Searches 24 h of the `omniswarm-*` journal, every compose container's log, and recent engine `worker.log` files. It looks for the exact values of the secrets in `/etc/omniswarm` and for GitHub-token, provider-key, env-assigned provider-key (`tools/secret-shapes.txt`), NEAR-secret-key and PEM shapes. It prints `HIT <rule> in <source>`, never the text, and alerts |
 
 Log retention:
 - **Containers:** json-file, 20 MB × 5 each (compose, and `daemon.json` for the sandbox containers). nginx logs to stdout, so this cap covers it: there is no logrotate.

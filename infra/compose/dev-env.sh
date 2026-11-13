@@ -70,7 +70,6 @@ mkdir -p "$STATE/secrets" "$STATE/runs"
 chmod 0777 "$STATE/secrets" "$STATE/runs"
 fill_key ADMIN_BASIC_USER admin
 fill_key ADMIN_BASIC_PASSWORD "$(openssl rand -hex 24)"
-fill_key OMNI_SECRETS_DIR "$STATE/secrets"
 mkdir -p "$STATE/nginx"
 admin_user="$(grep -E '^ADMIN_BASIC_USER=' "$ENV_FILE" | tail -n 1 | cut -d= -f2-)"
 admin_pass="$(grep -E '^ADMIN_BASIC_PASSWORD=' "$ENV_FILE" | tail -n 1 | cut -d= -f2-)"

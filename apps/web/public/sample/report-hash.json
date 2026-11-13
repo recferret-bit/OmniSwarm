@@ -1,0 +1,6 @@
+{
+  "_fixture": "Recorded sample report hash. /sample hashes the bundled report files in your browser and compares the result with this value.",
+  "repo": "near-examples/guest-book-examples",
+  "commit": "0123456789abcdef0123456789abcdef01234567",
+  "reportSha256": "8fb5033c2932c638b5d6967b1ca779d134d76102e98c3f32f0c2ed99fbc86c85"
+}

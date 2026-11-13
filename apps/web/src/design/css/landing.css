@@ -97,7 +97,7 @@
 .start-local pre { margin: 0; padding: var(--os-s3) var(--os-s4); background: var(--os-plate-2); border: 1px solid var(--os-seam); overflow-x: auto; }
 
 .trust__list { margin: 0; padding-left: 1.1rem; display: grid; gap: 8px; color: var(--os-text-2); }
-.trust__chain { margin: 0; color: var(--os-steel); }
+.trust__service { margin: 0; color: var(--os-steel); }
 
 @media (max-width: 960px) {
   .feature-grid, .pipeline, .example, .hero-stats { grid-template-columns: 1fr 1fr; }

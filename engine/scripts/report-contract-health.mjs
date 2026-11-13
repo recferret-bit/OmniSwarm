@@ -49,12 +49,18 @@ function budgetHealthErrors(root, meta) {
   return health.errors.map((e) => `BUDGET: ${e}`);
 }
 
-export function runRecordErrors(root, meta) {
-  const errors = [];
+// The sandbox's record of its checks (builds, installs, scanners) is tool evidence for the Tools block. A missing
+// or invalid record is shown there; it does not make the report incomplete.
+export function sandboxRecordProblem(root) {
   try {
     const sandbox = readReportText(root, 'harness/sandbox.md');
     if (!/^# Sandbox/m.test(sandbox) || !/^\| .+ \| (ran|failed|impossible) \| .+ \|$/m.test(sandbox)) throw new Error('invalid coverage record');
-  } catch { errors.push('Sandbox coverage record is missing or invalid; coverage is unknown.'); }
+    return null;
+  } catch { return 'Sandbox record (harness/sandbox.md) is missing or invalid, so which checks the sandbox ran is unknown.'; }
+}
+
+export function runRecordErrors(root, meta) {
+  const errors = [];
   if (meta.sandboxHardening === 1) {
     const problem = sourceReadDigestProblem(root);
     if (problem) errors.push(`SOURCE_DIGEST_MISMATCH: ${problem}`);

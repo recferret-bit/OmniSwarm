@@ -20,7 +20,7 @@ const hitsOf = (files, extra) => scan(files.map((entry) => entry.file), extra).m
 
 describe('bundle guard scanner', () => {
   it('passes clean output, including the real wallet code paths', () => {
-    const files = bundle({ 'static/a.js': 'const e={WALLET_REJECTED:"Payment cancelled in wallet."};new NearConnector({network:"testnet"})' });
+    const files = bundle({ 'static/a.js': 'const e={WALLET_REJECTED:"Cancelled in the wallet."};new NearConnector({network:"mainnet"})' });
     expect(hitsOf(files)).toEqual([]);
   });
 
@@ -44,7 +44,7 @@ describe('bundle guard scanner', () => {
 
   it('flags an inlined fixture hash passed as an extra literal', () => {
     const hash = '8fb5033c2932c638b5d6967b1ca779d134d76102e98c3f32f0c2ed99fbc86c85';
-    const files = bundle({ 'static/c.js': `const ATTESTED="${hash}"` });
+    const files = bundle({ 'static/c.js': `const SAMPLE_HASH="${hash}"` });
     expect(hitsOf(files, [hash])).toHaveLength(1);
   });
 });

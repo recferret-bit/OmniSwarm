@@ -15,11 +15,8 @@ services:
       COOKIE_SECURE: "0"
       ADMIN_BASIC_USER: ${ADMIN_BASIC_USER:?set ADMIN_BASIC_USER (dev.env.example)}
       ADMIN_BASIC_PASSWORD: ${ADMIN_BASIC_PASSWORD:?set ADMIN_BASIC_PASSWORD}
-      # The admin page's free-checks switch (a boolean, not a secret).
-      REVIEW_SETTINGS_FILE: /secrets/review-settings.json
-    # The switch file and the sandbox payer key (local.sh SANDBOX_PAYER_KEY_FILE=/secrets/bob.json).
-    volumes:
-      - ${OMNI_SECRETS_DIR:?set OMNI_SECRETS_DIR}:/secrets
+      # Wallet sign-in without a chain: the mock verifier knows only keys registered in-process.
+      KEY_VERIFIER: mock
 
   nginx:
     ports:

@@ -31,7 +31,7 @@ export const authRoutes: FastifyPluginAsyncZod<{ deps: ApiDeps }> = async (app, 
     },
   }, async (request, reply) => {
     const session = await loginNear(
-      { config: deps.config, chain: deps.chain, db: deps.pool, now: deps.clock.now() },
+      { config: deps.config, keys: deps.keys, db: deps.pool, now: deps.clock.now() },
       request.body,
     );
     setSession(reply, session.account, deps.clock.now(), deps.config.http.cookieSecure, { label: session.label, provider: session.provider });

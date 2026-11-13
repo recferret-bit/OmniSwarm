@@ -7,7 +7,6 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { pathToFileURL } from 'node:url';
 import { validate } from '@omniswarm/schemas';
-import type { ChainPort } from '../../src/chain/port.ts';
 import type { Config } from '../../src/config/load.ts';
 import type { Db } from '../../src/db/pool.ts';
 import type { RequestRow } from '../../src/db/repositories/requests.ts';
@@ -182,12 +181,11 @@ test('publishReport + reportIndex expose stage1Url, adviceUrl, pipelineUrl, and 
     });
 
     const row: RequestRow = {
-      id: REQ_ID, account: 'alice.test.near', repo: 'near/example', commit_sha: 'd'.repeat(40), network: 'sandbox', preset: 'account-nearai',
-      deployed: null, request_hash: 'c'.repeat(64), price_yocto: '0', status: 'done', attempts: 1, failure_cause: null,
+      id: REQ_ID, account: 'alice.test.near', repo: 'near/example', commit_sha: 'd'.repeat(40), preset: 'account-nearai',
+      status: 'done', attempts: 1, failure_cause: null,
       report_sha256: pub.reportSha256, report_url: `https://reports.example/${REQ_ID}/report.html`,
       max_severity: 'medium', scope: 'full', theme: null, parent_id: null, slice_path: null, models: null, incomplete: false,
       pipeline_mode: 'step-by-step', debate_rounds: 2,
-      attest_tx: null, refund_tx: null,
       queued_at: new Date('2026-11-09T00:00:00.000Z'), created_at: new Date('2026-11-09T00:00:00.000Z'), updated_at: new Date('2026-11-09T00:00:00.000Z'),
     };
     const pool = {
@@ -196,10 +194,9 @@ test('publishReport + reportIndex expose stage1Url, adviceUrl, pipelineUrl, and 
         return { rows: [] };
       },
     } as unknown as Db;
-    const chain = { getAttestation: async () => null } as unknown as ChainPort;
     const config = { storage: { reportsRoot, runsRoot: path.join(tmp, 'runs'), reportsBaseUrl: 'https://reports.example' } } as unknown as Config;
 
-    const index = await reportIndex({ config, pool, chain }, REQ_ID);
+    const index = await reportIndex({ config, pool }, REQ_ID);
     assert.equal(validate('intake-api#report-index-response', index).ok, true, JSON.stringify(validate('intake-api#report-index-response', index).errors));
     assert.equal(index.stage1Url, `https://reports.example/${REQ_ID}/audit_stage_1.html`);
     assert.equal(index.adviceUrl, `https://reports.example/${REQ_ID}/audit_stage_2_advice.html`);

@@ -21,6 +21,7 @@ import { HOST_DIR } from './sandbox-host-paths.mjs';
 import { PHASES, createProgress, createSticky } from './orchestrator-progress.mjs';
 import { runReviewSession } from './agent-session.mjs';
 import { REVIEW_WORKFLOW, buildExistingTestCatalog } from './review-workflow.mjs';
+import { TEST_PHASE_FILE } from './verification-health.mjs';
 import { families } from './reviewer-families.mjs';
 import { publishReviewers } from './reviewer-publish.mjs';
 import { formatReviewerSpec, reviewersOfMeta } from './reviewer-registry.mjs';
@@ -130,10 +131,10 @@ function writeInitialRecords(run) {
 }
 
 function createRun(request, output, sealed, planned, options) {
-  const { review = runReviewSession, startSandbox = startOneShotDocker } = options;
+  const { review = runReviewSession, startSandbox = startOneShotDocker, runSuite = callBridgeTool } = options;
   const cancellation = new AbortController();
   const run = {
-    request, output, ...sealed, ...planned, review, startSandbox, cancellation, signal: cancellation.signal,
+    request, output, ...sealed, ...planned, review, startSandbox, runSuite, cancellation, signal: cancellation.signal,
     pipelineMode: request.pipelineMode || null,
     concurrency: Math.max(1, Number(request.concurrency) || 1),
     reviewerById: new Map([...planned.judges, ...planned.reviewers].map((r) => [r.id, r])),
@@ -199,13 +200,26 @@ async function preparePhase(run) {
   console.log(`      Container ${run.session.container} is ready and airgapped (network disconnected).`);
 }
 
+// The target's suites are evidence for the Tests block; they never decide whether the review happens or whether
+// the report is complete. A suite that cannot be started is noted there and the run goes on to the review.
+// The one exception is the sandbox itself: a suite is refused when the container is not offline, and a run in
+// a sandbox that is not offline must stop.
+const OFFLINE_CHECK = /network-disconnected container|offline test containment/;
 async function testsPhase(run) {
   const catalog = readReportJson(run.output, 'harness/existing-tests.json');
+  const notStarted = [];
   for (const entry of catalog.tests) {
     if (run.cancellation.signal.aborted) break;
     console.log(`      Verifying existing suite: ${entry.description}`);
-    await callBridgeTool({ dockerBin: run.dockerBin, container: run.session.container, reportDir: run.output, auditor: 'verification' }, 'run_existing_tests', { test_id: entry.id });
+    try {
+      await run.runSuite({ dockerBin: run.dockerBin, container: run.session.container, reportDir: run.output, auditor: 'verification' }, 'run_existing_tests', { test_id: entry.id });
+    } catch (error) {
+      if (run.cancellation.signal.aborted || run.sandboxFailure || OFFLINE_CHECK.test(String(error?.message))) throw error;
+      notStarted.push({ testId: entry.id, note: `The suite could not be started: ${String(error?.message || error).replace(/\s+/g, ' ').slice(0, 300)}` });
+      console.log(`      Not started; reported in the Tests block: ${entry.description}`);
+    }
   }
+  if (notStarted.length) writeReportFile(run.output, TEST_PHASE_FILE, JSON.stringify(notStarted));
 }
 
 async function postReviewPipeline(run) {

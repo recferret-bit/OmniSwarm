@@ -1,4 +1,4 @@
-// Recompute a published report's attested hash (W09-11): anyone can run this on a downloaded folder.
+// Recompute a published report's hash (W09-11): anyone can run this on a downloaded folder.
 //   node apps/api/scripts/report-hash.ts <report-dir>
 import { hashReportDir } from '../src/worker/report.ts';
 

@@ -6,11 +6,10 @@ import type { HealthResponse } from '@/lib/api/schema.gen';
 import { env } from '@/lib/env';
 
 
-function chainLabel(health: HealthResponse | null): string {
-  if (env.apiMock) return 'Chain: mock (dev)';
-  const network = health?.network ?? env.network;
-  const height = typeof health?.chain.blockHeight === 'number' ? ` · height ${health.chain.blockHeight}` : '';
-  return `Chain: NEAR ${network}${health && !health.chain.rpc ? ' (RPC unavailable)' : ''}${height}`;
+function serviceLabel(health: HealthResponse | null): string {
+  if (env.apiMock) return 'Service: mock (dev)';
+  if (!health) return 'Service: checking';
+  return `Service: ${health.ok ? 'up' : 'degraded'} · ${health.queueDepth} queued · ${health.workers} ${health.workers === 1 ? 'worker' : 'workers'}`;
 }
 
 export function Trust() {
@@ -31,12 +30,11 @@ export function Trust() {
         <ul className="trust__list">
           <li>Reviews run in an offline sandbox: no network, no exploits, no probing of deployed contracts.</li>
           <li>Instructions found in your repository are treated as data, never as commands.</li>
-          <li>The operator key is a function-call key limited to the registry&apos;s attest, refund and mark-running methods; it cannot move NEAR.</li>
+          <li>Your NEAR AI key is stored encrypted, goes only to the reviewer process for that job, and appears in a report only as a fingerprint.</li>
+          <li>The report hash is public. Your browser recomputes it from the published files, so an edited report shows as a mismatch.</li>
           <li>Model agreement does not certify security. The report says what was checked and what was not.</li>
         </ul>
-        <p className="trust__chain" data-testid="chain-status">
-          {chainLabel(health)} · contract <code>{env.contractId}</code>
-        </p>
+        <p className="trust__service" data-testid="service-status">{serviceLabel(health)}</p>
       </div>
     </section>
   );

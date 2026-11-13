@@ -207,7 +207,7 @@ test('a Python project with tests gets a fixed, hash-bound pytest entry and no c
   assert.deepEqual(rows[0].files.map(file => file.path).sort(), ['backend/requirements.txt', 'backend/tests/conftest.py']);
   const selected = selectExistingTest({ ...catalog, tests: [{ ...rows[0], command: 'sh', args: ['-c', 'x'] }] }, rows[0].id, catalog.sourceDigest);
   assert.equal(selected.command, '/work/venv/bin/python');
-  assert.deepEqual(selected.args, ['-m', 'pytest', '-p', 'no:cacheprovider', '-q', '--tb=line']);
+  assert.deepEqual(selected.args, ['-m', 'pytest', '-p', 'no:cacheprovider', '-q', '--tb=line', '-rfEs', '--continue-on-collection-errors']);
   assert.equal(selected.timeoutMs, 1800000);
 });
 

@@ -39,7 +39,7 @@ The on-box timer cannot report a host that is down. Use at least one of these:
    - `https://<domain>/`, status 200
 3. **Cron on the owner's machine.** The same checks as the deploy smoke test, without the rate-limit burst:
    ```cron
-   */10 * * * * cd ~/OmniSwarm && infra/deploy/smoke.sh --no-burst --network testnet <domain> > /tmp/omniswarm-smoke.log 2>&1 || mail -s "omniswarm smoke failed" you@example.com < /tmp/omniswarm-smoke.log
+   */10 * * * * cd ~/OmniSwarm && infra/deploy/smoke.sh --no-burst <domain> > /tmp/omniswarm-smoke.log 2>&1 || mail -s "omniswarm smoke failed" you@example.com < /tmp/omniswarm-smoke.log
    ```
 
 ## Drill (wave check step 8)

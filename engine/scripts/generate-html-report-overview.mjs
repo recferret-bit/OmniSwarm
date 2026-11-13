@@ -15,7 +15,7 @@ export function hero({ targetName, meta, accepted, expected, complete, reviewCom
 
 export function notice(ctx) {
   const { complete, reviewComplete } = ctx;
-  return `<div class="notice"><b>${complete ? 'UNVERIFIED CLAIMS' : incompleteLabelOf(ctx)}</b><span>Model assertions, not a safety certificate. ${complete ? 'Zero findings does not prove safety.' : reviewComplete ? 'Review outputs are complete; required execution coverage still has gaps.' : 'Missing reviews are not passes.'}</span><a href="report.html#validation">View limitations ↗</a></div>`;
+  return `<div class="notice"><b>${complete ? 'UNVERIFIED CLAIMS' : incompleteLabelOf(ctx)}</b><span>Model assertions, not a safety certificate. ${complete ? 'Zero findings does not prove safety.' : reviewComplete ? 'Review outputs are complete, but the report could not be finished; see the errors.' : 'Missing reviews are not passes.'}</span><a href="report.html#validation">View limitations ↗</a></div>`;
 }
 
 function stats({ counts }) {

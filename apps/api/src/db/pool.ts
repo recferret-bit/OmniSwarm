@@ -5,7 +5,7 @@ export type Client = pg.PoolClient;
 /** Anything that runs a query: the pool, or a client inside a transaction. */
 export type Db = Pick<pg.Pool, 'query'> | Pick<pg.PoolClient, 'query'>;
 
-// numeric(40,0) and bigint come back as strings; keep them as strings (yocto amounts, ids).
+// numeric(40,0) and bigint come back as strings; keep them as strings (ids).
 export function createPool(url: string, max = 10): Pool {
   const pool = new pg.Pool({ connectionString: url, max });
   // An idle client that loses its connection must not crash the process.

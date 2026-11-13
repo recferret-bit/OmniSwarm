@@ -48,10 +48,9 @@ install_host_deps() {
   omni_run npm --prefix "$dir/engine/runtime" ci --ignore-scripts --no-audit --no-fund
 }
 
-# The worker resolves HOSTED_PRESET from <release>/omniswarm.config.json and refuses
-# to start without it; the file is gitignored, so a `git archive` release lacks it.
-# The owner's copy wins; otherwise the release's own example (it defines `hosted`
-# and `demo`) is used.
+# The engine reads <release>/omniswarm.config.json (reviewer defaults and prices); the
+# file is gitignored, so a `git archive` release lacks it. The owner's copy wins;
+# otherwise the release's own example is used.
 install_engine_config() {
   local dir="$1" src="$ENGINE_CONFIG"
   if [ ! -r "$src" ] && [ "$OMNI_DRY_RUN" = 0 ]; then

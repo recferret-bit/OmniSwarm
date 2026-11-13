@@ -60,7 +60,7 @@ describe('how stage pictures', () => {
     expect(paint(0, 0)).toContain('CONTRACT · contracts/vault/src/lib.rs');
     expect(paint(0, 0)).toContain('LEAD · NOT A FINDING YET');
     expect(paint(0, 2800)).toContain('INFRA · infra/nginx/edge.conf');
-    expect(paint(0, 5600)).toContain('APP · apps/web/src/pay/intent.ts');
+    expect(paint(0, 5600)).toContain('APP · apps/web/src/session/token.ts');
     const pass2 = paint(0, 0, true);
     expect(pass2).toContain('PASS 2 · SAME SNAPSHOT');
     expect(pass2).toContain('lib.rs:30 · DUP');
@@ -85,18 +85,18 @@ describe('how stage pictures', () => {
     expect(review).toContain('high-risk');
   });
 
-  it('locks a report sha256, matches the browser, and attests it', () => {
+  it('locks a report sha256, matches the browser, and publishes it', () => {
     expect(paint(3, 800)).toContain('findings-and-scores.json');
     expect(paint(3, 800)).toContain('general-review.json');
     expect(paint(3, 2800 * 1.9)).toContain('LOCKED');
     expect(paint(3, 2800 * 2.95)).toContain('MATCH');
-    const attested = paint(3, 0, true);
-    expect(attested).toContain('attest');
-    expect(attested).toContain('review_attested');
-    expect(attested).toContain('The chain stores the hash, not the report.');
+    const published = paint(3, 0, true);
+    expect(published).toContain('reportSha256');
+    expect(published).toContain('HASH SERVED WITH IT');
+    expect(published).toContain('The hash is public. Anyone can recompute it from the files.');
   });
 
-  it('draws the sample attestation hash across the lock-in', () => {
+  it('draws the sample report hash across the lock-in', () => {
     const drawn = paint(3, 2800 * 1.9, false, SAMPLE_HASH).replaceAll('\n', '');
     expect(drawn).toContain(SAMPLE_HASH);
   });
@@ -104,10 +104,10 @@ describe('how stage pictures', () => {
   it('does not present an empty fetch as a locked digest', () => {
     expect(paint(3, 2800 * 1.2, false, '')).not.toMatch(/(^|\n)LOCKED(\n|$)/);
     expect(paint(3, 2800 * 2.2, false, '')).not.toMatch(/(^|\n)MATCH(\n|$)/);
-    expect(paint(3, 2800 * 1.2, false, '')).toContain('Reading the sample attestation.');
-    const attested = paint(3, 0, true, '');
-    expect(attested).toContain('reading sample');
-    expect(attested).not.toContain('…');
-    expect(paint(3, 2800 * 1.2, false, 'zz'.repeat(32))).toContain('Reading the sample attestation.');
+    expect(paint(3, 2800 * 1.2, false, '')).toContain('Reading the sample report hash.');
+    const published = paint(3, 0, true, '');
+    expect(published).toContain('reading sample');
+    expect(published).not.toContain('…');
+    expect(paint(3, 2800 * 1.2, false, 'zz'.repeat(32))).toContain('Reading the sample report hash.');
   });
 });

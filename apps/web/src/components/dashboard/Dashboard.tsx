@@ -14,8 +14,8 @@ import { Button } from '../ui/Button';
 import { Field } from '../ui/Field';
 import { Panel } from '../ui/Panel';
 import { Pill } from '../ui/Pill';
-import { PipelineModeChecks, parseSavedPipelineMode } from '../flow/PipelineModeChecks';
-import { ScopeChecks } from '../flow/ScopeChecks';
+import { PipelineModeChecks, parseSavedPipelineMode } from './PipelineModeChecks';
+import { ScopeChecks } from './ScopeChecks';
 import { phaseLabel } from '../request/ProgressPanel';
 import { AccountKeyPanel, keyReady } from '../account/AccountKeyPanel';
 import { ReportTabs } from '../report/ReportTabs';
@@ -33,7 +33,7 @@ function displayName(session: SessionAccount): string {
 }
 
 function Row({ row }: { row: MyRequest }) {
-  const tone = row.status === 'done' ? 'good' : row.status === 'failed' || row.status === 'refunded' ? 'bad' : 'info';
+  const tone = row.status === 'done' ? 'good' : row.status === 'failed' ? 'bad' : 'info';
   return (
     <li className="request-row">
       <Link href={`/dashboard/requests/${row.requestId}`} className="request-row__repo">{row.theme ? `${row.repo} · ${row.theme}` : row.repo}</Link>

@@ -60,7 +60,7 @@ describe('landing animation loops', () => {
     } as typeof original;
     vi.stubGlobal('fetch', () => Promise.resolve({
       ok: true,
-      json: async () => ({ report_sha256: 'ab'.repeat(32) }),
+      json: async () => ({ reportSha256: 'ab'.repeat(32) }),
     }));
     try {
       render(<HowStage active={3} />);

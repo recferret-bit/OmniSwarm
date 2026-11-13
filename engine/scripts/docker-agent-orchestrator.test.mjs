@@ -77,6 +77,46 @@ test('sandbox loss cancels active sessions, preserves queued assignments and sta
   assert.equal(f.stopped, true);
 });
 
+// The target's own suites are evidence for the Tests block. Failing to start one is not a reason to skip the
+// review; a sandbox that is not offline is.
+test('a target suite that cannot be started is noted for the Tests block and the review still runs', async t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'audit-tests-phase-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const target = path.join(root, 'source');
+  fs.mkdirSync(target);
+  fs.writeFileSync(path.join(target, 'source.js'), 'export const inert = true;');
+  fs.writeFileSync(path.join(target, 'package.json'), JSON.stringify({ scripts: { test: 'node --test existing.test.cjs' } }));
+  fs.writeFileSync(path.join(target, 'existing.test.cjs'), "require('node:test')('inert', () => {});\n");
+  const reviewed = [];
+  const review = async ({ identity, directory, bridgeArgs }) => {
+    reviewed.push(identity.name);
+    const out = bridgeArgs[bridgeArgs.indexOf('--report-dir') + 1];
+    if (identity.role === 'auditor') commitSubmission(out, identity.name, identity, [{ verified_safe: [] }]);
+    return { code: 0, sessionId: identity.name, directory, elapsedMs: 1, observedExitCode: 0 };
+  };
+  const startSandbox = async ({ out }) => ({ container: 'inert', hostRunDir: out, stop: async () => {} });
+  const request = { target, surface: 's1', agents: ['claude'], models: { claude: 'fixture' } };
+  const suites = [];
+  const unstartable = async (ctx, tool, args) => { suites.push([ctx.auditor, tool, args.test_id]); throw new Error('Cannot prepare a per-run copy of the sealed source:\n no space left on device'); };
+
+  const out = path.join(root, 'report');
+  const result = await runOrchestratedAudit({ ...request, out }, { review, startSandbox, runSuite: unstartable, quietProgress: true });
+  const catalog = readReportJson(out, 'harness/existing-tests.json');
+  assert.equal(catalog.tests.length, 1, 'the fixture has one catalogued suite');
+  assert.deepEqual(suites, [['verification', 'run_existing_tests', catalog.tests[0].id]]);
+  assert.deepEqual(result.stageFailures, [], 'a suite that cannot start does not fail a stage');
+  assert.deepEqual(reviewed, ['claude-s1-auth'], 'the review ran');
+  assert.deepEqual(readReportJson(out, 'harness/existing-test-phase.json'), [{ testId: catalog.tests[0].id, note: 'The suite could not be started: Cannot prepare a per-run copy of the sealed source: no space left on device' }]);
+
+  // The same call refuses to run a suite in a container that is not offline: that ends the run before review.
+  reviewed.length = 0;
+  const online = async () => { throw new Error('Tests require a network-disconnected container'); };
+  const blocked = await runOrchestratedAudit({ ...request, out: path.join(root, 'online') }, { review, startSandbox, runSuite: online, quietProgress: true });
+  assert.deepEqual(blocked.stageFailures, ['sandbox_or_orchestrator:Tests require a network-disconnected container']);
+  assert.deepEqual(reviewed, []);
+  assert.equal(fs.existsSync(path.join(root, 'online', 'harness', 'existing-test-phase.json')), false);
+});
+
 test('providers overlap, their own surfaces queue, and peer reviews start together after all surfaces finish', { timeout: 10_000 }, async t => {
   const f = fixture(t);
   await f.waitFor(() => f.started.size === 4);

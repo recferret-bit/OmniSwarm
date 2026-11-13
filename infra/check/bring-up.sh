@@ -68,7 +68,7 @@ check_log "stack healthy: $(omni_compose ps --format '{{.Service}}' | sort | uni
   || check_fail "migrate did not run to completion before api"
 
 bash "$INFRA/deploy/smoke.sh" --scheme http --resolve 127.0.0.1 --http-port "$HTTP" \
-  --network testnet "$DOMAIN" "$REPORTS" | sed 's/^/    /'
+  "$DOMAIN" "$REPORTS" | sed 's/^/    /'
 
 case "$(omni_compose port postgres 5432)" in
   "127.0.0.1:$PG") check_log "postgres published on 127.0.0.1:$PG only" ;;

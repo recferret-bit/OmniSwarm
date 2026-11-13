@@ -50,7 +50,7 @@ test('every tracked env file except .env.example fails, as do reports/ and engin
 });
 
 test('a tracked env file passes only when every line is a NEXT_PUBLIC_* assignment', () => {
-  const pub = '# public\nNEXT_PUBLIC_NETWORK=testnet\n\nNEXT_PUBLIC_API_MOCK=0\n';
+  const pub = '# public\nNEXT_PUBLIC_DONATION_ACCOUNT=support.near\n\nNEXT_PUBLIC_API_MOCK=0\n';
   assert.equal(sweep(repo({ 'apps/web/.env': pub, 'apps/web/.env.development': pub })).status, 0);
   for (const body of [`${pub}SESSION_SECRET=abc\n`, 'API_ORIGIN=http://127.0.0.1:8080\n', 'export NEXT_PUBLIC_X=1\n']) {
     const result = sweep(repo({ 'apps/web/.env': body }));

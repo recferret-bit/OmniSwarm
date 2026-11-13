@@ -1,3 +1,0 @@
-[mcp_servers.omniswarm-guard]
-command = "node"
-args = ["packages/guard/mcp.mjs", "--api", "http://omniswarm.localhost:18480", "--network", "sandbox"]

@@ -1,8 +1,5 @@
-// NEP-413 client helpers. The payload bytes, base58 and the canonical request
-// message all come from @omniswarm/schemas, the same module the intake verifies
-// with; this file only handles the browser-side encodings around them.
-import { canonicalRequestMessage, requestHash } from '@omniswarm/schemas/canonical-message';
-import type { Network } from '../api/schema.gen';
+// NEP-413 client helpers for the sign-in challenge: the browser-side encodings
+// around the nonce the API issues and the signature a wallet returns.
 
 export function bytesToBase64(bytes: Uint8Array): string {
   let binary = '';
@@ -22,19 +19,4 @@ export function decodeChallengeNonce(nonce: string): Uint8Array {
   const bytes = base64ToBytes(nonce);
   if (bytes.length !== 32) throw new Error('challenge nonce must decode to 32 bytes');
   return bytes;
-}
-
-export interface RequestFields {
-  account: string;
-  commit: string;
-  deployed: string | null;
-  network: Network;
-  nonce: string;
-  preset: string;
-  repo: string;
-}
-
-export async function buildSignedRequest(fields: RequestFields): Promise<{ message: string; requestHash: string; nonceBytes: Uint8Array }> {
-  const message = canonicalRequestMessage(fields);
-  return { message, requestHash: await requestHash(message), nonceBytes: decodeChallengeNonce(fields.nonce) };
 }

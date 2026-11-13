@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { dominantTestFailure, killedDetail, scannerEvidence, testCounts } from './scanner-evidence.mjs';
+import { failedTests, failureCauses, killedDetail, scannerEvidence, skipReasons, testCounts } from './scanner-evidence.mjs';
 
 test('scanner failures, error envelopes and malformed output cannot become clean scans', () => {
   for (const code of [127, 124, 2]) assert.equal(scannerEvidence('osv-scanner', { code, stdout: '{"results":[]}' }).state, 'failed');
@@ -41,11 +41,20 @@ test('execution summaries distinguish nonzero tests, failures, skips and absent 
   assert.deepEqual(testCounts('test result: ok. 0 passed; 0 failed; 0 ignored'), { passed: 0, failed: 0, skipped: 0 });
 });
 
-test('a shared pytest failure line names the dominant cause', () => {
+test('failure causes are grouped by message, most frequent first, and the failing tests are named', () => {
   const stdout = '_ ERROR at setup of test_a _\nE   Failed: Real PostgreSQL verification requires PG_BINDIR server binaries\n_ ERROR at setup of test_b _\nE   Failed: Real PostgreSQL verification requires PG_BINDIR server binaries\nE   AssertionError: one-off\n';
-  assert.deepEqual(dominantTestFailure(stdout), { message: 'Failed: Real PostgreSQL verification requires PG_BINDIR server binaries', count: 2 });
-  assert.equal(dominantTestFailure('E   AssertionError: one-off\n'), null);
-  assert.equal(dominantTestFailure('8 passed in 0.31s'), null);
-  const summary = 'E   noise\nE   noise\nE   noise\nERROR tests/a.py::t1 - AssertionError: Real Redis is required\nERROR tests/a.py::t2 - AssertionError: Real Redis is required\nFAILED tests/b.py::t3 - assert False\n';
-  assert.deepEqual(dominantTestFailure(summary), { message: 'AssertionError: Real Redis is required', count: 2 });
+  assert.deepEqual(failureCauses(stdout), [{ message: 'Failed: Real PostgreSQL verification requires PG_BINDIR server binaries', count: 2 }, { message: 'AssertionError: one-off', count: 1 }]);
+  assert.deepEqual(failureCauses('8 passed in 0.31s'), []);
+  // The short summary wins over traceback lines, and a per-run copy path does not split one cause in two.
+  const summary = "E   noise\nE   noise\nE   noise\nERROR tests/a.py::t1 - FileNotFoundError: '/work/runs/b816d2100178d035/src/docs/v.json'\nERROR tests/a.py::t2 - FileNotFoundError: '/work/runs/0011223344556677/src/docs/v.json'\nFAILED tests/b.py::t3 - assert False\n";
+  assert.deepEqual(failureCauses(summary), [{ message: "FileNotFoundError: 'docs/v.json'", count: 2 }, { message: 'assert False', count: 1 }]);
+  assert.deepEqual(failureCauses(summary, 1), [{ message: "FileNotFoundError: 'docs/v.json'", count: 2 }]);
+  assert.deepEqual(failedTests(summary), { names: ['tests/a.py::t1', 'tests/a.py::t2', 'tests/b.py::t3'], total: 3 });
+  assert.deepEqual(failedTests('test escrow::refund ... FAILED\ntest escrow::open ... ok\ntest escrow::refund ... FAILED\n'), { names: ['escrow::refund'], total: 1 });
+  assert.deepEqual(failedTests(summary, 2), { names: ['tests/a.py::t1', 'tests/a.py::t2'], total: 3 });
+  // pytest -rs: one line per place and reason, with the number of tests skipped there.
+  const skipped = 'SKIPPED [3] tests/test_pg.py:25: Requires COMMAND_CENTER_POSTGRES_URL\nSKIPPED [1] tests/test_cash.py:149: PostgreSQL migration acceptance\nSKIPPED [2] tests/test_identity.py:23: Requires COMMAND_CENTER_POSTGRES_URL\n';
+  assert.deepEqual(skipReasons(skipped), [{ message: 'Requires COMMAND_CENTER_POSTGRES_URL', count: 5 }, { message: 'PostgreSQL migration acceptance', count: 1 }]);
+  assert.deepEqual(skipReasons(skipped, 1), [{ message: 'Requires COMMAND_CENTER_POSTGRES_URL', count: 5 }]);
+  assert.deepEqual(skipReasons(summary), []);
 });

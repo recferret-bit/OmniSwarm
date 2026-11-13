@@ -10,7 +10,7 @@ export interface Ink {
   text: string;
   plate: string;
   steel: string;
-  attested: string;
+  verified: string;
   seam: string;
   onEmber: string;
   ok: string;
@@ -32,10 +32,10 @@ export function readInk(el: Element): Ink {
     text: pick('--os-text'),
     plate: pick('--os-plate'),
     steel: pick('--os-steel'),
-    attested: pick('--os-attested'),
+    verified: pick('--os-verified'),
     seam: pick('--os-seam'),
     onEmber: pick('--os-on-ember'),
-    ok: pick('--os-ok-text') || pick('--os-attested'),
+    ok: pick('--os-ok-text') || pick('--os-verified'),
     fault: pick('--os-fault-text'),
     warn: pick('--os-warn-text'),
     mono: pick('--os-font-mono') || 'IBM Plex Mono, ui-monospace, monospace',

@@ -1,6 +1,6 @@
-// The `review` queue (INTAKE section 3 step 7, W09-02). A job is sent inside the caller's payment
-// transaction through pg-boss's `db` option, so "paid" and "enqueued" commit or roll back together.
-// Policy `exclusive` + singletonKey=requestHash: at most one queued-or-active job per request.
+// The `review` queue (INTAKE section 3, W09-02). A job is sent inside the transaction that inserts the
+// request, through pg-boss's `db` option, so "queued" and "enqueued" commit or roll back together.
+// Policy `exclusive` + singletonKey=requestId: at most one queued-or-active job per request.
 import { validate } from '@omniswarm/schemas';
 import type { Config } from '../config/load.ts';
 import type { Db } from '../db/pool.ts';
@@ -10,16 +10,14 @@ export const REVIEW_QUEUE = 'review';
 /** Jobs that exhausted their retries (a worker died twice): settled as an infra failure. */
 export const REVIEW_DEAD_QUEUE = 'review-dead';
 export const MAINTENANCE_QUEUE = 'maintenance';
-/** Admin refunds: recorded by the API, signed and sent by a worker (the only holder of the operator key). */
-export const REFUND_QUEUE = 'refund';
+/** Queues of the removed on-chain features; `installQueues` deletes them from a database that still has them. */
+const RETIRED_QUEUES = ['refund', 'guard-report'] as const;
 
 export interface ReviewJob {
   requestId: string;
-  requestHash: string;
   repo: string;
   commitSha: string;
   preset: string;
-  network: 'testnet' | 'mainnet' | 'sandbox';
 }
 
 export class JobContractError extends Error {
@@ -28,9 +26,12 @@ export class JobContractError extends Error {
 
 /** packages/schemas/job.schema.json#/$defs/input, checked on send and again on fetch. */
 export function assertReviewJob(data: unknown): ReviewJob {
-  const result = validate('job#input', data);
+  // A job queued before the payment fields were removed still carries requestHash and network: drop them.
+  const raw = (data && typeof data === 'object' ? data : {}) as Record<string, unknown>;
+  const job = { requestId: raw.requestId, repo: raw.repo, commitSha: raw.commitSha, preset: raw.preset };
+  const result = validate('job#input', job);
   if (!result.ok) throw new JobContractError(`job payload rejected: ${result.errors.join('; ')}`);
-  return data as ReviewJob;
+  return job as ReviewJob;
 }
 
 export function reviewQueueOptions(config: Config) {
@@ -58,16 +59,15 @@ export async function installQueues(boss: PgBoss, config: Config): Promise<void>
   };
   await ensure(REVIEW_DEAD_QUEUE, { policy: 'standard', retryLimit: 3, retryDelay: 30 });
   await ensure(REVIEW_QUEUE, reviewQueueOptions(config));
-  await ensure(REFUND_QUEUE, { policy: 'exclusive', retryLimit: 5, retryDelay: 30, retryBackoff: true, expireInSeconds: 600 });
-  await ensure(GUARD_REPORT_QUEUE, { policy: 'exclusive', retryLimit: 5, retryDelay: 30, retryBackoff: true, expireInSeconds: 600 });
   await ensure(MAINTENANCE_QUEUE, { policy: 'exclusive', retryLimit: 0, expireInSeconds: 300 });
+  for (const name of RETIRED_QUEUES) if (await boss.getQueue(name)) await boss.deleteQueue(name);
 }
 
 /** Send inside the caller's transaction. Returns the job id, or null when one is already queued. */
 export async function enqueueReview(boss: PgBoss, tx: Db, job: ReviewJob): Promise<string | null> {
   assertReviewJob(job);
   const db = { executeSql: (text: string, values?: unknown[]) => tx.query(text, values as unknown[]) };
-  return boss.send(REVIEW_QUEUE, job, { singletonKey: job.requestHash, db });
+  return boss.send(REVIEW_QUEUE, job, { singletonKey: job.requestId, db });
 }
 
 /** The claim a worker holds on one delivery of a review job (pg-boss `includeMetadata`). */
@@ -87,40 +87,7 @@ export async function releaseReview(boss: PgBoss, tx: Db, attempt: ReviewAttempt
   const completed = await boss.complete(REVIEW_QUEUE, { id: attempt.id, retryCount: attempt.retryCount }, { released: true }, { db }) as { affected?: number };
   if (completed.affected !== 1) return false;
   const retryLimit = Math.max(0, attempt.retryLimit - attempt.retryCount);
-  const id = await boss.send(REVIEW_QUEUE, job, { singletonKey: job.requestHash, retryLimit, db });
+  const id = await boss.send(REVIEW_QUEUE, job, { singletonKey: job.requestId, retryLimit, db });
   if (!id) throw new Error(`release of request ${job.requestId} was refused: another review job holds its singleton key`);
   return true;
-}
-
-export interface RefundJob { requestId: string; requestHash: string }
-
-export function assertRefundJob(data: unknown): RefundJob {
-  const job = data as Partial<RefundJob> | null;
-  if (!job || !/^[0-9a-f-]{36}$/.test(String(job.requestId)) || !/^[0-9a-f]{64}$/.test(String(job.requestHash))) {
-    throw new JobContractError('refund job payload rejected');
-  }
-  return { requestId: String(job.requestId), requestHash: String(job.requestHash) };
-}
-
-/** One pending refund job per request, sent inside the caller's transaction. */
-export async function enqueueRefund(boss: PgBoss, tx: Db, job: RefundJob): Promise<string | null> {
-  const db = { executeSql: (text: string, values?: unknown[]) => tx.query(text, values as unknown[]) };
-  return boss.send(REFUND_QUEUE, assertRefundJob(job), { singletonKey: job.requestHash, db });
-}
-
-/** Approved guard reports: `report_address` signed by a worker. */
-export const GUARD_REPORT_QUEUE = 'guard-report';
-
-export interface GuardReportJob { reportId: string }
-
-export function assertGuardReportJob(data: unknown): GuardReportJob {
-  const job = data as Partial<GuardReportJob> | null;
-  if (!job || !/^[0-9a-f-]{36}$/.test(String(job.reportId))) throw new JobContractError('guard report job payload rejected');
-  return { reportId: String(job.reportId) };
-}
-
-/** One pending job per approved report, sent inside the caller's transaction. */
-export async function enqueueGuardReport(boss: PgBoss, tx: Db, job: GuardReportJob): Promise<string | null> {
-  const db = { executeSql: (text: string, values?: unknown[]) => tx.query(text, values as unknown[]) };
-  return boss.send(GUARD_REPORT_QUEUE, assertGuardReportJob(job), { singletonKey: job.reportId, db });
 }

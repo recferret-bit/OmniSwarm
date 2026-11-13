@@ -22,12 +22,12 @@ function requestOrigin(headerList: Headers): URL {
 export async function generateMetadata(): Promise<Metadata> {
   return {
     metadataBase: requestOrigin(await headers()),
-    title: { default: 'OmniSwarm — AI code review attested on NEAR', template: '%s · OmniSwarm' },
-    description: 'A swarm of AI reviewers argues over your public GitHub repository, then the report hash is attested on NEAR.',
+    title: { default: 'OmniSwarm — Multi-model AI code review', template: '%s · OmniSwarm' },
+    description: 'A swarm of AI reviewers argues over your public GitHub repository, then you get a report whose hash you can verify in your browser.',
     icons: { icon: '/favicon.svg' },
     openGraph: {
       title: 'OmniSwarm',
-      description: 'Multi-model security review with an on-chain attestation.',
+      description: 'Multi-model security review on your own NEAR AI key, with a report hash you can verify.',
       type: 'website',
       images: [{ url: '/sample/preview.jpg', width: 1100, height: 720, alt: 'OmniSwarm sample security report' }],
     },

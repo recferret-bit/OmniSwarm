@@ -22,7 +22,7 @@ export const SECRET_SCOPE = {
   POSTGRES_PASSWORD: ['postgres', 'api', 'migrate'],
   DATABASE_URL: ['api', 'migrate'],
   SESSION_SECRET: ['api'],
-  ADMIN_TOKEN: ['api'],
+  ACCOUNT_KEYS_SECRET: ['api'],
   GITHUB_TOKEN: ['api'],
 };
 

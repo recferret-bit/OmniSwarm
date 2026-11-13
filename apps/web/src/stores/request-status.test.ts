@@ -57,9 +57,9 @@ describe('request status store', () => {
     stop();
   });
 
-  it('falls back to polling every 5 s when the stream errors, keeps going past failed, stops at refunded', async () => {
+  it('falls back to polling every 5 s when the stream errors, stops at failed', async () => {
     const failed = { status: 'failed' as const, createdAt: running.createdAt };
-    const { store, stream, tick, polling } = setup([running, failed, { status: 'refunded', createdAt: running.createdAt, refundTx: 'tx' }]);
+    const { store, stream, tick, polling } = setup([running, failed]);
     store.getState().watch('id-2');
     await vi.waitFor(() => expect(stream.onerror).not.toBeNull());
     stream.onerror!();
@@ -67,10 +67,7 @@ describe('request status store', () => {
     expect(polling()).toBe(true);
     tick();
     await vi.waitFor(() => expect(store.getState().byId['id-2']?.status?.status).toBe('failed'));
-    expect(polling()).toBe(true);
-    tick();
     await vi.waitFor(() => expect(store.getState().byId['id-2']?.mode).toBe('closed'));
-    expect(store.getState().byId['id-2']?.status?.refundTx).toBe('tx');
     expect(polling()).toBe(false);
   });
 

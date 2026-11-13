@@ -6,7 +6,6 @@ import {
 } from '../../http/schemas.ts';
 import { readSession, requireAccount, setSession } from '../auth/session.ts';
 import { authenticateDashboard } from './credentials.ts';
-import { readReviewSettings } from '../providers/settings.ts';
 import { adviseDashboardRequest, continueDashboardDebate, createDashboardJob, readDashboardReportPdf, type DashboardJobInput } from './dashboard.service.ts';
 import { fail } from '../../shared/errors.ts';
 
@@ -39,25 +38,10 @@ export const dashboardRoutes: FastifyPluginAsyncZod<{ deps: ApiDeps }> = async (
     return session;
   });
 
-  app.post('/api/free/jobs', {
-    config: perMinute(deps.config.http.rateLimitPerMinute),
-    schema: {
-      summary: "Queue a review on the signed-in account's own provider key with no payment while free checks are on",
-      body: dashboardJobBody,
-      response: { 201: dashboardJobResponse, 400: errorResponse, 401: errorResponse, 403: errorResponse, 404: errorResponse, 409: errorResponse, 503: errorResponse },
-    },
-  }, async (request, reply) => {
-    if (!readReviewSettings(deps.config.reviewSettingsFile).freeChecks) fail('FORBIDDEN', 'Free checks are off');
-    // A review runs only on an account's own key, so a guest has nothing to run on.
-    const session = readSession(request, deps.clock.now());
-    if (!session) fail('UNAUTHORIZED', 'Sign in and save your NEAR AI Cloud key on the dashboard to run a review');
-    return reply.code(201).send(await createDashboardJob(deps, session.account, jobInput(request.body)));
-  });
-
   app.post('/api/dashboard/jobs', {
     config: perMinute(deps.config.http.rateLimitPerMinute),
     schema: {
-      summary: "Queue a GitHub review on the signed-in account's own provider key and models (mock chain or local sandbox only)",
+      summary: "Queue a GitHub review on the signed-in account's own provider key and models",
       body: dashboardJobBody,
       response: { 201: dashboardJobResponse, 400: errorResponse, 401: errorResponse, 403: errorResponse, 404: errorResponse, 409: errorResponse, 503: errorResponse },
     },

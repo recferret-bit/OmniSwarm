@@ -12,7 +12,7 @@ import { Pill } from '../ui/Pill';
 import { statusLabel } from './Timeline';
 
 function Row({ row }: { row: MyRequest }) {
-  const tone = row.status === 'done' ? 'good' : row.status === 'failed' || row.status === 'refunded' ? 'bad' : 'info';
+  const tone = row.status === 'done' ? 'good' : row.status === 'failed' ? 'bad' : 'info';
   return (
     <li className="request-row">
       <Link href={`/r/${row.requestId}`} className="request-row__repo">{row.repo}</Link>

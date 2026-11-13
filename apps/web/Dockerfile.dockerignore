@@ -6,7 +6,6 @@
 !apps/web/
 !apps/api/package.json
 !packages/schemas/
-!packages/guard/package.json
 
 **/node_modules
 **/.env

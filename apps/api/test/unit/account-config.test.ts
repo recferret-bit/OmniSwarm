@@ -6,7 +6,6 @@ import { test } from 'node:test';
 import { fingerprintOf, open, seal } from '../../src/modules/providers/seal.ts';
 import { accountConfigDocument } from '../../src/worker/account-config.ts';
 import { accountKeyStatus, cleanModels, listProviderModels, readAccountKey, writeAccountKey } from '../../src/modules/providers/account-keys.ts';
-import { presetEnv } from '../../src/worker/preset.ts';
 import { prepareProviders } from '../../src/worker/review-handler.ts';
 import type { Config } from '../../src/config/load.ts';
 import type { Pool } from '../../src/db/pool.ts';
@@ -89,9 +88,6 @@ test('an account preset: first model orchestrates, all review, and only that pro
   assert.equal('alternateJudge' in (one.presets['account-nearai'] ?? {}), false);
   assert.throws(() => accountConfigDocument('account-nearai', []), /at least one model/);
   assert.throws(() => accountConfigDocument('hosted', ['m']), /not an account preset/);
-  assert.deepEqual(presetEnv('account-nearai', ['nearai:a/one', 'nearai:b/two']).envNames, ['NEARAI_API_KEY']);
-  assert.throws(() => presetEnv('x', ['cli:claude:opus']), /does not run/);
-  assert.throws(() => presetEnv('x', ['key:anthropic:claude-opus-5-5']), /does not run/);
 });
 
 test('the model list is fetched from the provider catalog endpoint with the key and never throws', async () => {
@@ -109,19 +105,17 @@ test('the model list is fetched from the provider catalog endpoint with the key 
 
 function jobRow(extra: Partial<RequestRow>): RequestRow {
   return {
-    id: 'r1', account: 'alice', repo: 'near/x', commit_sha: 'a'.repeat(40), network: 'sandbox', preset: 'account-nearai', deployed: null,
-    request_hash: 'h', price_yocto: '0', status: 'running', attempts: 0, failure_cause: null, report_sha256: null, report_url: null,
-    max_severity: null, scope: 'full', theme: null, parent_id: null, slice_path: null, models: null, incomplete: null, attest_tx: null,
-    refund_tx: null, queued_at: null, created_at: new Date(), updated_at: new Date(), ...extra,
+    id: 'r1', account: 'alice', repo: 'near/x', commit_sha: 'a'.repeat(40), preset: 'account-nearai',
+    status: 'running', attempts: 0, failure_cause: null, report_sha256: null, report_url: null,
+    max_severity: null, scope: 'full', theme: null, parent_id: null, slice_path: null, models: null, incomplete: null,
+    queued_at: null, created_at: new Date(), updated_at: new Date(), ...extra,
   };
 }
 
-test('the worker runs an account job on that account\'s key only, a hosted preset on no stored key, and fails a job with no key', async () => {
+test('the worker runs an account job on that account\'s key only, and fails a job with no key or a preset that is not an account preset', async () => {
   const pool = memoryPool();
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'omni-prepare-'));
-  const engineConfig = path.join(dir, 'omniswarm.config.json');
-  fs.writeFileSync(engineConfig, JSON.stringify({ presets: { hosted: { reviewers: ['nearai:deepseek-ai/DeepSeek-V4'], orchestrator: 'nearai:Qwen/Qwen3.8-Max' } } }));
-  const config = { accountKeysSecret: SECRET, http: { sessionSecret: SECRET }, engine: { configPath: engineConfig } } as unknown as Config;
+  const config = { accountKeysSecret: SECRET, http: { sessionSecret: SECRET } } as unknown as Config;
   await writeAccountKey(pool, SECRET, 'alice', 'nearai', { key: 'near-alice', models: ['a/one'] }, new Date());
 
   const own = await prepareProviders({ config, pool }, jobRow({ preset: 'account-nearai', models: ['a/one', 'b/two'] }), dir);
@@ -163,9 +157,8 @@ test('the worker runs an account job on that account\'s key only, a hosted prese
   assert.deepEqual(await prepareProviders({ config, pool }, jobRow({ preset: 'account-nearai', account: 'bob', models: ['a/one'] }), dir), { failed: 'nearai_account_key_or_models_missing' });
   assert.deepEqual(await prepareProviders({ config, pool }, jobRow({ preset: 'account-nearai', models: null }), dir), { failed: 'nearai_account_key_or_models_missing' });
 
-  // A configured hosted preset gets no stored key: only the scope of its own specs (the worker's env supplies them).
-  const hosted = await prepareProviders({ config, pool }, jobRow({ preset: 'hosted' }), dir);
-  assert.deepEqual(hosted, { providerEnv: {}, providerScope: ['NEARAI_API_KEY'] });
-  // A request left over from the removed operator panel resolves to nothing and carries no key.
-  assert.deepEqual(await prepareProviders({ config, pool }, jobRow({ preset: 'panel' }), dir), { providerEnv: {} });
+  // Every request runs on an account's own key. A row with any other preset (a removed hosted or operator-panel
+  // preset) is failed, never run on a key from the worker's own environment.
+  assert.deepEqual(await prepareProviders({ config, pool }, jobRow({ preset: 'hosted' }), dir), { failed: 'preset_not_supported' });
+  assert.deepEqual(await prepareProviders({ config, pool }, jobRow({ preset: 'panel' }), dir), { failed: 'preset_not_supported' });
 });

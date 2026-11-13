@@ -12,11 +12,6 @@ export default defineConfig({
     setupFiles: ['src/test/setup.ts'],
     restoreMocks: true,
     env: {
-      NEXT_PUBLIC_NETWORK: 'testnet',
-      NEXT_PUBLIC_CONTRACT_ID: 'review-registry.omniswarm.testnet',
-      NEXT_PUBLIC_INTAKE_RECIPIENT: 'omniswarm.testnet',
-      NEXT_PUBLIC_RPC_URL: 'https://rpc.mock.invalid',
-      NEXT_PUBLIC_EXPLORER_URL: 'https://explorer.mock.invalid',
       NEXT_PUBLIC_WALLET: 'mock',
       NEXT_PUBLIC_API_MOCK: '1',
     },

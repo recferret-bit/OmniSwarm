@@ -1,7 +1,5 @@
-// /api/health (liveness plus the public status block) and /api/ready (can this replica serve:
-// database reachable, migrations applied, queue installed). The chain probe is cached so a busy
-// health check never hammers the RPC.
-import type { ChainHealth, ChainPort } from '../../chain/port.ts';
+// /api/health (liveness plus queue status) and /api/ready (can this replica serve: database reachable,
+// migrations applied, queue installed).
 import type { Config } from '../../config/load.ts';
 import { currentVersion, latestVersion } from '../../db/migrate.ts';
 import type { Pool } from '../../db/pool.ts';
@@ -9,23 +7,13 @@ import { queueDepth } from '../../db/repositories/requests.ts';
 import type { PgBoss } from '../../queue/boss.ts';
 import { REVIEW_QUEUE } from '../../queue/review-queue.ts';
 
-export interface HealthDeps { config: Config; pool: Pool; chain: ChainPort; boss: PgBoss }
-
-const CHAIN_TTL_MS = 30_000;
+export interface HealthDeps { config: Config; pool: Pool; boss: PgBoss }
 
 export class HealthService {
   readonly #deps: HealthDeps;
-  #chain: { at: number; value: ChainHealth } | null = null;
 
   constructor(deps: HealthDeps) {
     this.#deps = deps;
-  }
-
-  async #chainHealth(): Promise<ChainHealth> {
-    if (this.#chain && Date.now() - this.#chain.at < CHAIN_TTL_MS) return this.#chain.value;
-    const value = await this.#deps.chain.health().catch(() => ({ rpc: false, contract: false }));
-    this.#chain = { at: Date.now(), value };
-    return value;
   }
 
   async #workers(): Promise<number> {
@@ -34,8 +22,8 @@ export class HealthService {
   }
 
   async health() {
-    const [depth, workers, chain] = await Promise.all([queueDepth(this.#deps.pool), this.#workers(), this.#chainHealth()]);
-    return { ok: true, network: this.#deps.config.intake.network, queueDepth: depth, workers, chain };
+    const [depth, workers] = await Promise.all([queueDepth(this.#deps.pool), this.#workers()]);
+    return { ok: true, queueDepth: depth, workers };
   }
 
   async ready() {

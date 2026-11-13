@@ -26,9 +26,8 @@ x-app: &app
   logging: *logging
 
 # The api image and its adapters. Production (the default) refuses every test
-# adapter; the local stack builds with OMNI_API_NODE_ENV=development and names
-# CHAIN_ADAPTER=mock (infra/env/dev.env.example). migrate needs the same
-# adapters: in production mode it drops the mock tables.
+# adapter; the local stack builds with OMNI_API_NODE_ENV=development
+# (infra/env/dev.env.example). migrate needs the same adapters.
 x-api-build: &api-build
   context: ../..
   dockerfile: apps/api/Dockerfile
@@ -36,7 +35,6 @@ x-api-build: &api-build
     NODE_ENV: ${OMNI_API_NODE_ENV:-production}
 
 x-api-adapters: &api-adapters
-  CHAIN_ADAPTER: ${CHAIN_ADAPTER:-near}
   GITHUB_ADAPTER: ${GITHUB_ADAPTER:-live}
 
 services:
@@ -97,26 +95,18 @@ services:
       <<: *api-adapters
       HOST: 0.0.0.0
       PORT: "8787"
-      # Admin listener: container loopback only, never published or proxied.
-      # Reach it with `compose exec api ...` on the host.
-      ADMIN_HOST: 127.0.0.1
-      ADMIN_PORT: "8788"
       # nginx is the only peer and overwrites X-Forwarded-For with the client
       # address ($remote_addr), so trusting the proxy cannot be spoofed.
       TRUST_PROXY: "true"
       DATABASE_URL: postgres://omniswarm:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in the stack env file}@postgres:5432/omniswarm
       SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET in the stack env file}
-      ADMIN_TOKEN: ${ADMIN_TOKEN:?set ADMIN_TOKEN in the stack env file}
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
-      NETWORK: ${NETWORK:?set NETWORK in the stack env file}
-      CONTRACT_ID: ${CONTRACT_ID:?set CONTRACT_ID in the stack env file}
-      INTAKE_RECIPIENT: ${INTAKE_RECIPIENT:?set INTAKE_RECIPIENT in the stack env file}
-      RPC_URLS: ${RPC_URLS:?set RPC_URLS in the stack env file}
-      PRICE_YOCTO: ${PRICE_YOCTO:?set PRICE_YOCTO in the stack env file}
-      MAX_REPO_KB: ${MAX_REPO_KB:?set MAX_REPO_KB in the stack env file}
-      HOSTED_PRESET: ${HOSTED_PRESET:?set HOSTED_PRESET in the stack env file}
-      # Empty = HOSTED_PRESET only. Add account-nearai to let signed-in accounts review on their own NEAR AI key.
-      ALLOWED_PRESETS: ${ALLOWED_PRESETS:-}
+      # NEAR wallet sign-in: how the API checks that a signing key belongs to the account.
+      # rpc (the production default) reads RPC_URLS; mock is refused in production.
+      KEY_VERIFIER: ${KEY_VERIFIER:-rpc}
+      # Mainnet NEAR RPC endpoint(s), comma list. Required in production while KEY_VERIFIER=rpc;
+      # empty only on the local stack (KEY_VERIFIER=mock). Treat the URL as a secret if it carries a key.
+      RPC_URLS: ${RPC_URLS:-}
       # Seals accounts' own provider keys (Postgres account_provider_key); the workers need the same value.
       ACCOUNT_KEYS_SECRET: ${ACCOUNT_KEYS_SECRET:-}
       # GET /api/reports/:id reads the published index (reviewers, general
@@ -135,10 +125,6 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
-    # The API calls NEAR RPC. host-gateway makes host.docker.internal resolve
-    # on Linux; Docker Desktop already does. The sandbox binds 0.0.0.0:3030.
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     networks: [db, edge]
 
   web:
@@ -148,12 +134,7 @@ services:
       context: ../..
       dockerfile: apps/web/Dockerfile
       args:
-        NEXT_PUBLIC_NETWORK: ${NEXT_PUBLIC_NETWORK:-testnet}
-        NEXT_PUBLIC_CONTRACT_ID: ${NEXT_PUBLIC_CONTRACT_ID:?set NEXT_PUBLIC_CONTRACT_ID (must equal the API CONTRACT_ID)}
-        NEXT_PUBLIC_INTAKE_RECIPIENT: ${NEXT_PUBLIC_INTAKE_RECIPIENT:?set NEXT_PUBLIC_INTAKE_RECIPIENT}
-        NEXT_PUBLIC_RPC_URL: ${NEXT_PUBLIC_RPC_URL:?set NEXT_PUBLIC_RPC_URL}
-        NEXT_PUBLIC_EXPLORER_URL: ${NEXT_PUBLIC_EXPLORER_URL:-https://testnet.nearblocks.io}
-        # Optional: empty hides the donation section; empty contract = the network's USDC.
+        # Optional: empty hides the donation section; empty contract = mainnet USDC.
         NEXT_PUBLIC_DONATION_ACCOUNT: ${NEXT_PUBLIC_DONATION_ACCOUNT:-}
         NEXT_PUBLIC_DONATION_USDC_CONTRACT: ${NEXT_PUBLIC_DONATION_USDC_CONTRACT:-}
     environment:
@@ -206,7 +187,7 @@ services:
 
 networks:
   # postgres, migrate, api. Not `internal`: prod publishes Postgres on
-  # 127.0.0.1 for the host workers, and the api needs NEAR RPC and GitHub.
+  # 127.0.0.1 for the host workers, and the api needs GitHub.
   db: {}
   # nginx, api, web. nginx and web never join `db`.
   edge: {}

@@ -13,13 +13,12 @@ COPY package.json package-lock.json ./
 COPY apps/api/package.json apps/api/
 COPY apps/web/package.json apps/web/
 COPY packages/schemas/package.json packages/schemas/
-COPY packages/guard/package.json packages/guard/
 RUN npm ci --omit=dev --ignore-scripts --no-audit --no-fund --workspace @omniswarm/api \
  && npm cache clean --force
 
 FROM node:24.22.2-trixie-slim@sha256:54f84b4cf8432b21aaffd5d3ce8d41e12cea0d10d33c09d2f3c9879d49d6b446 AS runtime
 # production (default) refuses every test adapter. The local stack builds with
-# --build-arg NODE_ENV=development and names CHAIN_ADAPTER=mock and GITHUB_ADAPTER=live
+# --build-arg NODE_ENV=development and names KEY_VERIFIER=mock and GITHUB_ADAPTER=live
 # explicitly, so API, migrate and the host worker all use the same adapters.
 ARG NODE_ENV=production
 ENV NODE_ENV=${NODE_ENV} \
@@ -31,7 +30,6 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY package.json package-lock.json ./
 COPY packages/schemas ./packages/schemas
-COPY packages/guard ./packages/guard
 COPY apps/api ./apps/api
 COPY --chmod=0755 infra/bin/exec-script.sh /usr/local/bin/exec-script
 USER 1000:1000

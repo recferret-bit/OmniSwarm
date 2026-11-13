@@ -5,14 +5,12 @@ import { fileURLToPath } from 'node:url';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const suites = {
   landing: ['landing/flow.test.mjs'],
-  'near-local': ['landing/near-local.test.mjs'],
 };
 const suite = process.argv[2];
 if (suite && !Object.hasOwn(suites, suite)) {
   process.stderr.write(`unknown e2e suite: ${suite}\n`);
   process.exit(2);
 }
-// No argument stays the landing suite, so check:all does not start the sandbox stack.
 const files = suites[suite ?? 'landing'];
 const run = spawnSync(process.execPath, ['--test', '--test-concurrency=1', ...files], {
   cwd: here,

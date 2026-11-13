@@ -1,9 +1,8 @@
-// Composition root: the only module that picks concrete adapters. Test adapters (mock chain, recorded
+// Composition root: the only module that picks concrete adapters. Test adapters (mock key verifier, recorded
 // GitHub, mock engine) are imported lazily and refused in production, so a production process never
 // even loads them.
 import path from 'node:path';
-import type { ChainPort } from './chain/port.ts';
-import { chainReader, guardPort, type GuardPort } from './modules/guard/guard.port.ts';
+import type { AccountKeyVerifier } from './near/key-verifier.ts';
 import type { Config } from './config/load.ts';
 import { createPool, type Pool } from './db/pool.ts';
 import type { EngineRunner } from './engine/port.ts';
@@ -15,23 +14,15 @@ function refuseInProduction(config: Config, what: string): void {
   if (config.env === 'production') throw new Error(`${what} is a test adapter and cannot run with NODE_ENV=production`);
 }
 
-/** `operator: true` only in the worker: the API process never loads the operator key. */
-export async function createChain(config: Config, pool: Pool, options: { operator?: boolean } = {}): Promise<ChainPort> {
-  if (config.chain.adapter === 'mock') {
-    refuseInProduction(config, 'CHAIN_ADAPTER=mock');
-    const { MockChainAdapter } = await import('./chain/mock/mock-chain.ts');
-    return new MockChainAdapter(pool, {
-      contractId: config.intake.contractId, priceYocto: config.intake.priceYocto ?? '0',
-      failRate: config.chain.mock.failRate, hangAfter: config.chain.mock.hangAfter,
-    });
+/** Sign-in only (NEAR wallet): the worker and scripts never read access keys, so they get no verifier. */
+export async function createKeyVerifier(config: Config): Promise<AccountKeyVerifier> {
+  if (config.keys.verifier === 'mock') {
+    refuseInProduction(config, 'KEY_VERIFIER=mock');
+    const { MockAccountKeyVerifier } = await import('./near/mock-key-verifier.ts');
+    return new MockAccountKeyVerifier();
   }
-  const { NearChainAdapter } = await import('./chain/near/near-chain.ts');
-  const { loadOperatorKey } = await import('./chain/near/operator-key.ts');
-  const keyFile = options.operator ? config.chain.operatorKeyFile : null;
-  return new NearChainAdapter({
-    rpcUrls: config.chain.rpcUrls, contractId: config.intake.contractId, operatorAccountId: config.chain.operatorAccountId,
-    operator: keyFile ? () => loadOperatorKey(keyFile) : null,
-  });
+  const { RpcAccountKeyVerifier } = await import('./near/key-verifier.ts');
+  return new RpcAccountKeyVerifier(config.keys.rpcUrls);
 }
 
 export async function createGitHub(config: Config): Promise<GitHubPort> {
@@ -52,40 +43,14 @@ export async function createEngine(config: Config, env: NodeJS.ProcessEnv = proc
   }
   const { CliEngineRunner } = await import('./engine/cli/cli-runner.ts');
   const { engineEnv } = await import('./engine/cli/env.ts');
-  const { resolvePreset } = await import('./worker/preset.ts');
-  const preset = resolvePreset(config.engine.configPath, config.intake.hostedPreset);
   return new CliEngineRunner({
-    root: config.engine.root, env: engineEnv(env, [...preset.envNames, ...config.engine.envPassthrough]),
+    root: config.engine.root, env: engineEnv(env, config.engine.envPassthrough),
     timeoutS: config.engine.timeoutS, killGraceS: config.engine.killGraceS, logMaxBytes: config.engine.logMaxBytes,
   });
 }
 
-/** The guard reads the registry through the chain adapter: the mock registry in mock-chain mode. */
-export async function createGuardPort(config: Config, chain: ChainPort): Promise<GuardPort> {
-  // The account-age indexer is a real network call: never with the mock chain (tests, local stack).
-  if (chain.kind === 'mock') return guardPort(chainReader(chain));
-  const { accountAgeFromConfig } = await import('@omniswarm/guard/account-age');
-  const accountAgeUrl = process.env.GUARD_ACCOUNT_AGE_URL?.trim() || undefined;
-  // Sandbox age is the local indexer. No URL means no source: do not call the public NearBlocks host.
-  if (config.intake.network === 'sandbox') {
-    if (!accountAgeUrl) return guardPort(chainReader(chain));
-    const accountAge = accountAgeFromConfig({
-      provider: 'nearblocks', network: 'sandbox', baseUrl: accountAgeUrl,
-      ...(config.guard.nearblocksApiKey ? { apiKey: config.guard.nearblocksApiKey } : {}),
-    });
-    return guardPort(chainReader(chain), accountAge);
-  }
-  const accountAge = accountAgeFromConfig({
-    provider: config.guard.accountAge, network: config.intake.network,
-    ...(accountAgeUrl ? { baseUrl: accountAgeUrl } : {}),
-    ...(config.guard.nearblocksApiKey ? { apiKey: config.guard.nearblocksApiKey } : {}),
-  });
-  return guardPort(chainReader(chain), accountAge);
-}
+export interface CoreDeps { config: Config; pool: Pool; clock: Clock }
 
-export interface CoreDeps { config: Config; pool: Pool; clock: Clock; chain: ChainPort }
-
-export async function createCore(config: Config, clock: Clock = systemClock, options: { operator?: boolean } = {}): Promise<CoreDeps> {
-  const pool = createPool(config.db.url, config.db.poolMax);
-  return { config, pool, clock, chain: await createChain(config, pool, options) };
+export function createCore(config: Config, clock: Clock = systemClock): CoreDeps {
+  return { config, pool: createPool(config.db.url, config.db.poolMax), clock };
 }

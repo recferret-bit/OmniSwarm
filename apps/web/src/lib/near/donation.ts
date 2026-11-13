@@ -1,7 +1,7 @@
 // Optional USDC donation: a NEP-141 `ft_transfer` on the native USDC contract.
 // Nothing in the app depends on it; it never gates a review. Amounts are kept as
 // strings end to end so no float ever touches a token amount.
-import type { WalletTransaction } from './payment';
+import type { WalletTransaction } from './connector';
 
 export const USDC_DECIMALS = 6;
 export const DONATION_GAS = '30000000000000';

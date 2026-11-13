@@ -4,187 +4,356 @@
   "title": "intake-api",
   "description": "Request and response DTOs of every intake endpoint (INTAKE section 4). Validate one with validate('intake-api#<def>', value). Examples are named valid-<def>--<label>.json.",
   "$defs": {
-    "account-id": {"type": "string", "pattern": "^[a-z0-9._-]{2,64}$"},
-    "network": {"enum": ["testnet", "mainnet", "sandbox"]},
-    "sha256-hex": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-    "commit-sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
-    "repo": {"type": "string", "pattern": "^[A-Za-z0-9-]{1,39}/[A-Za-z0-9._-]{1,100}$"},
-    "yocto": {"type": "string", "pattern": "^(0|[1-9][0-9]{0,38})$"},
-    "nonce": {"type": "string", "pattern": "^[A-Za-z0-9+/]{43}=$"},
-    "uuid": {"type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"},
-    "timestamp": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:.]+Z$"},
-    "status": {"enum": ["awaiting_payment", "queued", "running", "publishing", "done", "failed", "refunded", "expired"]},
-    "severity": {"enum": ["critical", "high", "medium", "low", "info", "none"]},
-    "pipeline-mode": {"enum": ["full", "step-by-step", "stage-1"]},
+    "account-id": {
+      "type": "string",
+      "pattern": "^[a-z0-9._-]{2,64}$"
+    },
+    "sha256-hex": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "commit-sha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "repo": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9-]{1,39}/[A-Za-z0-9._-]{1,100}$"
+    },
+    "nonce": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9+/]{43}=$"
+    },
+    "uuid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "timestamp": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:.]+Z$"
+    },
+    "status": {
+      "enum": [
+        "queued",
+        "running",
+        "publishing",
+        "done",
+        "failed"
+      ]
+    },
+    "severity": {
+      "enum": [
+        "critical",
+        "high",
+        "medium",
+        "low",
+        "info",
+        "none"
+      ]
+    },
+    "pipeline-mode": {
+      "enum": [
+        "full",
+        "step-by-step",
+        "stage-1"
+      ]
+    },
     "pipeline-summary": {
       "type": "object",
-      "required": ["pipelineMode", "currentStage", "noDebates", "roundsCompleted", "canRunMoreRounds"],
+      "required": [
+        "pipelineMode",
+        "currentStage",
+        "noDebates",
+        "roundsCompleted",
+        "canRunMoreRounds"
+      ],
       "additionalProperties": false,
       "properties": {
-        "pipelineMode": {"$ref": "#/$defs/pipeline-mode"},
-        "currentStage": {"enum": ["stage-1", "stage-2-advice", "stage-3-debate", "completed"]},
-        "noDebates": {"type": "boolean"},
-        "roundsCompleted": {"type": "integer", "minimum": 0},
-        "canRunMoreRounds": {"type": "boolean"},
+        "pipelineMode": {
+          "$ref": "#/$defs/pipeline-mode"
+        },
+        "currentStage": {
+          "enum": [
+            "stage-1",
+            "stage-2-advice",
+            "stage-3-debate",
+            "completed"
+          ]
+        },
+        "noDebates": {
+          "type": "boolean"
+        },
+        "roundsCompleted": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "canRunMoreRounds": {
+          "type": "boolean"
+        },
         "advice": {
           "type": "object",
-          "required": ["debateNeeded", "recommendedDepth", "recommendedRounds", "qualityRating", "summary"],
+          "required": [
+            "debateNeeded",
+            "recommendedDepth",
+            "recommendedRounds",
+            "qualityRating",
+            "summary"
+          ],
           "additionalProperties": false,
           "properties": {
-            "debateNeeded": {"type": "boolean"},
-            "recommendedDepth": {"enum": ["none", "shallow", "standard", "deep"]},
-            "recommendedRounds": {"type": "integer", "minimum": 0, "maximum": 3},
-            "qualityRating": {"enum": ["strong", "adequate", "degraded", "incomplete"]},
-            "summary": {"type": "string", "minLength": 1}
+            "debateNeeded": {
+              "type": "boolean"
+            },
+            "recommendedDepth": {
+              "enum": [
+                "none",
+                "shallow",
+                "standard",
+                "deep"
+              ]
+            },
+            "recommendedRounds": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 3
+            },
+            "qualityRating": {
+              "enum": [
+                "strong",
+                "adequate",
+                "degraded",
+                "incomplete"
+              ]
+            },
+            "summary": {
+              "type": "string",
+              "minLength": 1
+            }
           }
         },
         "incompletionNotes": {
           "type": "array",
           "items": {
             "type": "object",
-            "required": ["category", "code", "source", "reason", "impact"],
+            "required": [
+              "category",
+              "code",
+              "source",
+              "reason",
+              "impact"
+            ],
             "additionalProperties": false,
             "properties": {
-              "category": {"type": "string", "minLength": 1},
-              "code": {"type": "string", "minLength": 1},
-              "source": {"type": "string", "minLength": 1},
-              "reason": {"type": "string", "minLength": 1},
-              "impact": {"type": "string", "minLength": 1},
-              "nextStep": {"type": "string", "minLength": 1}
+              "category": {
+                "type": "string",
+                "minLength": 1
+              },
+              "code": {
+                "type": "string",
+                "minLength": 1
+              },
+              "source": {
+                "type": "string",
+                "minLength": 1
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1
+              },
+              "impact": {
+                "type": "string",
+                "minLength": 1
+              },
+              "nextStep": {
+                "type": "string",
+                "minLength": 1
+              }
             }
           }
         },
         "nextRoundRequestIds": {
           "type": "array",
-          "items": {"$ref": "#/$defs/uuid"}
-        }
-      }
-    },
-    "error-code": {
-      "enum": ["VALIDATION_ERROR", "REPO_INVALID", "REPO_NOT_FOUND", "REPO_PRIVATE", "REPO_ARCHIVED", "REPO_TOO_LARGE", "REPO_DENIED", "QUEUE_FULL", "NONCE_EXPIRED", "NONCE_USED", "NONCE_UNKNOWN", "SIG_INVALID", "KEY_NOT_FULL_ACCESS", "ACCOUNT_MISMATCH", "MESSAGE_INVALID", "PAYMENT_NOT_FOUND", "PAYMENT_MISMATCH", "TX_ALREADY_USED", "ACTIVE_REQUEST_EXISTS", "RATE_LIMITED", "UNAUTHORIZED", "FORBIDDEN", "NOT_FOUND", "CHAIN_UNAVAILABLE", "GITHUB_UNAVAILABLE", "INTERNAL", "REF_NOT_FOUND", "REF_CHANGED", "NETWORK_DISABLED", "PRESET_NOT_ALLOWED", "PAYLOAD_TOO_LARGE", "PAYMENT_SIGNER_MISMATCH", "INVALID_TRANSITION", "REFUND_NOT_ALLOWED", "REQUEST_NOT_FOUND"]
-    },
-    "error-response": {
-      "type": "object",
-      "required": ["error"],
-      "additionalProperties": false,
-      "properties": {
-        "error": {
-          "type": "object",
-          "required": ["code", "message", "retryable"],
-          "additionalProperties": false,
-          "properties": {
-            "code": {"$ref": "#/$defs/error-code"},
-            "message": {"type": "string", "minLength": 1, "maxLength": 2000},
-            "retryable": {"type": "boolean"}
+          "items": {
+            "$ref": "#/$defs/uuid"
           }
         }
       }
     },
-    "challenge-request": {"type": "object", "additionalProperties": false},
+    "error-code": {
+      "enum": [
+        "VALIDATION_ERROR",
+        "REPO_INVALID",
+        "REPO_NOT_FOUND",
+        "REPO_PRIVATE",
+        "REPO_ARCHIVED",
+        "REPO_TOO_LARGE",
+        "REPO_DENIED",
+        "QUEUE_FULL",
+        "NONCE_EXPIRED",
+        "NONCE_USED",
+        "NONCE_UNKNOWN",
+        "SIG_INVALID",
+        "KEY_NOT_FULL_ACCESS",
+        "ACCOUNT_MISMATCH",
+        "RATE_LIMITED",
+        "UNAUTHORIZED",
+        "FORBIDDEN",
+        "NOT_FOUND",
+        "GITHUB_UNAVAILABLE",
+        "INTERNAL",
+        "REF_NOT_FOUND",
+        "REF_CHANGED",
+        "PRESET_NOT_ALLOWED",
+        "PAYLOAD_TOO_LARGE",
+        "INVALID_TRANSITION",
+        "REQUEST_NOT_FOUND"
+      ]
+    },
+    "error-response": {
+      "type": "object",
+      "required": [
+        "error"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "error": {
+          "type": "object",
+          "required": [
+            "code",
+            "message",
+            "retryable"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "code": {
+              "$ref": "#/$defs/error-code"
+            },
+            "message": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2000
+            },
+            "retryable": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    },
+    "challenge-request": {
+      "type": "object",
+      "additionalProperties": false
+    },
     "challenge-response": {
       "type": "object",
-      "required": ["nonce", "expiresAt"],
-      "additionalProperties": false,
-      "properties": {"nonce": {"$ref": "#/$defs/nonce"}, "expiresAt": {"$ref": "#/$defs/timestamp"}}
-    },
-    "quote-request": {
-      "type": "object",
-      "required": ["repoUrl", "network"],
+      "required": [
+        "nonce",
+        "expiresAt"
+      ],
       "additionalProperties": false,
       "properties": {
-        "repoUrl": {"type": "string", "minLength": 1, "maxLength": 300},
-        "network": {"$ref": "#/$defs/network"},
-        "ref": {"type": "string", "minLength": 1, "maxLength": 200}
+        "nonce": {
+          "$ref": "#/$defs/nonce"
+        },
+        "expiresAt": {
+          "$ref": "#/$defs/timestamp"
+        }
       }
-    },
-    "quote-response": {
-      "type": "object",
-      "required": ["normalizedRepo", "commitSha", "priceYocto", "contractId", "queueDepth", "preset", "etaMinutes"],
-      "additionalProperties": false,
-      "properties": {
-        "normalizedRepo": {"$ref": "#/$defs/repo"},
-        "commitSha": {"$ref": "#/$defs/commit-sha"},
-        "priceYocto": {"$ref": "#/$defs/yocto"},
-        "contractId": {"$ref": "#/$defs/account-id"},
-        "queueDepth": {"type": "integer", "minimum": 0},
-        "preset": {"type": "string", "pattern": "^[a-z0-9-]{1,40}$"},
-        "etaMinutes": {"type": "integer", "minimum": 0},
-        "sizeKb": {"type": "integer", "minimum": 0},
-        "large": {"type": "boolean"},
-        "freeChecks": {"type": "boolean"}
-      }
-    },
-    "create-request-body": {
-      "type": "object",
-      "required": ["accountId", "publicKey", "signature", "message", "nonce"],
-      "additionalProperties": false,
-      "properties": {
-        "accountId": {"$ref": "#/$defs/account-id"},
-        "publicKey": {"type": "string", "pattern": "^ed25519:[1-9A-HJ-NP-Za-km-z]{32,64}$"},
-        "signature": {"type": "string", "minLength": 1, "maxLength": 512},
-        "message": {"type": "string", "minLength": 1, "maxLength": 4096},
-        "nonce": {"$ref": "#/$defs/nonce"},
-        "pipelineMode": {"$ref": "#/$defs/pipeline-mode"}
-      }
-    },
-    "create-request-response": {
-      "type": "object",
-      "required": ["requestId", "requestHash", "priceYocto", "contractId"],
-      "additionalProperties": false,
-      "properties": {
-        "requestId": {"$ref": "#/$defs/uuid"},
-        "requestHash": {"$ref": "#/$defs/sha256-hex"},
-        "priceYocto": {"$ref": "#/$defs/yocto"},
-        "contractId": {"$ref": "#/$defs/account-id"}
-      }
-    },
-    "payment-request": {
-      "type": "object",
-      "required": ["txHash"],
-      "additionalProperties": false,
-      "properties": {"txHash": {"type": "string", "pattern": "^[1-9A-HJ-NP-Za-km-z]{43,44}$"}}
-    },
-    "payment-response": {
-      "description": "The request after its payment was confirmed. A replay of the same tx is idempotent and answers with the current status; position is the 1-based queue rank while queued, else null.",
-      "type": "object",
-      "required": ["status", "position"],
-      "additionalProperties": false,
-      "properties": {"status": {"$ref": "#/$defs/status"}, "position": {"type": ["integer", "null"], "minimum": 1}}
     },
     "progress": {
       "type": "object",
-      "required": ["phase"],
+      "required": [
+        "phase"
+      ],
       "additionalProperties": false,
       "properties": {
-        "phase": {"type": "string", "minLength": 1},
-        "reviewer": {"type": "string"},
-        "pass": {"type": "integer", "minimum": 1},
-        "percent": {"type": "number", "minimum": 0, "maximum": 100},
-        "detail": {"$ref": "#/$defs/progress-detail"}
+        "phase": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reviewer": {
+          "type": "string"
+        },
+        "pass": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "percent": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "detail": {
+          "$ref": "#/$defs/progress-detail"
+        }
       }
     },
     "progress-detail": {
       "description": "The engine's live snapshot (harness/host/progress.json), passed through by the worker. Counts, phase states and reviewer ids only; no finding text. A parent request split into themes carries themes instead of reviewers.",
       "type": "object",
-      "required": ["state", "phases"],
+      "required": [
+        "state",
+        "phases"
+      ],
       "additionalProperties": false,
       "properties": {
-        "state": {"enum": ["running", "finished", "incomplete", "failed", "cancelled"]},
-        "startedAt": {"$ref": "#/$defs/timestamp"},
-        "updatedAt": {"$ref": "#/$defs/timestamp"},
-        "elapsedMs": {"type": "integer", "minimum": 0},
+        "state": {
+          "enum": [
+            "running",
+            "finished",
+            "incomplete",
+            "failed",
+            "cancelled"
+          ]
+        },
+        "startedAt": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "updatedAt": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "elapsedMs": {
+          "type": "integer",
+          "minimum": 0
+        },
         "phases": {
           "type": "array",
           "maxItems": 32,
           "items": {
             "type": "object",
-            "required": ["name", "state"],
+            "required": [
+              "name",
+              "state"
+            ],
             "additionalProperties": false,
             "properties": {
-              "name": {"enum": ["prepare", "tests", "review", "crosscheck", "debate", "adjudicate", "general-review", "report"]},
-              "state": {"enum": ["pending", "running", "done", "failed", "skipped"]},
-              "startedAt": {"$ref": "#/$defs/timestamp"},
-              "endedAt": {"$ref": "#/$defs/timestamp"}
+              "name": {
+                "enum": [
+                  "prepare",
+                  "tests",
+                  "review",
+                  "crosscheck",
+                  "debate",
+                  "adjudicate",
+                  "general-review",
+                  "report"
+                ]
+              },
+              "state": {
+                "enum": [
+                  "pending",
+                  "running",
+                  "done",
+                  "failed",
+                  "skipped"
+                ]
+              },
+              "startedAt": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "endedAt": {
+                "$ref": "#/$defs/timestamp"
+              }
             }
           }
         },
@@ -193,19 +362,59 @@
           "maxItems": 32,
           "items": {
             "type": "object",
-            "required": ["id", "state", "jobsDone", "jobs", "passes"],
+            "required": [
+              "id",
+              "state",
+              "jobsDone",
+              "jobs",
+              "passes"
+            ],
             "additionalProperties": false,
             "properties": {
-              "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,80}$"},
-              "state": {"enum": ["pending", "running", "done", "failed"]},
-              "jobsDone": {"type": "integer", "minimum": 0},
-              "jobs": {"type": "integer", "minimum": 1},
-              "passes": {"type": "integer", "minimum": 1},
-              "pass": {"type": "integer", "minimum": 1},
-              "calls": {"type": "integer", "minimum": 0},
-              "budget": {"type": "integer", "minimum": 1},
-              "surface": {"type": "string", "pattern": "^S[1-6]$"},
-              "idleMs": {"type": "integer", "minimum": 0}
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9-]{0,80}$"
+              },
+              "state": {
+                "enum": [
+                  "pending",
+                  "running",
+                  "done",
+                  "failed"
+                ]
+              },
+              "jobsDone": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "jobs": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "passes": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "pass": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "calls": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "budget": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "surface": {
+                "type": "string",
+                "pattern": "^S[1-6]$"
+              },
+              "idleMs": {
+                "type": "integer",
+                "minimum": 0
+              }
             }
           }
         },
@@ -215,20 +424,61 @@
           "maxItems": 32,
           "items": {
             "type": "object",
-            "required": ["id", "idleMs"],
+            "required": [
+              "id",
+              "idleMs"
+            ],
             "additionalProperties": false,
-            "properties": {"id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,120}$"}, "idleMs": {"type": "integer", "minimum": 0}}
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9-]{0,120}$"
+              },
+              "idleMs": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
           }
         },
         "crosscheck": {
-          "type": "object", "required": ["done", "total"], "additionalProperties": false,
-          "properties": {"done": {"type": "integer", "minimum": 0}, "total": {"type": "integer", "minimum": 0}}
+          "type": "object",
+          "required": [
+            "done",
+            "total"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "done": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "total": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
         },
         "debate": {
-          "type": "object", "additionalProperties": false,
+          "type": "object",
+          "additionalProperties": false,
           "properties": {
-            "clusters": {"type": "integer", "minimum": 0}, "heard": {"type": "integer", "minimum": 0},
-            "judged": {"type": "integer", "minimum": 0}, "toJudge": {"type": "integer", "minimum": 0}
+            "clusters": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "heard": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "judged": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "toJudge": {
+              "type": "integer",
+              "minimum": 0
+            }
           }
         },
         "themes": {
@@ -236,13 +486,32 @@
           "maxItems": 32,
           "items": {
             "type": "object",
-            "required": ["theme", "status"],
+            "required": [
+              "theme",
+              "status"
+            ],
             "additionalProperties": false,
             "properties": {
-              "theme": {"enum": ["web3", "apps", "infra", "scripts"]},
-              "status": {"$ref": "#/$defs/status"},
-              "phase": {"type": "string", "minLength": 1},
-              "percent": {"type": "number", "minimum": 0, "maximum": 100}
+              "theme": {
+                "enum": [
+                  "web3",
+                  "apps",
+                  "infra",
+                  "scripts"
+                ]
+              },
+              "status": {
+                "$ref": "#/$defs/status"
+              },
+              "phase": {
+                "type": "string",
+                "minLength": 1
+              },
+              "percent": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 100
+              }
             }
           }
         }
@@ -250,299 +519,263 @@
     },
     "request-status-response": {
       "type": "object",
-      "required": ["status", "createdAt"],
+      "required": [
+        "status",
+        "createdAt"
+      ],
       "additionalProperties": false,
       "properties": {
-        "status": {"$ref": "#/$defs/status"},
-        "progress": {"$ref": "#/$defs/progress"},
-        "position": {"type": "integer", "minimum": 1, "description": "Rank among queued requests; only while queued"},
-        "reportUrl": {"type": "string", "pattern": "^https?://[^\\s]+$"},
-        "reportSha256": {"$ref": "#/$defs/sha256-hex"},
-        "incomplete": {"type": "boolean", "description": "The report was published with report-health state incomplete"},
-        "pipelineMode": {"$ref": "#/$defs/pipeline-mode"},
-        "pipeline": {"$ref": "#/$defs/pipeline-summary"},
-        "attestTx": {"type": "string", "minLength": 1},
-        "refundTx": {"type": "string", "minLength": 1},
-        "failureCause": {"type": "string", "minLength": 1},
+        "status": {
+          "$ref": "#/$defs/status"
+        },
+        "progress": {
+          "$ref": "#/$defs/progress"
+        },
+        "position": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Rank among queued requests; only while queued"
+        },
+        "reportUrl": {
+          "type": "string",
+          "pattern": "^https?://[^\\s]+$"
+        },
+        "reportSha256": {
+          "$ref": "#/$defs/sha256-hex"
+        },
+        "incomplete": {
+          "type": "boolean",
+          "description": "The report was published with report-health state incomplete"
+        },
+        "pipelineMode": {
+          "$ref": "#/$defs/pipeline-mode"
+        },
+        "pipeline": {
+          "$ref": "#/$defs/pipeline-summary"
+        },
+        "failureCause": {
+          "type": "string",
+          "minLength": 1
+        },
         "timeline": {
           "type": "array",
           "maxItems": 50,
           "items": {
             "type": "object",
-            "required": ["event", "at"],
+            "required": [
+              "event",
+              "at"
+            ],
             "additionalProperties": false,
-            "properties": {"event": {"type": "string", "minLength": 1}, "at": {"$ref": "#/$defs/timestamp"}}
+            "properties": {
+              "event": {
+                "type": "string",
+                "minLength": 1
+              },
+              "at": {
+                "$ref": "#/$defs/timestamp"
+              }
+            }
           }
         },
-        "createdAt": {"$ref": "#/$defs/timestamp"}
+        "createdAt": {
+          "$ref": "#/$defs/timestamp"
+        }
       }
     },
     "progress-event": {
       "type": "object",
-      "required": ["status", "at"],
+      "required": [
+        "status",
+        "at"
+      ],
       "additionalProperties": false,
-      "properties": {"status": {"$ref": "#/$defs/status"}, "progress": {"$ref": "#/$defs/progress"}, "at": {"$ref": "#/$defs/timestamp"}}
+      "properties": {
+        "status": {
+          "$ref": "#/$defs/status"
+        },
+        "progress": {
+          "$ref": "#/$defs/progress"
+        },
+        "at": {
+          "$ref": "#/$defs/timestamp"
+        }
+      }
     },
     "request-list-response": {
       "type": "object",
-      "required": ["requests"],
+      "required": [
+        "requests"
+      ],
       "additionalProperties": false,
       "properties": {
         "requests": {
           "type": "array",
           "items": {
             "type": "object",
-            "required": ["requestId", "repo", "status", "createdAt"],
+            "required": [
+              "requestId",
+              "repo",
+              "status",
+              "createdAt"
+            ],
             "additionalProperties": false,
             "properties": {
-              "requestId": {"$ref": "#/$defs/uuid"},
-              "repo": {"$ref": "#/$defs/repo"},
-              "status": {"$ref": "#/$defs/status"},
-              "createdAt": {"$ref": "#/$defs/timestamp"},
-              "theme": {"type": "string", "minLength": 1},
-              "progress": {"$ref": "#/$defs/progress", "description": "Latest phase and percent while running, without detail"}
+              "requestId": {
+                "$ref": "#/$defs/uuid"
+              },
+              "repo": {
+                "$ref": "#/$defs/repo"
+              },
+              "status": {
+                "$ref": "#/$defs/status"
+              },
+              "createdAt": {
+                "$ref": "#/$defs/timestamp"
+              },
+              "theme": {
+                "type": "string",
+                "minLength": 1
+              },
+              "progress": {
+                "$ref": "#/$defs/progress",
+                "description": "Latest phase and percent while running, without detail"
+              }
             }
-          }
-        }
-      }
-    },
-    "receipt": {
-      "description": "What was bought for one request, from the payment row, each reviewers/<id>/usage.json, findings-and-scores.json and the chain tx ids. A refunded request has refund and no attestation.",
-      "type": "object",
-      "required": ["paid", "reviewers", "check"],
-      "additionalProperties": false,
-      "properties": {
-        "paid": {
-          "type": "object",
-          "required": ["yocto", "tx"],
-          "additionalProperties": false,
-          "properties": {
-            "yocto": {"$ref": "#/$defs/yocto"},
-            "tx": {"type": "string", "minLength": 1}
-          }
-        },
-        "reviewers": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "required": ["id", "vendor", "model", "calls", "tokens", "usd"],
-            "additionalProperties": false,
-            "properties": {
-              "id": {"type": "string", "minLength": 1},
-              "vendor": {"type": "string", "minLength": 1},
-              "model": {"type": "string", "minLength": 1},
-              "calls": {"type": "integer", "minimum": 0},
-              "tokens": {"type": "integer", "minimum": 0},
-              "usd": {"type": "number", "minimum": 0}
-            }
-          }
-        },
-        "check": {
-          "type": "object",
-          "required": ["passed", "total", "byStatus"],
-          "additionalProperties": false,
-          "properties": {
-            "passed": {"type": "integer", "minimum": 0, "description": "Findings whose status is CONFIRMED, LIKELY, REFUTED, or AGREED, or the legacy UPHELD_REVIEW, MODEL_AGREEMENT, or REFUTED_REVIEW"},
-            "total": {"type": "integer", "minimum": 0},
-            "byStatus": {
-              "type": "object",
-              "additionalProperties": {"type": "integer", "minimum": 0}
-            }
-          }
-        },
-        "attestation": {
-          "type": "object",
-          "required": ["tx", "hash"],
-          "additionalProperties": false,
-          "properties": {
-            "tx": {"type": "string", "minLength": 1},
-            "hash": {"$ref": "#/$defs/sha256-hex"},
-            "match": {"type": "boolean", "description": "Stored report hash equals the chain attestation hash"}
-          }
-        },
-        "refund": {
-          "type": "object",
-          "required": ["tx"],
-          "additionalProperties": false,
-          "properties": {
-            "tx": {"type": "string", "minLength": 1},
-            "yocto": {"$ref": "#/$defs/yocto"}
           }
         }
       }
     },
     "report-index-response": {
-      "description": "GET /api/reports/:id. A published request includes reportUrl and reportSha256. A refunded request includes requestId and receipt (with refund, without attestation) and omits the report links. Other statuses are 404.",
+      "description": "GET /api/reports/:id. A published request includes reportUrl and reportSha256 (the sha256 the browser checks the report files against), the repository and the highest severity and cross-check counts from the report. Other statuses are 404.",
       "type": "object",
-      "required": ["requestId"],
+      "required": [
+        "requestId"
+      ],
       "additionalProperties": false,
       "properties": {
-        "requestId": {"$ref": "#/$defs/uuid"},
-        "reportUrl": {"type": "string", "pattern": "^https?://[^\\s]+$"},
-        "reportSha256": {"$ref": "#/$defs/sha256-hex"},
-        "reviewers": {"type": "array", "items": {"type": "string"}},
-        "generalReviewUrl": {"type": "string", "pattern": "^https?://[^\\s]+$"},
-        "stage1Url": {"type": "string", "pattern": "^https?://[^\\s]+$"},
-        "adviceUrl": {"type": "string", "pattern": "^https?://[^\\s]+$"},
-        "pipelineUrl": {"type": "string", "pattern": "^https?://[^\\s]+$"},
-        "roundUrls": {"type": "array", "items": {"type": "string", "pattern": "^https?://[^\\s]+$"}},
-        "attestation": {"$ref": "attestation.schema.json"},
-        "receipt": {"$ref": "#/$defs/receipt"}
-      }
-    },
-    "guard-verdict-response": {
-      "type": "object",
-      "required": ["verdict", "reasons", "signals"],
-      "additionalProperties": false,
-      "properties": {
-        "verdict": {"enum": ["allow", "warn", "block"]},
-        "reasons": {
-          "type": "array",
-          "description": "Reason strings. Guard codes include SOURCE_METADATA_MISMATCH (warn: NEP-330 metadata names a different repo or commit than the attestation; the metadata is self-reported) and SOURCE_METADATA_ABSENT (info: no contract_source_metadata; it never decides the verdict).",
-          "items": {"type": "string", "minLength": 1}
+        "requestId": {
+          "$ref": "#/$defs/uuid"
         },
-        "signals": {
-          "type": "object",
-          "properties": {
-            "sourceMetadata": {
-              "description": "NEP-330 contract_source_metadata read from the counterparty. Self-reported: it does not prove the deployed bytes were rebuilt from that commit. Null when the method is absent.",
-              "type": ["object", "null"],
-              "additionalProperties": false,
-              "required": ["link", "rev", "fetchedAt"],
-              "properties": {
-                "link": {"type": ["string", "null"]},
-                "rev": {"type": ["string", "null"]},
-                "fetchedAt": {"type": "string", "minLength": 1}
-              }
-            }
-          }
+        "reportUrl": {
+          "type": "string",
+          "pattern": "^https?://[^\\s]+$"
         },
-        "attestation": {"$ref": "attestation.schema.json"}
-      }
-    },
-    "guard-report-request": {
-      "type": "object",
-      "required": ["account", "evidenceUrl", "reason"],
-      "additionalProperties": false,
-      "properties": {
-        "account": {"$ref": "#/$defs/account-id"},
-        "evidenceUrl": {"type": "string", "pattern": "^https://[!-~]+$", "maxLength": 2000, "description": "Visible ASCII only, so 2000 characters are the registry's 2000-byte evidence_uri limit"},
-        "reason": {"type": "string", "minLength": 1, "maxLength": 280, "pattern": "^[^\\u0000-\\u001f\\u007f]*[^\\s\\u0000-\\u001f\\u007f][^\\u0000-\\u001f\\u007f]*$", "description": "The registry's report_address reason: 1-280 characters, not only whitespace, no control characters"}
-      }
-    },
-    "guard-report-response": {
-      "description": "202: the report waits for the owner's review (admin listener); an approved report is sent on chain as report_address by a worker. A resubmission of an open report returns the same reportId.",
-      "type": "object",
-      "required": ["queued"],
-      "additionalProperties": false,
-      "properties": {"queued": {"const": true}, "reportId": {"$ref": "#/$defs/uuid"}}
-    },
-    "guard-report-status": {"enum": ["pending", "approved", "reported", "rejected"]},
-    "admin-guard-report-list-response": {
-      "description": "GET /api/admin/guard/reports[?status=] on the loopback admin listener.",
-      "type": "object",
-      "required": ["reports"],
-      "additionalProperties": false,
-      "properties": {
-        "reports": {
+        "reportSha256": {
+          "$ref": "#/$defs/sha256-hex"
+        },
+        "reviewers": {
           "type": "array",
           "items": {
-            "type": "object",
-            "required": ["reportId", "account", "reporter", "evidenceUrl", "reason", "status", "reportTx", "createdAt"],
-            "additionalProperties": false,
-            "properties": {
-              "reportId": {"$ref": "#/$defs/uuid"},
-              "account": {"$ref": "#/$defs/account-id"},
-              "reporter": {"$ref": "#/$defs/account-id"},
-              "evidenceUrl": {"type": "string", "pattern": "^https://[^\\s]+$"},
-              "reason": {"type": "string", "minLength": 1},
-              "status": {"$ref": "#/$defs/guard-report-status"},
-              "reportTx": {"type": ["string", "null"], "minLength": 1},
-              "createdAt": {"$ref": "#/$defs/timestamp"}
-            }
-          }
-        }
-      }
-    },
-    "admin-guard-decision-response": {
-      "description": "POST /api/admin/guard/reports/:id/approve (202 approved: a worker sends report_address) or /reject (200). Repeating a decision answers with the current state; reportTx is set once the worker sent it, null when the chain already listed the account.",
-      "type": "object",
-      "required": ["status", "reportTx"],
-      "additionalProperties": false,
-      "properties": {"status": {"$ref": "#/$defs/guard-report-status"}, "reportTx": {"type": ["string", "null"], "minLength": 1}}
-    },
-    "ledger-response": {
-      "description": "GET /api/ledger (public, W09-18): paid requests, newest first (at most 500), with the deposit paid, the model cost summed from every attempt's reviewers/*/usage.json (recorded when the request is published or refunded) and the refund. Totals cover every paid request. No account ids.",
-      "type": "object",
-      "required": ["entries", "totals"],
-      "additionalProperties": false,
-      "properties": {
-        "entries": {
-          "type": "array",
-          "maxItems": 500,
-          "items": {
-            "type": "object",
-            "required": ["requestId", "repo", "status", "priceYocto", "paidYocto", "modelCostUsd", "reviewers"],
-            "additionalProperties": false,
-            "properties": {
-              "requestId": {"$ref": "#/$defs/uuid"},
-              "repo": {"$ref": "#/$defs/repo"},
-              "status": {"$ref": "#/$defs/status"},
-              "priceYocto": {"$ref": "#/$defs/yocto"},
-              "paidYocto": {"$ref": "#/$defs/yocto"},
-              "modelCostUsd": {"type": "number", "minimum": 0},
-              "reviewers": {"type": "integer", "minimum": 0, "description": "Reviewers that reported usage; 0 until the cost is recorded"},
-              "refundTx": {"type": "string", "minLength": 1}
-            }
+            "type": "string"
           }
         },
-        "totals": {
+        "generalReviewUrl": {
+          "type": "string",
+          "pattern": "^https?://[^\\s]+$"
+        },
+        "stage1Url": {
+          "type": "string",
+          "pattern": "^https?://[^\\s]+$"
+        },
+        "adviceUrl": {
+          "type": "string",
+          "pattern": "^https?://[^\\s]+$"
+        },
+        "pipelineUrl": {
+          "type": "string",
+          "pattern": "^https?://[^\\s]+$"
+        },
+        "roundUrls": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^https?://[^\\s]+$"
+          }
+        },
+        "repo": {
+          "$ref": "#/$defs/repo"
+        },
+        "maxSeverity": {
+          "$ref": "#/$defs/severity-or-none"
+        },
+        "check": {
           "type": "object",
-          "required": ["requests", "salesYocto", "refundedYocto", "modelCostUsd"],
+          "required": [
+            "passed",
+            "total"
+          ],
           "additionalProperties": false,
           "properties": {
-            "requests": {"type": "integer", "minimum": 0},
-            "salesYocto": {"$ref": "#/$defs/yocto", "description": "Deposits of paid requests that were not refunded"},
-            "refundedYocto": {"$ref": "#/$defs/yocto"},
-            "modelCostUsd": {"type": "number", "minimum": 0}
-          }
+            "passed": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "total": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "description": "Findings that held up under the cross-check, and findings checked in all"
         }
       }
     },
     "health-response": {
       "type": "object",
-      "required": ["ok", "network", "queueDepth", "workers", "chain"],
+      "required": [
+        "ok",
+        "queueDepth",
+        "workers"
+      ],
       "additionalProperties": false,
       "properties": {
-        "ok": {"type": "boolean"},
-        "network": {"$ref": "#/$defs/network"},
-        "queueDepth": {"type": "integer", "minimum": 0},
-        "workers": {"type": "integer", "minimum": 0},
-        "chain": {
-          "type": "object",
-          "required": ["rpc", "contract"],
-          "additionalProperties": false,
-          "properties": {
-            "rpc": {"type": "boolean"},
-            "contract": {"type": "boolean"},
-            "blockHeight": {"type": "integer", "minimum": 0, "description": "Latest block when the near adapter can read one"}
-          }
+        "ok": {
+          "type": "boolean"
+        },
+        "queueDepth": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "workers": {
+          "type": "integer",
+          "minimum": 0
         }
       },
-      "description": "GET /api/health: liveness plus status. chain.rpc/contract come from ChainPort.health (cached 30 s); workers counts live pg-boss worker instances."
-    },
-    "admin-refund-response": {
-      "description": "202 refund_queued: the API recorded the refund and a worker (the only operator-key holder) sends it. 200 refunded: already refunded; refundTx is null when the tx hash was not recorded.",
-      "oneOf": [
-        { "type": "object", "required": ["status"], "additionalProperties": false, "properties": { "status": { "const": "refund_queued" } } },
-        { "type": "object", "required": ["status", "refundTx"], "additionalProperties": false, "properties": { "status": { "const": "refunded" }, "refundTx": { "type": ["string", "null"], "minLength": 1 } } }
-      ]
+      "description": "GET /api/health: liveness plus queue status; workers counts live pg-boss worker instances."
     },
     "ready-response": {
       "type": "object",
-      "required": ["ok", "db", "queue", "migrations"],
+      "required": [
+        "ok",
+        "db",
+        "queue",
+        "migrations"
+      ],
       "additionalProperties": false,
-      "properties": {"ok": {"type": "boolean"}, "db": {"type": "boolean"}, "queue": {"type": "boolean"}, "migrations": {"type": "boolean"}}
+      "properties": {
+        "ok": {
+          "type": "boolean"
+        },
+        "db": {
+          "type": "boolean"
+        },
+        "queue": {
+          "type": "boolean"
+        },
+        "migrations": {
+          "type": "boolean"
+        }
+      }
+    },
+    "severity-or-none": {
+      "enum": [
+        "critical",
+        "high",
+        "medium",
+        "low",
+        "info",
+        "none"
+      ]
     }
   }
 }

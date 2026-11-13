@@ -6,7 +6,7 @@
 # project, and engine worker.log files under RUNS_ROOT changed in the window.
 # Looks for:
 #   - the exact value of every secret in /etc/omniswarm/*.env (names with SECRET, TOKEN,
-#     PASSWORD, _KEY, WEBHOOK or HEARTBEAT; values of 12+ characters) and the operator key
+#     PASSWORD, _KEY, WEBHOOK or HEARTBEAT; values of 12+ characters)
 #   - secret shapes: GitHub tokens and provider API keys (tools/secret-shapes.txt, shared with
 #     tools/secret-sweep.sh), NEAR ed25519 secret keys, PEM private keys
 # Prints "clean", or one "HIT <rule> in <source>" line per finding and never the matching text;
@@ -47,7 +47,7 @@ if [ "$OMNI_DRY_RUN" = 1 ]; then
   printf '+ journalctl --since -%s -u omniswarm-* -o cat\n' "$since"
   printf '+ docker logs --since %s <each container of compose project %s>\n' "$since" "$OMNI_PROJECT"
   printf '+ find <RUNS_ROOT> -name worker.log -mmin -%s\n' "$((hours * 60))"
-  printf '+ grep -F <values of the secret variables in %s/*.env and the operator key>; grep -E %s\n' "$ETC" "${RULES[*]%%|*}"
+  printf '+ grep -F <values of the secret variables in %s/*.env>; grep -E %s\n' "$ETC" "${RULES[*]%%|*}"
   exit 0
 fi
 
@@ -81,10 +81,6 @@ for file in "$ETC"/*.env; do
     printf '%s\t%s\n' "$name" "$value" >> "$work/values"
   done < "$file"
 done
-if [ -r "$ETC/operator-key.json" ]; then
-  key="$(sed -nE 's/.*"(private_key|secret_key)"[[:space:]]*:[[:space:]]*"([^"]+)".*/\2/p' "$ETC/operator-key.json" | head -n 1)"
-  [ -z "$key" ] || printf 'OPERATOR_KEY\t%s\n' "$key" >> "$work/values"
-fi
 
 # --- scan -----------------------------------------------------------------------
 hits=0

@@ -1,19 +1,15 @@
 // Structured incompletion diagnostics: classifies every incomplete audit signal (arguing/debate timeouts
 // and caps, reviewer session timeouts, usage limits, provider/auth errors, budget ceilings, cross-check
-// gaps, sandbox verification gaps, and stage failures) into human-readable reason + security impact notes.
+// gaps, a lost sandbox, and stage failures) into human-readable reason + security impact notes. The target's tests
+// and the audit's scanners are not incompletion causes (report Tests and Tools blocks).
 import fs from 'node:fs';
 import path from 'node:path';
 import { readReportJson } from './report-files.mjs';
 import { reviewersOfMeta } from './reviewer-registry.mjs';
+import { SURFACES } from './orchestrator-surfaces.mjs';
 
-const SURFACE_LABELS = {
-  s1: 'S1 (Auth & Trust Boundaries)',
-  s2: 'S2 (Input & Serialization)',
-  s3: 'S3 (Business Logic & State)',
-  s4: 'S4 (External Calls & Custody)',
-  s5: 'S5 (Runtime & Dependencies)',
-  s6: 'S6 (Build, CI & Secrets)',
-};
+// The names the run printed when it assigned each surface (orchestrator-surfaces.mjs), not a second list.
+const SURFACE_LABELS = Object.fromEntries(SURFACES.map((surface) => [surface.id, `${surface.code} (${surface.name})`]));
 
 const REPORT_DIR_PLACEHOLDER = '<report-dir>';
 
@@ -120,7 +116,7 @@ export function buildIncompletionNotes(first, second = {}) {
       impact: scrubHostPath(note.impact, root),
       ...(note.nextStep ? { nextStep: scrubHostPath(note.nextStep, root) } : {}),
     };
-    const multiInstance = clean.code === 'verification_coverage_gap' || clean.code === 'health_contract_error';
+    const multiInstance = clean.code === 'health_contract_error';
     const key = multiInstance
       ? `${clean.category}:${clean.code}:${clean.source}:${clean.reason}`
       : `${clean.category}:${clean.code}:${clean.source}`;
@@ -622,22 +618,11 @@ export function buildIncompletionNotes(first, second = {}) {
     }
   }
 
-  // 6. Sandbox / verification gaps (from health.verification.gaps or run-record errors)
-  const verificationGaps = Array.isArray(h.verification?.gaps) ? h.verification.gaps : [];
-  for (const gap of verificationGaps) {
-    add({
-      category: 'sandbox_verification',
-      code: 'verification_coverage_gap',
-      source: 'verification',
-      reason: gap,
-      impact: 'Static source analysis ran without executing all target test suites offline; runtime behavior of cited code paths was not dynamically exercised.',
-      nextStep: 'Run the target project’s native test suite (e.g., forge test / cargo test) in your CI or local dev environment.',
-    });
-  }
+  // 6. The target's own tests and the audit's own scanners are not incompletion causes. They are shown in the
+  // report's Tests and Tools blocks and never make a report incomplete.
 
   // 7. Catch-all for any remaining health.errors so an incomplete report NEVER lacks a note
   for (const err of Array.isArray(h.errors) ? h.errors : []) {
-    if (verificationGaps.includes(err)) continue;
     if (/One or more review stages failed/i.test(err) && notes.length > 0) continue;
     if (/missing or failed cross-check exit|expected cross-check output/i.test(err) && notes.some((n) => n.source.startsWith('crosscheck'))) continue;
     if (/worker exit is missing or nonzero|missing or invalid outputs/i.test(err)) {

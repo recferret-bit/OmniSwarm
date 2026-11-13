@@ -1,9 +1,0 @@
-{
-  "verdict": "warn",
-  "reasons": ["SOURCE_METADATA_MISMATCH"],
-  "signals": {
-    "sourceMetadata": {
-      "link": "https://github.com/other/elsewhere"
-    }
-  }
-}

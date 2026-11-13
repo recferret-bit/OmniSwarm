@@ -14,7 +14,6 @@ name: deploy
 #   vars.DEPLOY_HOST            ssh host name or address
 #   vars.DEPLOY_USER            ssh user (default: deploy)
 #   vars.OMNI_DOMAIN            app hostname the smoke test checks
-#   vars.NETWORK                network /api/health must report (default: testnet)
 # Expressions reach scripts only through `env:`, never inline in `run:`.
 
 on:
@@ -49,7 +48,7 @@ jobs:
       - name: Rollback plan
         run: bash infra/deploy/deploy.sh --dry-run deploy-host.invalid --rollback
       - name: Smoke plan
-        run: bash infra/deploy/smoke.sh --dry-run --network testnet omniswarm.example
+        run: bash infra/deploy/smoke.sh --dry-run omniswarm.example
 
   deploy:
     if: github.event_name == 'workflow_dispatch'
@@ -104,8 +103,7 @@ jobs:
       - name: Smoke
         env:
           OMNI_DOMAIN: ${{ vars.OMNI_DOMAIN }}
-          NETWORK: ${{ vars.NETWORK }}
-        run: bash infra/deploy/smoke.sh --network "${NETWORK:-testnet}" "$OMNI_DOMAIN"
+        run: bash infra/deploy/smoke.sh "$OMNI_DOMAIN"
       - name: Drop the key
         if: always()
         run: SSH_AUTH_SOCK="$RUNNER_TEMP/ssh-agent.sock" ssh-add -D 2>/dev/null || true

@@ -13,7 +13,6 @@ import { assertPassable } from '../../src/engine/cli/env.ts';
 import type { EngineRunner } from '../../src/engine/port.ts';
 import { AppError } from '../../src/shared/errors.ts';
 import { APP_ROOT } from '../../src/shared/paths.ts';
-import { presetEnv, resolvePreset } from '../../src/worker/preset.ts';
 
 const SHA = 'a'.repeat(40);
 
@@ -44,39 +43,12 @@ test('argv is exactly the 8-flag allow-list; any field carrying a flag is refuse
   }
 });
 
-test('the hosted preset gets only its provider keys; intake secrets never reach the engine', async () => {
-  const config = { presets: { hosted: { reviewers: ['nearai:deepseek-ai/DeepSeek-V4', 'nearai:Qwen/Qwen3.8-Max'], orchestrator: 'nearai:deepseek-ai/DeepSeek-V4' } } };
-  const root = fakeEngine(`${RECORD}\nfs.mkdirSync(process.argv[process.argv.indexOf('--out') + 1], { recursive: true });`, config);
-  const env = {
-    PATH: process.env.PATH ?? '', HOME: os.homedir(), DATABASE_URL: 'postgres://secret', SESSION_SECRET: 'x'.repeat(40), ADMIN_TOKEN: 'y'.repeat(40),
-    GITHUB_TOKEN: 'ghp_secret', OPERATOR_KEY_FILE: '/run/credentials/operator-key', PROBE_SECRET_KEY: 'leak', ANTHROPIC_API_KEY: 'not-in-preset',
-    NEARAI_API_KEY: 'near-operator-key', INTAKE_RECIPIENT: 'omniswarm.testnet', CONTRACT_ID: 'registry.testnet',
-    ENGINE_RUNNER: 'cli', ENGINE_ROOT: root, HOSTED_PRESET: 'hosted',
-  };
-  const engine: EngineRunner = await createEngine(loadConfig('worker', env), env);
-  const run = input(root);
-  const result = await engine.run(run, new AbortController().signal);
-  assert.equal(result.exitCode, 0);
-  const seen = JSON.parse(fs.readFileSync(path.join(root, 'seen.json'), 'utf8'));
-  assert.deepEqual(seen.argv, ['run', '--github', 'near/near-sdk-rs', '--ref', SHA, '--preset', 'hosted', '--out', run.outDir]);
-  assert.equal(fs.realpathSync(seen.cwd), fs.realpathSync(root), 'cwd is the engine root');
-  assert.notEqual(seen.pid, process.pid);
-  assert.deepEqual(Object.keys(seen.env).filter((key) => !['PATH', 'HOME', 'USER', 'TMPDIR', 'LANG', '__CF_USER_TEXT_ENCODING'].includes(key)).sort(),
-    ['NEARAI_API_KEY']);
-  for (const secret of ['postgres://secret', 'ghp_secret', 'leak', 'not-in-preset', 'x'.repeat(40)]) {
-    assert.ok(!JSON.stringify(seen.env).includes(secret), `engine env carries ${secret}`);
-  }
-  assert.match(fs.readFileSync(run.logPath, 'utf8'), /spawned pid/);
-  assert.throws(() => assertPassable(['DATABASE_URL']), /may not be passed/);
-  assert.throws(() => assertPassable(['OPERATOR_KEY_FILE']), /may not be passed/);
-});
-
 test('an account job runs on the account\'s own key, never the operator\'s key in the worker env', async () => {
   const root = fakeEngine(`${RECORD}\nfs.mkdirSync(process.argv[process.argv.indexOf('--out') + 1], { recursive: true });`, { presets: { hosted: { reviewers: ['nearai:deepseek-ai/DeepSeek-V4'], orchestrator: 'nearai:deepseek-ai/DeepSeek-V4' } } });
   const env = {
     PATH: process.env.PATH ?? '', HOME: os.homedir(), DATABASE_URL: 'postgres://secret', SESSION_SECRET: 'x'.repeat(40), ADMIN_TOKEN: 'y'.repeat(40),
-    OPERATOR_KEY_FILE: '/run/credentials/operator-key', NEARAI_API_KEY: 'near-operator-key', INTAKE_RECIPIENT: 'omniswarm.testnet', CONTRACT_ID: 'registry.testnet',
-    OMNI_LIVE: '1', ENGINE_RUNNER: 'cli', ENGINE_ROOT: root, HOSTED_PRESET: 'hosted',
+    GITHUB_TOKEN: 'ghp_secret', PROBE_SECRET_KEY: 'leak', ANTHROPIC_API_KEY: 'not-in-preset', NEARAI_API_KEY: 'near-operator-key',
+    OMNI_LIVE: '1', ENGINE_RUNNER: 'cli', ENGINE_ROOT: root,
   };
   const engine: EngineRunner = await createEngine(loadConfig('worker', env), env);
   const run = { ...input(root), preset: 'account-nearai', providerEnv: { NEARAI_API_KEY: 'near-account-key', NOT_A_PROVIDER: 'x' }, providerScope: ['NEARAI_API_KEY'] };
@@ -85,21 +57,12 @@ test('an account job runs on the account\'s own key, never the operator\'s key i
   assert.deepEqual(Object.keys(seen.env).filter((key) => !['PATH', 'HOME', 'USER', 'TMPDIR', 'LANG', '__CF_USER_TEXT_ENCODING'].includes(key))
     .sort(), ['NEARAI_API_KEY', 'OMNI_LIVE'], 'the operator\'s OMNI_LIVE opt-in rides along; no other variable does');
   assert.equal(seen.env.NEARAI_API_KEY, 'near-account-key');
-  assert.ok(!JSON.stringify(seen.env).includes('near-operator-key'));
-});
-
-test('presets with CLI subscriptions, scripted reviewers or an unvetted orchestrator are refused', () => {
-  const notAllowed = (error: unknown) => error instanceof AppError && error.code === 'PRESET_NOT_ALLOWED';
-  assert.throws(() => presetEnv('demo', ['scripted:baseline', 'scripted:judge']), notAllowed, 'scripted runs on OmniSwarm fixtures only');
-  assert.throws(() => presetEnv('x', ['nearai:a/b', 'cli:claude:opus']), notAllowed);
-  const example = path.join(APP_ROOT, '../../engine/omniswarm.config.example.json');
-  const hosted = resolvePreset(example, loadConfig('worker', { DATABASE_URL: 'postgres://u@h/d', CONTRACT_ID: 'registry.testnet' }).intake.hostedPreset);
-  assert.equal(hosted.name, 'hosted', 'the default HOSTED_PRESET exists in the example config and is allowed');
-  assert.deepEqual(hosted.envNames, ['NEARAI_API_KEY']);
-  assert.throws(() => resolvePreset(example, 'demo'), notAllowed, 'the demo preset (scripted judge) is refused');
-  const root = fakeEngine('', { presets: { auto: { reviewers: ['scripted:baseline'], orchestrator: 'recommended' } } });
-  assert.throws(() => resolvePreset(path.join(root, 'omniswarm.config.json'), 'auto'), /orchestrator explicitly/);
-  assert.throws(() => resolvePreset(path.join(root, 'omniswarm.config.json'), 'missing'), /not defined/);
+  for (const secret of ['postgres://secret', 'ghp_secret', 'leak', 'not-in-preset', 'near-operator-key', 'x'.repeat(40)]) {
+    assert.ok(!JSON.stringify(seen.env).includes(secret), `engine env carries ${secret}`);
+  }
+  assert.match(fs.readFileSync(run.logPath, 'utf8'), /spawned pid/);
+  assert.throws(() => assertPassable(['DATABASE_URL']), /may not be passed/);
+  assert.equal(fs.realpathSync(seen.cwd), fs.realpathSync(root), 'cwd is the engine root');
 });
 
 function runner(root: string, overrides: Partial<ConstructorParameters<typeof CliEngineRunner>[0]> = {}) {

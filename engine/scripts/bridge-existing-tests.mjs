@@ -57,19 +57,21 @@ function assertOffline(ctx) {
 async function runOnFreshCopy(ctx, entry) {
   const runDir = `/work/runs/${crypto.randomBytes(8).toString('hex')}`;
   const prepared = await runProgram(ctx, PREPARE_RUN_SCRIPT, [runDir], { cwd: '/', timeoutMs: 10 * 60_000 });
-  let result, cleanup = { killed: [], survivors: [] };
+  let result, cleanup = { killed: [], survivors: [] }, durationMs = null;
   try {
     if (prepared.code !== 0) throw new Error(`Cannot prepare a per-run copy of the sealed source: ${prepared.stderr.slice(0, 300)}`);
+    const started = Date.now();
     result = await runProgram(ctx, EXISTING_TEST_RUNNER, [`${runDir}/src`], { cwd: runDir, path: SUITE_PATH, input: JSON.stringify(entry), timeoutMs: entry.timeoutMs + 10_000, maxBytes: TEST_OUTPUT_BYTES, keepTail: true });
+    durationMs = Date.now() - started;
   } finally {
     const cleaned = await runProgram(ctx, SUITE_CLEANUP_SCRIPT, [runDir], { cwd: '/', timeoutMs: 60_000 });
     try { cleanup = JSON.parse(cleaned.stdout); } catch { cleanup = { killed: [], survivors: [], cleanupFailed: true }; }
   }
   const dependencies = ['sealed', 'unsealed'].includes(prepared.stdout.trim()) ? prepared.stdout.trim() : 'unknown';
-  return { result, cleanup, dependencies };
+  return { result, cleanup, dependencies, durationMs };
 }
 
-function recordRun(ctx, key, catalog, entry, { result, cleanup, dependencies }, failureDetail) {
+function recordRun(ctx, key, catalog, entry, { result, cleanup, dependencies, durationMs }, failureDetail) {
   const file = `harness/existing-test-results-${key}.json`;
   let prior = []; try { prior = readReportJson(ctx.reportDir, file); } catch { /* first test */ }
   const sequence = Math.max(-1, ...prior.map(row => Number(row.evidenceFile?.match(/-(\d+)\.json$/)?.[1] ?? -1))) + 1;
@@ -79,7 +81,7 @@ function recordRun(ctx, key, catalog, entry, { result, cleanup, dependencies }, 
   writeReportFile(ctx.reportDir, evidenceFile, evidence);
   const row = {
     testId: entry.id, sourceDigest: catalog.sourceDigest, kind: entry.kind, cwd: entry.cwd, exitCode: result.code, counts: testCounts(result.stdout),
-    ...(failureDetail ? { failureDetail } : {}), dependencies, killedProcesses: cleanup.killed, ...(cleanup.survivors?.length ? { survivingProcesses: cleanup.survivors } : {}),
+    ...(failureDetail ? { failureDetail } : {}), dependencies, ...(Number.isFinite(durationMs) ? { durationMs } : {}), killedProcesses: cleanup.killed, ...(cleanup.survivors?.length ? { survivingProcesses: cleanup.survivors } : {}),
     evidenceFile, evidenceHash: sha256Hex(evidence), at: new Date().toISOString(), scope: 'existing_offline_test_only',
   };
   writeReportFile(ctx.reportDir, file, JSON.stringify([...prior, row].slice(-200)));

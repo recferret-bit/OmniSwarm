@@ -17,8 +17,7 @@ describe('operator dashboard and local jobs', NEEDS_DB, () => {
   let api: ApiStack;
   const admin = `Basic ${Buffer.from('admin:admin-test-password').toString('base64')}`;
   before(async () => {
-    const settings = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'omni-operator-settings-')), 'review-settings.json');
-    t = await migratedDb('operator', { ADMIN_BASIC_USER: 'admin', ADMIN_BASIC_PASSWORD: 'admin-test-password', REVIEW_SETTINGS_FILE: settings });
+    t = await migratedDb('operator', { ADMIN_BASIC_USER: 'admin', ADMIN_BASIC_PASSWORD: 'admin-test-password' });
     api = await startApi(t.env);
     // A dashboard job runs only on the signed-in account's own key (dashboard.service.ts): give `operator` a fake one.
     await writeAccountKey(api.deps.pool, api.deps.config.accountKeysSecret, 'operator', 'nearai',
@@ -66,13 +65,12 @@ describe('operator dashboard and local jobs', NEEDS_DB, () => {
     const other = await call(api.base, '/api/requests?mine=1', { cookie: `sid=${api.app.signCookie(value)}` });
     assert.equal(other.status, 200, JSON.stringify(other.body));
     assert.ok(!other.body.requests.some((row: { requestId: string }) => row.requestId === created.body.requestId));
-    const row = await api.deps.pool.query<{ status: string; request_hash: string; preset: string; models: string[]; price_yocto: string }>(
-      'SELECT status, request_hash, preset, models, price_yocto::text FROM request WHERE id = $1', [created.body.requestId]);
+    const row = await api.deps.pool.query<{ status: string; preset: string; models: string[] }>(
+      'SELECT status, preset, models FROM request WHERE id = $1', [created.body.requestId]);
     assert.equal(row.rows[0]?.status, 'queued');
     assert.equal(row.rows[0]?.preset, 'account-nearai');
     assert.deepEqual(row.rows[0]?.models, ['deepseek-ai/DeepSeek-V4', 'Qwen/Qwen3.8-Max']);
-    assert.equal(row.rows[0]?.price_yocto, '0', 'the account is not charged on the mock chain');
-    const jobs = await api.deps.pool.query<{ n: number }>('SELECT count(*)::int AS n FROM pgboss.job WHERE name = $1 AND singleton_key = $2', ['review', row.rows[0]?.request_hash]);
+    const jobs = await api.deps.pool.query<{ n: number }>('SELECT count(*)::int AS n FROM pgboss.job WHERE name = $1 AND singleton_key = $2', ['review', created.body.requestId]);
     assert.equal(jobs.rows[0]?.n, 1);
 
     const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'omni-local-job-')));
@@ -137,44 +135,28 @@ describe('operator dashboard and local jobs', NEEDS_DB, () => {
       assert.equal(refused.body.error.code, 'VALIDATION_ERROR', JSON.stringify(refused.body));
     }
 
-    // The admin page keeps jobs and the free-checks switch; the operator provider-key routes are gone.
+    // The admin page keeps jobs; the operator provider-key routes are gone.
     assert.equal((await call(api.base, '/api/operator/activity', { headers: { authorization: admin } })).status, 200);
     assert.equal((await call(api.base, '/api/operator/providers', { headers: { authorization: admin } })).status, 404);
     assert.equal((await call(api.base, '/api/operator/providers', { method: 'PUT', body: { nearai: 'k' }, headers: { authorization: admin } })).status, 404);
 
-    // Free checks: off refuses; on, a guest is told to sign in and a signed-in account still needs its own key.
-    assert.equal((await call(api.base, '/api/free/jobs', { method: 'POST', body })).status, 403);
-    const on = await call(api.base, '/api/operator/settings', { method: 'PUT', body: { freeChecks: true }, headers: { authorization: admin } });
-    assert.deepEqual(on.body, { freeChecks: true });
-    try {
-      assert.equal((await call(api.base, '/api/review-settings')).body.freeChecks, true);
-      const guest = await call(api.base, '/api/free/jobs', { method: 'POST', body });
-      assert.equal(guest.status, 401, JSON.stringify(guest.body));
-      assert.match(guest.body.error.message, /Sign in and save your NEAR AI Cloud key/);
-      assert.equal((await call(api.base, '/api/free/jobs', { method: 'POST', body, cookie: dave })).body.error.code, 'PRESET_NOT_ALLOWED');
-    } finally {
-      await call(api.base, '/api/operator/settings', { method: 'PUT', body: { freeChecks: false }, headers: { authorization: admin } });
+    // There is no free-checks switch any more: everything is free on the account's own key.
+    for (const [method, url] of [['POST', '/api/free/jobs'], ['GET', '/api/review-settings'], ['PUT', '/api/operator/settings']] as const) {
+      assert.equal((await call(api.base, url, { method, body: method === 'GET' ? undefined : body, headers: { authorization: admin } })).status, 404, url);
     }
+    const activity = await call(api.base, '/api/operator/activity', { headers: { authorization: admin } });
+    assert.deepEqual(Object.keys(activity.body), ['jobs']);
 
     // A finished review left over from the removed panel cannot be continued: it has no account key to run on.
     const legacy = '0f0e0d0c-0b0a-4908-8706-050403020100';
     await insertRequest(api.deps.pool, {
-      id: legacy, account: 'dave.mock', repo: 'near/near-sdk-rs', commitSha: SHA, network: 'testnet', preset: 'panel', deployed: null,
-      requestHash: 'e'.repeat(64), priceYocto: '0', now: new Date(), scope: 'full', models: null, pipelineMode: 'stage-1',
+      id: legacy, account: 'dave.mock', repo: 'near/near-sdk-rs', commitSha: SHA, preset: 'panel',
+      now: new Date(), scope: 'full', models: null, pipelineMode: 'stage-1',
     });
     await api.deps.pool.query("UPDATE request SET status = 'done' WHERE id = $1", [legacy]);
     const advise = await call(api.base, `/api/dashboard/jobs/${legacy}/advise`, { method: 'POST', cookie: dave });
     assert.equal(advise.status, 400, JSON.stringify(advise.body));
     assert.equal(advise.body.error.code, 'PRESET_NOT_ALLOWED');
-    // A finished review on a preset the operator still allows (the signed flow's hosted preset) continues as before.
-    const hosted = '1f0e0d0c-0b0a-4908-8706-050403020101';
-    await insertRequest(api.deps.pool, {
-      id: hosted, account: 'erin.mock', repo: 'near/near-sdk-rs', commitSha: SHA, network: 'testnet', preset: api.deps.config.intake.hostedPreset,
-      deployed: null, requestHash: 'f'.repeat(64), priceYocto: '0', now: new Date(), scope: 'full', models: null, pipelineMode: 'stage-1',
-    });
-    await api.deps.pool.query("UPDATE request SET status = 'done' WHERE id = $1", [hosted]);
-    const continued = await call(api.base, `/api/requests/${hosted}/advise`, { method: 'POST', cookie: cookieFor('erin.mock') });
-    assert.equal(continued.status, 201, JSON.stringify(continued.body));
   });
 
   test('a NEAR AI review runs on the account\'s own key and models and never echoes the key', async () => {

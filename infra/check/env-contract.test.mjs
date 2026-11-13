@@ -4,15 +4,15 @@ import { checkContract, composeRefs, parseEnv, requiredUnset, unitEnv } from './
 
 function input(overrides = {}) {
   const base = {
-    stack: parseEnv('POSTGRES_PASSWORD=\nSESSION_SECRET=\nNETWORK=testnet\nOMNI_DOMAIN=\n'),
+    stack: parseEnv('POSTGRES_PASSWORD=\nSESSION_SECRET=\nGITHUB_TIMEOUT_MS=1\nOMNI_DOMAIN=\n'),
     dev: parseEnv('OMNI_DOMAIN=omniswarm.localhost\nOMNI_HTTP_PORT=18480\n'),
     worker: parseEnv('DATABASE_URL=\nWORKER_CONCURRENCY=1\n'),
     providers: parseEnv(''),
-    apiExample: parseEnv('DATABASE_URL=x\nSESSION_SECRET=x\nNETWORK=testnet\nWORKER_CONCURRENCY=1\n'),
-    baseRefs: composeRefs('${POSTGRES_PASSWORD:?m} ${SESSION_SECRET:?m} ${NETWORK:?m} ${OMNI_DOMAIN:?m} ${OMNI_RELEASE:?m}'),
+    apiExample: parseEnv('DATABASE_URL=x\nSESSION_SECRET=x\nGITHUB_TIMEOUT_MS=1\nWORKER_CONCURRENCY=1\n'),
+    baseRefs: composeRefs('${POSTGRES_PASSWORD:?m} ${SESSION_SECRET:?m} ${GITHUB_TIMEOUT_MS:?m} ${OMNI_DOMAIN:?m} ${OMNI_RELEASE:?m}'),
     devRefs: composeRefs('${OMNI_HTTP_PORT:?m} ${OMNI_DOMAIN}'),
     workerUnitEnv: unitEnv('Environment=WORKER_ID=%i\nEnvironment=HOME=/var/lib/x\n'),
-    composeJson: { services: { api: { environment: { DATABASE_URL: 'u', SESSION_SECRET: 's', NETWORK: 'testnet' } } } },
+    composeJson: { services: { api: { environment: { DATABASE_URL: 'u', SESSION_SECRET: 's', GITHUB_TIMEOUT_MS: '1' } } } },
   };
   return { ...base, ...overrides };
 }
@@ -30,35 +30,35 @@ test('a consistent contract has no errors', () => {
 });
 
 test('a compose variable missing from the example is an error', () => {
-  const { errors } = checkContract(input({ baseRefs: composeRefs('${POSTGRES_PASSWORD:?m} ${SESSION_SECRET:?m} ${NETWORK:?m} ${OMNI_DOMAIN:?m} ${UNDECLARED:?m}') }));
+  const { errors } = checkContract(input({ baseRefs: composeRefs('${POSTGRES_PASSWORD:?m} ${SESSION_SECRET:?m} ${GITHUB_TIMEOUT_MS:?m} ${OMNI_DOMAIN:?m} ${UNDECLARED:?m}') }));
   assert.ok(errors.includes('compose reads UNDECLARED, not declared in infra/env/stack.env.example'), errors.join('\n'));
 });
 
 test('a declared but unused stack variable is an error (dead config)', () => {
-  const { errors } = checkContract(input({ stack: parseEnv('POSTGRES_PASSWORD=\nSESSION_SECRET=\nNETWORK=testnet\nOMNI_DOMAIN=\nLEFTOVER=1\n') }));
+  const { errors } = checkContract(input({ stack: parseEnv('POSTGRES_PASSWORD=\nSESSION_SECRET=\nGITHUB_TIMEOUT_MS=1\nOMNI_DOMAIN=\nLEFTOVER=1\n') }));
   assert.ok(errors.some((e) => e.startsWith('LEFTOVER (stack.env.example) is declared but no compose file reads it')), errors.join('\n'));
 });
 
 test('a secret with a value in an example is an error (the skeleton defaulted SESSION_SECRET)', () => {
-  const { errors } = checkContract(input({ stack: parseEnv('POSTGRES_PASSWORD=omniswarm\nSESSION_SECRET=dev-session-secret\nNETWORK=testnet\nOMNI_DOMAIN=\n') }));
+  const { errors } = checkContract(input({ stack: parseEnv('POSTGRES_PASSWORD=omniswarm\nSESSION_SECRET=dev-session-secret\nGITHUB_TIMEOUT_MS=1\nOMNI_DOMAIN=\n') }));
   assert.ok(errors.includes('POSTGRES_PASSWORD (stack.env.example) has a value; secrets in examples must be empty'));
   assert.ok(errors.includes('SESSION_SECRET (stack.env.example) has a value; secrets in examples must be empty'));
 });
 
-test('an api variable nobody delivers is an error (the skeleton never passed ADMIN_TOKEN)', () => {
-  const { errors } = checkContract(input({ apiExample: parseEnv('DATABASE_URL=x\nADMIN_TOKEN=\n') }));
-  assert.ok(errors.includes('apps/api/.env.example declares ADMIN_TOKEN; no infra env file or compose service delivers it'), errors.join('\n'));
+test('an api variable nobody delivers is an error (the skeleton never passed GITHUB_TOKEN)', () => {
+  const { errors } = checkContract(input({ apiExample: parseEnv('DATABASE_URL=x\nGITHUB_TOKEN=\n') }));
+  assert.ok(errors.includes('apps/api/.env.example declares GITHUB_TOKEN; no infra env file or compose service delivers it'), errors.join('\n'));
 });
 
 test('a provider key in any compose service is an error', () => {
-  const composeJson = { services: { api: { environment: { DATABASE_URL: 'u', SESSION_SECRET: 's', NETWORK: 't', NEARAI_API_KEY: 'k' } } } };
+  const composeJson = { services: { api: { environment: { DATABASE_URL: 'u', SESSION_SECRET: 's', GITHUB_TIMEOUT_MS: 't', NEARAI_API_KEY: 'k' } } } };
   const { errors } = checkContract(input({ composeJson }));
   assert.ok(errors.includes('compose service api receives provider variable NEARAI_API_KEY; keys belong to the worker only'), errors.join('\n'));
 });
 
 test('REPORTS_BASE_URL in the api is app config, not a provider variable', () => {
-  const composeJson = { services: { api: { environment: { DATABASE_URL: 'u', SESSION_SECRET: 's', NETWORK: 't', REPORTS_BASE_URL: 'https://r' } } } };
-  const { errors } = checkContract(input({ composeJson, apiExample: parseEnv('DATABASE_URL=x\nSESSION_SECRET=x\nNETWORK=testnet\nWORKER_CONCURRENCY=1\nREPORTS_BASE_URL=\n') }));
+  const composeJson = { services: { api: { environment: { DATABASE_URL: 'u', SESSION_SECRET: 's', GITHUB_TIMEOUT_MS: 't', REPORTS_BASE_URL: 'https://r' } } } };
+  const { errors } = checkContract(input({ composeJson, apiExample: parseEnv('DATABASE_URL=x\nSESSION_SECRET=x\nGITHUB_TIMEOUT_MS=1\nWORKER_CONCURRENCY=1\nREPORTS_BASE_URL=\n') }));
   assert.ok(!errors.some((e) => e.includes('provider variable')), errors.join('\n'));
   const leaked = checkContract(input({ composeJson: { services: { api: { environment: { EXAMPLE_BASE_URL: 'x' } } } }, providers: parseEnv('EXAMPLE_API_KEY=\nEXAMPLE_BASE_URL=\n') })).errors;
   assert.ok(leaked.includes('compose service api receives provider variable EXAMPLE_BASE_URL; keys belong to the worker only'), leaked.join('\n'));

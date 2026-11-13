@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { Writable } from 'node:stream';
 import { test } from 'node:test';
 import Fastify, { type FastifyBaseLogger } from 'fastify';
-import { chainUnavailable } from '../../src/chain/errors.ts';
+import { keyLookupUnavailable } from '../../src/near/key-verifier.ts';
 import { installErrorHandling } from '../../src/http/error-handler.ts';
 import { AppError } from '../../src/shared/errors.ts';
 import { createLogger } from '../../src/shared/logger.ts';
@@ -30,7 +30,7 @@ async function app(log: FastifyBaseLogger) {
   });
   server.get('/api/chain', async () => {
     const rpc = Object.assign(new TypeError(`request to https://rpc.provider.example/v2/${RPC_KEY}?apikey=${RPC_KEY} failed`), { url: `https://rpc.provider.example/v2/${RPC_KEY}` });
-    throw chainUnavailable(new AggregateError([rpc], `all RPC servers failed: https://u:${RPC_KEY}@rpc2.example/`));
+    throw keyLookupUnavailable(new AggregateError([rpc], `all RPC servers failed: https://u:${RPC_KEY}@rpc2.example/`));
   });
   return server;
 }

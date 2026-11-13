@@ -5,7 +5,7 @@ End-to-end checks, one subfolder per track. The root of `tests/e2e/` (`package.j
 **Owning waves:** W03–W07 (`engine/`), W08–W09 (`intake/`), W11 (`landing/`).
 **Gate command:** `npm run test:e2e` (landing), `npm run check:w03` … `check:w09` for the engine and intake specs.
 
-**Boundary:** NEAR RPC, wallets, payments, the GitHub API and the queue live only in `apps/`, `contracts/` and `infra/`. `engine/scripts/`, `engine/docker/`, `engine/native/` and `engine/skills/` stay the offline review engine and never gain a network path to them (AGENTS.md, "Tracks and boundaries").
+**Boundary:** NEAR wallet sign-in, donations, the GitHub API and the queue live only in `apps/` and `infra/`. `engine/scripts/`, `engine/docker/`, `engine/native/` and `engine/skills/` stay the offline review engine and never gain a network path to them (AGENTS.md, "Tracks and boundaries").
 
 | Folder | Waves | What it drives | How to run |
 |---|---|---|---|
@@ -15,4 +15,4 @@ End-to-end checks, one subfolder per track. The root of `tests/e2e/` (`package.j
 
 The `intake/` specs skip without `DATABASE_URL`. With it, each spec file creates its own database on that server and drops it afterwards (`apps/api/test/helpers/db.ts`), so point it at a throwaway Postgres you are allowed to create databases on.
 
-Nothing here calls a live service: no NEAR RPC, no GitHub API, no provider. Real-service runs against testnet are an owner step and are not part of these suites.
+Nothing here calls a live service: no NEAR RPC, no GitHub API, no provider. Real-service runs are an owner step and are not part of these suites.

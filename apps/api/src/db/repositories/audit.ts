@@ -6,8 +6,7 @@ export async function audit(db: Db, entry: { actor: string; requestId: string | 
     [entry.now, entry.actor, entry.requestId, entry.event, JSON.stringify(entry.data ?? {})]);
 }
 
-const PUBLIC_EVENTS = ['request_created', 'payment_verified', 'reconciled', 'review_started', 'report_published', 'review_attested',
-  'review_failed', 'review_refunded', 'admin_refund', 'expired'];
+const PUBLIC_EVENTS = ['request_created', 'review_started', 'report_published', 'review_done', 'review_failed'];
 
 /** The public, redacted timeline of one request: event names and times only. */
 export async function timeline(db: Db, requestId: string): Promise<Array<{ event: string; at: Date }>> {

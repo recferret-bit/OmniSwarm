@@ -1,11 +1,10 @@
-// The user's side of the intake flow over real HTTP: challenge, sign (mock wallet), create, pay on the
-// mock chain, confirm. Every response body can be checked against the shared JSON Schema.
+// The user's side of the flow over real HTTP: sign in (NEAR wallet, mock key verifier), save the account's
+// own NEAR AI key and models, queue a dashboard review. Every response body can be checked against the
+// shared JSON Schema.
 import assert from 'node:assert/strict';
 import { validate } from '@omniswarm/schemas';
-import { payRequestReview, registerKey } from '../../src/chain/mock/mock-ledger.ts';
-import type { Db } from '../../src/db/pool.ts';
-import { DevWallet, type SignedBody } from '../../scripts/dev-wallet.ts';
-import { CONTRACT, PRICE, RECIPIENT, SHA } from './stack.ts';
+import { DevWallet } from '../../scripts/dev-wallet.ts';
+import { RECIPIENT } from './stack.ts';
 
 export interface Reply { status: number; body: any; headers: Headers }
 
@@ -33,45 +32,37 @@ export async function challenge(base: string): Promise<string> {
   return reply.body.nonce;
 }
 
-export async function wallet(db: Db, account = 'alice.mock', permission: 'FullAccess' | 'FunctionCall' = 'FullAccess'): Promise<DevWallet> {
-  const dev = new DevWallet(account);
-  await registerKey(db, dev.accountId, dev.publicKey, permission);
-  return dev;
-}
-
-export function sign(dev: DevWallet, nonce: string, overrides: Partial<{ repo: string; commit: string; network: string; preset: string; deployed: string | null }> = {}): SignedBody {
-  return dev.signRequest({
-    repo: 'near/near-sdk-rs', commit: SHA, network: 'testnet', preset: 'scripted', deployed: null, nonce, ...overrides,
-  }, RECIPIENT);
-}
-
 export function sessionCookie(reply: Reply): string {
   const cookie = reply.headers.get('set-cookie')?.split(';')[0];
   if (!cookie?.startsWith('sid=')) assert.fail('sid cookie set');
   return cookie;
 }
 
-export interface Created { requestId: string; requestHash: string; cookie: string }
+let counter = 0;
+export const freshAccount = () => `user${Date.now().toString(36)}${counter++}.near`;
 
-export async function createRequest(base: string, db: Db, dev?: DevWallet): Promise<Created> {
-  const who = dev ?? await wallet(db, `user${Math.floor(Math.random() * 1e9)}.mock`);
-  const reply = await call(base, '/api/requests', { method: 'POST', body: sign(who, await challenge(base)) });
-  assert.equal(reply.status, 201, JSON.stringify(reply.body));
-  conforms('create-request-response', reply.body);
-  return { requestId: reply.body.requestId, requestHash: reply.body.requestHash, cookie: sessionCookie(reply) };
-}
-
-export async function pay(db: Db, created: Created, account: string, amount = PRICE): Promise<string> {
-  return payRequestReview(db, { signer: account, receiver: CONTRACT, requestHash: created.requestHash, depositYocto: amount });
-}
-
-/** challenge -> sign -> create -> pay -> confirm; returns the queued request. */
-export async function queuedRequest(base: string, db: Db): Promise<Created & { position: number }> {
-  const dev = await wallet(db, `user${Math.floor(Math.random() * 1e9)}.mock`);
-  const created = await createRequest(base, db, dev);
-  const txHash = await pay(db, created, dev.accountId);
-  const reply = await call(base, `/api/requests/${created.requestId}/payment`, { method: 'POST', body: { txHash }, cookie: created.cookie });
+/** Sign in with a NEAR wallet (challenge, NEP-413 login message). Returns the session cookie. */
+export async function signIn(base: string, dev: DevWallet = new DevWallet(freshAccount())): Promise<{ cookie: string; account: string; dev: DevWallet }> {
+  const reply = await call(base, '/api/login/near', { method: 'POST', body: dev.login(await challenge(base), RECIPIENT) });
   assert.equal(reply.status, 200, JSON.stringify(reply.body));
-  conforms('payment-response', reply.body);
-  return { ...created, position: reply.body.position };
+  return { cookie: sessionCookie(reply), account: dev.accountId, dev };
+}
+
+export const MODELS = ['deepseek-ai/DeepSeek-V4', 'Qwen/Qwen3.8-Max'];
+
+export async function saveKey(base: string, cookie: string): Promise<void> {
+  const saved = await call(base, '/api/account/providers/nearai', { method: 'PUT', cookie, body: { key: 'near-test-key-not-real-0000', models: MODELS } });
+  assert.equal(saved.status, 200, JSON.stringify(saved.body));
+}
+
+export interface Queued { requestId: string; cookie: string; account: string }
+
+/** A new account signs in, saves its key and queues a review of the recorded near/near-sdk-rs. */
+export async function queuedJob(base: string, body: Record<string, unknown> = {}): Promise<Queued> {
+  const { cookie, account } = await signIn(base);
+  await saveKey(base, cookie);
+  const reply = await call(base, '/api/dashboard/jobs', { method: 'POST', cookie, body: { repo: 'near/near-sdk-rs', ...body } });
+  assert.equal(reply.status, 201, JSON.stringify(reply.body));
+  assert.equal(reply.body.status, 'queued');
+  return { requestId: reply.body.requestId, cookie, account };
 }

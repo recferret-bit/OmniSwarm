@@ -22,7 +22,10 @@ export function testCommand(kind) {
   if (kind === 'cargo') return { command: 'cargo', args: ['test', '--locked', '--offline'], timeoutMs: 900000 };
   // Interpreter and dependencies are prepared by docker/prepare-python-env.py before the network is disconnected.
   // Python suites that start disposable PostgreSQL/Redis servers outgrow the Cargo budget.
-  if (kind === 'pytest') return { command: PYTHON_TEST_INTERPRETER, args: ['-m', 'pytest', '-p', 'no:cacheprovider', '-q', '--tb=line'], timeoutMs: 1800000 };
+  // A module pytest cannot collect (an input the snapshot omits, a missing optional dependency) fails alone:
+  // without --continue-on-collection-errors one such module stops the session before any test runs.
+  // -rfEs adds the skipped tests and their reasons to the short summary, for the report's Tests block.
+  if (kind === 'pytest') return { command: PYTHON_TEST_INTERPRETER, args: ['-m', 'pytest', '-p', 'no:cacheprovider', '-q', '--tb=line', '-rfEs', '--continue-on-collection-errors'], timeoutMs: 1800000 };
   if (kind === 'shell') return { command: 'bash', args: ['--noprofile', '--norc', './test.sh'], timeoutMs: 900000 };
   // NEAR build verification. cargo-near and wasm32-unknown-unknown are provisioned in the image; the runner adds
   // the offline environment. No ABI step: it would load the native build of the contract.

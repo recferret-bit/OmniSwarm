@@ -7,7 +7,7 @@ import path from 'node:path';
 // Mock wallet, MSW, mock controls and key- or secret-shaped strings.
 export const BANNED = [
   { name: 'MockConnector', pattern: /MockConnector/ },
-  { name: 'mock wallet account', pattern: /alice\.testnet/ },
+  { name: 'mock wallet account', pattern: /alice\.near/ },
   { name: 'ed25519 key', pattern: /ed25519:[1-9A-HJ-NP-Za-km-z]{43,88}/ },
   { name: 'base58 64-byte secret', pattern: /(?<![1-9A-HJ-NP-Za-km-z])[1-9A-HJ-NP-Za-km-z]{87,88}(?![1-9A-HJ-NP-Za-km-z])/ },
   { name: 'sk- key', pattern: /(?<![A-Za-z0-9_-])sk-[A-Za-z0-9_-]{16,}/ },

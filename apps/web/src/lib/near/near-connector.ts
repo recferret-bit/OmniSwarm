@@ -2,9 +2,7 @@
 // which runs in the browser, because near-connect touches `window` on import.
 import { NearConnector } from '@hot-labs/near-connect';
 import { AppError } from '../api/errors';
-import { env } from '../env';
-import { normalizeWalletError, type SignMessageInput, type WalletConnector } from './connector';
-import type { WalletTransaction } from './payment';
+import { normalizeWalletError, type SignMessageInput, type WalletConnector, type WalletTransaction } from './connector';
 
 function txHashOf(outcome: unknown): string {
   const record = outcome as { transaction?: { hash?: unknown }; transaction_outcome?: { id?: unknown } } | null;
@@ -13,19 +11,12 @@ function txHashOf(outcome: unknown): string {
   return hash;
 }
 
-// near-connect only accepts mainnet and testnet. sandbox is the local dev wallet (W15-07).
-function walletNetwork(network: typeof env.network): 'mainnet' | 'testnet' {
-  if (network === 'mainnet' || network === 'testnet') return network;
-  throw new AppError('WALLET_UNAVAILABLE', 'sandbox uses the local dev wallet, not near-connect');
-}
+// OmniSwarm runs on NEAR mainnet only.
+const network = 'mainnet';
 
 export function createNearConnector(): WalletConnector {
-  const network = walletNetwork(env.network);
   const connector = new NearConnector({
     network,
-    // NEAR Mobile's executor throws unless the network is mainnet, and its
-    // manifest sets testnet: false. near-connect then omits it on testnet.
-    // Do not force that flag; a listed wallet that cannot sign is a dead end.
     features: { signMessage: true, signAndSendTransaction: true },
   });
 

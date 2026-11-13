@@ -7,7 +7,7 @@ export default function ErrorBoundary({ reset }: { error: Error & { digest?: str
   return (
     <>
       <h1>Something went wrong</h1>
-      <Alert action={<Button variant="secondary" onClick={reset}>Try again</Button>}>This page failed to load. Nothing was paid or signed.</Alert>
+      <Alert action={<Button variant="secondary" onClick={reset}>Try again</Button>}>This page failed to load. Nothing was changed.</Alert>
     </>
   );
 }

@@ -1,4 +1,4 @@
-// GitHub as the quote needs it: repository facts and a ref resolved to a commit SHA.
+// GitHub as the review checks need it: repository facts and a ref resolved to a commit SHA.
 // Adapters: `live` (REST API) and `recorded` (fixture files, tests only).
 
 export interface RepoInfo {

@@ -2,7 +2,7 @@
 // the run moves. The engine's live snapshot (harness/host/progress.json, see progress-detail.ts) is the source;
 // a run that has none (an older engine) falls back to inferring the phase from the report files. A theme of a
 // split review also refreshes its parent's row, so the page the account watches moves too. It also watches
-// the request: a refund while running aborts the run.
+// the request.
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Pool } from '../db/pool.ts';
@@ -81,7 +81,7 @@ export async function themeProgress(pool: Pool, parentId: string): Promise<Progr
       const percent = FINISHED.has(row.status) ? 100 : progress ? Number(progress.percent) : 0;
       return { theme: String(row.theme), status: row.status, ...(progress && !FINISHED.has(row.status) ? { phase: progress.phase } : {}), percent };
     });
-  const failed = list.some((row) => row.status === 'failed' || row.status === 'refunded');
+  const failed = list.some((row) => row.status === 'failed');
   const percent = Math.round(list.reduce((sum, row) => sum + row.percent, 0) / list.length);
   return {
     phase: 'themes', percent: failed ? Math.min(percent, 99) : percent,
@@ -93,7 +93,6 @@ export class ProgressTailer {
   readonly #deps: TailerDeps;
   readonly #requestId: string;
   readonly #outDir: string;
-  readonly #onRefunded: () => void;
   #last: Progress | null = null;
   #lastNow = '';
   #lastLater = '';
@@ -102,11 +101,10 @@ export class ProgressTailer {
   #timer: NodeJS.Timeout | null = null;
   #running: Promise<void> = Promise.resolve();
 
-  constructor(deps: TailerDeps, requestId: string, outDir: string, onRefunded: () => void) {
+  constructor(deps: TailerDeps, requestId: string, outDir: string) {
     this.#deps = deps;
     this.#requestId = requestId;
     this.#outDir = outDir;
-    this.#onRefunded = onRefunded;
   }
 
   start(intervalMs: number): void {
@@ -140,7 +138,6 @@ export class ProgressTailer {
       this.#lastWrite = now.getTime();
     }
     const row = await findRequest(this.#deps.pool, this.#requestId);
-    if (row?.status === 'refunded') this.#onRefunded();
     if (row?.parent_id) await this.#refreshParent(row.parent_id, now);
   }
 

@@ -16,12 +16,12 @@ describe('how scene beats', () => {
     expect(beat(-10, BEAT_MS, 4).index).toBe(3);
   });
 
-  it('locks the picture to the bundled sample attestation', () => {
-    const recorded = JSON.parse(readFileSync(path.join(here, '../../../public/sample/attestation.json'), 'utf8')) as { report_sha256: string };
+  it('locks the picture to the bundled sample report hash', () => {
+    const recorded = JSON.parse(readFileSync(path.join(here, '../../../public/sample/report-hash.json'), 'utf8')) as { reportSha256: string };
     const source = readFileSync(path.join(here, 'how-sample-hash.ts'), 'utf8');
-    expect(SAMPLE_HASH).toBe(recorded.report_sha256);
+    expect(SAMPLE_HASH).toBe(recorded.reportSha256);
     expect(SAMPLE_HASH).toMatch(/^[0-9a-f]{64}$/);
-    expect(source).toContain('attestation.json');
+    expect(source).toContain('report-hash.json');
     expect(source).not.toMatch(/SAMPLE_HASH = ['"][0-9a-f]{64}['"]/);
   });
 });

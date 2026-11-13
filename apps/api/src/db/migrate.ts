@@ -1,7 +1,7 @@
 // Numbered SQL migrations (NNN_name.sql), one ledger table per migration set. Each file runs in its own
 // transaction. Callers hold MIGRATION_LOCK so concurrent deploy steps serialize; the API and worker
-// never call this at boot. The core set is every deployment's schema; other sets (the mock chain's
-// tables) live beside the code that owns them and are applied only where that code may run.
+// never call this at boot. The core set is every deployment's schema; a further set could live beside the
+// code that owns it and be applied only where that code may run.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';

@@ -1,8 +1,0 @@
-{
-  "accountId": "alice.testnet",
-  "publicKey": "ed25519:11111111111111111111111111111111111111111111",
-  "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
-  "message": "{\"account\":\"alice.testnet\",\"v\":1}",
-  "nonce": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
-  "pipelineMode": "step-by-step"
-}

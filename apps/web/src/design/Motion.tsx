@@ -194,7 +194,7 @@ export function Motion() {
 
         <figure>
           <div className="stage plate">
-            <span className="tick">ATTESTED</span>
+            <span className="tick">VERIFIED</span>
           </div>
           <figcaption>
             <b>Tick</b>

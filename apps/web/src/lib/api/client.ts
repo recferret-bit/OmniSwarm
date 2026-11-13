@@ -1,4 +1,4 @@
-// Typed fetch client for the intake API (INTAKE section 4) plus the operator
+// Typed fetch client for the intake API (INTAKE section 4) plus the account
 // session, dashboard jobs and local jobs. Same-origin only: `/api/*` is proxied
 // in dev and routed by nginx in production. Intake DTO types come from
 // schema.gen.ts; an `{error:{code}}` body becomes an AppError. Report PDFs are
@@ -6,16 +6,10 @@
 import { AppError, isErrorCode } from './errors';
 import type {
   ChallengeResponse,
-  CreateRequestBody,
-  CreateRequestResponse,
   HealthResponse,
-  PaymentRequest,
-  PaymentResponse,
   PipelineMode,
   PipelineSummary,
   Progress,
-  QuoteRequest,
-  QuoteResponse,
   ReportIndexResponse,
   RequestListResponse,
   RequestStatusResponse,
@@ -142,9 +136,6 @@ export function localReportHref(jobId: string): string {
 export const api = {
   health: () => call<HealthResponse>('GET', '/health'),
   challenge: () => call<ChallengeResponse>('POST', '/challenge', {}),
-  quote: (body: QuoteRequest) => call<QuoteResponse>('POST', '/quote', body),
-  createRequest: (body: CreateRequestBody) => call<CreateRequestResponse>('POST', '/requests', body),
-  confirmPayment: (requestId: string, body: PaymentRequest) => call<PaymentResponse>('POST', `/requests/${id(requestId)}/payment`, body),
   getRequest: (requestId: string) => call<RequestStatusResponse>('GET', `/requests/${id(requestId)}`),
   listMine: () => call<RequestListResponse>('GET', '/requests?mine=1'),
   getReport: (requestId: string) => call<ReportIndexResponse>('GET', `/reports/${id(requestId)}`),

@@ -57,15 +57,33 @@ export function testCounts(stdout) {
   if (value('pass') != null && value('fail') != null) return { passed: Number(value('pass')), failed: Number(value('fail')), skipped: Number(value('skipped') || 0) + Number(value('todo') || 0) };
   return null;
 }
-// pytest prints "E   <message>" under tracebacks and "FAILED|ERROR <test> - <message>" in its short
-// summary; a shared cause names the coverage gap. Summary lines win when present.
-export function dominantTestFailure(stdout) {
+// Every distinct failure of a suite with how often it occurred, most frequent first, for the report's Tests block.
+// pytest prints "E   <message>" under tracebacks and "FAILED|ERROR <test> - <message>" in its short summary;
+// summary lines win when present. A per-run copy path differs between runs of the same source; without it the
+// same cause groups as one.
+export function failureCauses(stdout, limit = Infinity) {
   const counts = new Map();
   const text = String(stdout);
   const summary = [...text.matchAll(/^(?:FAILED|ERROR) \S+ - (\S.{0,199})/gm)];
-  for (const [, message] of summary.length ? summary : text.matchAll(/^E {3}(\S.{0,199})/gm)) counts.set(message, (counts.get(message) || 0) + 1);
-  const [message, count] = [...counts].sort((a, b) => b[1] - a[1])[0] || [];
-  return count >= 2 ? { message, count } : null;
+  for (const [, raw] of summary.length ? summary : text.matchAll(/^E {3}(\S.{0,199})/gm)) {
+    const message = raw.replace(/\/work\/runs\/[0-9a-f]+\/src\//g, '').trim();
+    counts.set(message, (counts.get(message) || 0) + 1);
+  }
+  return [...counts].sort((a, b) => b[1] - a[1]).slice(0, limit).map(([message, count]) => ({ message, count }));
+}
+// Why tests were skipped, from pytest's short summary ("SKIPPED [3] tests/a.py:25: needs PostgreSQL"), grouped by
+// reason with the number of tests behind each, most frequent first.
+export function skipReasons(stdout, limit = Infinity) {
+  const counts = new Map();
+  for (const [, n, message] of String(stdout).matchAll(/^SKIPPED \[(\d+)\] \S+?: (\S.{0,199})/gm)) counts.set(message.trim(), (counts.get(message.trim()) || 0) + Number(n));
+  return [...counts].sort((a, b) => b[1] - a[1]).slice(0, limit).map(([message, count]) => ({ message, count }));
+}
+// The failing tests a runner names: pytest's short summary ("FAILED|ERROR <test>") and cargo's "test <name> ... FAILED".
+export function failedTests(stdout, limit = 1000) {
+  const text = String(stdout);
+  const names = [...text.matchAll(/^(?:FAILED|ERROR) (\S+)/gm), ...text.matchAll(/^test (\S+) \.\.\. FAILED$/gm)].map((match) => match[1]);
+  const unique = [...new Set(names)];
+  return { names: unique.slice(0, limit), total: unique.length };
 }
 export function missingTestArtifact(stderr) {
   const name = String(stderr).match(/couldn't read [^\n]*\/deploy\/([A-Za-z0-9_-]+\.so)[^\n]*No such file or directory/)?.[1];

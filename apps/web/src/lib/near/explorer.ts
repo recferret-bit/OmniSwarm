@@ -1,19 +1,10 @@
-import { env } from '../env';
-
-// Every network uses the configured explorer origin and these paths.
-// The sandbox stack sets that origin to http://127.0.0.1:3031.
-export function txUrlFor(explorerUrl: string, hash: string): string {
-  return `${explorerUrl}/txns/${encodeURIComponent(hash)}`;
-}
-
-export function accountUrlFor(explorerUrl: string, accountId: string): string {
-  return `${explorerUrl}/address/${encodeURIComponent(accountId)}`;
-}
+// Explorer links. OmniSwarm uses NEAR mainnet only, so the origin is a constant.
+export const EXPLORER_URL = 'https://nearblocks.io';
 
 export function txUrl(hash: string): string {
-  return txUrlFor(env.explorerUrl, hash);
+  return `${EXPLORER_URL}/txns/${encodeURIComponent(hash)}`;
 }
 
 export function accountUrl(accountId: string): string {
-  return accountUrlFor(env.explorerUrl, accountId);
+  return `${EXPLORER_URL}/address/${encodeURIComponent(accountId)}`;
 }

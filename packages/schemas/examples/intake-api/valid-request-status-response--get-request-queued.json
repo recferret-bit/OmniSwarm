@@ -7,7 +7,7 @@
       "at": "2026-11-03T10:00:00Z"
     },
     {
-      "event": "payment_verified",
+      "event": "queued",
       "at": "2026-11-03T10:01:00Z"
     }
   ],

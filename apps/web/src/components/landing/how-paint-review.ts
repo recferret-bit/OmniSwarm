@@ -36,10 +36,10 @@ const SURFACES: readonly Surface[] = [
   },
   {
     kind: 'APP',
-    path: 'apps/web/src/pay/intent.ts',
-    lines: ['export async function signIntent(req) {', '    return wallet.sign(req.payload);', '}'],
+    path: 'apps/web/src/session/token.ts',
+    lines: ['export async function issueToken(req) {', '    return sign(req.payload);', '}'],
     hot: 1,
-    cite: 'intent.ts:88',
+    cite: 'token.ts:88',
   },
   { ...CONTRACT, kind: 'PASS 2' },
 ];

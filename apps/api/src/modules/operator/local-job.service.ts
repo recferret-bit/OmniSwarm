@@ -13,8 +13,8 @@ import { fail } from '../../shared/errors.ts';
 import type { z } from 'zod';
 import type { progress as progressSchema } from '../../http/schemas.ts';
 import type { Logger } from '../../shared/logger.ts';
-import { checkRepo } from '../quote/quote.service.ts';
-import { parseGitHubInput } from '../quote/repo-url.ts';
+import { checkRepo } from '../../github/repo-check.ts';
+import { parseGitHubInput } from '../../github/repo-url.ts';
 import { progressFromSnapshot } from '../../worker/progress-detail.ts';
 import { readPipelineSummary, type PipelineMode } from '../requests/pipeline-view.ts';
 import {
@@ -118,7 +118,7 @@ export async function createLocalJob(
     args = localAuditArgv({ kind: 'path', target: source, outDir, pipelineMode, concurrency: body.concurrency });
   } else {
     const parsed = parseGitHubInput(body.github);
-    const checked = await checkRepo({ config: deps.config, db: deps.pool, github: deps.github }, parsed.repo, parsed.ref);
+    const checked = await checkRepo({ config: deps.config, github: deps.github }, parsed.repo, parsed.ref);
     kind = 'github';
     source = checked.repo;
     ref = parsed.ref;

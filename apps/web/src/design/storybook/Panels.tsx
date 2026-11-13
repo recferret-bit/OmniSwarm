@@ -53,8 +53,8 @@ function Badges() {
       <span className="badge badge-act">Cite</span>
       <span className="badge badge-line">src/lib.rs:30</span>
       <span className="badge badge-neutral">Disputed</span>
-      <Pill tone="good">Attested</Pill>
-      <Pill tone="warn">Refunded</Pill>
+      <Pill tone="good">Verified</Pill>
+      <Pill tone="warn">Incomplete</Pill>
       <Pill tone="bad">Mismatch</Pill>
       <Pill tone="info">Running</Pill>
       <Pill>Queued</Pill>
@@ -67,7 +67,7 @@ function Panels() {
     <div className="stack">
       <Panel title="Hosted review">
         <StatGrid label="Budget">
-          <Stat label="Price" value="1 NEAR" />
+          <Stat label="Reviewers" value="3" />
           <Stat label="Passes" value="2" />
           <Stat label="Tool calls" value="40" />
         </StatGrid>
@@ -135,15 +135,15 @@ function Alerts() {
   return (
     <div className="stack">
       <Alert tone="info">Quote ready.</Alert>
-      <Alert tone="warn">The review cannot run. The deposit is refunded.</Alert>
-      <Alert tone="bad">The recomputed hash does not match the attestation.</Alert>
+      <Alert tone="warn">The review cannot run. Nothing was charged.</Alert>
+      <Alert tone="bad">The recomputed hash does not match the published hash.</Alert>
       <button type="button" className="btn btn-ghost btn-sm" onClick={() => setOpen(true)}>Show toast</button>
       {open ? <div className="toast" role="status">Report hash copied. <button type="button" className="btn btn-sm btn-secondary" onClick={() => setOpen(false)}>Dismiss</button></div> : null}
     </div>
   );
 }
 
-const STATUSES: Status[] = ['awaiting_payment', 'queued', 'running', 'done', 'failed', 'refunded'];
+const STATUSES: Status[] = ['queued', 'running', 'done', 'failed'];
 
 function ReportBits() {
   const [status, setStatus] = useState<Status>('running');
@@ -177,5 +177,5 @@ function AccountStory() {
   if (signedOut) {
     return <button type="button" className="btn btn-primary" onClick={() => setSignedOut(false)}>Connect NEAR wallet</button>;
   }
-  return <AccountChip accountId="auditor.testnet" onSignOut={() => setSignedOut(true)} />;
+  return <AccountChip accountId="auditor.near" onSignOut={() => setSignedOut(true)} />;
 }

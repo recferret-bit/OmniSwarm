@@ -357,15 +357,96 @@ test('renderer discloses unavailable outputs and sandbox coverage', (t) => {
   assert.doesNotMatch(html, /Quorum Security Review/);
 });
 
-test('complete reviewer outputs with execution gaps render incomplete verification', t => {
+// The user-facing rule: complete or incomplete is decided by the agents' review alone. The target's test suites,
+// the audit's scanners and the sandbox record are shown in the Tests and Tools blocks and never change that flag.
+test('complete reviewer outputs with no scanner record and no sandbox record are complete; Tools says what is missing', t => {
   const f = fixture(t);
   f.meta.workflow = 'source_security_review_v1';
   f.save('claude', [controls]);
-  assert.equal(run('generate-html-report.mjs', f.dir).status, 2);
+  fs.unlinkSync(path.join(f.dir, 'harness/sandbox.md'));
+  const rendered = run('generate-html-report.mjs', f.dir);
+  assert.equal(rendered.status, 0, `${rendered.stdout}\n${rendered.stderr}`);
+  const health = JSON.parse(fs.readFileSync(path.join(f.dir, 'report-health.json'), 'utf8'));
+  assert.equal(health.state, 'validated_outputs');
+  assert.deepEqual(health.errors, []);
+  assert.deepEqual(health.incompletionNotes, []);
+  assert.equal(health.tools.state, 'gaps');
+  assert.deepEqual(health.tools.notes, ['Structured scanner evidence is missing or invalid.', 'Sandbox record (harness/sandbox.md) is missing or invalid, so which checks the sandbox ran is unknown.']);
+  assert.match(rendered.stdout, /Tools \(the audit's own scanners; they do not decide whether this report is complete\):\n {2}No scanner result was recorded\. 2 notes\./);
   const html = fs.readFileSync(path.join(f.dir, 'report.html'), 'utf8');
-  assert.match(html, /INCOMPLETE VERIFICATION/);
-  assert.match(html, /Review outputs are complete/);
-  assert.doesNotMatch(html, /Missing reviews are not passes/);
+  assert.doesNotMatch(html, /INCOMPLETE/);
+  assert.match(html, /<details class="panel" id="tools"><summary><span class="pill orange">Tools<\/span>Tools/);
+  assert.match(html, /<li>Sandbox record \(harness\/sandbox\.md\) is missing or invalid/);
+});
+
+test('a failing target suite is shown in the Tests block and does not make a validated report incomplete', t => {
+  const f = fixture(t);
+  f.meta.workflow = 'source_security_review_v1';
+  f.save('claude', [controls]);
+  const sha = (value) => crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex');
+  f.put('source-manifest.json', { digest: 'source', files: [{ path: 'src/report.ts' }] });
+  f.put('harness/existing-tests.json', {
+    version: 1, workflow: 'source_security_review_v1', sourceDigest: 'source',
+    tests: [{ id: 'test-py', kind: 'pytest', cwd: 'backend', description: 'pytest existing tests in backend' }, { id: 'test-rs', kind: 'cargo', cwd: 'program', description: 'cargo existing tests in program' }],
+    coverageGaps: ['EVM contract tests in evm (foundry) are not run: forge, hardhat and solc are not in the sandbox image and are not installed during a review.'],
+  });
+  const output = { stdout: 'FAILED tests/test_cash.py::test_start - AssertionError: bigint: Failed to load <bindings>\nFAILED tests/test_cash.py::test_claim - AssertionError: bigint: Failed to load <bindings>\n2 failed, 11768 passed, 500 skipped in 1036.86s (0:17:16)\n', stderr: '' };
+  f.put('harness/existing-test-output-verification-0.json', output);
+  f.put('harness/existing-test-results-verification.json', [{ testId: 'test-py', sourceDigest: 'source', kind: 'pytest', cwd: 'backend', exitCode: 1, durationMs: 1036860, dependencies: 'sealed', evidenceFile: 'harness/existing-test-output-verification-0.json', evidenceHash: sha(output), at: '2026-11-12T23:28:38.000Z' }]);
+  const checks = [];
+  for (const [tool, stdout] of [['gitleaks', '[]'], ['semgrep', '{"results":[],"errors":[]}'], ['osv-scanner', '{"results":[]}']]) {
+    f.put(`harness/scanner-output-${tool}-0.json`, { code: 0, stdout });
+    checks.push({ tool, state: 'passed', evidenceFile: `harness/scanner-output-${tool}-0.json` });
+  }
+  f.put('harness/scanner-results.json', { version: 1, checks: [...checks, { tool: 'cargo-audit', state: 'not_applicable' }, { tool: 'npm-audit', state: 'not_applicable' }] });
+
+  const rendered = run('generate-html-report.mjs', f.dir);
+  assert.equal(rendered.status, 0, `${rendered.stdout}\n${rendered.stderr}`);
+  const health = JSON.parse(fs.readFileSync(path.join(f.dir, 'report-health.json'), 'utf8'));
+  assert.equal(health.state, 'validated_outputs');
+  assert.deepEqual(health.errors, []);
+  assert.deepEqual(health.verification.gaps, []);
+  assert.equal('tests' in health.verification, false, 'the Tests block is its own top-level block');
+  assert.equal(health.tests.state, 'failed');
+  assert.deepEqual(health.tests.suites.map((suite) => [suite.id, suite.state, suite.counts]), [['test-py', 'failed', { passed: 11768, failed: 2, skipped: 500 }], ['test-rs', 'not_run', null]]);
+  assert.deepEqual(health.tests.notes, ['EVM contract tests in evm (foundry) are not run: forge, hardhat and solc are not in the sandbox image and are not installed during a review.']);
+  assert.deepEqual(health.incompletionNotes, []);
+
+  assert.match(rendered.stdout, /Tests \(the target project's own suites; they do not decide whether this report is complete\):/);
+  assert.match(rendered.stdout, /- pytest existing tests in backend: failed\. Exit 1; 11768 passed, 2 failed or errored, 500 skipped\./);
+  assert.match(rendered.stdout, /- cargo existing tests in program: not run\./);
+  assert.doesNotMatch(`${rendered.stdout}${rendered.stderr}`, /INCOMPLETE/);
+
+  const html = fs.readFileSync(path.join(f.dir, 'report.html'), 'utf8');
+  assert.doesNotMatch(html, /INCOMPLETE VERIFICATION|INCOMPLETE REVIEW/);
+  assert.match(html, /<details class="panel" id="tests"><summary><span class="pill orange">Tests<\/span>Tests<span class="meta-label">2 suites: 1 failed, 1 not run\. 11,768 tests passed, 2 failed or errored, 500 skipped\.<\/span>/);
+  assert.match(html, /do not decide whether this report is complete/);
+  assert.match(html, /<td>pytest existing tests in backend<\/td><td class="test-failed"><strong>failed<\/strong><\/td><td>11,768<\/td><td>2<\/td><td>500<\/td><td>1<\/td><td>17m 17s<\/td>/);
+  assert.match(html, /<li>2× <code>AssertionError: bigint: Failed to load &lt;bindings&gt;<\/code><\/li>/);
+  assert.match(html, /<li><code>tests\/test_cash\.py::test_start<\/code><\/li>/);
+  assert.match(html, /Suites that are not run/);
+
+  // A failed scanner does not make it incomplete either: it is shown in the Tools block.
+  f.put('harness/scanner-output-semgrep-0.json', { code: 1, stdout: '', signal: 'SIGKILL', elapsedMs: 180004, timeoutMs: 180000 });
+  f.put('harness/scanner-results.json', { version: 1, checks: [...checks.map((row) => (row.tool === 'semgrep' ? { tool: 'semgrep', state: 'failed', detail: 'Timed out: killed at its 180s limit before it finished.', evidenceFile: row.evidenceFile } : row)), { tool: 'cargo-audit', state: 'not_applicable' }, { tool: 'npm-audit', state: 'not_applicable' }] });
+  const gapped = run('generate-html-report.mjs', f.dir);
+  assert.equal(gapped.status, 0, `${gapped.stdout}\n${gapped.stderr}`);
+  assert.doesNotMatch(`${gapped.stdout}${gapped.stderr}`, /INCOMPLETE/);
+  assert.match(gapped.stdout, /Tools \(the audit's own scanners; they do not decide whether this report is complete\):\n {2}5 scanners: 2 passed, 2 not applicable, 1 failed\.\n {2}- gitleaks: passed\n {2}- semgrep: failed\. Timed out: killed at its 180s limit before it finished\./);
+  const gappedHealth = JSON.parse(fs.readFileSync(path.join(f.dir, 'report-health.json'), 'utf8'));
+  assert.equal(gappedHealth.state, 'validated_outputs');
+  assert.deepEqual(gappedHealth.errors, []);
+  assert.deepEqual(gappedHealth.verification.gaps, ['semgrep: failed. Timed out: killed at its 180s limit before it finished.']);
+  assert.equal(gappedHealth.tools.state, 'gaps');
+  assert.equal(gappedHealth.tests.state, 'failed');
+  const gappedHtml = fs.readFileSync(path.join(f.dir, 'report.html'), 'utf8');
+  assert.match(gappedHtml, /<td>semgrep<\/td><td class="tool-failed"><strong>failed<\/strong><\/td><td>—<\/td><td>—<\/td><td>Timed out: killed at its 180s limit before it finished\.<\/td>/);
+
+  // A reviewer that delivered nothing still makes it incomplete: that is the agents' work.
+  fs.unlinkSync(path.join(f.dir, 'auditors/claude-s1-auth.json'));
+  const missing = run('generate-html-report.mjs', f.dir);
+  assert.equal(missing.status, 2);
+  assert.match(missing.stderr, /INCOMPLETE: missing, failed or invalid review outputs/);
 });
 
 test('renderer displays benign SVG source inertly and remains offline', (t) => {

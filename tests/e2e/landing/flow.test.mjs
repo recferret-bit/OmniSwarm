@@ -1,7 +1,6 @@
 // Landing e2e on mocks: a production `next build` with MSW and the mock wallet,
-// driven in headless Chrome at 360 px. The landing has no paid quote flow any more
-// (its components stay dormant and unit-tested): reviews run on the account's own
-// NEAR AI key from the dashboard, and the optional USDC donation is the last section.
+// driven in headless Chrome at 360 px. Reviews run on the account's own NEAR AI key
+// from the dashboard, and the optional USDC donation is the last section.
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { after, before, describe, test } from 'node:test';
@@ -10,8 +9,8 @@ import { digestReport } from '@omniswarm/schemas/canonical-json';
 import { listFiles, scan } from '../../../apps/web/scripts/bundle-scan.mjs';
 import { axeViolations, BASE, buildMockApp, removeMockWorker, startMockApp } from './app.mjs';
 
-const HERO = 'A swarm of AI reviewers that argue over your code, then sign the verdict on NEAR';
-const USDC_TESTNET = '3e2210e1184b45b64c8a434c0a7e7b23cc04ea7eb7a6c3c32520d03d4afcb8af';
+const HERO = 'A swarm of AI reviewers that argue over your code, then publish a report you can verify';
+const USDC_MAINNET = '17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1';
 let server;
 let browser;
 let mockBuild;
@@ -64,11 +63,11 @@ describe('landing on mocks', { concurrency: false }, () => {
     const main = await page.locator('main').innerText();
     assert.match(main, new RegExp(HERO));
     for (const id of ['how', 'trust', 'start', 'support']) await page.locator(`#${id}`).waitFor();
-    assert.match(await page.getByTestId('chain-status').innerText(), /Chain: mock \(dev\)/);
-    // No pricing and no paid quote form: the call to action is the dashboard on your own NEAR AI key.
+    assert.match(await page.getByTestId('service-status').innerText(), /Service: mock \(dev\)/);
+    // No pricing, no payment and no chain story: the call to action is the dashboard on your own NEAR AI key.
     assert.equal(await page.locator('#pricing').count(), 0);
     assert.equal(await page.getByRole('button', { name: 'Get quote' }).count(), 0);
-    assert.doesNotMatch(main, /Z\.AI|OpenRouter|1 NEAR \(testnet\)/);
+    assert.doesNotMatch(main, /Z\.AI|OpenRouter|testnet|attested|on-chain|review-registry|receipt|1 NEAR/i);
     assert.match(await page.locator('#start').innerText(), /own NEAR AI key[\s\S]*charges nothing[\s\S]*\.\/bin\/audit local/);
     assert.equal(await page.locator('#start').getByRole('link', { name: 'Open the dashboard' }).getAttribute('href'), '/dashboard');
     assert.equal(await page.getByRole('link', { name: 'Review a repo' }).getAttribute('href'), '#start');
@@ -78,16 +77,16 @@ describe('landing on mocks', { concurrency: false }, () => {
     assert.match(support, /Servers, sandbox runners, storage, the domain and coffee/);
     assert.doesNotMatch(support, /OmniSwarm charges nothing/);
     assert.equal(await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Support' }).getAttribute('href'), '/#support');
-    assert.match(support, /omniswarm\.testnet/);
+    assert.match(support, /omniswarm\.near/);
     assert.match(support, /Send native USDC on NEAR only — not USDC\.e or another network\./);
-    assert.ok(support.includes(USDC_TESTNET));
+    assert.ok(support.includes(USDC_MAINNET));
     assert.deepEqual(await axeViolations(page), []);
     await checkInternalLinks(page);
 
     await page.getByRole('link', { name: 'View a sample report' }).click();
-    await page.getByText('No wallet is required to read a report.').waitFor();
-    await page.getByText('Attested (sample)').waitFor();
-    assert.match(await page.getByText(/not read from NEAR/).innerText(), /recorded sample attestation/);
+    await page.getByText('No sign-in is required to read a report.').waitFor();
+    await page.getByText('Report hash matches').waitFor();
+    assert.match(await page.getByText(/Compared with a sample hash/).innerText(), /bundled with this site/);
     for (const tab of ['Per-model reports', 'Cross-check', 'General review']) {
       await page.getByRole('tab', { name: tab }).click();
       assert.equal(await page.getByRole('tab', { name: tab }).getAttribute('aria-selected'), 'true');
@@ -154,18 +153,18 @@ describe('landing on mocks', { concurrency: false }, () => {
     assert.match(reviewers, /nearai-deepseek-ai-deepseek-v4/);
 
     await page.getByRole('button', { name: 'Open report' }).click();
-    await page.getByText('hash matches on-chain attestation').waitFor();
+    await page.getByText('Report hash matches').waitFor();
     const read = async (testId) => (await page.getByTestId(testId).textContent()).trim();
     const docs = await page.evaluate(async (rid) => Promise.all(['findings-and-scores.json', 'general-review.json']
       .map((name) => fetch(`https://reports.omniswarm.mock/${rid}/${name}`).then((response) => response.json()))), id);
     const recomputed = await digestReport(docs[0], docs[1]);
     assert.equal(await read('report-hash'), recomputed);
-    assert.equal(await read('attested-hash'), recomputed);
+    assert.equal(await read('served-hash'), recomputed);
     assert.deepEqual(await axeViolations(page), []);
 
     await page.getByRole('button', { name: 'Tamper the report' }).click();
     await page.getByRole('button', { name: 'Verify again' }).click();
-    await page.getByText('hash does not match the attestation').waitFor();
+    await page.getByText('Report hash does not match').waitFor();
     assert.notEqual(await read('report-hash'), recomputed);
 
     await page.getByRole('link', { name: 'All requests' }).click();

@@ -46,7 +46,7 @@
 .sw-ember-hi { background: var(--os-ember-hi); }
 .sw-ember-ink { background: var(--os-ember-ink); }
 .sw-cite-hi { background: var(--os-cite-hi); }
-.sw-ok { background: var(--os-attested); }
+.sw-ok { background: var(--os-verified); }
 .sw-fault { background: var(--os-fault); }
 .sw-warn { background: var(--os-warn); }
 .contrast { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }

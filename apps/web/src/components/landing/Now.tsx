@@ -23,13 +23,13 @@ const NOW: FlowStep[] = [
   },
   {
     title: 'Waves landed',
-    lead: 'W00 through W14 are on main, through the guard.',
-    detail: 'That run covers the reviewer registry, the sandbox, the intake API, the testnet contract, this app, and the guard.',
+    lead: 'W00 through W14 are on main.',
+    detail: 'That run covers the reviewer catalog, the offline sandbox, the intake API and this app.',
   },
   {
     title: 'Free',
     lead: 'OmniSwarm charges nothing. You pay NEAR AI directly.',
-    detail: 'Model calls are billed to your own NEAR AI account. The report hash is still attested on NEAR testnet, so anyone can check it.',
+    detail: 'Model calls are billed to your own NEAR AI account. The report hash is published with the report, so anyone can check it in the browser.',
   },
 ];
 

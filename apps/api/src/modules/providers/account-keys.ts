@@ -65,7 +65,7 @@ export async function readAccountKey(db: Db, secret: string, account: string, pr
   try { return open(secret, row.key, aad(providerId, account)); } catch { return null; }
 }
 
-/** `account-<provider>` and the account's saved models, or PRESET_NOT_ALLOWED. Used by the dashboard and the signed request flow. */
+/** `account-<provider>` and the account's saved models, or PRESET_NOT_ALLOWED. Used by the dashboard. */
 export async function accountPreset(db: { pool: Db }, account: string, providerId: string): Promise<{ preset: string; models: string[] }> {
   const view = await accountKeyStatus(db.pool, account, providerId);
   if (!view.set || view.models.length === 0) fail('PRESET_NOT_ALLOWED', `Save your ${view.label} key and choose at least one model before queueing a review on it`);

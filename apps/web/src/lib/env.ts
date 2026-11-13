@@ -1,89 +1,61 @@
 // Public build-time configuration. Every NEXT_PUBLIC_* value is read with a
 // literal `process.env.NAME` so Next inlines it into the bundle; parseEnv then
-// fails the build (or the test) when a value is missing or malformed.
-import type { Network } from './api/schema.gen';
+// fails the build (or the test) when a value is malformed. OmniSwarm talks to
+// NEAR mainnet only: @hot-labs/near-connect needs no RPC or explorer setting,
+// and the explorer origin is a constant (lib/near/explorer.ts).
 
 export interface Env {
-  network: Network;
-  contractId: string;
-  intakeRecipient: string;
-  rpcUrl: string;
-  explorerUrl: string;
-  wallet: 'real' | 'mock' | 'local';
+  wallet: 'real' | 'mock';
   apiMock: boolean;
+  /** NEP-413 `recipient` the wallet signs the sign-in message for. Must equal the API's recipient. */
+  loginRecipient: string;
   /** NEAR account that receives optional USDC donations. null hides every donation section. */
   donationAccount: string | null;
-  /** NEP-141 native USDC contract for the wallet donation. null (sandbox, no override) keeps only the manual address. */
-  donationUsdcContract: string | null;
+  /** NEP-141 native USDC contract for the wallet donation. */
+  donationUsdcContract: string;
 }
 
-type OptionalRaw = 'donationAccount' | 'donationUsdcContract';
-export type RawEnv = Record<Exclude<keyof Env, OptionalRaw>, string | undefined> & Partial<Record<OptionalRaw, string | undefined>>;
+export interface RawEnv {
+  wallet?: string | undefined;
+  apiMock?: string | undefined;
+  loginRecipient?: string | undefined;
+  donationAccount?: string | undefined;
+  donationUsdcContract?: string | undefined;
+}
 
-// Native USDC on NEAR (Circle). Bridged USDC.e is a different contract and is never the default.
-export const NATIVE_USDC: Readonly<Record<Network, string | null>> = {
-  mainnet: '17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1',
-  testnet: '3e2210e1184b45b64c8a434c0a7e7b23cc04ea7eb7a6c3c32520d03d4afcb8af',
-  sandbox: null,
-};
+// Native USDC on NEAR mainnet (Circle). Bridged USDC.e is a different contract and is never the default.
+export const NATIVE_USDC = '17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1';
+export const DEFAULT_LOGIN_RECIPIENT = 'omniswarm.near';
 
 const ACCOUNT_ID = /^[a-z0-9._-]{2,64}$/;
 
-function required(name: string, value: string | undefined): string {
-  if (!value) throw new Error(`${name} is not set (see apps/web/.env.example)`);
+function account(name: string, value: string): string {
+  if (!ACCOUNT_ID.test(value)) throw new Error(`${name} is not a NEAR account id`);
   return value;
 }
 
-// https on every network. Plain http is the local sandbox only (RPC :3030, indexer :3031).
-function endpointUrl(name: string, value: string | undefined, network: string): string {
-  const text = required(name, value).replace(/\/$/, '');
-  if (/^https:\/\/[^\s]+$/.test(text)) return text;
-  if (network === 'sandbox' && /^http:\/\/[^\s]+$/.test(text)) return text;
-  throw new Error(`${name} must be an https URL`);
-}
-
-function account(name: string, value: string | undefined): string {
-  const text = required(name, value);
-  if (!ACCOUNT_ID.test(text)) throw new Error(`${name} is not a NEAR account id`);
-  return text;
-}
-
-// Optional account: unset or empty (a Docker ARG with no value) is null, anything else must be an account id.
+// Optional account: unset or empty (a Docker ARG with no value) falls back, anything else must be an account id.
 function optionalAccount(name: string, value: string | undefined): string | null {
   const text = value?.trim();
   return text ? account(name, text) : null;
 }
 
 export function parseEnv(raw: RawEnv): Env {
-  const network = required('NEXT_PUBLIC_NETWORK', raw.network);
-  if (network !== 'testnet' && network !== 'mainnet' && network !== 'sandbox') {
-    throw new Error('NEXT_PUBLIC_NETWORK must be testnet, mainnet or sandbox');
-  }
   const wallet = raw.wallet || 'real';
-  if (wallet !== 'real' && wallet !== 'mock' && wallet !== 'local') {
-    throw new Error('NEXT_PUBLIC_WALLET must be real, mock or local');
-  }
+  if (wallet !== 'real' && wallet !== 'mock') throw new Error('NEXT_PUBLIC_WALLET must be real or mock');
   return {
-    network,
-    contractId: account('NEXT_PUBLIC_CONTRACT_ID', raw.contractId),
-    intakeRecipient: account('NEXT_PUBLIC_INTAKE_RECIPIENT', raw.intakeRecipient),
-    rpcUrl: endpointUrl('NEXT_PUBLIC_RPC_URL', raw.rpcUrl, network),
-    explorerUrl: endpointUrl('NEXT_PUBLIC_EXPLORER_URL', raw.explorerUrl, network),
     wallet,
     apiMock: raw.apiMock === '1',
+    loginRecipient: optionalAccount('NEXT_PUBLIC_INTAKE_RECIPIENT', raw.loginRecipient) ?? DEFAULT_LOGIN_RECIPIENT,
     donationAccount: optionalAccount('NEXT_PUBLIC_DONATION_ACCOUNT', raw.donationAccount),
-    donationUsdcContract: optionalAccount('NEXT_PUBLIC_DONATION_USDC_CONTRACT', raw.donationUsdcContract) ?? NATIVE_USDC[network],
+    donationUsdcContract: optionalAccount('NEXT_PUBLIC_DONATION_USDC_CONTRACT', raw.donationUsdcContract) ?? NATIVE_USDC,
   };
 }
 
 export const env: Env = parseEnv({
-  network: process.env.NEXT_PUBLIC_NETWORK,
-  contractId: process.env.NEXT_PUBLIC_CONTRACT_ID,
-  intakeRecipient: process.env.NEXT_PUBLIC_INTAKE_RECIPIENT,
-  rpcUrl: process.env.NEXT_PUBLIC_RPC_URL,
-  explorerUrl: process.env.NEXT_PUBLIC_EXPLORER_URL,
   wallet: process.env.NEXT_PUBLIC_WALLET,
   apiMock: process.env.NEXT_PUBLIC_API_MOCK,
+  loginRecipient: process.env.NEXT_PUBLIC_INTAKE_RECIPIENT,
   donationAccount: process.env.NEXT_PUBLIC_DONATION_ACCOUNT,
   donationUsdcContract: process.env.NEXT_PUBLIC_DONATION_USDC_CONTRACT,
 });

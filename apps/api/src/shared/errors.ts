@@ -3,7 +3,6 @@
 
 const CODES = {
   VALIDATION_ERROR: [400, false],
-  MESSAGE_INVALID: [400, false],
   REPO_INVALID: [400, false],
   REPO_PRIVATE: [400, false],
   REPO_ARCHIVED: [400, false],
@@ -12,7 +11,6 @@ const CODES = {
   REPO_NOT_FOUND: [404, false],
   REF_NOT_FOUND: [404, false],
   REF_CHANGED: [409, false],
-  NETWORK_DISABLED: [400, false],
   PRESET_NOT_ALLOWED: [400, false],
   PAYLOAD_TOO_LARGE: [413, false],
   QUEUE_FULL: [503, true],
@@ -24,17 +22,10 @@ const CODES = {
   ACCOUNT_MISMATCH: [401, false],
   UNAUTHORIZED: [401, false],
   FORBIDDEN: [403, false],
-  PAYMENT_NOT_FOUND: [402, true],
-  PAYMENT_MISMATCH: [402, false],
-  PAYMENT_SIGNER_MISMATCH: [403, false],
-  TX_ALREADY_USED: [409, false],
-  ACTIVE_REQUEST_EXISTS: [409, false],
   INVALID_TRANSITION: [409, false],
-  REFUND_NOT_ALLOWED: [409, false],
   RATE_LIMITED: [429, true],
   NOT_FOUND: [404, false],
   REQUEST_NOT_FOUND: [404, false],
-  CHAIN_UNAVAILABLE: [503, true],
   GITHUB_UNAVAILABLE: [503, true],
   INTERNAL: [500, true],
 } as const satisfies Record<string, readonly [number, boolean]>;

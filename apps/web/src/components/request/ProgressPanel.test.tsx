@@ -65,7 +65,7 @@ describe('<ProgressPanel>', () => {
 
   it('trusts a final request status over a snapshot that never recorded its end', () => {
     const live = progress({ reviewers: [{ id: 'cli-grok-grok-4-7', state: 'running', jobsDone: 0, jobs: 1, passes: 2, pass: 1, calls: 31, budget: 40, idleMs: 1_000 }] });
-    for (const [status, label] of [['failed', 'Stopped by an error'], ['refunded', 'Stopped by an error'], ['expired', 'Cancelled'], ['done', 'Finished']] as const) {
+    for (const [status, label] of [['failed', 'Stopped by an error'], ['done', 'Finished']] as const) {
       const { unmount } = render(<ProgressPanel progress={live} status={status} />);
       expect(head()).toHaveTextContent(`46% · ${label}`);
       expect(screen.getByRole('row', { name: /cli-grok/ })).toHaveTextContent('Stopped');
@@ -123,7 +123,7 @@ describe('<ProgressPanel>', () => {
 
 describe('the mock request lifecycle', () => {
   it('carries a schema-valid live detail at every step of a run', () => {
-    const request = { paidAt: 0, fails: false } as never;
+    const request = { startedAt: 0, fails: false } as never;
     let seen = 0;
     for (let t = 0; t < DONE_AFTER_MS; t += STEP_MS / 2) {
       const snap = snapshotAt(request, t);

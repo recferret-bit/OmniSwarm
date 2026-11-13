@@ -4,7 +4,7 @@
 //   infra_failed    our timeout, or the engine recorded a lost sandbox / provider outage
 //   operator_error  the engine could not be started (missing or non-executable ./bin/audit)
 //   engine_error    anything else (retried once, then settled as infra_failed)
-//   aborted         the worker stopped the run (shutdown, or the request was refunded meanwhile)
+//   aborted         the worker stopped the run (shutdown)
 import fs from 'node:fs';
 import path from 'node:path';
 import type { EngineRunResult } from '../engine/port.ts';

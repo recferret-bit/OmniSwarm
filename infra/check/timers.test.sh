@@ -54,7 +54,7 @@ export OMNI_ALERT_WEBHOOK_URL=https://alert.invalid/hook-path-is-a-secret OMNI_H
 
 # --- health.sh ----------------------------------------------------------------
 green() {
-  printf '200\n{"ok":true,"network":"testnet","queueDepth":0,"workers":1}\n' > "$S/http/api_health"
+  printf '200\n{"ok":true,"queueDepth":0,"workers":1}\n' > "$S/http/api_health"
   printf '200\n{"ok":true,"db":true,"queue":true,"migrations":true}\n' > "$S/http/api_ready"
   rm -f "$S/down-omniswarm-workers.target"; echo 10 > "$S/disk"
 }
@@ -106,9 +106,8 @@ echo "  prune.sh: stale engine staging, images of pruned releases, old build cac
 # --- log-hygiene.sh -------------------------------------------------------------
 gh="ghp_$(printf 'Z%.0s' $(seq 1 36))"
 nearkey="ed25519:$(printf '3%.0s' $(seq 1 88))"
-printf 'SESSION_SECRET=planted-session-secret-0123456789\nADMIN_TOKEN=short\nNETWORK=testnet\n' > "$T/etc/stack.env"
+printf 'SESSION_SECRET=planted-session-secret-0123456789\nACCOUNT_KEYS_SECRET=short\nGITHUB_TOKEN=short\n' > "$T/etc/stack.env"
 printf 'RUNS_ROOT=%s\n' "$runs" > "$T/etc/worker.env"
-printf '{"account_id":"op.testnet","public_key":"ed25519:pub","private_key":"%s"}\n' "$nearkey" > "$T/etc/operator-key.json"
 export OMNI_ETC="$T/etc"
 echo 'worker ready' > "$S/journal"; echo 'GET /api/health 200' > "$S/logs-api-1"
 : > "$runs/new-req/1/worker.log"
@@ -119,7 +118,7 @@ echo "clone with $gh" >> "$runs/new-req/1/worker.log"
 echo "signer $nearkey" >> "$S/logs-api-1"
 : > "$calls"
 if out="$(bash "$INFRA/deploy/log-hygiene.sh" 2>&1)"; then fail "planted secrets were not found"; fi
-for want in 'HIT value of SESSION_SECRET in journal' 'HIT github-token in run:new-req_1_worker.log' 'HIT value of OPERATOR_KEY in docker:api-1' 'HIT near-secret-key in docker:api-1'; do
+for want in 'HIT value of SESSION_SECRET in journal' 'HIT github-token in run:new-req_1_worker.log' 'HIT near-secret-key in docker:api-1'; do
   printf '%s' "$out" | grep -qF "$want" || fail "log-hygiene lacks '$want': $out"
 done
 for leak in planted-session-secret "$gh" "$nearkey"; do

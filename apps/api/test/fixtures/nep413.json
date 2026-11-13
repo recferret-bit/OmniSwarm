@@ -2,46 +2,46 @@
   {
     "name": "valid",
     "publicKey": "ed25519:EDMZqGS3NwkFni86QiT1CJNGtDu3Jb5giLYx7LFwn2rY",
-    "signature": "MkbAHel4UEclix95lCkF+pE5vdUC7nBcg6SjIskYdfMl5Zp9clP2+Ef77x3OAwXsAXdc4vdYpkfgI13Upuy9AA==",
-    "message": "{\"account\":\"alice.testnet\",\"commit\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"deployed\":null,\"network\":\"testnet\",\"nonce\":\"AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=\",\"preset\":\"scripted\",\"repo\":\"near/near-sdk-rs\",\"v\":1}",
+    "signature": "K82r17to8dK6vHNpQqv99ASAOsynivCmyNsksppNjGclIbACfPQYDoT1H1kxYerALB6TbUG7oRCuILJJmJ6RCQ==",
+    "message": "{\"account\":\"alice.testnet\",\"kind\":\"login\",\"nonce\":\"AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=\",\"v\":1}",
     "nonce": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
-    "recipient": "omniswarm.testnet",
+    "recipient": "omniswarm.near",
     "valid": true
   },
   {
     "name": "tampered-message",
     "publicKey": "ed25519:EDMZqGS3NwkFni86QiT1CJNGtDu3Jb5giLYx7LFwn2rY",
-    "signature": "MkbAHel4UEclix95lCkF+pE5vdUC7nBcg6SjIskYdfMl5Zp9clP2+Ef77x3OAwXsAXdc4vdYpkfgI13Upuy9AA==",
-    "message": "{\"account\":\"alice.testnet\",\"commit\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"deployed\":null,\"network\":\"testnet\",\"nonce\":\"AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=\",\"preset\":\"scripted\",\"repo\":\"near/near-sdk-rx\",\"v\":1}",
+    "signature": "K82r17to8dK6vHNpQqv99ASAOsynivCmyNsksppNjGclIbACfPQYDoT1H1kxYerALB6TbUG7oRCuILJJmJ6RCQ==",
+    "message": "{\"account\":\"alicf.testnet\",\"kind\":\"login\",\"nonce\":\"AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=\",\"v\":1}",
     "nonce": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
-    "recipient": "omniswarm.testnet",
+    "recipient": "omniswarm.near",
     "valid": false
   },
   {
     "name": "wrong-recipient",
     "publicKey": "ed25519:EDMZqGS3NwkFni86QiT1CJNGtDu3Jb5giLYx7LFwn2rY",
-    "signature": "jSOks9lHAxb91czRYxBOTOSl5mAxFDVRojGHI3fZjGO9WGowh78UeRO6rqyGqu2kJKllvrBbN2pXCDLx8OjVAg==",
-    "message": "{\"account\":\"alice.testnet\",\"commit\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"deployed\":null,\"network\":\"testnet\",\"nonce\":\"AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=\",\"preset\":\"scripted\",\"repo\":\"near/near-sdk-rs\",\"v\":1}",
+    "signature": "/EkZjARJ+z7/GsX2ysNO3doz/S2HTGWNcEJOL7mdGVWi08kAoQDxMhShVVQ4GNjQ5VXE9/wp1t3oopfzjJ08Dg==",
+    "message": "{\"account\":\"alice.testnet\",\"kind\":\"login\",\"nonce\":\"AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=\",\"v\":1}",
     "nonce": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
-    "recipient": "omniswarm.testnet",
+    "recipient": "omniswarm.near",
     "valid": false
   },
   {
     "name": "wrong-nonce",
     "publicKey": "ed25519:EDMZqGS3NwkFni86QiT1CJNGtDu3Jb5giLYx7LFwn2rY",
-    "signature": "MkbAHel4UEclix95lCkF+pE5vdUC7nBcg6SjIskYdfMl5Zp9clP2+Ef77x3OAwXsAXdc4vdYpkfgI13Upuy9AA==",
-    "message": "{\"account\":\"alice.testnet\",\"commit\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"deployed\":null,\"network\":\"testnet\",\"nonce\":\"AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=\",\"preset\":\"scripted\",\"repo\":\"near/near-sdk-rs\",\"v\":1}",
+    "signature": "K82r17to8dK6vHNpQqv99ASAOsynivCmyNsksppNjGclIbACfPQYDoT1H1kxYerALB6TbUG7oRCuILJJmJ6RCQ==",
+    "message": "{\"account\":\"alice.testnet\",\"kind\":\"login\",\"nonce\":\"AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=\",\"v\":1}",
     "nonce": "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=",
-    "recipient": "omniswarm.testnet",
+    "recipient": "omniswarm.near",
     "valid": false
   },
   {
     "name": "wrong-key",
     "publicKey": "ed25519:5j5hedkPtHJRUUdVye7Qgo79DHL7Rq62EYtGfE1XPKVS",
-    "signature": "MkbAHel4UEclix95lCkF+pE5vdUC7nBcg6SjIskYdfMl5Zp9clP2+Ef77x3OAwXsAXdc4vdYpkfgI13Upuy9AA==",
-    "message": "{\"account\":\"alice.testnet\",\"commit\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"deployed\":null,\"network\":\"testnet\",\"nonce\":\"AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=\",\"preset\":\"scripted\",\"repo\":\"near/near-sdk-rs\",\"v\":1}",
+    "signature": "K82r17to8dK6vHNpQqv99ASAOsynivCmyNsksppNjGclIbACfPQYDoT1H1kxYerALB6TbUG7oRCuILJJmJ6RCQ==",
+    "message": "{\"account\":\"alice.testnet\",\"kind\":\"login\",\"nonce\":\"AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=\",\"v\":1}",
     "nonce": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
-    "recipient": "omniswarm.testnet",
+    "recipient": "omniswarm.near",
     "valid": false
   }
 ]

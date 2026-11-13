@@ -12,7 +12,6 @@
     "worker": "node src/bin/worker.ts",
     "db:migrate": "node src/bin/migrate.ts",
     "db:reset": "node scripts/db-reset.ts",
-    "reconcile": "node scripts/reconcile.ts",
     "openapi": "node scripts/openapi.ts",
     "typecheck": "tsc --noEmit -p .",
     "test": "node --test --test-concurrency=1 \"test/**/*.test.ts\""
@@ -24,7 +23,6 @@
     "@fastify/rate-limit": "11.2.2",
     "@fastify/swagger": "9.9.3",
     "@fastify/swagger-ui": "6.1.2",
-    "@omniswarm/guard": "*",
     "@omniswarm/schemas": "*",
     "fastify": "5.12.8",
     "fastify-type-provider-zod": "7.0.0",

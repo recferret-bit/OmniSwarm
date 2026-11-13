@@ -1,5 +1,5 @@
 // NEP-413 (W08-10/11) with reproducible vectors from fixed test seeds (test-only keys, not secrets),
-// the canonical signed message (W08-09) and repo URL normalisation (W08-13).
+// and repo URL normalisation (W08-13).
 // Regenerate the vectors with UPDATE_VECTORS=1.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -7,13 +7,12 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { DevWallet } from '../../scripts/dev-wallet.ts';
 import { decodePublicKey, decodeSignature, verifyNep413 } from '../../src/modules/auth/nep413.ts';
-import { parseSignedMessage } from '../../src/modules/auth/signed-message.ts';
-import { normalizeRepoUrl } from '../../src/modules/quote/repo-url.ts';
-import { AppError } from '../../src/shared/errors.ts';
+import { loginMessage } from '../../src/modules/auth/near-login.ts';
+import { normalizeRepoUrl } from '../../src/github/repo-url.ts';
 import { APP_ROOT } from '../../src/shared/paths.ts';
 
 const FILE = path.join(APP_ROOT, 'test/fixtures/nep413.json');
-const RECIPIENT = 'omniswarm.testnet';
+const RECIPIENT = 'omniswarm.near';
 const NONCE = Buffer.alloc(32, 1).toString('base64');
 const OTHER_NONCE = Buffer.alloc(32, 2).toString('base64');
 
@@ -22,14 +21,14 @@ interface Vector { name: string; publicKey: string; signature: string; message: 
 function vectors(): Vector[] {
   const alice = new DevWallet('alice.testnet', 'omniswarm-test-seed-alice');
   const mallory = new DevWallet('alice.testnet', 'omniswarm-test-seed-mallory');
-  const fields = { commit: 'a'.repeat(40), deployed: null, network: 'testnet', nonce: NONCE, preset: 'scripted', repo: 'near/near-sdk-rs' };
-  const good = alice.signRequest(fields, RECIPIENT);
+  const good = alice.login(NONCE, RECIPIENT);
+  const message = loginMessage('alice.testnet', NONCE);
   const vector = (name: string, body: typeof good, extra: Partial<Vector> = {}): Vector =>
-    ({ name, publicKey: body.publicKey, signature: body.signature, message: body.message, nonce: body.nonce, recipient: RECIPIENT, valid: false, ...extra });
+    ({ name, publicKey: body.publicKey, signature: body.signature, message, nonce: body.nonce, recipient: RECIPIENT, valid: false, ...extra });
   return [
     vector('valid', good, { valid: true }),
-    vector('tampered-message', { ...good, message: good.message.replace('near-sdk-rs', 'near-sdk-rx') }),
-    vector('wrong-recipient', alice.signRequest(fields, 'evil.testnet')),
+    { ...vector('tampered-message', good), message: message.replace('alice', 'alicf') },
+    vector('wrong-recipient', alice.login(NONCE, 'evil.near')),
     vector('wrong-nonce', { ...good, nonce: OTHER_NONCE }),
     vector('wrong-key', { ...good, publicKey: mallory.publicKey }),
   ];
@@ -56,15 +55,8 @@ test('signatures decode from base64 (wallets) or base58 (compat), nothing else',
   assert.equal(decodePublicKey('ed25519:short'), null);
 });
 
-test('the signed message must be canonical with exactly the eight keys', () => {
-  const dev = new DevWallet('alice.testnet', 'seed');
-  const { message } = dev.signRequest({ commit: 'a'.repeat(40), deployed: null, network: 'testnet', nonce: NONCE, preset: 'scripted', repo: 'o/r' }, RECIPIENT);
-  assert.equal(parseSignedMessage(message).repo, 'o/r');
-  const object = JSON.parse(message);
-  for (const bad of [JSON.stringify({ ...object, x: 1 }), JSON.stringify(object, null, 2), JSON.stringify({ ...object, v: 2 }),
-    JSON.stringify({ ...object, preset: 'cli:claude:opus' }), JSON.stringify({ ...object, network: 'localnet' }), '[]']) {
-    assert.throws(() => parseSignedMessage(bad), (error: unknown) => error instanceof AppError && error.code === 'MESSAGE_INVALID', bad);
-  }
+test('the login message is exactly {account, kind, nonce, v} in this order, no spaces', () => {
+  assert.equal(loginMessage('alice.near', NONCE), `{"account":"alice.near","kind":"login","nonce":"${NONCE}","v":1}`);
 });
 
 test('repo URLs normalise to owner/name and an optional ref', () => {

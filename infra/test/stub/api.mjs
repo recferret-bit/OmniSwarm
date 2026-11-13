@@ -37,7 +37,7 @@ function events(req, res) {
 
 async function route(req, res) {
   const { pathname } = new URL(req.url, 'http://stub');
-  if (pathname === '/api/health') return json(res, 200, { ok: true, network: process.env.NETWORK || null });
+  if (pathname === '/api/health') return json(res, 200, { ok: true });
   if (pathname === '/api/ready') {
     const ok = await databaseReachable();
     return json(res, ok ? 200 : 503, { ok });

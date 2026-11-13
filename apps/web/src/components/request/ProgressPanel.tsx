@@ -32,7 +32,7 @@ type RunState = ProgressDetail['state'];
 
 // The request (or local job) status is the authority once it is final. A snapshot still saying "running" then
 // is a run that was killed before it could record its end, so it is never shown as live.
-const FINAL_STATUS: Record<string, RunState> = { failed: 'failed', refunded: 'failed', expired: 'cancelled', done: 'finished' };
+const FINAL_STATUS: Record<string, RunState> = { failed: 'failed', done: 'finished' };
 export function displayState(detail: RunState, status?: string): RunState {
   return detail === 'running' && status && FINAL_STATUS[status] ? FINAL_STATUS[status] : detail;
 }

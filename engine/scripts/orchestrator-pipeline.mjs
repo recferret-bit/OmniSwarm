@@ -6,6 +6,7 @@ import { loadClaims } from './debate-claims.mjs';
 import { sourceReader } from './debate-citations.mjs';
 import { buildClusters } from './debate-cluster.mjs';
 import { buildIncompletionNotes } from './report-incompletion.mjs';
+import { testsHtml, testsMarkdown, toolsHtml, toolsMarkdown } from './report-tests.mjs';
 import { validate } from '../../packages/schemas/index.mjs';
 import { readJsonOr, writeJson, writeText } from './report-util-files.mjs';
 import { DEFAULTS } from './run-config.mjs';
@@ -28,6 +29,7 @@ const ALLOWED_HARNESS_TOP_FILES = new Set([
   'budget-health.json',
   'stack-profile.json',
   'existing-tests.json',
+  'existing-test-phase.json',
   'scanner-results.json',
   'test-artifacts.json',
 ]);
@@ -306,6 +308,10 @@ export function writeStage1Artifacts(first, second = {}) {
       }
       : null,
     incompletionNotes: notes,
+    // The target's own suites (report-health.json `tests`). They never change `health.state`.
+    tests: health.tests || null,
+    // The audit's own scanners and sandbox record (report-health.json `tools`). They never change `health.state` either.
+    tools: health.tools || null,
     findingsCount: findings.length,
     findings,
     disclaimer: DISCLAIMER,
@@ -345,6 +351,8 @@ export function writeStage1Artifacts(first, second = {}) {
       mdLines.push(`- **${f.clusterId}** [${(f.severity || 'info').toUpperCase()}] \`${f.status}\` — ${f.title} (${(f.locations || []).join(', ')})`);
     }
   }
+  mdLines.push(...testsMarkdown(doc.tests));
+  mdLines.push(...toolsMarkdown(doc.tools));
   mdLines.push('', DISCLAIMER, '');
   writeText(out, 'audit_stage_1.md', mdLines.join('\n'));
 
@@ -371,6 +379,9 @@ export function writeStage1Artifacts(first, second = {}) {
   nav a { margin-right: 1rem; color: #2563eb; text-decoration: none; }
   .muted { color: #6b7280; font-size: 0.88rem; }
   .impact { color: #92400e; }
+  .table-scroll { overflow-x: auto; }
+  .test-suite { margin-top: 0.6rem; }
+  pre { overflow-x: auto; background: #f3f4f6; padding: 0.6rem; border-radius: 6px; font-size: 0.82rem; }
 </style>
 </head>
 <body>
@@ -406,6 +417,8 @@ export function writeStage1Artifacts(first, second = {}) {
       </tbody>
     </table>`}
   </div>
+  ${doc.tests ? `<div class="card" id="tests"><h2>Tests</h2>${testsHtml(doc.tests)}</div>` : ''}
+  ${doc.tools ? `<div class="card" id="tools"><h2>Tools</h2>${toolsHtml(doc.tools)}</div>` : ''}
   <p class="muted">${escapeHtml(DISCLAIMER)}</p>
 </body>
 </html>

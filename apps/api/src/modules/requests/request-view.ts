@@ -46,8 +46,6 @@ export async function viewRequest(db: Db, id: string, storage?: { reportsRoot: s
     ...(row.incomplete !== null ? { incomplete: row.incomplete } : {}),
     ...(showMode ? { pipelineMode: row.pipeline_mode ?? 'full' } : {}),
     ...(pipeline ? { pipeline } : {}),
-    ...(row.attest_tx ? { attestTx: row.attest_tx } : {}),
-    ...(row.refund_tx ? { refundTx: row.refund_tx } : {}),
     ...(row.failure_cause ? { failureCause: row.failure_cause } : {}),
     timeline: events.map((event) => ({ event: event.event, at: iso(event.at) })),
     createdAt: iso(row.created_at),

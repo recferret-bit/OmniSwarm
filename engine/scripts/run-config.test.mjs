@@ -112,7 +112,7 @@ test('the default debate rounds are the golden-eval OD-14 decision recorded in e
 });
 
 test('scripted_judge_demo_only: the scripted judge is refused at plan time on anything but a bundled fixture', (t) => {
-  const real = path.join(here, '../..', 'contracts', 'review-registry');
+  const real = path.join(here, '../..', 'apps', 'api');
   for (const flags of [{ orchestrator: 'scripted:judge' }, { orchestrator: 'cli:claude:opus', alternateJudge: 'scripted:judge' }]) {
     assert.throws(() => resolveRunConfig({ flags: { ...flags, target: real }, root: tmp(t) }), /^ConfigError: scripted_judge_demo_only: --(orchestrator|alternate-judge) scripted:judge/);
   }

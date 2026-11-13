@@ -94,7 +94,7 @@ p { overflow-wrap: anywhere; }
   clip-path: polygon(var(--os-chamfer-s) 0, 100% 0, 100% calc(100% - var(--os-chamfer-s)), calc(100% - var(--os-chamfer-s)) 100%, 0 100%, 0 var(--os-chamfer-s));
 }
 .badge-act, .pill--info { background: var(--os-cite); color: var(--os-on-cite); }
-.badge-ok, .pill--good { background: var(--os-attested); color: var(--os-on-ember); }
+.badge-ok, .pill--good { background: var(--os-verified); color: var(--os-on-ember); }
 .badge-bad, .pill--bad { background: var(--os-fault); color: var(--os-on-ember); }
 .badge-warn, .pill--warn { background: var(--os-warn); color: var(--os-on-ember); }
 .badge-neutral, .pill--neutral { background: var(--os-plate-3); color: var(--os-text); border-color: var(--os-seam-2); }

@@ -21,21 +21,15 @@
       "type": "object",
       "required": [
         "requestId",
-        "requestHash",
         "repo",
         "commitSha",
-        "preset",
-        "network"
+        "preset"
       ],
       "additionalProperties": false,
       "properties": {
         "requestId": {
           "type": "string",
           "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-        },
-        "requestHash": {
-          "type": "string",
-          "pattern": "^[0-9a-f]{64}$"
         },
         "repo": {
           "type": "string",
@@ -48,13 +42,6 @@
         "preset": {
           "type": "string",
           "pattern": "^[a-z0-9-]{1,40}$"
-        },
-        "network": {
-          "enum": [
-            "testnet",
-            "mainnet",
-            "sandbox"
-          ]
         }
       }
     },

@@ -3,7 +3,7 @@ const FEATURES = [
   { k: '02', title: 'File and line', body: 'A finding counts when it cites the line. A regex hit in the lead scan stays a lead until a reviewer cites the control.' },
   { k: '03', title: 'Anonymized debate', body: 'Reviewers challenge each other’s claims with source evidence. Unsupported claims are refuted. The round hides who said it.' },
   { k: '04', title: 'A judge from another family', body: 'A cross-family judge rules on each disputed cluster. The orchestrator then writes the general review.' },
-  { k: '05', title: 'Hash on NEAR', body: 'The report hash is attested on the review-registry contract. This site recomputes that hash in your browser.' },
+  { k: '05', title: 'A hash you can check', body: 'The service publishes a hash of the report files. This site recomputes that hash in your browser and says whether it matches.' },
   { k: '06', title: 'Their tests, not ours', body: 'The runner executes the repository’s own catalogued tests. A green suite is evidence about that suite, not a safety certificate.' },
 ];
 

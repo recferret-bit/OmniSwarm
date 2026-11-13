@@ -5,7 +5,7 @@ import { api, localReportHref, type LocalJobDetail, type LocalJobRequest } from 
 import { messageFor, toAppError, type AppErrorCode } from '@/lib/api/errors';
 import type { PipelineMode, Status } from '@/lib/api/schema.gen';
 import { parseRepoInput } from '@/lib/repo';
-import { PipelineModeChecks } from '../flow/PipelineModeChecks';
+import { PipelineModeChecks } from '../dashboard/PipelineModeChecks';
 import { PipelinePanel } from '../request/PipelinePanel';
 import { ProgressPanel } from '../request/ProgressPanel';
 import { statusLabel } from '../request/Timeline';
@@ -15,7 +15,7 @@ import { Field } from '../ui/Field';
 import { Panel } from '../ui/Panel';
 import { Pill, type Tone } from '../ui/Pill';
 
-const KNOWN: readonly Status[] = ['queued', 'running', 'publishing', 'done', 'failed', 'refunded'];
+const KNOWN: readonly Status[] = ['queued', 'running', 'publishing', 'done', 'failed'];
 
 function isKnown(status: string): status is Status {
   return (KNOWN as readonly string[]).includes(status);
@@ -23,7 +23,7 @@ function isKnown(status: string): status is Status {
 
 function toneOf(status: string): Tone {
   if (status === 'done') return 'good';
-  if (status === 'failed' || status === 'refunded') return 'bad';
+  if (status === 'failed') return 'bad';
   return 'info';
 }
 
@@ -109,7 +109,7 @@ export function LocalJobs() {
   return (
     <Panel title="Local job">
       <p className="muted">
-        The local job runs a scripted reviewer with no paid model call. A real model review stays{' '}
+        The local job runs a scripted reviewer with no model call. A real model review stays{' '}
         <code>./bin/audit run --repo {'<path>'}</code> or <code>--github owner/repo</code>.
       </p>
       <form className="quote-form" onSubmit={submit} noValidate>

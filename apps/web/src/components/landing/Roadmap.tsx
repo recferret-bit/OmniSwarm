@@ -2,14 +2,9 @@ import { FlipFlow, type FlowStep } from './FlipFlow';
 
 const LATER: FlowStep[] = [
   {
-    title: 'Mainnet registry',
-    lead: 'Same attest and refund methods, after testnet is the one people use.',
-    detail: 'The contract methods do not change. Mainnet waits until the testnet flow has been the one people actually use.',
-  },
-  {
-    title: 'Public cost ledger',
-    lead: 'A published cost per run. The report keeps a fingerprint, never the key.',
-    detail: 'Reports already store the first and last four characters of the key hash. The ledger would publish the cost, not the secret.',
+    title: 'Cost in the report',
+    lead: 'Show what a run cost, next to the findings. The report keeps a fingerprint, never the key.',
+    detail: 'Reports already store a fingerprint of the key that ran them. A cost line would show the spend, not the secret.',
   },
   {
     title: 'De-anonymize toggle',
@@ -27,14 +22,9 @@ const LATER: FlowStep[] = [
     detail: 'The engine stays offline either way. The action does not widen reviewer tools or the network.',
   },
   {
-    title: 'Publish the guard',
-    lead: 'Another signer can refuse a payment when the hash drifted.',
-    detail: 'Ship the guard so a missing attestation or a drifted code hash stops the payment.',
-  },
-  {
-    title: 'Social login',
-    lead: 'A session that is not the sample operator account.',
-    detail: 'The wallet signature on a paid request stays. Login does not replace it.',
+    title: 'More sign-in providers',
+    lead: 'Another way to sign in besides Google, X and a NEAR wallet.',
+    detail: 'Sign-in only picks the account that owns your NEAR AI key and your review history. It never moves funds.',
   },
 ];
 

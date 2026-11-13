@@ -14,29 +14,18 @@ COPY package.json package-lock.json ./
 COPY apps/api/package.json apps/api/
 COPY apps/web/package.json apps/web/
 COPY packages/schemas/package.json packages/schemas/
-COPY packages/guard/package.json packages/guard/
 RUN npm ci --ignore-scripts --no-audit --no-fund --workspace @omniswarm/web \
  && npm cache clean --force
 
 FROM deps AS build
 # NEXT_PUBLIC_* values are inlined at build time; .env files are excluded from
 # the context, so pass them as build args (infra/env/web.env.example).
-ARG NEXT_PUBLIC_NETWORK=testnet
-ARG NEXT_PUBLIC_CONTRACT_ID
-ARG NEXT_PUBLIC_INTAKE_RECIPIENT
-ARG NEXT_PUBLIC_RPC_URL
-ARG NEXT_PUBLIC_EXPLORER_URL=https://testnet.nearblocks.io
 ARG NEXT_PUBLIC_WALLET=real
 ARG NEXT_PUBLIC_API_MOCK=0
-# Optional donations: empty hides them; the USDC contract defaults by network.
+# Optional donations: empty hides them; the USDC contract defaults to mainnet native USDC.
 ARG NEXT_PUBLIC_DONATION_ACCOUNT=
 ARG NEXT_PUBLIC_DONATION_USDC_CONTRACT=
 ENV NEXT_TELEMETRY_DISABLED=1 \
-    NEXT_PUBLIC_NETWORK=$NEXT_PUBLIC_NETWORK \
-    NEXT_PUBLIC_CONTRACT_ID=$NEXT_PUBLIC_CONTRACT_ID \
-    NEXT_PUBLIC_INTAKE_RECIPIENT=$NEXT_PUBLIC_INTAKE_RECIPIENT \
-    NEXT_PUBLIC_RPC_URL=$NEXT_PUBLIC_RPC_URL \
-    NEXT_PUBLIC_EXPLORER_URL=$NEXT_PUBLIC_EXPLORER_URL \
     NEXT_PUBLIC_WALLET=$NEXT_PUBLIC_WALLET \
     NEXT_PUBLIC_API_MOCK=$NEXT_PUBLIC_API_MOCK \
     NEXT_PUBLIC_DONATION_ACCOUNT=$NEXT_PUBLIC_DONATION_ACCOUNT \

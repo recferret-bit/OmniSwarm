@@ -203,7 +203,7 @@ test('buildIncompletionNotes parses real budgetHealth(), cost_ceiling workers, r
     assert.equal(byCode.get('debate_phase_timeout')?.category, 'timeout');
     assert.equal(byCode.get('debate_incomplete')?.category, 'debate_arguing');
     assert.equal(byCode.get('general_review_unavailable')?.category, 'stage_failure');
-    assert.equal(byCode.get('verification_coverage_gap')?.category, 'sandbox_verification');
+    assert.equal(byCode.has('verification_coverage_gap'), false, 'a scanner or test gap is not an incompletion cause');
     assert.equal(byCode.get('source_digest_mismatch')?.category, 'sandbox_verification');
 
     // No duplicate health_contract_error for BUDGET: codex: budget_exhausted_without_submission
@@ -303,7 +303,7 @@ test('buildIncompletionNotes end-to-end against real debateStage + adjudicateSta
   }
 });
 
-test('buildIncompletionNotes preserves multiple distinct verification.gaps, multiple health_contract_error rows, and auditor_incomplete stageFailures', () => {
+test('buildIncompletionNotes ignores verification.gaps, preserves multiple health_contract_error rows and auditor_incomplete stageFailures', () => {
   const dir = makeTempDir();
   try {
     const notes = buildIncompletionNotes(dir, {
@@ -333,8 +333,8 @@ test('buildIncompletionNotes preserves multiple distinct verification.gaps, mult
       },
     });
 
-    const gapNotes = notes.filter((n) => n.code === 'verification_coverage_gap');
-    assert.equal(gapNotes.length, 2, 'must preserve every distinct verification.gaps item instead of colliding on seenKeys');
+    // Scanner and test gaps are shown in the report's Tools and Tests blocks; they are never incompletion causes.
+    assert.equal(notes.some((n) => n.code === 'verification_coverage_gap' || /forge|near-workspaces/.test(n.reason)), false);
 
     const contractNotes = notes.filter((n) => n.code === 'health_contract_error');
     assert.equal(contractNotes.length, 3, 'must preserve every distinct health.errors item');

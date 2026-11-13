@@ -1,18 +1,18 @@
 // Crash recovery with real worker processes (`node src/bin/worker.ts`) killed with SIGKILL:
 //  - mid-run: the missed heartbeat re-queues the job, a new worker runs attempt 2 in a fresh dir;
-//  - between the chain attest and the status write: the retry sees the attestation and finishes;
+//  - between the report publication and the `done` status write: the retry finishes without running the engine;
 //  - SIGTERM mid-run: the engine stops at once and the job is handed back without spending its retry;
 //  - two workers racing for three jobs: every request runs exactly once.
-// Every request ends with exactly one attestation on the mock chain.
+// Every request ends `done` (or `failed`) exactly once.
 import assert from 'node:assert/strict';
 import { spawn, type ChildProcess } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { after, before, describe, test } from 'node:test';
-import { chainEvents } from '../../src/chain/mock/mock-ledger.ts';
-import { findRequest } from '../../src/db/repositories/requests.ts';
+import { findRequest, transition } from '../../src/db/repositories/requests.ts';
 import { APP_ROOT } from '../../src/shared/paths.ts';
-import { queuedRequest } from '../helpers/flow.ts';
+import { queuedJob } from '../helpers/flow.ts';
+import { publishReport } from '../../src/worker/publish.ts';
 import { NEEDS_DB } from '../helpers/db.ts';
 import { migratedDb, startApi, until, type ApiStack, type TestDb } from '../helpers/stack.ts';
 
@@ -61,8 +61,8 @@ describe('crash recovery with real worker processes', NEEDS_DB, () => {
     return row?.status === 'done' ? row : null;
   }, 60_000, 200);
 
-  test('SIGKILL mid-run: the job is re-run once in a new attempt dir and attested once', async () => {
-    const request = await queuedRequest(api.base, api.deps.pool);
+  test('SIGKILL mid-run: the job is re-run once in a new attempt dir and finished once', async () => {
+    const request = await queuedJob(api.base);
     const first = workerProcess({ ...t.env, MOCK_ENGINE_STEP_MS: '1500' });
     children.push(first);
     await until(async () => {
@@ -76,26 +76,29 @@ describe('crash recovery with real worker processes', NEEDS_DB, () => {
     const row = await done(request.requestId);
     assert.equal(row.attempts, 2);
     secondAttemptDir(request.requestId);
-    const events = await chainEvents(api.deps.pool, request.requestHash);
-    assert.equal(events.filter((event) => event === 'review_attested').length, 1);
-    assert.equal(events.filter((event) => event === 'review_running').length, 1);
+    const events = await api.deps.pool.query<{ event: string }>(`SELECT event FROM audit_log WHERE request_id = $1`, [request.requestId]);
+    assert.equal(events.rows.filter((r) => r.event === 'review_done').length, 1);
     await stop(second);
   });
 
-  test('SIGKILL after the attest landed and before the status write: finished without a second attest', async () => {
-    const request = await queuedRequest(api.base, api.deps.pool);
-    const hanging = workerProcess({ ...t.env, MOCK_CHAIN_HANG_AFTER: 'attest' });
-    children.push(hanging);
-    await until(async () => (await chainEvents(api.deps.pool, request.requestHash)).includes('review_attested'), 30_000);
-    await kill(hanging);
-    assert.equal((await findRequest(api.deps.pool, request.requestId))?.status, 'publishing');
+  test('a crash after the report was published and before the done write: finished without running the engine again', async () => {
+    const request = await queuedJob(api.base);
+    // What a worker killed between the publication and the status write leaves behind.
+    const fixture = path.join(APP_ROOT, 'test/fixtures/engine-report');
+    const published = publishReport({ reportsRoot: t.config.storage.reportsRoot, requestId: request.requestId, sourceDir: fixture, repo: 'near/near-sdk-rs', commitSha: 'a'.repeat(40), preset: 'account-nearai' });
+    const now = new Date();
+    await transition(api.deps.pool, request.requestId, { to: 'running', actor: 'test', event: 'review_started', now });
+    await transition(api.deps.pool, request.requestId, {
+      to: 'publishing', actor: 'test', event: 'report_published', now,
+      patch: { reportSha256: published.reportSha256, reportUrl: `https://reports.test/${request.requestId}/report.html`, maxSeverity: 'medium', incomplete: false },
+    });
     const recovering = workerProcess(t.env);
     children.push(recovering);
     const row = await done(request.requestId);
-    assert.equal(row.attest_tx, null, 'the lost tx hash is not invented');
-    const events = await chainEvents(api.deps.pool, request.requestHash);
-    assert.equal(events.filter((event) => event === 'review_attested').length, 1);
-    assert.equal(fs.readdirSync(path.join(t.config.storage.runsRoot, request.requestId)).length, 1, 'the engine did not run again');
+    assert.equal(row.report_sha256, published.reportSha256);
+    assert.ok(!fs.existsSync(path.join(t.config.storage.runsRoot, request.requestId, '0', 'result.json')), 'the engine did not run');
+    const events = await api.deps.pool.query<{ event: string }>(`SELECT event FROM audit_log WHERE request_id = $1 AND event = 'review_done'`, [request.requestId]);
+    assert.equal(events.rowCount, 1);
     await stop(recovering);
   });
 
@@ -110,14 +113,14 @@ describe('crash recovery with real worker processes', NEEDS_DB, () => {
     return Date.now() - started;
   }
 
-  const reviewJobs = async (requestHash: string) => (await api.deps.pool.query<{ state: string; retry_count: number; retry_limit: number; output: unknown }>(
-    `SELECT state, retry_count, retry_limit, output FROM pgboss.job WHERE name = 'review' AND singleton_key = $1 ORDER BY created_on`, [requestHash])).rows;
+  const reviewJobs = async (requestId: string) => (await api.deps.pool.query<{ state: string; retry_count: number; retry_limit: number; output: unknown }>(
+    `SELECT state, retry_count, retry_limit, output FROM pgboss.job WHERE name = 'review' AND singleton_key = $1 ORDER BY created_on`, [requestId])).rows;
 
   test('SIGTERM aborts the running engine at once, exits 0, and hands the job back with its retry', async () => {
-    const request = await queuedRequest(api.base, api.deps.pool);
+    const request = await queuedJob(api.base);
     const took = await sigtermMidRun(request.requestId);
     assert.ok(took < 15_000, `stopped in ${took} ms, not after the 20 s engine step`);
-    const [released, again] = await reviewJobs(request.requestHash);
+    const [released, again] = await reviewJobs(request.requestId);
     assert.equal(released?.state, 'completed');
     assert.deepEqual(released?.output, { released: true });
     assert.deepEqual({ state: again?.state, retryCount: again?.retry_count, retryLimit: again?.retry_limit }, { state: 'created', retryCount: 0, retryLimit: 1 });
@@ -126,28 +129,26 @@ describe('crash recovery with real worker processes', NEEDS_DB, () => {
     const row = await done(request.requestId);
     assert.equal(row.attempts, 2);
     secondAttemptDir(request.requestId);
-    assert.equal((await chainEvents(api.deps.pool, request.requestHash)).filter((event) => event === 'review_attested').length, 1);
     await stop(next);
   });
 
-  test('the retry kept across a SIGTERM is still there: a crashing engine afterwards is retried once, then refunded', async () => {
-    const request = await queuedRequest(api.base, api.deps.pool);
+  test('the retry kept across a SIGTERM is still there: a crashing engine afterwards is retried once, then failed', async () => {
+    const request = await queuedJob(api.base);
     await sigtermMidRun(request.requestId);
     const crashing = workerProcess({ ...t.env, MOCK_ENGINE_FAIL: 'crash' });
     children.push(crashing);
     const row = await until(async () => {
       const current = await findRequest(api.deps.pool, request.requestId);
-      return current?.status === 'refunded' ? current : null;
+      return current?.status === 'failed' ? current : null;
     }, 60_000, 200);
     // 1 interrupted run (free) + the first crash + its retry.
     assert.equal(row.attempts, 3);
     assert.match(row.failure_cause ?? '', /^engine_error_after_retry/);
-    assert.equal((await chainEvents(api.deps.pool, request.requestHash)).filter((event) => event === 'review_refunded').length, 1);
     await stop(crashing);
   });
 
   test('two worker processes race for three jobs: each runs exactly once', async () => {
-    const requests = [await queuedRequest(api.base, api.deps.pool), await queuedRequest(api.base, api.deps.pool), await queuedRequest(api.base, api.deps.pool)];
+    const requests = [await queuedJob(api.base), await queuedJob(api.base), await queuedJob(api.base)];
     const env = { ...t.env, MOCK_ENGINE_STEP_MS: '100', WORKER_CONCURRENCY: '2' };
     const racers = [workerProcess(env), workerProcess(env)];
     children.push(...racers);
@@ -155,7 +156,6 @@ describe('crash recovery with real worker processes', NEEDS_DB, () => {
       const row = await done(request.requestId);
       assert.equal(row.attempts, 1);
       assert.deepEqual(fs.readdirSync(path.join(t.config.storage.runsRoot, request.requestId)), ['0']);
-      assert.equal((await chainEvents(api.deps.pool, request.requestHash)).filter((event) => event === 'review_attested').length, 1);
     }
     await Promise.all(racers.map(stop));
     assert.ok(racers.every((child) => child.exitCode === 0), 'SIGTERM drains and exits 0');

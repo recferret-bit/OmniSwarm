@@ -1,7 +1,7 @@
 // Model cost of a request (W09-18): every attempt's reviewers/<id>/usage.json
 // (packages/schemas/usage.schema.json: `totals.cost`, else the sum of `passes[].cost`), summed over all
 // attempts of the request, because a retried run spent money too. Recorded into `request_cost` when the
-// request is published or refunded, before disk hygiene may remove the attempt dirs.
+// request is published or failed, before disk hygiene may remove the attempt dirs.
 import fs from 'node:fs';
 import path from 'node:path';
 import { readJson } from './classify.ts';

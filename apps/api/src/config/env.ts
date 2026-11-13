@@ -1,14 +1,11 @@
 // Environment schema for every intake process (API, worker, migrate). Validated once at startup;
 // a bad or missing value exits with one line naming the key. No secret has a default, and the test
-// adapters (mock chain, recorded GitHub, mock engine) are refused when NODE_ENV=production.
+// adapters (mock key verifier, recorded GitHub, mock engine) are refused when NODE_ENV=production.
 import path from 'node:path';
 import { z } from 'zod';
 import { REPO_ROOT } from '../shared/paths.ts';
 
 const ACCOUNT_ID = /^[a-z0-9._-]{2,64}$/;
-const PRESET = /^[a-z0-9-]{1,40}$/;
-const YOCTO = /^(0|[1-9][0-9]{0,38})$/;
-const LOOPBACK = new Set(['127.0.0.1', '::1', 'localhost']);
 
 const flag = z.enum(['0', '1', 'true', 'false']).transform((value) => value === '1' || value === 'true');
 const list = z.string().default('').transform((value) => value.split(',').map((item) => item.trim()).filter(Boolean));
@@ -33,9 +30,6 @@ export const envSchema = z.object({
   HOST: z.string().min(1).default('127.0.0.1'),
   PORT: int(0, 65535).default(8787),
   TRUST_PROXY: trustProxy,
-  ADMIN_HOST: z.string().default('127.0.0.1').refine((host) => LOOPBACK.has(host), 'admin listener binds loopback only'),
-  ADMIN_PORT: int(0, 65535).default(8788),
-  ADMIN_TOKEN: z.string().min(32, 'must be at least 32 characters').optional(),
   SESSION_SECRET: z.string().min(32, 'must be at least 32 characters').optional(),
   COOKIE_SECURE: flag.optional(),
   LANDING_ORIGIN: z.url().optional(),
@@ -46,45 +40,23 @@ export const envSchema = z.object({
   // Admin page (HTTP basic). Separate from the sample-account session.
   ADMIN_BASIC_USER: z.string().min(1).optional(),
   ADMIN_BASIC_PASSWORD: z.string().min(8).optional(),
-  // The admin page's free-checks switch (a boolean, not a secret). Unset: free checks are off and cannot be turned on.
-  REVIEW_SETTINGS_FILE: absPath.optional(),
   // Seals accounts' own provider keys (account_provider_key). The API and the workers both need it; unset
-  // outside production falls back to SESSION_SECRET. Production requires it once an account- preset is allowed.
+  // outside production falls back to SESSION_SECRET. Production requires it: every review runs on an account's key.
   ACCOUNT_KEYS_SECRET: z.string().min(32, 'must be at least 32 characters').optional(),
 
-  NETWORK: z.enum(['testnet', 'mainnet', 'sandbox']).default('testnet'),
-  // Local near-sandbox switch. `sandbox` outside production is applied in load.ts.
-  // productionIssues refuses it. Any other value leaves NETWORK alone.
-  NEAR_NETWORK: z.enum(['testnet', 'mainnet', 'sandbox']).optional(),
-  // Price on NETWORK. Testnet defaults to 1 NEAR (OD-08); mainnet has no default, so it stays off unless priced.
-  // `sandbox` is the local near-sandbox only. productionIssues refuses it. The 1 NEAR sandbox
-  // default is applied with NEAR_NETWORK=sandbox, not for a bare NETWORK=sandbox.
-  PRICE_YOCTO: z.string().regex(YOCTO).optional(),
-  INTAKE_RECIPIENT: z.string().regex(ACCOUNT_ID).optional(),
-  CONTRACT_ID: z.string().regex(ACCOUNT_ID).optional(),
-  MAX_REPO_KB: int(1, 10_000_000).default(204_800),
+  // The NEP-413 recipient the wallet signs the sign-in message for (NEAR wallet sign-in only). Must equal the
+  // web app's NEXT_PUBLIC_INTAKE_RECIPIENT.
+  INTAKE_RECIPIENT: z.string().regex(ACCOUNT_ID).default('omniswarm.near'),
   MAX_QUEUE: int(1, 10_000).default(10),
-  ETA_MINUTES_PER_JOB: int(1, 1440).default(15),
   REPO_ALLOWLIST: list,
   REPO_DENYLIST: list,
-  // The preset a signed (wallet) request names and the worker runs (engine omniswarm.config.json). Defaults to
-  // `hosted` (OD-04); production must name it. `scripted` runs only with the mock engine.
-  HOSTED_PRESET: z.string().regex(PRESET).optional(),
-  ALLOWED_PRESETS: list,
   RATE_LIMIT_PER_MINUTE: int(1, 10_000).default(30),
   REQUESTS_PER_DAY: int(1, 1000).default(5),
 
-  CHAIN_ADAPTER: z.enum(['mock', 'near']).optional(),
+  // NEAR wallet sign-in checks that the signing key is a full-access key of the account. `rpc` reads the
+  // account's access keys from RPC_URLS (mainnet); `mock` knows only keys registered in-process and is test-only.
+  KEY_VERIFIER: z.enum(['rpc', 'mock']).optional(),
   RPC_URLS: list,
-  // Worker only (INTAKE section 5). The account id comes from the key file's account_id unless set here.
-  OPERATOR_KEY_FILE: absPath.optional(),
-  OPERATOR_ACCOUNT_ID: z.string().regex(ACCOUNT_ID).optional(),
-  MOCK_CHAIN_FAIL_RATE: z.coerce.number().min(0).max(1).default(0),
-  MOCK_CHAIN_HANG_AFTER: z.enum(['attest', 'refund']).optional(),
-
-  // Guard account-age signal (W13): off by default; `nearblocks` asks the NearBlocks API (API only).
-  GUARD_ACCOUNT_AGE: z.enum(['off', 'nearblocks']).default('off'),
-  NEARBLOCKS_API_KEY: z.string().min(1).optional(),
 
   GITHUB_ADAPTER: z.enum(['live', 'recorded']).optional(),
   GITHUB_API_URL: z.url().default('https://api.github.com'),
@@ -103,9 +75,8 @@ export const envSchema = z.object({
   MOCK_ENGINE_STEP_MS: int(0, 600_000).default(50),
   RUNS_ROOT: absPath.default(path.join(REPO_ROOT, 'reports/intake/runs')),
   REPORTS_ROOT: absPath.default(path.join(REPO_ROOT, 'reports/intake/published')),
-  // Disk hygiene (W09-19): finished requests whose run dirs are kept; how long an orphaned report stays.
+  // Disk hygiene (W09-19): finished (done or failed) requests whose run dirs are kept.
   KEEP_RUNS: int(1, 100_000).default(20),
-  ORPHAN_REPORT_RETENTION_H: int(1, 87_600).default(168),
   // http is the local stack only. productionIssues refuses it when NODE_ENV=production.
   REPORTS_BASE_URL: z.url().refine((url) => url.startsWith('https://') || url.startsWith('http://'), 'must be http or https').default('https://reports.localhost'),
 

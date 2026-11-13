@@ -8,7 +8,8 @@ import path from 'node:path';
 import type { RequestRow } from '../db/repositories/requests.ts';
 import { findRequest, insertThemeRequest, listThemes, transition } from '../db/repositories/requests.ts';
 import { withTransaction } from '../db/pool.ts';
-import { enqueueReview, type ReviewJob } from '../queue/review-queue.ts';
+import { jobFor } from '../modules/requests/queue-request.ts';
+import { enqueueReview } from '../queue/review-queue.ts';
 import type { PgBoss } from '../queue/boss.ts';
 import type { Clock } from '../shared/clock.ts';
 import type { Pool } from '../db/pool.ts';
@@ -103,19 +104,16 @@ export async function splitLargeReview(input: {
     const id = crypto.randomUUID();
     const dest = path.join(input.config.storage.runsRoot, input.row.id, 'themes', slice.theme);
     materialize(root, slice, dest);
-    const requestHash = crypto.createHash('sha256').update(`theme:${input.row.id}:${slice.theme}:${id}`).digest('hex');
-    const job: ReviewJob = {
-      requestId: id, requestHash, repo: input.row.repo, commitSha: input.row.commit_sha, preset: input.row.preset, network: input.row.network,
-    };
+    const job = jobFor({ id, repo: input.row.repo, commit_sha: input.row.commit_sha, preset: input.row.preset });
     await withTransaction(input.pool, async (tx) => {
-      await insertThemeRequest(tx, { id, parent: input.row, theme: slice.theme, slicePath: dest, now, requestHash });
+      await insertThemeRequest(tx, { id, parent: input.row, theme: slice.theme, slicePath: dest, now });
       await enqueueReview(input.boss, tx, job);
     });
   }
   return 'split';
 }
 
-export async function finalReportDir(pool: Pool, config: Config, parentId: string): Promise<{ parent: RequestRow; dir: string } | null> {
+export async function finalReportDir(pool: Pool, config: Config, parentId: string): Promise<{ parent: RequestRow; dir: string; severities: (string | null)[] } | null> {
   const themes = await listThemes(pool, parentId);
   if (themes.length === 0 || themes.some((theme) => theme.status === 'queued' || theme.status === 'running' || theme.status === 'publishing')) return null;
   const parent = await findRequest(pool, parentId);
@@ -125,5 +123,5 @@ export async function finalReportDir(pool: Pool, config: Config, parentId: strin
   fs.writeFileSync(path.join(dir, 'report.html'), indexHtml(parent.repo, themes.map((theme) => ({ theme: theme.theme ?? 'theme', id: theme.id, status: theme.status }))));
   fs.writeFileSync(path.join(dir, 'findings-and-scores.json'), '[]\n');
   fs.writeFileSync(path.join(dir, 'general-review.json'), '{}\n');
-  return { parent, dir };
+  return { parent, dir, severities: themes.filter((theme) => theme.status === 'done').map((theme) => theme.max_severity) };
 }

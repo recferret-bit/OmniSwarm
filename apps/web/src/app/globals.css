@@ -98,7 +98,7 @@
 
 .timeline__steps, .timeline__phases { display: flex; flex-wrap: wrap; gap: 8px; list-style: none; padding: 0; margin: 0 0 8px; }
 .timeline__steps li { padding: 4px 10px; background: var(--os-plate-3); color: var(--os-steel); }
-.timeline__steps li.is-done { background: var(--os-attested-dim); color: var(--os-attested); }
+.timeline__steps li.is-done { background: var(--os-verified-dim); color: var(--os-verified); }
 .timeline__steps li.is-current { background: var(--os-cite-dim); color: var(--os-cite-text); font-weight: 700; }
 .timeline__phases li { font-size: 0.875rem; color: var(--os-steel); }
 .timeline__phases li + li::before { content: "→ "; }
@@ -108,7 +108,7 @@ progress { width: 100%; accent-color: var(--os-ember); }
 .progress__head { margin: 0; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-weight: 600; }
 .progress__phases { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; padding: 0; margin: 0; }
 .progress__phases li { padding: 3px 8px; font-size: 0.875rem; background: var(--os-plate-3); color: var(--os-steel); }
-.progress__phases li.is-done { background: var(--os-attested-dim); color: var(--os-attested); }
+.progress__phases li.is-done { background: var(--os-verified-dim); color: var(--os-verified); }
 .progress__phases li.is-running { background: var(--os-cite-dim); color: var(--os-cite-text); font-weight: 700; }
 .progress__phases li.is-failed { outline: 1px solid var(--os-ember); color: var(--os-text); }
 .progress__phases li.is-skipped { text-decoration: line-through; opacity: 0.7; }
@@ -133,10 +133,10 @@ progress { width: 100%; accent-color: var(--os-ember); }
 .request-list { list-style: none; padding: 0; margin: 0; }
 .request-row__progress { flex-basis: 100%; }
 
-.attestation { display: grid; gap: 8px; }
-.attestation__verdict, .attestation__note { margin: 0; }
-.attestation__hashes { margin: 0; display: grid; gap: 4px; }
-.attestation__hashes dd { margin: 0 0 4px; }
+.hashcheck { display: grid; gap: 8px; }
+.hashcheck__verdict, .hashcheck__note { margin: 0; }
+.hashcheck__hashes { margin: 0; display: grid; gap: 4px; }
+.hashcheck__hashes dd { margin: 0 0 4px; }
 .tabs__list {
   display: flex; flex-wrap: nowrap; align-items: stretch; gap: 0;
   border-bottom: 1px solid var(--os-seam);

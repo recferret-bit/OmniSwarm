@@ -53,11 +53,11 @@
   /* Text accents. Night uses the bright forms; day overrides these. */
   --os-ember-text: var(--os-ember-hi);
   --os-cite-text: var(--os-cite-hi);
-  --os-ok-text: var(--os-attested);
+  --os-ok-text: var(--os-verified);
   --os-warn-text: var(--os-warn);
   --os-inverse: var(--os-paper);
   --os-inverse-ink: var(--os-ink);
-  --os-attested: #3DDC97;
+  --os-verified: #3DDC97;
   --os-fault: #FF4D4D;
   --os-fault-text: #FF9B9B;
   --os-warn: #F2C16B;
@@ -67,7 +67,7 @@
   --os-ember-glow-0: rgba(255, 90, 31, 0);
   --os-ember-dim: rgba(255, 90, 31, 0.14);
   --os-cite-dim: rgba(30, 91, 255, 0.18);
-  --os-attested-dim: rgba(61, 220, 151, 0.14);
+  --os-verified-dim: rgba(61, 220, 151, 0.14);
   --os-fault-dim: rgba(255, 77, 77, 0.14);
   --os-warn-dim: rgba(242, 193, 107, 0.14);
 
@@ -126,8 +126,8 @@
   --accent-pale: var(--os-ember-dim);
   --red: var(--os-fault-text);
   --red-pale: var(--os-fault-dim);
-  --green: var(--os-attested);
-  --green-pale: var(--os-attested-dim);
+  --green: var(--os-verified);
+  --green-pale: var(--os-verified-dim);
   --blue: var(--os-cite-hi);
   --blue-pale: var(--os-cite-dim);
   --amber: var(--os-warn);

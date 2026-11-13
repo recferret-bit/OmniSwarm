@@ -17,7 +17,7 @@ const NOW = Date.now();
 
 function roots() {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), 'hygiene-'));
-  return { runsRoot: path.join(base, 'runs'), reportsRoot: path.join(base, 'published'), keepRuns: 20, orphanReportRetentionH: 168 };
+  return { runsRoot: path.join(base, 'runs'), reportsRoot: path.join(base, 'published'), keepRuns: 20 };
 }
 
 /** One attempt dir; `completed` copies the recorded report and an exit-0 result. */
@@ -59,14 +59,14 @@ test('25 finished requests: the newest 20 keep their run dirs, all 25 published 
   assert.equal(fs.readdirSync(policy.reportsRoot).filter((name) => name !== '.staging').length, 25, 'a done report is never removed, however old');
 });
 
-test('a done request keeps only its published attempt; in-flight, failed and unknown requests are never touched', async () => {
+test('a done request keeps only its published attempt; in-flight and unknown requests are never touched', async () => {
   const policy = roots();
   const done = crypto.randomUUID();
   attempt(policy.runsRoot, done, 0, false);
   const kept = attempt(policy.runsRoot, done, 1, true);
   const known = new Map<string, KnownRequest>([[done, at('done')]]);
   const untouchable: string[] = [];
-  for (const status of ['running', 'publishing', 'queued', 'failed'] as const) {
+  for (const status of ['running', 'publishing', 'queued'] as const) {
     const id = crypto.randomUUID();
     attempt(policy.runsRoot, id, 0, false);
     publish(policy.reportsRoot, id, 900 * HOUR);
@@ -86,20 +86,35 @@ test('a done request keeps only its published attempt; in-flight, failed and unk
   }
 });
 
-test('an orphaned report (refunded after publication) goes after the retention; stale staging goes after an hour', async () => {
+test('failed runs are finished too: the newest KEEP_RUNS keep their dirs, and no failed run grows the disk forever', async () => {
+  const policy = { ...roots(), keepRuns: 2 };
+  const known = new Map<string, KnownRequest>();
+  const ids = Array.from({ length: 4 }, (_, i) => {
+    const id = crypto.randomUUID();
+    attempt(policy.runsRoot, id, 0, false);
+    known.set(id, at(i % 2 ? 'failed' : 'done', (4 - i) * HOUR));
+    return id;
+  });
+  const result = await runHygiene(policy, lookup(known), NOW);
+  assert.equal(result.runsRemoved, 2);
+  assert.deepEqual(fs.readdirSync(policy.runsRoot).sort(), ids.slice(2).sort());
+});
+
+test('a published report is never removed, whatever the request status or age; stale staging goes after an hour', async () => {
   const policy = roots();
-  const old = crypto.randomUUID();
-  const fresh = crypto.randomUUID();
-  publish(policy.reportsRoot, old, 200 * HOUR);
-  publish(policy.reportsRoot, fresh, 200 * HOUR);
-  const known = new Map([[old, at('refunded', 169 * HOUR)], [fresh, at('refunded', 2 * HOUR)]]);
+  const known = new Map<string, KnownRequest>();
+  const reports = (['done', 'failed', 'running'] as const).map((status) => {
+    const id = crypto.randomUUID();
+    publish(policy.reportsRoot, id, 900 * HOUR);
+    known.set(id, at(status, 900 * HOUR));
+    return id;
+  });
   const staleStaging = path.join(policy.reportsRoot, '.staging', 'x-1');
   const liveStaging = path.join(policy.reportsRoot, '.staging', 'x-2');
   for (const dir of [staleStaging, liveStaging]) fs.mkdirSync(dir, { recursive: true });
   fs.utimesSync(staleStaging, new Date(NOW - 2 * HOUR), new Date(NOW - 2 * HOUR));
   const result = await runHygiene(policy, lookup(known), NOW);
-  assert.deepEqual({ reports: result.reportsRemoved, staging: result.stagingRemoved }, { reports: 1, staging: 1 });
-  assert.ok(!fs.existsSync(path.join(policy.reportsRoot, old)));
-  assert.ok(fs.existsSync(path.join(policy.reportsRoot, fresh)), 'orphaned for 2 h only');
+  assert.equal(result.stagingRemoved, 1);
+  for (const id of reports) assert.ok(fs.existsSync(path.join(policy.reportsRoot, id)));
   assert.ok(fs.existsSync(liveStaging), 'a publication in progress is left alone');
 });

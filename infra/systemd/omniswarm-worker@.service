@@ -30,10 +30,6 @@ WorkingDirectory=/srv/omniswarm/current
 # Root-only (0600) files; systemd reads them before dropping to User=.
 EnvironmentFile=/etc/omniswarm/worker.env
 EnvironmentFile=/etc/omniswarm/providers.env
-# The operator function-call key stays root:root 0600 on disk; systemd copies
-# it into this unit's private credentials dir, readable by this process only.
-LoadCredential=operator-key:/etc/omniswarm/operator-key.json
-Environment=OPERATOR_KEY_FILE=%d/operator-key
 Environment=WORKER_ID=%i
 Environment=NODE_ENV=production
 Environment=ENGINE_ROOT=/srv/omniswarm/current

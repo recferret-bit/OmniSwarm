@@ -32,7 +32,7 @@ export interface EngineRunResult {
   exitCode: number | null;
   signal: string | null;
   timedOut: boolean;
-  /** The worker asked the run to stop (shutdown or the request was refunded meanwhile). */
+  /** The worker asked the run to stop (shutdown). */
   aborted: boolean;
   /** The process could not be started at all (ENOENT, EACCES): an operator problem, not a review outcome. */
   spawnError: string | null;

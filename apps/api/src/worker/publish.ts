@@ -1,6 +1,6 @@
 // Publish (W09-10): copy one attempt's report into REPORTS_ROOT/<requestId>/ without private files,
 // make it read-only, write published.json, and move it into place with a single rename. The first
-// publication wins: a later attempt never replaces a report that may already be attested.
+// publication wins: a later attempt never replaces a report that may already be linked.
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';

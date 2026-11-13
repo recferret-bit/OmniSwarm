@@ -1,6 +1,0 @@
-{
-  "accountId": "alice.testnet",
-  "publicKey": "ed25519:11111111111111111111111111111111111111111111",
-  "message": "{\"account\":\"alice.testnet\",\"v\":1}",
-  "nonce": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
-}

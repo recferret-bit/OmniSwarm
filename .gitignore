@@ -25,9 +25,6 @@ engine/eval/runs/
 # operator run config at the repository root (copy of engine/omniswarm.config.example.json)
 omniswarm.config.json
 
-# Local near-sandbox binary, home, and dev keys (W15). Never commit.
-infra/compose/.local/near/
-
 # Cargo build output
 target/
 

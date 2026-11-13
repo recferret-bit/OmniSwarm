@@ -1,8 +1,9 @@
 // The "Evidence & scope" panels: review status and limits, isolation policy, sandbox records, per-stack coverage,
 // control assertions and attached diagram source. Shared by report.html and the pre-v2 findings-by-model.html.
 import { disclosure, esc, prose } from './report-cards.mjs';
+import { suiteLabel, testsHeadline, testsHtml, toolsHeadline, toolsHtml } from './report-tests.mjs';
 
-export const incompleteLabelOf = (ctx) => (ctx.reviewComplete ? 'INCOMPLETE VERIFICATION' : 'INCOMPLETE REVIEW');
+export const incompleteLabelOf = (ctx) => (ctx.reviewComplete ? 'INCOMPLETE REPORT' : 'INCOMPLETE REVIEW');
 
 function incompletionDetails(health, complete) {
   const notes = Array.isArray(health?.incompletionNotes) ? health.incompletionNotes : [];
@@ -54,10 +55,19 @@ function stackRows(eco, suiteRows, gapRows) {
 function stackCoverage({ profile, catalog, health }) {
   const verification = health.verification || {};
   const suites = new Map((verification.suites || []).map((suite) => [suite.id, suite.state]));
-  const gaps = verification.gaps || [];
+  // A report written before the Tests block has only the strict suite states.
+  const recorded = new Map((health.tests?.suites || []).map((suite) => [suite.id, suite]));
+  // Open gaps: scanners that failed or did not run, and suites the target has but the sandbox never runs. Like the
+  // Tests and Tools blocks, this table informs and does not decide whether the report is complete.
+  const gaps = [...(verification.gaps || []), ...(health.tests?.notes || [])];
   const eco = profile?.ecosystems;
   if (!eco) return '<p class="note">Stack profile unavailable or predates ecosystem detection; per-stack coverage cannot be derived.</p>';
-  const suiteRows = (kinds) => (catalog.tests || []).filter((test) => kinds.includes(test.kind)).map((test) => `${test.description}: ${suites.get(test.id) === 'passed' ? 'passed' : suites.get(test.id) === 'failed_or_unverified' ? 'failed or unverified' : 'not run'}`);
+  const suiteState = (test) => {
+    const suite = recorded.get(test.id);
+    if (suite) return `${suiteLabel(suite.state)}${suite.counts ? ` (${suite.counts.passed} passed, ${suite.counts.failed} failed or errored, ${suite.counts.skipped} skipped)` : ''}`;
+    return suites.get(test.id) === 'passed' ? 'passed' : suites.get(test.id) === 'failed_or_unverified' ? 'failed or unverified' : 'not run';
+  };
+  const suiteRows = (kinds) => (catalog.tests || []).filter((test) => kinds.includes(test.kind)).map((test) => `${test.description}: ${suiteState(test)}`);
   const gapRows = (pattern) => gaps.filter((gap) => pattern.test(gap));
   const rows = stackRows(eco, suiteRows, gapRows);
   return `<div class="table-scroll"><table><thead><tr><th>Stack</th><th>Detected</th><th>Existing tests</th><th>Open coverage gaps</th></tr></thead><tbody>${rows.map(([name, detected, detail, tests, open]) => `<tr><td><b>${esc(name)}</b><br><small>${esc(detail)}</small></td><td>${detected ? 'yes' : 'absent'}</td><td>${detected ? (tests.length ? tests.map(esc).join('<br>') : 'no suite catalogued') : '—'}</td><td>${detected ? (open.length ? open.map(esc).join('<br>') : 'none recorded') : '—'}</td></tr>`).join('')}</tbody></table></div><p class="note">Source review of a detected stack is performed by the assigned surfaces S1–S6 (see the surface map); this table shows only tool-reported test and scanner coverage. A failed or missing item is not a pass.</p>`;
@@ -69,11 +79,28 @@ function controlsDetails({ verifiedSafe }) {
   return `<details class="panel"><summary><span class="pill green">Controls</span>Auditor control assertions<span class="meta-label">${verifiedSafe.length} reported</span></summary><div class="panel-body"><p class="note">Unverified model assertions, not certified controls. Contradiction detection and tiebreak escalation are not implemented.</p><div class="controls-list">${verifiedSafe.map(item).join('')}</div></div></details>`;
 }
 
+// The target's own suites, in full. They are shown on every report and never decide whether it is complete.
+function testsPanel({ health }) {
+  const tests = health.tests;
+  if (!tests) return '';
+  const tone = tests.state === 'passed' ? 'green' : tests.state === 'failed' ? 'orange' : 'blue';
+  return `<details class="panel" id="tests"><summary><span class="pill ${tone}">Tests</span>Tests<span class="meta-label">${esc(testsHeadline(tests))}</span></summary><div class="panel-body">${testsHtml(tests)}</div></details>`;
+}
+
+// The audit's own scanners and sandbox record, shown on every report. They never decide whether it is complete.
+function toolsPanel({ health }) {
+  const tools = health.tools;
+  if (!tools) return '';
+  return `<details class="panel" id="tools"><summary><span class="pill ${tools.state === 'passed' ? 'green' : 'orange'}">Tools</span>Tools<span class="meta-label">${esc(toolsHeadline(tools))}</span></summary><div class="panel-body">${toolsHtml(tools)}</div></details>`;
+}
+
 export function evidencePanels(ctx, modelRows) {
   const { complete, health, sandboxRows, sandboxMd, diagrams } = ctx;
   return `<details class="panel" id="validation"><summary><span class="pill orange">${complete ? 'Validated' : 'Incomplete'}</span>Review status & limitations<span class="meta-label">${health.errors?.length || 0} gaps</span></summary><div class="panel-body">${validationDetails(ctx, modelRows)}${isolationDetails(ctx)}</div></details>
     <details class="panel"><summary><span class="pill blue">Coverage</span>Sandbox & checks<span class="meta-label">${sandboxRows.length} records</span></summary><div class="panel-body">${sandboxDetails(ctx)}${sandboxMd ? disclosure('Original sandbox record', `<pre>${esc(sandboxMd)}</pre>`) : ''}</div></details>
     <details class="panel"><summary><span class="pill blue">Stacks</span>Coverage by stack<span class="meta-label">Python · Node · Solana · NEAR</span></summary><div class="panel-body">${stackCoverage(ctx)}</div></details>
+    ${testsPanel(ctx)}
+    ${toolsPanel(ctx)}
     ${controlsDetails(ctx)}
     ${diagrams.length ? `<details class="panel"><summary>Attached diagram source<span class="meta-label">${diagrams.length} files</span></summary><div class="panel-body"><p class="note">Attachments are displayed as inert source.</p>${diagrams.map((d) => disclosure(d.title, `<pre>${esc(d.svg)}</pre>`)).join('')}</div></details>` : ''}`;
 }

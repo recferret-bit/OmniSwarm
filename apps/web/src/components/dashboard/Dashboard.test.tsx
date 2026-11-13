@@ -119,11 +119,11 @@ describe('<Dashboard>', () => {
     unmount();
 
     const before = env.donationAccount;
-    env.donationAccount = 'omniswarm.testnet';
+    env.donationAccount = 'omniswarm.near';
     try {
       render(<Dashboard />);
       expect(await screen.findByRole('heading', { name: 'Support OmniSwarm' })).toBeInTheDocument();
-      expect(screen.getByTestId('donation-account')).toHaveTextContent('omniswarm.testnet');
+      expect(screen.getByTestId('donation-account')).toHaveTextContent('omniswarm.near');
     } finally {
       env.donationAccount = before;
     }

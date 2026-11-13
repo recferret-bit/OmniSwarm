@@ -1,4 +1,4 @@
-// Fastify factories: the public app (every /api route but admin) and the loopback-only admin app.
+// Fastify factory for the public app (every /api route).
 import crypto from 'node:crypto';
 import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
@@ -7,20 +7,14 @@ import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import Fastify, { type FastifyBaseLogger, type FastifyInstance } from 'fastify';
 import { jsonSchemaTransform, serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
-import type { CoreDeps } from '../container.ts';
-import { adminRoutes } from '../modules/admin/admin.routes.ts';
 import { authRoutes } from '../modules/auth/auth.routes.ts';
 import { dashboardRoutes } from '../modules/dashboard/dashboard.routes.ts';
-import { guardRoutes } from '../modules/guard/guard.routes.ts';
 import { localRoutes } from '../modules/operator/local.routes.ts';
 import { operatorRoutes } from '../modules/providers/operator.routes.ts';
 import { accountProviderRoutes } from '../modules/providers/account.routes.ts';
 import { healthRoutes } from '../modules/health/health.routes.ts';
-import { ledgerRoutes } from '../modules/ledger/ledger.routes.ts';
 import { reportRoutes } from '../modules/report-index/reports.routes.ts';
-import { paymentRoutes } from '../modules/payments/payment.routes.ts';
 import { eventRoutes } from '../modules/progress/events.routes.ts';
-import { quoteRoutes } from '../modules/quote/quote.routes.ts';
 import { requestRoutes } from '../modules/requests/requests.routes.ts';
 import type { Logger } from '../shared/logger.ts';
 import type { ApiDeps } from './deps.ts';
@@ -76,15 +70,9 @@ export async function buildApp(deps: ApiDeps, options: { sseKeepAliveMs?: number
   await app.register(cookie, { secret: http.sessionSecret });
   await registerRateLimit(app, deps.pool);
   await registerDocs(app);
-  for (const routes of [healthRoutes, authRoutes, quoteRoutes, requestRoutes, paymentRoutes, guardRoutes, ledgerRoutes, reportRoutes, dashboardRoutes, localRoutes, operatorRoutes, accountProviderRoutes]) {
+  for (const routes of [healthRoutes, authRoutes, requestRoutes, reportRoutes, dashboardRoutes, localRoutes, operatorRoutes, accountProviderRoutes]) {
     await app.register(routes, { deps });
   }
   await app.register(eventRoutes, { deps, ...(options.sseKeepAliveMs ? { keepAliveMs: options.sseKeepAliveMs } : {}) });
-  return app;
-}
-
-export async function buildAdminApp(deps: CoreDeps & { log: Logger; boss: ApiDeps['boss'] }, token: string): Promise<FastifyInstance> {
-  const app = base(deps.log.child({ listener: 'admin' }), false);
-  await app.register(adminRoutes, { deps, token });
   return app;
 }

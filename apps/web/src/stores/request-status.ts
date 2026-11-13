@@ -6,8 +6,7 @@ import { toAppError, type AppErrorCode } from '@/lib/api/errors';
 import type { ProgressEvent, RequestStatusResponse, Status } from '@/lib/api/schema.gen';
 
 export const POLL_MS = 5_000;
-// `failed` is not final: a failed paid review moves on to `refunded` (INTAKE section 4).
-export const TERMINAL: readonly Status[] = ['done', 'refunded'];
+export const TERMINAL: readonly Status[] = ['done', 'failed'];
 export type LiveMode = 'connecting' | 'live' | 'polling' | 'closed';
 
 export interface RequestView {
@@ -71,7 +70,7 @@ export function createRequestStatusStore(deps: StatusDeps) {
           // A status-only event (sent on every connect, after the replayed rows) keeps the progress already shown.
           const status = view.status ? { ...view.status, status: event.status, progress: event.progress ?? view.status.progress } : null;
           patch(id, { mode: 'live', events: [...view.events, event], ...(status ? { status } : {}) });
-          // The terminal GET carries reportUrl, reportSha256 and the tx hashes.
+          // The terminal GET carries reportUrl and reportSha256.
           if (TERMINAL.includes(event.status)) void refresh();
         };
         patch(id, { mode: 'connecting' });

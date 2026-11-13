@@ -1,10 +1,10 @@
 # Owner tasks for the hosted demo
 
-These are the steps only the owner can do: rent the host, buy or point the domain, create keys, sign testnet transactions, and deploy for the first time. Do them in order. Each task says where to do it and what to hand over: a variable name and the env file it goes in. **No real value belongs in this file or anywhere in the repository.**
+These are the steps only the owner can do: rent the host, buy or point the domain, create keys, register the donation account, and deploy for the first time. Do them in order. Each task says where to do it and what to hand over: a variable name and the env file it goes in. **No real value belongs in this file or anywhere in the repository.**
 
 Keep your filled env files in `~/.omniswarm/env/` on your own machine (`chmod 700` on the directory, `chmod 600` on the files). `infra/deploy/secrets.sh` copies them to the host.
 
-`<you>` below is your NEAR testnet account name without `.testnet`. `<domain>` is the app hostname, and `<host>` is the ssh alias of the VM.
+`<you>` below is your NEAR mainnet account name. `<domain>` is the app hostname, and `<host>` is the ssh alias of the VM.
 
 ## 1. Host
 
@@ -31,33 +31,14 @@ Keep your filled env files in `~/.omniswarm/env/` on your own machine (`chmod 70
 |---|---|---|
 | [ ] No provider key. OmniSwarm charges users nothing and pays for no review: each user pastes their own NEAR AI Cloud key on `/dashboard`. Leave `providers.env` empty (the worker unit still loads the file) | nothing to buy | nothing (`providers.env` stays comment-only) |
 | [ ] Generate the account-key secret: `openssl rand -base64 48`. It seals each account's own NEAR AI key in Postgres and must differ from `SESSION_SECRET`, because the workers receive it. Without it a production API cannot store any account's key | your machine | `ACCOUNT_KEYS_SECRET` (`stack.env` and `worker.env`, equal) |
+| [ ] A mainnet NEAR RPC endpoint for wallet sign-in (the API checks that the signing key belongs to the account). Keep `KEY_VERIFIER=rpc`: production refuses `mock`. If the provider puts an API key in the URL, treat the URL as a secret | an RPC provider (for example FastNEAR) | `RPC_URLS` (`stack.env`), a comma list of https URLs |
 | [ ] Fine-grained GitHub token: public repositories, read-only, no other permission. Optional: without it, the API uses the unauthenticated rate limit | github.com, Settings, Developer settings, Fine-grained tokens | `GITHUB_TOKEN` (`stack.env`) |
-| [ ] Generate three random secrets: `openssl rand -hex 32`, run once for each | your machine | `SESSION_SECRET`, `ADMIN_TOKEN`, `POSTGRES_PASSWORD` (`stack.env`); the same password inside `DATABASE_URL` (`worker.env`) |
+| [ ] Generate two random secrets: `openssl rand -hex 32`, run once for each | your machine | `SESSION_SECRET`, `POSTGRES_PASSWORD` (`stack.env`); the same password inside `DATABASE_URL` (`worker.env`) |
 | [ ] An alert webhook (a Slack or Discord incoming webhook) and a heartbeat URL (`docs/ops/UPTIME.md`) | Slack/Discord, healthchecks.io | `OMNI_ALERT_WEBHOOK_URL`, `OMNI_HEARTBEAT_URL` (`ops.env`) |
 
-## 4. Testnet contract (W10)
+## 4. NEAR
 
-You need `near` (near-cli-rs 0.30) and `cargo-near` on your machine, not on the host. You also need a funded testnet account `<you>.testnet` with at least 7 NEAR: 5 for the contract account, 1 for the operator account, and gas.
-
-- [ ] Print the six commands (this touches nothing), read them, then run them:
-  ```sh
-  OWNER=<you>.testnet bash contracts/review-registry/scripts/deploy-testnet.sh --dry-run
-  OWNER=<you>.testnet bash contracts/review-registry/scripts/deploy-testnet.sh --execute
-  ```
-  This creates `review-registry.<you>.testnet` (the contract) and `operator.<you>.testnet`, deploys with price 1 NEAR, adds the operator's function-call key, and reads back `get_price`. Override `CONTRACT`, `OPERATOR`, `TREASURY`, `PRICE_YOCTO` or `OPERATOR_ALLOWANCE` in the environment if you need other values.
-- [ ] Check the operator key: `near account list-keys operator.<you>.testnet network-config testnet now` must show one function-call key for `review-registry.<you>.testnet`, limited to `mark_running`, `attest`, `refund` and `report_address`.
-- [ ] **Already deployed with an older key?** A function-call key issued before registry v0.3.0 lacks `report_address`, so the worker's abuse reports fail. Re-issue it:
-  1. Run the `near account add-key operator.<you>.testnet grant-function-call-access …` line that `deploy-testnet.sh --dry-run` prints (step 5). It lists all four methods.
-  2. Point `operator-key.json` at the new key (next task), and run `secrets.sh`.
-  3. Restart the workers.
-  4. Delete the old key: `near account delete-keys operator.<you>.testnet public-keys <old ed25519:…> network-config testnet sign-with-keychain send`. Check the syntax with `near account delete-keys --help` first.
-- [ ] Copy the operator key file that step 5 wrote under `~/.near-credentials/testnet/` (named `operator.<you>.testnet.json`, or a `<public key>.json` inside `operator.<you>.testnet/`) to `~/.omniswarm/env/operator-key.json`. It holds `account_id`, `public_key` and `private_key`. Its `public_key` must be the function-call key from the check above. Never copy the contract account's own key: that is the upgrade key, and it stays offline in your keychain.
-- [ ] Hand over:
-  - `CONTRACT_ID=review-registry.<you>.testnet` in `stack.env` **and** in `worker.env`
-  - `NEXT_PUBLIC_CONTRACT_ID` in `stack.env`, which **must equal `CONTRACT_ID`**. Otherwise every payment stops at `CONTRACT_MISMATCH` in the browser. `secrets.sh` refuses a mismatch.
-  - `INTAKE_RECIPIENT` and `NEXT_PUBLIC_INTAKE_RECIPIENT` (`stack.env`, equal): the NEP-413 recipient the wallet signs for. Use an account you own, for example `<you>.testnet`.
-  - `RPC_URLS` in `stack.env` and in `worker.env` (equal), and `NEXT_PUBLIC_RPC_URL`: one or more testnet RPC endpoints. If a provider puts an API key in the URL, treat the URL as a secret.
-  - `PRICE_YOCTO=1000000000000000000000000` (1 NEAR, OD-08) in `stack.env`.
+OmniSwarm has no contract of its own, no operator key and no payment (docs/spec/DECISIONS.md, 2026-11-13). There is nothing to deploy on a NEAR network. NEAR appears only in wallet sign-in (NEP-413) and in the optional mainnet USDC donation (task 13).
 
 ## 5. Fill the env files
 
@@ -66,28 +47,14 @@ You need `near` (near-cli-rs 0.30) and `cargo-near` on your machine, not on the 
   mkdir -p -m 700 ~/.omniswarm/env
   for f in stack worker providers ops; do install -m 600 infra/env/$f.env.example ~/.omniswarm/env/$f.env; done
   ```
-- [ ] `HOSTED_PRESET` in `stack.env` and in `worker.env` (equal): the examples say `hosted`. Only the dormant paid wallet flow uses it, and it would need an operator key that you do not install (OD-26). Use `demo` for a first deploy that spends nothing. Dashboard reviews always run `account-nearai` on the user's own key. Leave `OMNI_API_NODE_ENV=production`, `CHAIN_ADAPTER=near` and `GITHUB_ADAPTER=live` as they are: production refuses the test adapters.
+- [ ] Dashboard reviews always run `account-nearai` on the user's own key (OD-26); there is no hosted preset. Leave `OMNI_API_NODE_ENV=production` and `GITHUB_ADAPTER=live` as they are: production refuses the test adapters.
 - [ ] Optional: `~/.omniswarm/env/omniswarm.config.json`, your copy of `engine/omniswarm.config.example.json` with your own presets or `prices`. Without it, each release uses the example file, which defines `hosted` and `demo`.
 - [ ] Check without copying anything: `node infra/deploy/secrets-check.mjs ~/.omniswarm/env`. It lists each variable name with a fingerprint and refuses:
   - an empty required value
-  - a contract-id mismatch, or a placeholder contract id (`*.mock`, `review-registry.owner.testnet`)
   - a `DATABASE_URL` whose password is not `POSTGRES_PASSWORD`
   - secrets shorter than the minimum
-  - a donation recipient on another network than `NETWORK`
+  - a `.testnet` donation recipient (mainnet only)
   - any variable in `providers.env`
-  - an operator key of the contract account
-
-### Placeholder contract ids in the repository
-
-These stay as they are. They are local or test defaults, and production takes its ids from `stack.env`:
-
-| File | Value | Used by |
-|---|---|---|
-| `infra/env/dev.env.example` | `review-registry.mock` | `npm run stack:local` and the infra gate (mock chain) |
-| `apps/web/.env`, `apps/web/.env.example`, `apps/web/vitest.config.ts` | `review-registry.omniswarm.testnet` | local `next dev` and the web tests. The production image gets `NEXT_PUBLIC_CONTRACT_ID` as a build argument from `stack.env` |
-| `contracts/review-registry/scripts/deploy-testnet.sh` | `OWNER=owner.testnet` | the default when you forget `OWNER=`. The script then fails, because you do not hold that account's key |
-
-If you want `next dev` on your machine to talk to your real contract, ask the web track to change `apps/web/.env`. Do not put a production value in `apps/web/.env.example`.
 
 ## 6. Install the secrets
 
@@ -100,7 +67,7 @@ If you want `next dev` on your machine to talk to your real contract, ask the we
   ```sh
   infra/deploy/deploy.sh --dry-run <host> wave-12   # the plan; contacts nothing
   infra/deploy/deploy.sh <host> wave-12             # first run also issues the TLS certificate
-  infra/deploy/smoke.sh --network testnet <domain>  # 10 checks, all "ok"
+  infra/deploy/smoke.sh <domain>  # 10 checks, all "ok"
   ```
 - [ ] Copy one sample report to `/srv/omniswarm/reports/sample/` so the smoke test's `reports-csp` check has a page to fetch. Then follow `docs/plan/checks/w12-check.md` from step 5.
 
@@ -133,7 +100,7 @@ node engine/native/grok-review/admit.mjs --admit
 - [ ] Environment secrets:
   - `DEPLOY_SSH_KEY`: the private half of `~/.ssh/omniswarm_deploy`
   - `DEPLOY_KNOWN_HOSTS`: the output of `ssh-keyscan -t ed25519 <ip>`. Compare its fingerprint with `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` run on the host itself.
-- [ ] Environment variables: `DEPLOY_HOST` (IP or hostname), `DEPLOY_USER` (`deploy`), `OMNI_DOMAIN`, `NETWORK` (`testnet`).
+- [ ] Environment variables: `DEPLOY_HOST` (IP or hostname), `DEPLOY_USER` (`deploy`), `OMNI_DOMAIN`.
 - [ ] Actions → deploy → Run workflow, with `tag=wave-12`. The run waits for your approval, deploys, then runs the smoke test.
 
 ## 11. Security contact
@@ -145,31 +112,27 @@ node engine/native/grok-review/admit.mjs --admit
 
 - [ ] After the first hosted review, fill the table in `docs/ops/COST.md` ("Measuring a hosted run").
 
-## 13. Mainnet payout account (W14)
-
-- [ ] Create the mainnet account that will receive withdrawals once mainnet is priced (OD-08). Hand it over only when W14 asks. Mainnet stays off for the hackathon.
-
-## 14. Donations (optional)
+## 13. Donations (optional, mainnet only)
 
 The user dashboard and the end of the landing page can show a NEAR USDC donation section (README "Support the project"). It is hidden until you set a recipient. A donation is a NEP-141 `ft_transfer` with 1 yoctoNEAR attached, signed by the donor's wallet.
 
-- [ ] Pick the recipient account on the stack's network (`<you>.testnet` on testnet). Use an account you control; it receives the USDC directly.
-- [ ] Storage-register it on the USDC contract, or every transfer to it fails. Read the minimum deposit, check the account, then register it once (USDC on testnet is `3e2210e1184b45b64c8a434c0a7e7b23cc04ea7eb7a6c3c32520d03d4afcb8af`; on mainnet `17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1`):
+- [ ] Pick a mainnet recipient account (`<you>.near` or an implicit account). Use an account you control; it receives the USDC directly. A `.testnet` account is refused by `secrets.sh`.
+- [ ] Storage-register it on the USDC contract, or every transfer to it fails. Read the minimum deposit, check the account, then register it once (mainnet USDC is `17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1`):
   ```sh
-  USDC=3e2210e1184b45b64c8a434c0a7e7b23cc04ea7eb7a6c3c32520d03d4afcb8af
-  near contract call-function as-read-only $USDC storage_balance_bounds json-args '{}' network-config testnet now
-  near contract call-function as-read-only $USDC storage_balance_of json-args '{"account_id":"<recipient>"}' network-config testnet now
+  USDC=17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1
+  near contract call-function as-read-only $USDC storage_balance_bounds json-args '{}' network-config mainnet now
+  near contract call-function as-read-only $USDC storage_balance_of json-args '{"account_id":"<recipient>"}' network-config mainnet now
   near contract call-function as-transaction $USDC storage_deposit \
     json-args '{"account_id":"<recipient>","registration_only":true}' \
     prepaid-gas '30.0 Tgas' attached-deposit '<min from storage_balance_bounds, in NEAR>' \
-    sign-as <you>.testnet network-config testnet sign-with-keychain send
+    sign-as <you>.near network-config mainnet sign-with-keychain send
   ```
   `storage_balance_of` returns `null` before the deposit and a balance after it.
-- [ ] Hand over: `NEXT_PUBLIC_DONATION_ACCOUNT=<recipient>` (`stack.env`). Leave `NEXT_PUBLIC_DONATION_USDC_CONTRACT` empty to use the network's USDC; set it only to use another NEP-141 contract (the recipient must be registered there too). `secrets.sh` refuses a recipient on the wrong network.
+- [ ] Hand over: `NEXT_PUBLIC_DONATION_ACCOUNT=<recipient>` (`stack.env`). Leave `NEXT_PUBLIC_DONATION_USDC_CONTRACT` empty to use mainnet USDC; set it only to use another NEP-141 contract (the recipient must be registered there too). `secrets.sh` refuses a `.testnet` recipient.
 - [ ] Deploy again: both values are web build args, so the section appears only in a new web image.
 
 ## Maintenance while the demo runs
 
 - Security updates install themselves (`unattended-upgrades`). The host never reboots on its own. When `/var/run/reboot-required` exists, reboot when no review is running: `systemctl is-active omniswarm-worker@1` and `/api/health` `queueDepth` 0.
 - Docker and Node come from their own repositories and do not auto-upgrade. Upgrade them with `sudo apt-get install --only-upgrade docker-ce nodejs` in the same window.
-- Changed a secret? Run `secrets.sh` again. For `worker.env`, `providers.env` or `operator-key.json`, restart the workers: `sudo systemctl restart omniswarm-workers.target`. For `stack.env`, deploy again: compose reads it when it recreates the containers. Use a new tag or commit, because `deploy.sh` refuses the release that is already current.
+- Changed a secret? Run `secrets.sh` again. For `worker.env` or `providers.env`, restart the workers: `sudo systemctl restart omniswarm-workers.target`. For `stack.env`, deploy again: compose reads it when it recreates the containers. Use a new tag or commit, because `deploy.sh` refuses the release that is already current.

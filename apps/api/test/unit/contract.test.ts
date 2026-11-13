@@ -14,13 +14,9 @@ import { APP_ROOT } from '../../src/shared/paths.ts';
 const DEFS = (loadSchema('intake-api') as { $defs: Record<string, { enum?: string[] }> }).$defs;
 
 const BY_DEF: Record<string, ZodType> = {
-  'error-response': dto.errorResponse, 'challenge-response': dto.challengeResponse, 'quote-request': dto.quoteRequest,
-  'quote-response': dto.quoteResponse, 'create-request-body': dto.createRequestBody, 'create-request-response': dto.createRequestResponse,
-  'payment-request': dto.paymentRequest, 'payment-response': dto.paymentResponse, 'request-status-response': dto.requestStatusResponse,
-  'progress-event': dto.progressEvent, 'request-list-response': dto.requestListResponse, 'guard-verdict-response': dto.guardVerdictResponse,
-  'health-response': dto.healthResponse, 'ready-response': dto.readyResponse, 'admin-refund-response': dto.adminRefundResponse,
-  'ledger-response': dto.ledgerResponse, 'report-index-response': dto.reportIndexResponse, 'guard-report-request': dto.guardReportRequest, 'guard-report-response': dto.guardReportResponse,
-  'admin-guard-report-list-response': dto.adminGuardReportListResponse, 'admin-guard-decision-response': dto.adminGuardDecisionResponse,
+  'error-response': dto.errorResponse, 'challenge-response': dto.challengeResponse, 'request-status-response': dto.requestStatusResponse,
+  'progress-event': dto.progressEvent, 'request-list-response': dto.requestListResponse, 'health-response': dto.healthResponse,
+  'ready-response': dto.readyResponse, 'report-index-response': dto.reportIndexResponse,
 };
 
 test('error codes and statuses are the schema enums', () => {
@@ -46,5 +42,5 @@ test('every intake-api example validates (or fails) the same way through the DTO
     assert.equal(schema.safeParse(value).success, kind === 'valid', file);
     checked++;
   }
-  assert.ok(checked >= 25, `checked ${checked} examples`);
+  assert.ok(checked >= 8, `checked ${checked} examples`);
 });

@@ -5,25 +5,16 @@ import { api } from '@/lib/api/client';
 import { toAppError, messageFor } from '@/lib/api/errors';
 import type { ReportIndexResponse } from '@/lib/api/schema.gen';
 import { reportFiles, verifyReport } from '@/lib/report/verify';
-import { useRequestFlow } from '@/stores/request-flow';
 import { Alert } from '../ui/Alert';
 import { Panel } from '../ui/Panel';
-import { AttestationBadge } from './AttestationBadge';
+import { HashBadge } from './HashBadge';
 import { ReportContents } from './ReportContents';
 import { ReportFrame } from './ReportFrame';
 import { useVerification } from './useVerification';
 
-// The request hash keys the on-chain attestation. The hash this browser signed
-// wins over the one the API reports, so a lying index cannot pick the record.
-function useRequestHash(id: string, index: ReportIndexResponse | null): string | null {
-  const signed = useRequestFlow((state) => (state.request?.requestId === id ? state.request.requestHash : null));
-  return signed ?? index?.attestation?.requestHash ?? null;
-}
-
-export function RequestReport({ id, attestTx }: { id: string; attestTx?: string }) {
+export function RequestReport({ id }: { id: string }) {
   const [index, setIndex] = useState<ReportIndexResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const requestHash = useRequestHash(id, index);
 
   useEffect(() => {
     let live = true;
@@ -32,10 +23,10 @@ export function RequestReport({ id, attestTx }: { id: string; attestTx?: string 
   }, [id]);
 
   const run = useCallback(
-    () => (index && requestHash
-      ? verifyReport(reportFiles(index), requestHash, { apiAttestation: index.attestation ?? null })
-      : Promise.reject(new Error('the report index has no request hash'))),
-    [index, requestHash],
+    () => (index && index.reportUrl
+      ? verifyReport(reportFiles({ reportUrl: index.reportUrl, generalReviewUrl: index.generalReviewUrl }), index.reportSha256)
+      : Promise.reject(new Error('the report index has no report URL'))),
+    [index],
   );
   const { state, recheck } = useVerification(index ? run : null);
 
@@ -44,9 +35,18 @@ export function RequestReport({ id, attestTx }: { id: string; attestTx?: string 
   if (!index.reportUrl) return <Alert>This request has no published report.</Alert>;
   return (
     <>
-      <Panel id="attestation" title="Attestation">
-        <AttestationBadge state={state} attestTx={attestTx} onRecheck={recheck} />
+      <Panel id="hash-check" title="Report hash">
+        <HashBadge state={state} onRecheck={recheck} />
       </Panel>
+      {index.repo || index.maxSeverity || index.check ? (
+        <Panel id="summary" title="Summary">
+          <dl className="report-summary">
+            {index.repo ? <><dt>Repository</dt><dd>{index.repo}</dd></> : null}
+            {index.maxSeverity ? <><dt>Highest severity</dt><dd>{index.maxSeverity}</dd></> : null}
+            {index.check ? <><dt>Findings that passed the cross-check</dt><dd>{index.check.passed} of {index.check.total}</dd></> : null}
+          </dl>
+        </Panel>
+      ) : null}
       <Panel id="sections" title="Sections">
         {state.phase === 'done' ? <ReportContents findings={state.result.findings} general={state.result.general} reviewers={index.reviewers} /> : <p>Loading the report…</p>}
       </Panel>

@@ -3,20 +3,20 @@
 #   secrets.sh [--dry-run] <ssh-host> [--from DIR]      (DIR default ~/.omniswarm/env)
 #
 # 1. node infra/deploy/secrets-check.mjs DIR: every variable present, required ones set,
-#    cross-file values agree (NEXT_PUBLIC_CONTRACT_ID = CONTRACT_ID, the worker's
-#    DATABASE_URL password = POSTGRES_PASSWORD, ...), no placeholder contract id. Prints
+#    cross-file values agree (the worker's presets = the stack's, DATABASE_URL
+#    password = POSTGRES_PASSWORD, ...), no .testnet donation recipient. Prints
 #    names and sha256 fingerprints only. Stops on an error.
 # 2. Streams each file over ssh into /etc/omniswarm/<name> as root:root 0600 (written to a
 #    temp name, then renamed; nothing lands in the ssh user's home), then compares the
 #    host's sha256 with the local one.
-#    Files: stack.env worker.env providers.env [ops.env operator-key.json omniswarm.config.json]
-# 3. Lists the names of any provider or operator-key variable inside a running api
+#    Files: stack.env worker.env providers.env [ops.env omniswarm.config.json]
+# 3. Lists the names of any provider-key variable inside a running api
 #    container (there must be none).
 # The ssh user needs passwordless sudo (provision.sh --deploy-user). Afterwards redeploy
 # (deploy.sh) or restart the workers so the new values are read.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
-FILES=(stack.env worker.env providers.env ops.env operator-key.json omniswarm.config.json)
+FILES=(stack.env worker.env providers.env ops.env omniswarm.config.json)
 
 dry=0; host=""; from="${HOME}/.omniswarm/env"
 while [ "$#" -gt 0 ]; do
@@ -53,7 +53,7 @@ for name in "${FILES[@]}"; do
   echo "  installed /etc/omniswarm/$name (root:root 0600, sha256:${want:0:12})"
 done
 
-leaks="$(remote "sudo docker ps -q --filter label=com.docker.compose.service=api | xargs -r sudo docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' | cut -d= -f1 | grep -E '_API_KEY\$|^OPERATOR_KEY|^OPENROUTER|^ZAI_' | sort -u || true")"
+leaks="$(remote "sudo docker ps -q --filter label=com.docker.compose.service=api | xargs -r sudo docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' | cut -d= -f1 | grep -E '_API_KEY\$|^OPENROUTER|^ZAI_' | sort -u || true")"
 if [ "$dry" = 1 ]; then printf '%s\n' "$leaks"; echo "dry run: nothing was copied"; exit 0; fi
 [ -z "$leaks" ] || { echo "secrets.sh: the api container holds worker-only variables: $leaks" >&2; exit 1; }
-echo "secrets installed on $host; api containers hold no provider or operator key. Redeploy or restart omniswarm-workers.target to apply."
+echo "secrets installed on $host; api containers hold no provider key. Redeploy or restart omniswarm-workers.target to apply."

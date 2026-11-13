@@ -1,11 +1,19 @@
 // The wallet surface the app uses. The real implementation wraps
-// @hot-labs/near-connect; a test-key connector replaces it only when the build
-// sets NEXT_PUBLIC_WALLET=mock. near-connect only knows mainnet and testnet, so
-// it is not used for NEXT_PUBLIC_WALLET=local (the dev wallet signs instead).
-// The literal env comparisons below are folded by the bundler, so a production
-// build never emits the mock or dev-wallet chunk.
+// @hot-labs/near-connect (mainnet); a test-key connector replaces it only when
+// the build sets NEXT_PUBLIC_WALLET=mock. The literal env comparison below is
+// folded by the bundler, so a production build never emits the mock chunk.
 import { AppError } from '../api/errors';
-import type { WalletTransaction } from './payment';
+
+export interface FunctionCallAction<Args extends Record<string, unknown> = Record<string, unknown>> {
+  type: 'FunctionCall';
+  params: { methodName: string; args: Args; gas: string; deposit: string };
+}
+
+/** One function call the wallet signs and sends: a USDC donation. */
+export interface WalletTransaction<Args extends Record<string, unknown> = Record<string, unknown>> {
+  receiverId: string;
+  actions: [FunctionCallAction<Args>];
+}
 
 export interface SignMessageInput {
   message: string;
@@ -22,9 +30,7 @@ export interface SignedMessage {
 
 export interface WalletConnector {
   restore(): Promise<string | null>;
-  /** Dev wallet only. The home page uses this to list seeded accounts. */
-  listAccounts?(): Promise<Array<{ accountId: string; publicKey: string }>>;
-  connect(accountId?: string): Promise<string>;
+  connect(): Promise<string>;
   signOut(): Promise<void>;
   signMessage(input: SignMessageInput): Promise<SignedMessage>;
   signAndSendTransaction(tx: WalletTransaction): Promise<{ txHash: string }>;
@@ -37,9 +43,7 @@ export function getConnector(): Promise<WalletConnector> {
   if (!instance) {
     instance = process.env.NEXT_PUBLIC_WALLET === 'mock'
       ? import('../../mocks/wallet').then((mod) => mod.createMockConnector())
-      : process.env.NEXT_PUBLIC_WALLET === 'local'
-        ? import('./dev-wallet').then((mod) => mod.createDevWallet())
-        : import('./near-connector').then((mod) => mod.createNearConnector());
+      : import('./near-connector').then((mod) => mod.createNearConnector());
   }
   return instance;
 }

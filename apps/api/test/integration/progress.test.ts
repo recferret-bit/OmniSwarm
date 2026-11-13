@@ -10,7 +10,7 @@ import { after, before, describe, test } from 'node:test';
 import { appendProgress, latestProgress } from '../../src/db/repositories/progress.ts';
 import { findRequest, insertThemeRequest, transition } from '../../src/db/repositories/requests.ts';
 import { ProgressTailer, themeProgress } from '../../src/worker/progress-tailer.ts';
-import { call, conforms, createRequest } from '../helpers/flow.ts';
+import { call, conforms, queuedJob } from '../helpers/flow.ts';
 import { NEEDS_DB } from '../helpers/db.ts';
 import { migratedDb, startApi, type ApiStack, type TestDb } from '../helpers/stack.ts';
 
@@ -62,16 +62,15 @@ describe('live progress through the database', NEEDS_DB, () => {
   });
 
   async function runningRequest() {
-    const created = await createRequest(api.base, api.deps.pool);
+    const created = await queuedJob(api.base);
     const now = new Date();
-    await transition(api.deps.pool, created.requestId, { to: 'queued', actor: 'test', event: 'payment_verified', now });
     await transition(api.deps.pool, created.requestId, { to: 'running', actor: 'test', event: 'review_started', now });
     return created.requestId;
   }
 
   test('the engine snapshot reaches GET /api/requests/:id with its detail, and the list shows phase and percent', async () => {
     const id = await runningRequest();
-    const tailer = new ProgressTailer({ pool: api.deps.pool, clock: { now: () => new Date() } }, id, outDir(running(40)), () => {});
+    const tailer = new ProgressTailer({ pool: api.deps.pool, clock: { now: () => new Date() } }, id, outDir(running(40)));
     await tailer.tick();
     const view = await call(api.base, `/api/requests/${id}`);
     assert.equal(view.status, 200);
@@ -109,7 +108,7 @@ describe('live progress through the database', NEEDS_DB, () => {
     const now = new Date();
     const theme = async (name: string) => {
       const id = crypto.randomUUID();
-      await insertThemeRequest(api.deps.pool, { id, parent, theme: name, slicePath: `/tmp/${name}`, now, requestHash: crypto.randomBytes(32).toString('hex') });
+      await insertThemeRequest(api.deps.pool, { id, parent, theme: name, slicePath: `/tmp/${name}`, now });
       return id;
     };
     assert.equal(await themeProgress(api.deps.pool, parentId), null);
@@ -117,7 +116,7 @@ describe('live progress through the database', NEEDS_DB, () => {
     const apps = await theme('apps');
     await transition(api.deps.pool, web3, { to: 'running', actor: 'test', event: 'review_started', now });
     // The theme's tailer writes its own row, then refreshes the parent.
-    const tailer = new ProgressTailer({ pool: api.deps.pool, clock: { now: () => new Date() } }, web3, outDir(running(50)), () => {});
+    const tailer = new ProgressTailer({ pool: api.deps.pool, clock: { now: () => new Date() } }, web3, outDir(running(50)));
     await tailer.tick();
     let row = await latestProgress(api.deps.pool, parentId);
     assert.ok(row);

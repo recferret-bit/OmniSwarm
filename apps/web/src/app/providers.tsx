@@ -2,7 +2,6 @@
 
 import dynamic from 'next/dynamic';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { useRequestFlow } from '@/stores/request-flow';
 import { useWallet } from '@/stores/wallet';
 
 // A literal the bundler folds: with mocks off, the MSW worker, the handlers and
@@ -16,10 +15,6 @@ let booting: Promise<void> | null = null;
 // Once per page load, even when StrictMode mounts the provider twice.
 function bootstrap(): Promise<void> {
   booting ??= (async () => {
-    await useRequestFlow.persist.rehydrate();
-    const flow = useRequestFlow.getState();
-    // A reload during "Confirming" resumes confirming the same transaction.
-    if (flow.step === 'confirming' && flow.txHash) void flow.confirm();
     void useWallet.getState().restore();
   })();
   return booting;

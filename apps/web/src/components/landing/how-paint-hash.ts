@@ -22,14 +22,14 @@ export function paintHash(scene: HowScene) {
     ['TWO REPORT FILES', 'CANONICAL JSON'],
     ['REPORT SHA256', '64 HEX'],
     ['BROWSER RECOMPUTES', 'DIGEST MATCH'],
-    ['ATTEST ON NEAR', 'review_attested'],
+    ['PUBLISH THE REPORT', 'HASH SERVED WITH IT'],
   ] as const;
   const head = heads[index] ?? heads[0];
   const box = caption(scene, `0${index + 1} / 04`, head[0], head[1]);
   if (index === 0) drawFiles(scene, box.x, box.y, box.w, box.h, u);
   else if (index === 1) drawLock(scene, box.x, box.y, box.w, box.h, u);
   else if (index === 2) drawMatch(scene, box.x, box.y, box.w, box.h, u);
-  else drawAttest(scene, box.x, box.y, box.w, box.h, u);
+  else drawPublish(scene, box.x, box.y, box.w, box.h, u);
 }
 
 function scramble(hash: string, until: number, time: number) {
@@ -180,7 +180,7 @@ function drawWaiting(scene: HowScene, x: number, y: number) {
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
   ctx.fillStyle = ink.steel;
-  ctx.fillText('Reading the sample attestation.', x, y + 24);
+  ctx.fillText('Reading the sample report hash.', x, y + 24);
 }
 
 function drawLock(scene: HowScene, x: number, y: number, w: number, h: number, u: number) {
@@ -219,7 +219,7 @@ function drawLock(scene: HowScene, x: number, y: number, w: number, h: number, u
   ctx.fillText(u > 0.75 ? 'LOCKED' : 'LOCKING', x, meterY + 22);
   ctx.font = mono(ink, 12, 600);
   ctx.fillStyle = ink.steel;
-  ctx.fillText('Same bytes the intake worker attests.', x, Math.min(y + h - 12, meterY + 46));
+  ctx.fillText('Same bytes the worker hashed.', x, Math.min(y + h - 12, meterY + 46));
 }
 
 function drawMatch(scene: HowScene, x: number, y: number, w: number, h: number, u: number) {
@@ -263,20 +263,20 @@ function drawMatch(scene: HowScene, x: number, y: number, w: number, h: number, 
   ctx.fillText(matched ? 'MATCH' : 'COMPARING', x, Math.min(y + h - 32, cursor + 22));
   ctx.font = mono(ink, 12, 600);
   ctx.fillStyle = ink.text;
-  ctx.fillText(clipText(ctx, 'digestReport(findings, general) against attestation.report_sha256', w), x, y + h - 10);
+  ctx.fillText(clipText(ctx, 'digestReport(findings, general) against the served reportSha256', w), x, y + h - 10);
 }
 
-function drawAttest(scene: HowScene, x: number, y: number, w: number, h: number, u: number) {
+function drawPublish(scene: HowScene, x: number, y: number, w: number, h: number, u: number) {
   const { ctx, ink } = scene;
   const land = easeOut(u);
   const narrow = w < 680;
   const facts: Array<[string, string]> = [
-    ['method', 'attest'],
-    ['report_sha256', isReportHash(scene.reportHash) ? `${scene.reportHash.slice(0, 16)}…` : 'reading sample'],
+    ['file', 'report.html'],
+    ['reportSha256', isReportHash(scene.reportHash) ? `${scene.reportHash.slice(0, 16)}…` : 'reading sample'],
     ['repo', 'sample/vault'],
     ['commit', 'a1c4e9b'],
-    ['max_severity', 'high'],
-    ['event', 'review_attested'],
+    ['maxSeverity', 'high'],
+    ['verify', 'browser'],
   ];
   const foot = 22;
   const factW = narrow ? w : Math.round(w * 0.56);
@@ -286,7 +286,7 @@ function drawAttest(scene: HowScene, x: number, y: number, w: number, h: number,
   ctx.textAlign = 'left';
   ctx.font = mono(ink, 13, 700);
   ctx.fillStyle = ink.emberText;
-  ctx.fillText('attest(', x + 14, y + 16);
+  ctx.fillText('report {', x + 14, y + 16);
   const rowH = (factH - 48) / facts.length;
   facts.forEach(([key, value], factIndex) => {
     const shown = clamp01(u * facts.length - factIndex);
@@ -296,25 +296,27 @@ function drawAttest(scene: HowScene, x: number, y: number, w: number, h: number,
     ctx.fillText(key, x + 22, ly);
     const valueX = x + Math.min(150, factW * 0.38);
     ctx.font = mono(ink, 14, 700);
-    ctx.fillStyle = key === 'event' ? ink.emberText : ink.text;
+    ctx.fillStyle = key === 'verify' ? ink.emberText : ink.text;
     const typed = value.slice(0, Math.ceil(shown * value.length));
     ctx.fillText(typed ? clipText(ctx, typed, factW - (valueX - x) - 12) : '·', valueX, ly);
   });
   ctx.font = mono(ink, 13, 700);
   ctx.fillStyle = ink.emberText;
-  ctx.fillText(')', x + 14, y + factH - 14);
+  ctx.fillText('}', x + 14, y + factH - 14);
   const chainX = narrow ? x : x + factW + 14;
   const chainY = narrow ? y + factH + 8 : y;
   const chainW = narrow ? w : w - factW - 14;
   const chainH = narrow ? Math.max(36, h - foot - factH - 8) : h - foot;
-  drawChain(ctx, ink, chainX, chainY, chainW, chainH, land, isReportHash(scene.reportHash) ? scene.reportHash : '');
+  drawShelf(ctx, ink, chainX, chainY, chainW, chainH, land, isReportHash(scene.reportHash) ? scene.reportHash : '');
   ctx.font = mono(ink, 12, 600);
   ctx.fillStyle = ink.steel;
   ctx.textAlign = 'left';
-  ctx.fillText('The chain stores the hash, not the report.', x, y + h - 8);
+  ctx.fillText('The hash is public. Anyone can recompute it from the files.', x, y + h - 8);
 }
 
-function drawChain(
+const SHELF = ['REPORT', 'FINDINGS', 'GENERAL', 'HASH'] as const;
+
+function drawShelf(
   ctx: CanvasRenderingContext2D,
   ink: Ink,
   x: number,
@@ -339,7 +341,7 @@ function drawChain(
     ctx.textBaseline = 'middle';
     ctx.font = mono(ink, 12, 700);
     ctx.fillStyle = on ? ink.emberText : ink.steel;
-    ctx.fillText(i === count - 1 ? 'NOW' : `N-${count - 1 - i}`, bx + blockW / 2, top + drop + blockH * 0.38);
+    ctx.fillText(SHELF[i] ?? '', bx + blockW / 2, top + drop + blockH * 0.38);
     if (on && blockH > 72) {
       ctx.font = mono(ink, blockW < 72 ? 9 : 11, 600);
       ctx.fillStyle = ink.text;

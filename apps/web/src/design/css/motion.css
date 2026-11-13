@@ -52,7 +52,7 @@
 .is-play .blip { animation: os-blink 1.4s steps(2, start) infinite; }
 
 .hash { font-family: var(--os-font-mono); font-size: 13px; letter-spacing: 0.08em; color: var(--os-text-2); }
-.hash b { color: var(--os-attested); }
+.hash b { color: var(--os-verified); }
 .is-play .hash { animation: os-boot 0.6s steps(8, end) both; }
 
 .debate { display: flex; gap: 18px; align-items: center; }
@@ -61,7 +61,7 @@
 .is-play .debate .pass { width: 36px; height: 2px; background: var(--os-ember); transform-origin: left center; animation: os-pass 1.4s var(--os-ease-sweep) infinite; }
 
 .meter-demo { width: min(100%, 240px); }
-.meter-demo i { width: 0; background: var(--os-attested); }
+.meter-demo i { width: 0; background: var(--os-verified); }
 .is-play .meter-demo i { animation: os-fill 1.4s var(--os-ease-sweep) forwards; }
 
 .cite-line { font-family: var(--os-font-mono); font-size: 13px; padding: 8px 10px; border-left: 3px solid transparent; }
@@ -73,7 +73,7 @@
 .toast-demo { animation: none; }
 .is-play .toast-demo { animation: os-toast-in var(--os-dur-plate) var(--os-ease-latch) both; }
 
-.tick { font-family: var(--os-font-mono); letter-spacing: 0.14em; color: var(--os-attested); }
+.tick { font-family: var(--os-font-mono); letter-spacing: 0.14em; color: var(--os-verified); }
 .is-play .tick { animation: os-boot 0.45s steps(1, end) both; animation-delay: 200ms; opacity: 0; }
 
 @keyframes os-boot { to { opacity: 1; } }
@@ -90,4 +90,4 @@
 
 /* Track height. storybook.css is not loaded on this page. */
 .meter { display: block; height: 6px; background: var(--os-seam); }
-.meter i { display: block; height: 100%; background: var(--os-attested); }
+.meter i { display: block; height: 100%; background: var(--os-verified); }

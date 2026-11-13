@@ -2,32 +2,29 @@
 // stream, the account's list and the report index.
 import { http, HttpResponse, sse } from 'msw';
 import type { ProgressEvent, RequestStatusResponse } from '@/lib/api/schema.gen';
-import { reportBase, settle } from '../chain';
 import { clock, readState, stamp, type MockRequest } from '../db';
+import { mockReportSha256, reportBase } from '../reports';
 import { REVIEWERS, snapshotAt, STEP_MS } from '../state-machine';
 import { apiError } from './intake';
 
-const TERMINAL = new Set(['done', 'refunded']);
+const TERMINAL = new Set(['done', 'failed']);
 
 function find(id: string): MockRequest | undefined {
   return readState().requests.find((row) => row.id === id);
 }
 
 export async function statusOf(row: MockRequest): Promise<RequestStatusResponse> {
-  const settled = await settle(row);
-  const snapshot = snapshotAt(settled, clock.now());
-  const body: RequestStatusResponse = { status: snapshot.status, createdAt: stamp(settled.createdAt) };
-  if (settled.pipelineMode) body.pipelineMode = settled.pipelineMode;
+  const snapshot = snapshotAt(row, clock.now());
+  const body: RequestStatusResponse = { status: snapshot.status, createdAt: stamp(row.createdAt) };
+  if (row.pipelineMode) body.pipelineMode = row.pipelineMode;
   if (snapshot.progress) body.progress = snapshot.progress;
   if (snapshot.status === 'done') {
-    const attestation = readState().attestations[settled.requestHash];
-    body.reportUrl = `${reportBase(settled.id)}report.html`;
-    if (attestation) body.reportSha256 = attestation.report_sha256;
-    if (settled.attestTx) body.attestTx = settled.attestTx;
-    if (settled.pipelineMode || settled.roundsCompleted) {
-      const mode = settled.pipelineMode ?? 'full';
-      const rounds = settled.roundsCompleted ?? (mode === 'full' ? 2 : 0);
-      const nextRoundRequestIds = readState().requests.filter((item) => item.parentId === settled.id).map((item) => item.id);
+    body.reportUrl = `${reportBase(row.id)}report.html`;
+    body.reportSha256 = await mockReportSha256();
+    if (row.pipelineMode || row.roundsCompleted) {
+      const mode = row.pipelineMode ?? 'full';
+      const rounds = row.roundsCompleted ?? (mode === 'full' ? 2 : 0);
+      const nextRoundRequestIds = readState().requests.filter((item) => item.parentId === row.id).map((item) => item.id);
       body.pipeline = {
         pipelineMode: mode,
         currentStage: rounds > 0 ? 'stage-3-debate' : mode === 'stage-1' ? 'stage-1' : mode === 'step-by-step' ? 'stage-2-advice' : 'completed',
@@ -45,7 +42,6 @@ export async function statusOf(row: MockRequest): Promise<RequestStatusResponse>
       };
     }
   }
-  if (snapshot.status === 'refunded' && settled.refundTx) body.refundTx = settled.refundTx;
   return body;
 }
 
@@ -94,39 +90,16 @@ const mine = http.get('/api/requests', async ({ request }) => {
   return HttpResponse.json({ requests });
 });
 
-function paidReceipt(row: MockRequest, tx: string) {
-  return { paid: { yocto: row.priceYocto, tx }, reviewers: [], check: { passed: 0, total: 0, byStatus: {} } };
-}
-
 const report = http.get<{ id: string }>('/api/reports/:id', async ({ params }) => {
-  const stored = find(params.id);
-  if (!stored) return apiError('REQUEST_NOT_FOUND', 404, 'Request not found');
-  const status = await statusOf(stored);
-  const row = find(params.id) ?? stored;
-  if (status.status === 'refunded' && row.txHash && row.refundTx) {
-    return HttpResponse.json({
-      requestId: row.id,
-      receipt: { ...paidReceipt(row, row.txHash), refund: { tx: row.refundTx, yocto: row.priceYocto } },
-    });
-  }
-  const attestation = readState().attestations[row.requestHash];
-  if (status.status !== 'done' || !attestation) return apiError('NOT_FOUND', 404, 'Report not published yet');
+  const row = find(params.id);
+  if (!row) return apiError('REQUEST_NOT_FOUND', 404, 'Request not found');
+  const status = await statusOf(row);
+  if (status.status !== 'done') return apiError('NOT_FOUND', 404, 'Report not published yet');
   const base = reportBase(row.id);
   return HttpResponse.json({
-    requestId: row.id, reportUrl: `${base}report.html`, reportSha256: attestation.report_sha256,
+    requestId: row.id, reportUrl: `${base}report.html`, reportSha256: await mockReportSha256(),
     reviewers: [...REVIEWERS], generalReviewUrl: `${base}general-review.json`,
-    attestation: {
-      requestHash: attestation.request_hash, reportSha256: attestation.report_sha256, reportUri: attestation.report_uri,
-      deployed: attestation.deployed, codeHash: attestation.code_hash, maxSeverity: attestation.max_severity,
-      repo: attestation.repo, commit: attestation.commit, bindingConfirmed: attestation.binding_confirmed,
-      blockHeight: attestation.block_height, blockTimestampMs: attestation.block_timestamp_ms,
-    },
-    ...(row.txHash && row.attestTx ? {
-      receipt: {
-        ...paidReceipt(row, row.txHash),
-        attestation: { tx: row.attestTx, hash: attestation.report_sha256 },
-      },
-    } : {}),
+    repo: row.repo, maxSeverity: 'high', check: { passed: 3, total: 5 },
   });
 });
 

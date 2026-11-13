@@ -8,8 +8,8 @@ export const reportRoutes: FastifyPluginAsyncZod<{ deps: ApiDeps }> = async (app
   app.get('/api/reports/:id', {
     config: perMinute(deps.config.http.rateLimitPerMinute),
     schema: {
-      summary: 'Index of a published report: links, reviewers and the on-chain attestation (public)',
-      params: requestParams, response: { 200: reportIndexResponse, 404: errorResponse, 503: errorResponse },
+      summary: 'Index of a published report: links, reviewers, repository, highest severity and cross-check counts (public)',
+      params: requestParams, response: { 200: reportIndexResponse, 404: errorResponse, 429: errorResponse },
     },
   }, async (request) => reportIndex(deps, request.params.id));
 };

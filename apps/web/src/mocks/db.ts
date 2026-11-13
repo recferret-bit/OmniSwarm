@@ -1,12 +1,11 @@
-// Dev/e2e only. In-memory intake + chain state shared by the MSW handlers and the
+// Dev/e2e only. In-memory intake state shared by the MSW handlers and the
 // mock wallet, mirrored to sessionStorage so a reload or a deep link to /r/<id>
 // keeps the same requests and local jobs. Never imported by a production build.
 import type { PipelineMode } from '@/lib/api/schema.gen';
-import type { OnChainAttestation } from '@/lib/near/rpc';
 
 export const MOCK_ERRORS = [
   'QUEUE_FULL', 'REPO_PRIVATE', 'REPO_TOO_LARGE', 'REPO_NOT_FOUND', 'RATE_LIMITED',
-  'NONCE_EXPIRED', 'PAYMENT_NOT_FOUND', 'REVIEW_FAILED', 'SSE_DROP',
+  'REVIEW_FAILED', 'SSE_DROP',
 ] as const;
 export type MockError = (typeof MOCK_ERRORS)[number];
 
@@ -15,35 +14,13 @@ export interface MockRequest {
   account: string;
   repo: string;
   commit: string;
-  deployed: string | null;
-  requestHash: string;
-  priceYocto: string;
   createdAt: number;
-  paidAt: number | null;
-  txHash: string | null;
+  /** When the worker picked the job up: the status walks queued -> running -> done from here. */
+  startedAt: number;
   fails: boolean;
-  attestTx: string | null;
-  refundTx: string | null;
   pipelineMode?: PipelineMode;
   roundsCompleted?: number;
   parentId?: string | null;
-}
-
-export interface MockTx {
-  signer: string;
-  receiver: string;
-  requestHash: string;
-  deposit: string;
-}
-
-// A guard report waiting for the owner's review (the admin listener is loopback-only and not mocked).
-export interface MockGuardReport {
-  id: string;
-  account: string;
-  reporter: string;
-  evidenceUrl: string;
-  reason: string;
-  createdAt: number;
 }
 
 export interface MockControls {
@@ -69,10 +46,9 @@ export interface LocalJob {
 export interface MockState {
   nonces: Record<string, { expiresAt: number; used: boolean }>;
   requests: MockRequest[];
-  txs: Record<string, MockTx>;
-  attestations: Record<string, OnChainAttestation>;
-  guardReports: MockGuardReport[];
   session: string | null;
+  /** The account's own provider keys (only whether one is set, its fingerprint and the chosen models). */
+  ownKeys: Record<string, { set: boolean; fingerprint: string | null; models: string[] }>;
   localJobs: LocalJob[];
   controls: MockControls;
 }
@@ -80,7 +56,7 @@ export interface MockState {
 const KEY = 'omniswarm.mock.db';
 
 export function emptyState(): MockState {
-  return { nonces: {}, requests: [], txs: {}, attestations: {}, guardReports: [], session: null, localJobs: [], controls: { error: null, walletReject: false, tampered: false } };
+  return { nonces: {}, requests: [], session: null, ownKeys: {}, localJobs: [], controls: { error: null, walletReject: false, tampered: false } };
 }
 
 let memory: MockState | null = null;
@@ -118,7 +94,7 @@ export function resetState(): void {
   storage()?.removeItem(KEY);
 }
 
-// A one-shot control fires once and clears itself (NONCE_EXPIRED, PAYMENT_NOT_FOUND).
+// A one-shot control fires once and clears itself (REVIEW_FAILED).
 export function takeError(code: MockError): boolean {
   return updateState((state) => {
     if (state.controls.error !== code) return false;

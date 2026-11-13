@@ -86,14 +86,14 @@ On the web, NEAR AI Cloud gets one panel on `/dashboard`.
 - **Paste your NEAR AI Cloud key** once, then choose models (listed from NEAR AI's `/models` endpoint, or typed in). The page shows a fingerprint, never the key.
 - **Submit a repository.** Every dashboard review runs on that key (`account-nearai`). There is no hosted panel and no operator key.
 
-The landing page has no quote, sign or pay form. It links to `/dashboard`. The paid wallet flow (`POST /api/quote`, `request_review`) stays in the code but is dormant.
+The landing page links to `/dashboard`. There is no payment step: the chain integration was removed (docs/spec/DECISIONS.md, 2026-11-13).
 
 ## Adding a provider
 
 1. Add the public entry to `PUBLIC_PROVIDERS` in `providers-public.mjs`: id, label, transport, spec prefix, models path, key sources and data policy. Then add its wiring to `WIRING` in `providers.mjs`: base URL, key variable and allow-list, body and headers.
 2. If its spec family is new, add the family to `reviewer-spec.schema.json`, `reviewer-registry.mjs` `FAMILIES` and `reviewer-families.mjs` `FAMILY_WAVES`. Then add `engine/scripts/provider-<family>.mjs` as `export const family = singleProviderFamily('<id>')`. A `key:<id>:` provider needs no new file.
 3. Extend `provider-presets.test.mjs` with what it must send. `npm run test:schemas`, `npm test` and `npm run test:intake` then cover the rest. The engine allow-list, the hosted preset check, the account key panel and the reports pick it up from the catalog.
-4. For hosted use, give it the `account` key source and allow `account-<id>` in `ALLOWED_PRESETS`. Users then bring their own key. Do not add an operator key to `infra/env/providers.env.example`: OmniSwarm does not pay for users' reviews.
+4. For hosted use, give it the `account` key source. Users then bring their own key. Do not add an operator key to `infra/env/providers.env.example`: OmniSwarm does not pay for users' reviews.
 
 ## Accounts' own keys
 
@@ -106,10 +106,9 @@ A provider whose catalog entry lists `account` (today only NEAR AI Cloud) can ru
   - `GET /api/account/providers/:provider/models`
   - Session auth (the `sid` cookie). Responses carry a fingerprint, never the key.
 - **Preset:** `account-<provider>` (`account-nearai`). The first model orchestrates, every model reviews, a second model is the alternate judge. The models are snapshotted on the request row (`request.models`, migration 009), so a later change does not alter a queued or retried job.
-- **Dashboard:** `POST /api/dashboard/jobs` always runs `account-nearai` on the signed-in account's key. It is refused until the account has saved a key and at least one model. Today it is also refused outside the mock chain and the local sandbox (`assertDashboardChain`), so a testnet deploy cannot run a dashboard review yet.
-- **Signed (wallet) requests:** dormant. A request may sign `preset: "account-nearai"` only when the operator lists it in `ALLOWED_PRESETS`.
-- **Pipeline steps:** a dashboard or signed request may ask for `pipelineMode: "step-by-step"` or `"stage-1"`. The follow-up `POST /api/dashboard/jobs/:id/advise|debate` (or `/api/requests/:id/advise|debate`) creates a child request with the parent's preset and model snapshot, so it runs on the same account key. These follow-up routes are refused outside the mock chain and the local sandbox (`assertDashboardChain`); on the sandbox the seeded payer pays for them.
-- **Worker:** passes only that account's key variable to the engine. `providerScope` removes every other provider variable from the spawn, so no other key rides along. A missing key or models fails the run as infrastructure and refunds it.
+- **Dashboard:** `POST /api/dashboard/jobs` always runs `account-nearai` on the signed-in account's key. It is refused until the account has saved a key and at least one model.
+- **Pipeline steps:** a dashboard or signed request may ask for `pipelineMode: "step-by-step"` or `"stage-1"`. The follow-up `POST /api/dashboard/jobs/:id/advise|debate` (or `/api/requests/:id/advise|debate`) creates a child request with the parent's preset and model snapshot, so it runs on the same account key.
+- **Worker:** passes only that account's key variable to the engine. `providerScope` removes every other provider variable from the spawn, so no other key rides along. A missing key or models fails the run as infrastructure.
 
 ## Live calls
 
@@ -117,7 +116,7 @@ Every API-provider request goes through `engine/scripts/http-replay.mjs`, which 
 
 - `audit local --provider nearai` exits with an instruction when `OMNI_LIVE` is not `1`.
 - The hosted worker passes `OMNI_LIVE` to the engine only when its own environment has it (`infra/env/worker.env.example` sets `OMNI_LIVE=1`).
-- On the local stack, start with `OMNI_LIVE=1 LOCAL_ENGINE_RUNNER=cli npm run stack:local` (sandbox chain) or `OMNI_LIVE=1 NEAR_LOCAL=0 npm run stack:local` (mock chain).
+- On the local stack, start with `OMNI_LIVE=1 npm run stack:local`; without it the host workers use the mock engine.
 
 ## Cost
 

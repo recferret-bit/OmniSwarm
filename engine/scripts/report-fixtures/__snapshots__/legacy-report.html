@@ -147,6 +147,14 @@ td { overflow-wrap: anywhere; }
 .result-ran { color: var(--blue); }
 .result-failed { color: var(--red); }
 .result-impossible { color: #a93d00; }
+.test-passed { color: var(--green); }
+.test-passed_with_skips, .test-not_run { color: var(--orange-ink); }
+.test-failed, .test-no_result, .test-unverified { color: var(--red); }
+.tool-not_applicable { color: var(--muted); }
+.tool-failed, .tool-missing { color: var(--orange-ink); }
+.test-suite { border: 1px solid var(--rule); padding: 12px 14px; margin-top: 8px; font-size: 12px; }
+.test-suite > summary { cursor: pointer; font-weight: 700; }
+.test-suite pre { overflow-x: auto; }
 .controls-list { display: grid; gap: 8px; }
 .control { border: 1px solid var(--rule); padding: 14px; }
 .control > summary { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; font-weight: 700; }
@@ -287,6 +295,8 @@ td { overflow-wrap: anywhere; }
 | fixture | impossible | Benign data fixture, no target execution. |
 </pre></details></div></details>
     <details class="panel"><summary><span class="pill blue">Stacks</span>Coverage by stack<span class="meta-label">Python · Node · Solana · NEAR</span></summary><div class="panel-body"><p class="note">Stack profile unavailable or predates ecosystem detection; per-stack coverage cannot be derived.</p></div></details>
+    
+    
     
     
   </section><footer class="footer"><span>Audit / Core · Source security review</span><span>Model assertions · Unverified provenance</span><span>2026-11-02</span></footer></main></div>

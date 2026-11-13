@@ -22,8 +22,8 @@ export const SUPPORT_LEDE = 'Servers, sandbox runners, storage, the domain and c
 export interface DonateProps {
   /** Recipient account. Defaults to NEXT_PUBLIC_DONATION_ACCOUNT; null renders nothing. */
   account?: string | null;
-  /** Native USDC contract. Defaults to the network's (or the override); null keeps only the manual address. */
-  usdcContract?: string | null;
+  /** Native USDC contract on NEAR mainnet. Defaults to NEXT_PUBLIC_DONATION_USDC_CONTRACT, then the Circle native USDC contract. */
+  usdcContract?: string;
   /** `section`: the landing band. `footer`: the block at the foot of the operator dashboard. Both are centered. */
   variant?: 'section' | 'footer';
   connector?: () => Promise<WalletConnector>;
@@ -49,7 +49,7 @@ function CopyAccount({ account }: { account: string }) {
   );
 }
 
-function DonateBody({ account, usdcContract, connector }: { account: string; usdcContract: string | null; connector: () => Promise<WalletConnector> }) {
+function DonateBody({ account, usdcContract, connector }: { account: string; usdcContract: string; connector: () => Promise<WalletConnector> }) {
   const legendId = useId();
   const accountId = useWallet(selectAccountId);
   const connected = useWallet((state) => state.status === 'connected' && state.accountId !== null);
@@ -66,7 +66,7 @@ function DonateBody({ account, usdcContract, connector }: { account: string; usd
   const donate = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setTouched(true);
-    if (!units || !usdcContract || busy) return;
+    if (!units || busy) return;
     setBusy(true);
     setOutcome(null);
     try {
@@ -118,18 +118,14 @@ function DonateBody({ account, usdcContract, connector }: { account: string; usd
             error={amountError}
           />
         ) : null}
-        {usdcContract ? (
-          <div className="donate__wallet">
-            <WalletSlot />
-            <Button type="submit" busy={busy} disabled={!connected || !units}>
-              {units ? `Donate ${formatUsdc(units)} USDC` : 'Donate'}
-            </Button>
-            {!connected ? <p className="muted">Connect a NEAR wallet to send it from here, or use the address below.</p> : null}
-            {connected && accountId ? <p className="muted">Sent from {accountId}. The wallet asks you to confirm, and 1 yoctoNEAR is attached as NEP-141 requires.</p> : null}
-          </div>
-        ) : (
-          <p className="muted">Wallet donations are not set up on this network. Send USDC to the address below.</p>
-        )}
+        <div className="donate__wallet">
+          <WalletSlot />
+          <Button type="submit" busy={busy} disabled={!connected || !units}>
+            {units ? `Donate ${formatUsdc(units)} USDC` : 'Donate'}
+          </Button>
+          {!connected ? <p className="muted">Connect a NEAR wallet to send it from here, or use the address below.</p> : null}
+          {connected && accountId ? <p className="muted">Sent from {accountId}. The wallet asks you to confirm, and 1 yoctoNEAR is attached as NEP-141 requires.</p> : null}
+        </div>
       </form>
       {outcome?.kind === 'sent' ? (
         <Alert tone="info">
@@ -149,12 +145,8 @@ function DonateBody({ account, usdcContract, connector }: { account: string; usd
             <code data-testid="donation-account">{account}</code>
             <CopyAccount account={account} />
           </dd>
-          {usdcContract ? (
-            <>
-              <dt>Token</dt>
-              <dd><span>Native USDC</span> <code className="donate__contract">{usdcContract}</code></dd>
-            </>
-          ) : null}
+          <dt>Token</dt>
+          <dd><span>Native USDC</span> <code className="donate__contract">{usdcContract}</code></dd>
         </dl>
         {/* A standing warning, not an event: same look as a warn Alert, without role="alert". */}
         <div className="alert alert--warn"><p className="alert__text"><strong>{NATIVE_ONLY}</strong></p></div>

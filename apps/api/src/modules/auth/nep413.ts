@@ -1,6 +1,6 @@
 // NEP-413 signature check over the shared payload builder (@omniswarm/schemas/nep413): the wallet
 // signs sha256(tag || borsh(message) || nonce[32] || borsh(recipient) || None). The FullAccess check
-// is the chain's (ChainPort.keyPermission); this module is pure crypto.
+// is the key verifier's (AccountKeyVerifier.keyPermission); this module is pure crypto.
 import crypto from 'node:crypto';
 import { b58decode, b58encode, nep413Payload } from '@omniswarm/schemas/nep413';
 

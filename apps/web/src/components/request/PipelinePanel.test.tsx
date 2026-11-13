@@ -189,7 +189,7 @@ describe('<RequestStatusView> follow-up alert wording', () => {
     };
     useRequestStatus.setState({ byId: {} });
     vi.spyOn(api, 'getRequest').mockResolvedValue(statusDoc);
-    vi.spyOn(api, 'getReport').mockRejectedValue(new Error('no receipt needed in unit test'));
+    vi.spyOn(api, 'getReport').mockRejectedValue(new Error('no report needed in unit test'));
     vi.spyOn(api, 'adviseRequest').mockResolvedValue({
       requestId: '22222222-2222-4333-8444-555555555555',
       repo: 'near/example',

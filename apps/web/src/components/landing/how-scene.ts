@@ -17,7 +17,7 @@ export interface HowScene {
   y: number;
   w: number;
   h: number;
-  /** Full report_sha256. Empty until the browser has read the public attestation. */
+  /** Full report_sha256. Empty until the browser has read the public sample hash. */
   reportHash: string;
 }
 

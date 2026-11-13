@@ -545,11 +545,14 @@ process.exitCode=result.stageFailures.length||html.status!==0?2:0;
     env: { ...process.env, SANDBOX_FAST: '1', PATH: `${binDir}${path.delimiter}${process.env.PATH}` },
   });
 
-  assert.equal(run.status, 2, `orchestrate failed:\nSTDOUT:\n${run.stdout}\nSTDERR:\n${run.stderr}`);
+  // Fast mode leaves scanners without results. That is shown in the Tools block; the agents' review decides the
+  // report, so it is complete.
+  assert.equal(run.status, 0, `orchestrate failed:\nSTDOUT:\n${run.stdout}\nSTDERR:\n${run.stderr}`);
   const health = JSON.parse(fs.readFileSync(path.join(outDir, 'report-health.json'), 'utf8'));
   assert.equal(health.reviewState, 'validated_outputs', JSON.stringify(health));
-  assert.equal(health.state, 'incomplete');
-  assert.ok(health.verification.gaps.some(gap => gap.includes('scanner')));
+  assert.equal(health.state, 'validated_outputs');
+  assert.ok(health.verification.gaps.length > 0);
+  assert.equal(health.tools.state, 'gaps');
 
   const findings = JSON.parse(fs.readFileSync(path.join(outDir, 'findings-and-scores.json'), 'utf8'));
   assert.equal(findings.length, 1);
@@ -565,14 +568,15 @@ process.exitCode=result.stageFailures.length||html.status!==0?2:0;
   // The reviewer's call reused the coordinator's run of the same suite instead of executing it again.
   assert.equal(readReportJson(outDir, 'harness/existing-test-results-verification.json').find(row => row.kind === 'npm').exitCode, 0);
   assert.equal(fs.existsSync(path.join(outDir, 'harness/existing-test-results-claude-s1-auth.json')), false);
-  assert.match(fs.readFileSync(path.join(outDir, 'report.html'), 'utf8'), /INCOMPLETE VERIFICATION/);
+  assert.doesNotMatch(fs.readFileSync(path.join(outDir, 'report.html'), 'utf8'), /INCOMPLETE/);
+  assert.match(fs.readFileSync(path.join(outDir, 'report.html'), 'utf8'), /<details class="panel" id="tools">/);
 
   const resumedOut = path.join(root, 'resumed-report');
   const resumed = spawnSync(process.execPath, [runnerFile, targetDir, resumedOut, 'claude,grok', outDir], {
     encoding: 'utf8', timeout: 90_000,
     env: { ...process.env, SANDBOX_FAST: '1', PATH: `${binDir}${path.delimiter}${process.env.PATH}` },
   });
-  assert.equal(resumed.status, 2, `Saved assignment resume failed: ${resumed.stderr}`);
+  assert.equal(resumed.status, 0, `Saved assignment resume failed: ${resumed.stderr}`);
   assert.equal(readReportJson(resumedOut, 'meta.json').resumedFrom, fs.realpathSync(outDir));
   assert.equal(readReportJson(resumedOut, 'report-health.json').reviewState, 'validated_outputs');
   for (const job of readReportJson(resumedOut, 'workers.json').jobs) assert.equal(fs.realpathSync(job.sessionDirectory), fs.realpathSync(path.join(outDir, 'sessions', job.name)));
@@ -581,7 +585,7 @@ process.exitCode=result.stageFailures.length||html.status!==0?2:0;
     encoding: 'utf8', timeout: 90_000,
     env: { ...process.env, SANDBOX_FAST: '1', PATH: `${binDir}${path.delimiter}${process.env.PATH}` },
   });
-  assert.equal(continued.status, 2, `Chained resume must retain the original native session: ${continued.stderr}`);
+  assert.equal(continued.status, 0, `Chained resume must retain the original native session: ${continued.stderr}`);
   assert.equal(readReportJson(continuedOut, 'report-health.json').reviewState, 'validated_outputs');
   assert.equal(readReportJson(continuedOut, 'harness/session-claude-s1-auth.json').directory, readReportJson(resumedOut, 'harness/session-claude-s1-auth.json').directory);
 

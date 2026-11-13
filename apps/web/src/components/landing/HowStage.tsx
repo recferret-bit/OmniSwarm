@@ -60,6 +60,6 @@ export function HowStage({ active }: { active: number }) {
       document.removeEventListener('visibilitychange', onVis);
     };
   }, [active]);
-  const picture = ['independent review', 'anonymized debate', 'judgement', 'NEAR attestation'][active] ?? 'review stage';
+  const picture = ['independent review', 'anonymized debate', 'judgement', 'report hash check'][active] ?? 'review stage';
   return <canvas ref={ref} className="how-stage" role="img" aria-label={`Animated picture of ${picture}`} />;
 }

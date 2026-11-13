@@ -1,6 +1,6 @@
 // `npm run guard`: builds production (NEXT_PUBLIC_WALLET=real, mocks off) into
 // .next-guard and fails if the mock wallet, MSW, the mock controls, the recorded
-// sample attestation hash or any key-shaped string reached first-party output.
+// sample report hash or any key-shaped string reached first-party output.
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
@@ -47,7 +47,7 @@ const files = [
   ...listFiles(path.join(out, 'server/chunks')),
   ...listFiles(path.join(root, 'public')),
 ];
-const sampleHash = JSON.parse(fs.readFileSync(path.join(root, 'public/sample/attestation.json'), 'utf8')).report_sha256;
+const sampleHash = JSON.parse(fs.readFileSync(path.join(root, 'public/sample/report-hash.json'), 'utf8')).reportSha256;
 const hits = scan(files.filter((file) => !file.includes(`${path.sep}public${path.sep}sample${path.sep}`)), [sampleHash]);
 if (!files.some((file) => file.includes(`${path.sep}static${path.sep}`))) {
   console.error('no client bundle found; the build output layout changed');

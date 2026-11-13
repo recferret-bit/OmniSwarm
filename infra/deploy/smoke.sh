@@ -8,7 +8,6 @@
 #     --cacert FILE        trust this CA (https only)
 #     --resolve IP         send both hostnames to IP (curl --resolve)
 #     --http-port N        redirect port for https (default 80); the app port for http
-#     --network NAME       /api/health must report this network
 #     --report PATH        reports-origin path to check (default /sample/report.html)
 #     --min-cert-days N    certificates must be valid for N more days (default 14)
 #     --no-burst           skip the /api/challenge rate-limit burst
@@ -16,7 +15,7 @@
 # if any check failed. reports-domain defaults to reports.<domain>.
 set -euo pipefail
 
-dry=0; scheme=https; cacert=""; resolve_ip=""; http_port=80; network=""; report_path=/sample/report.html
+dry=0; scheme=https; cacert=""; resolve_ip=""; http_port=80; report_path=/sample/report.html
 min_days=14; burst=1; target=""; reports=""
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -25,11 +24,10 @@ while [ "$#" -gt 0 ]; do
     --cacert) cacert="$2"; shift 2 ;;
     --resolve) resolve_ip="$2"; shift 2 ;;
     --http-port) http_port="$2"; shift 2 ;;
-    --network) network="$2"; shift 2 ;;
     --report) report_path="$2"; shift 2 ;;
     --min-cert-days) min_days="$2"; shift 2 ;;
     --no-burst) burst=0; shift ;;
-    -h | --help) sed -n '2,16p' "$0"; exit 0 ;;
+    -h | --help) sed -n '2,15p' "$0"; exit 0 ;;
     -*) echo "smoke.sh: unknown option $1" >&2; exit 64 ;;
     *) if [ -z "$target" ]; then target="$1"; else reports="$1"; fi; shift ;;
   esac
@@ -112,7 +110,6 @@ if req health "$APP/api/health"; then
   b="$(body)"
   if [ "$(status)" != 200 ]; then fail health "status $(status)"
   elif ! printf '%s' "$b" | grep -q '"ok":true'; then fail health "body has no \"ok\":true: $b"
-  elif [ -n "$network" ] && ! printf '%s' "$b" | grep -q "\"network\":\"$network\""; then fail health "network is not $network: $b"
   else ok health; fi
 fi
 

@@ -26,7 +26,7 @@ export function SiteFooter() {
             </ul>
           </div>
         </nav>
-        <p className="site-footer__note">Model agreement does not certify security. Testnet only during the hackathon.</p>
+        <p className="site-footer__note">Model agreement does not certify security.</p>
       </div>
     </footer>
   );

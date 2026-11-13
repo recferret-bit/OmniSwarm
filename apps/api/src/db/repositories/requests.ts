@@ -11,11 +11,7 @@ export interface RequestRow {
   account: string;
   repo: string;
   commit_sha: string;
-  network: 'testnet' | 'mainnet' | 'sandbox';
   preset: string;
-  deployed: string | null;
-  request_hash: string;
-  price_yocto: string;
   status: Status;
   attempts: number;
   failure_cause: string | null;
@@ -30,16 +26,13 @@ export interface RequestRow {
   pipeline_mode?: 'full' | 'step-by-step' | 'stage-1';
   debate_rounds?: number | null;
   incomplete: boolean | null;
-  attest_tx: string | null;
-  refund_tx: string | null;
   queued_at: Date | null;
   created_at: Date;
   updated_at: Date;
 }
 
 export interface NewRequest {
-  id: string; account: string; repo: string; commitSha: string; network: string; preset: string;
-  deployed: string | null; requestHash: string; priceYocto: string; now: Date;
+  id: string; account: string; repo: string; commitSha: string; preset: string; now: Date;
   scope?: 'full' | 'web2' | 'web3';
   models?: string[] | null;
   pipelineMode?: 'full' | 'step-by-step' | 'stage-1';
@@ -50,13 +43,13 @@ export interface NewRequest {
 
 const PATCHABLE = {
   attempts: 'attempts', failureCause: 'failure_cause', reportSha256: 'report_sha256', reportUrl: 'report_url',
-  maxSeverity: 'max_severity', incomplete: 'incomplete', attestTx: 'attest_tx', refundTx: 'refund_tx', queuedAt: 'queued_at',
+  maxSeverity: 'max_severity', incomplete: 'incomplete', queuedAt: 'queued_at',
 } as const;
 export type RequestPatch = Partial<Record<keyof typeof PATCHABLE, string | number | boolean | Date | null>>;
 
 export interface Transition {
   to: Status;
-  /** Narrows the legal sources further (for example only `awaiting_payment` for a payment). */
+  /** Narrows the legal sources further. */
   from?: readonly Status[];
   patch?: RequestPatch;
   actor: string;
@@ -65,25 +58,26 @@ export interface Transition {
   now: Date;
 }
 
+/** A new request is `queued` at once: reviews are free, so there is nothing to wait for. The caller enqueues the job in the same transaction. */
 export async function insertRequest(db: Db, row: NewRequest): Promise<void> {
   await db.query(
     `WITH created AS (
-       INSERT INTO request (id, account, repo, commit_sha, network, preset, deployed, request_hash, price_yocto, status, created_at, updated_at, scope, models, pipeline_mode, parent_id, debate_rounds, theme)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'awaiting_payment',$10,$10,$12,$13,$14,$15,$16,$17) RETURNING id)
-     INSERT INTO audit_log (ts, actor, request_id, event, data) SELECT $10, 'api', id, 'request_created', $11 FROM created`,
-    [row.id, row.account, row.repo, row.commitSha, row.network, row.preset, row.deployed, row.requestHash, row.priceYocto, row.now,
+       INSERT INTO request (id, account, repo, commit_sha, preset, status, queued_at, created_at, updated_at, scope, models, pipeline_mode, parent_id, debate_rounds, theme)
+       VALUES ($1,$2,$3,$4,$5,'queued',$6,$6,$6,$8,$9,$10,$11,$12,$13) RETURNING id)
+     INSERT INTO audit_log (ts, actor, request_id, event, data) SELECT $6, 'api', id, 'request_created', $7 FROM created`,
+    [row.id, row.account, row.repo, row.commitSha, row.preset, row.now,
       JSON.stringify({ repo: row.repo, commit: row.commitSha, ...(row.pipelineMode && row.pipelineMode !== 'full' ? { pipelineMode: row.pipelineMode } : {}), ...(row.debateRounds !== null && row.debateRounds !== undefined ? { debateRounds: row.debateRounds } : {}) }),
       row.scope ?? 'full', row.models ?? null, row.pipelineMode ?? 'full', row.parentId ?? null, row.debateRounds ?? null, row.theme ?? null]);
 }
 
 export async function insertThemeRequest(db: Db, row: {
-  id: string; parent: RequestRow; theme: string; slicePath: string; now: Date; requestHash: string;
+  id: string; parent: RequestRow; theme: string; slicePath: string; now: Date;
 }): Promise<void> {
   await db.query(
-    `INSERT INTO request (id, account, repo, commit_sha, network, preset, deployed, request_hash, price_yocto, status, created_at, updated_at, queued_at, scope, theme, parent_id, slice_path, models, pipeline_mode)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,0,'queued',$9,$9,$9,$10,$11,$12,$13,$14,$15)`,
-    [row.id, row.parent.account, row.parent.repo, row.parent.commit_sha, row.parent.network, row.parent.preset, row.parent.deployed,
-      row.requestHash, row.now, row.parent.scope, row.theme, row.parent.id, row.slicePath, row.parent.models, row.parent.pipeline_mode ?? 'full']);
+    `INSERT INTO request (id, account, repo, commit_sha, preset, status, created_at, updated_at, queued_at, scope, theme, parent_id, slice_path, models, pipeline_mode)
+     VALUES ($1,$2,$3,$4,$5,'queued',$6,$6,$6,$7,$8,$9,$10,$11,$12)`,
+    [row.id, row.parent.account, row.parent.repo, row.parent.commit_sha, row.parent.preset,
+      row.now, row.parent.scope, row.theme, row.parent.id, row.slicePath, row.parent.models, row.parent.pipeline_mode ?? 'full']);
 }
 
 export async function listRecent(db: Db, limit = 200): Promise<RequestRow[]> {
@@ -130,7 +124,7 @@ export async function listByAccount(db: Db, account: string): Promise<RequestRow
   return result.rows;
 }
 
-/** 1-based rank among queued requests by the time payment was confirmed; null when not queued. */
+/** 1-based rank among queued requests by the time they were queued; null when not queued. */
 export async function queuePosition(db: Db, id: string): Promise<number | null> {
   return (await statusAndPosition(db, id))?.position ?? null;
 }
@@ -144,7 +138,7 @@ export async function statusAndPosition(db: Db, id: string): Promise<{ status: S
   return result.rows[0] ?? null;
 }
 
-/** Requests that hold a queue slot: paid and not yet finished. */
+/** Requests that hold a queue slot: queued, running or publishing. */
 export async function queueDepth(db: Db): Promise<number> {
   const result = await db.query<{ n: number }>(`SELECT count(*)::int AS n FROM request WHERE status IN ('queued', 'running', 'publishing')`);
   return result.rows[0]?.n ?? 0;
@@ -156,10 +150,4 @@ export async function accountUsage(db: Db, account: string, since: Date): Promis
             count(*) FILTER (WHERE created_at >= $2)::int AS recent
      FROM request WHERE account = $1`, [account, since]);
   return result.rows[0] ?? { active: 0, recent: 0 };
-}
-
-export async function awaitingPayment(db: Db, limit = 200): Promise<RequestRow[]> {
-  const result = await db.query<RequestRow>(
-    `SELECT * FROM request WHERE status = 'awaiting_payment' ORDER BY created_at LIMIT $1`, [limit]);
-  return result.rows;
 }

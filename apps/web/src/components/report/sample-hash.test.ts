@@ -17,7 +17,7 @@ describe('sample hash fetch', () => {
   it('returns an empty string when the file is missing or the digest is not hex', async () => {
     vi.stubGlobal('fetch', () => Promise.resolve({ ok: false, json: async () => ({}) }));
     expect(await readSampleHash()).toBe('');
-    vi.stubGlobal('fetch', () => Promise.resolve({ ok: true, json: async () => ({ report_sha256: 'not-a-hash' }) }));
+    vi.stubGlobal('fetch', () => Promise.resolve({ ok: true, json: async () => ({ reportSha256: 'not-a-hash' }) }));
     expect(await readSampleHash()).toBe('');
     vi.stubGlobal('fetch', () => Promise.reject(new Error('offline')));
     expect(await readSampleHash()).toBe('');

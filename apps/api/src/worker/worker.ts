@@ -5,24 +5,26 @@
 import type { JobWithMetadata } from 'pg-boss';
 import { withTransaction } from '../db/pool.ts';
 import type { PgBoss } from '../queue/boss.ts';
-import {
-  assertGuardReportJob, assertRefundJob, assertReviewJob, GUARD_REPORT_QUEUE, MAINTENANCE_QUEUE, REFUND_QUEUE, releaseReview,
-  REVIEW_DEAD_QUEUE, REVIEW_QUEUE, type ReviewJob,
-} from '../queue/review-queue.ts';
-import { sendGuardReport } from '../modules/guard/guard-report.service.ts';
-import type { PaymentDeps } from '../modules/payments/payment.service.ts';
-import { refundRequest } from '../modules/payments/settlement.service.ts';
+import { assertReviewJob, MAINTENANCE_QUEUE, releaseReview, REVIEW_DEAD_QUEUE, REVIEW_QUEUE, type ReviewJob } from '../queue/review-queue.ts';
 import { isAppError } from '../shared/errors.ts';
 import { runMaintenance } from './maintenance.ts';
 import { findRequest, transition } from '../db/repositories/requests.ts';
 import { accountPresetProvider } from '@omniswarm/schemas/providers';
 import { finalReportDir, splitLargeReview } from './theme-split.ts';
-import { beginPublishing, attestRequest } from '../modules/payments/settlement.service.ts';
 import { publishReport } from './publish.ts';
-import { chainReportUri } from './report-uri.ts';
+import { SEVERITIES, type Severity } from './report.ts';
+import { beginPublishing, finishRequest } from './settle.ts';
 import { handleDeadReview, handleReview, RunInterruptedError, type HandlerDeps } from './review-handler.ts';
 
-type WorkerDeps = HandlerDeps & PaymentDeps;
+type WorkerDeps = HandlerDeps;
+
+/** The highest severity among a split review's slices. */
+function severityOf(severities: readonly (string | null)[]): Severity {
+  return severities.reduce<Severity>((best, value) => {
+    const own = (value ?? 'none') as Severity;
+    return SEVERITIES.indexOf(own) > SEVERITIES.indexOf(best) ? own : best;
+  }, 'none');
+}
 
 /**
  * Deliveries of `review` jobs. `shutdown` aborts every running engine at once (SIGTERM is forwarded to
@@ -61,10 +63,10 @@ async function workReviews(boss: PgBoss, deps: WorkerDeps, shutdown: AbortSignal
             reportsRoot: deps.config.storage.reportsRoot, requestId: final.parent.id, sourceDir: final.dir,
             repo: final.parent.repo, commitSha: final.parent.commit_sha, preset: final.parent.preset,
           });
-          const reportUri = `${deps.config.storage.reportsBaseUrl}/${final.parent.id}/report.html`;
+          const reportUrl = `${deps.config.storage.reportsBaseUrl}/${final.parent.id}/report.html`;
           try {
-            await beginPublishing(deps, final.parent.id, { reportSha256: published.reportSha256, reportUri, maxSeverity: 'none', incomplete: false });
-            await attestRequest(deps, final.parent.id, { reportUri: chainReportUri(reportUri), maxSeverity: 'none' });
+            await beginPublishing(deps, final.parent.id, { reportSha256: published.reportSha256, reportUrl, maxSeverity: severityOf(final.severities), incomplete: false });
+            await finishRequest(deps, final.parent.id);
             log.info({ parentId: final.parent.id }, 'final report published');
           } catch (error) {
             if (!isAppError(error, 'INVALID_TRANSITION')) throw error;
@@ -94,25 +96,6 @@ export async function startWorker(boss: PgBoss, deps: WorkerDeps, shutdown: Abor
     const data = assertReviewJob(job.data);
     deps.log.warn({ requestId: data.requestId }, 'review job exhausted its retries; settling it');
     return handleDeadReview(deps, data);
-  });
-  // Chain writes the API asked for: the API process holds no operator key (INTAKE section 5).
-  await boss.work(REFUND_QUEUE, { batchSize: 1, pollingIntervalSeconds: 1 }, async ([job]) => {
-    if (!job) return null;
-    const data = assertRefundJob(job.data);
-    try {
-      return await refundRequest(deps, data.requestId, { actor: 'admin', cause: 'admin' });
-    } catch (error) {
-      // The request moved on (for example it completed) before the refund ran: nothing to retry.
-      if (isAppError(error, 'REFUND_NOT_ALLOWED')) {
-        deps.log.warn({ requestId: data.requestId }, 'admin refund skipped: no longer refundable');
-        return { skipped: true };
-      }
-      throw error;
-    }
-  });
-  await boss.work(GUARD_REPORT_QUEUE, { batchSize: 1, pollingIntervalSeconds: 1 }, async ([job]) => {
-    if (!job) return null;
-    return sendGuardReport(deps, assertGuardReportJob(job.data).reportId);
   });
   await boss.work(MAINTENANCE_QUEUE, { batchSize: 1, pollingIntervalSeconds: 5 }, async () => runMaintenance(deps));
   await boss.schedule(MAINTENANCE_QUEUE, '* * * * *', {}, { singletonKey: 'maintenance' });

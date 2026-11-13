@@ -7,9 +7,10 @@ import { ShareOnX } from './ShareOnX';
 const INDEX = {
   requestId: '00000000-0000-4000-8000-000000000001',
   reportUrl: 'https://reports.omniswarm.example/r/1/report.html',
-  attestation: { requestHash: 'a', reportSha256: 'b', reportUri: 'u', maxSeverity: 'medium', repo: 'octo/app' },
-  receipt: { paid: { yocto: '0', tx: 't' }, reviewers: [], check: { passed: 2, total: 4, byStatus: {} } },
-} as unknown as ReportIndexResponse;
+  repo: 'octo/app',
+  maxSeverity: 'medium',
+  check: { passed: 2, total: 4 },
+} satisfies ReportIndexResponse;
 
 describe('ShareOnX', () => {
   it('prefills the post and links to the X compose window with the report link', () => {

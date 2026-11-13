@@ -14,9 +14,9 @@ interface Job {
   id: string; account: string; repo: string; status: string; scope: string;
   theme: string | null; parentId: string | null; failureCause: string | null; createdAt: string;
 }
-interface Activity { freeChecks: boolean; jobs: Job[] }
+interface Activity { jobs: Job[] }
 
-const KNOWN: readonly Status[] = ['awaiting_payment', 'queued', 'running', 'publishing', 'done', 'failed', 'refunded', 'expired'];
+const KNOWN: readonly Status[] = ['queued', 'running', 'publishing', 'done', 'failed'];
 
 function isStatus(value: string): value is Status {
   return (KNOWN as readonly string[]).includes(value);
@@ -24,8 +24,7 @@ function isStatus(value: string): value is Status {
 
 function toneFor(status: string): Tone {
   if (status === 'done') return 'good';
-  if (status === 'failed' || status === 'refunded' || status === 'expired') return 'bad';
-  if (status === 'awaiting_payment') return 'warn';
+  if (status === 'failed') return 'bad';
   if (status === 'queued' || status === 'running' || status === 'publishing') return 'info';
   return 'neutral';
 }
@@ -124,8 +123,6 @@ function Jobs({ jobs }: { jobs: Job[] | null }) {
 export default function AdminPage() {
   const [activity, setActivity] = useState<Activity | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
 
   useEffect(() => {
     let live = true;
@@ -137,27 +134,6 @@ export default function AdminPage() {
     return () => { live = false; };
   }, []);
 
-  const setFree = async (freeChecks: boolean) => {
-    setPending(true);
-    setError(null);
-    setNotice(null);
-    try {
-      const response = await fetch('/api/operator/settings', {
-        method: 'PUT', credentials: 'include',
-        headers: { accept: 'application/json', 'content-type': 'application/json' },
-        body: JSON.stringify({ freeChecks }),
-      });
-      if (!response.ok) throw new Error('The setting was not saved');
-      const saved = await response.json() as { freeChecks: boolean };
-      setActivity((current) => current ? { ...current, freeChecks: saved.freeChecks } : current);
-      setNotice(saved.freeChecks ? 'Free checks are on.' : 'Payment is required before a review is queued.');
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'The setting was not saved');
-    } finally {
-      setPending(false);
-    }
-  };
-
   const jobs = activity?.jobs ?? null;
   const accounts = jobs ? group(jobs) : null;
   const inProgress = jobs ? jobs.filter((job) => job.status === 'queued' || job.status === 'running' || job.status === 'publishing').length : '—';
@@ -167,7 +143,6 @@ export default function AdminPage() {
     <>
       <h1>Admin</h1>
       {error ? <Alert>{error}</Alert> : null}
-      {notice ? <Alert tone="info">{notice}</Alert> : null}
       <Panel>
         <p className="muted">This page is separate from the public site. The browser asked for the admin user before it loaded.</p>
         <StatGrid label="Activity">
@@ -181,33 +156,6 @@ export default function AdminPage() {
           tabs={[
             { id: 'operators', label: 'Operators', content: <Operators jobs={jobs} /> },
             { id: 'jobs', label: 'Jobs', content: <Jobs jobs={jobs} /> },
-            {
-              id: 'settings',
-              label: 'Settings',
-              content: (
-                <div className="admin-stack">
-                  <section className="admin-stack">
-                    <h2 id="free-checks" className="panel__title">Free checks {activity ? <Pill tone={activity.freeChecks ? 'good' : 'neutral'}>{activity.freeChecks ? 'On' : 'Off'}</Pill> : null}</h2>
-                    <div role="radiogroup" aria-labelledby="free-checks" className="choice">
-                    <label className="choice__option">
-                      <input type="radio" name="free" checked={activity?.freeChecks === true} disabled={pending || !activity} onChange={() => void setFree(true)} />
-                      <span className="choice__copy">
-                        <strong>Allow free checks</strong>
-                        <span className="muted">Visitors queue a review from the landing page without a wallet.</span>
-                      </span>
-                    </label>
-                    <label className="choice__option">
-                      <input type="radio" name="free" checked={activity?.freeChecks === false} disabled={pending || !activity} onChange={() => void setFree(false)} />
-                      <span className="choice__copy">
-                        <strong>Require payment</strong>
-                        <span className="muted">Visitors sign and pay before a review is queued.</span>
-                      </span>
-                    </label>
-                    </div>
-                  </section>
-                </div>
-              ),
-            },
           ]}
         />
       </Panel>

@@ -1,6 +1,0 @@
-{
-  "id": "metadata-elsewhere",
-  "ticket": "tickets/metadata-elsewhere.md",
-  "snapshot": "fixtures/metadata-elsewhere.json",
-  "note": "NEP-330 metadata is self-reported. elsewhere.owner.testnet's contract_source_metadata names https://github.com/other/elsewhere, not the attested recferret-bit/OmniSwarm commit. A mismatch warns and does not sign until a human approves. It does not prove the deployed bytes were rebuilt from that other repository. Proof is a NearBlocks or SourceScan verification."
-}

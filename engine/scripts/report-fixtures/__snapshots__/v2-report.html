@@ -147,6 +147,14 @@ td { overflow-wrap: anywhere; }
 .result-ran { color: var(--blue); }
 .result-failed { color: var(--red); }
 .result-impossible { color: #a93d00; }
+.test-passed { color: var(--green); }
+.test-passed_with_skips, .test-not_run { color: var(--orange-ink); }
+.test-failed, .test-no_result, .test-unverified { color: var(--red); }
+.tool-not_applicable { color: var(--muted); }
+.tool-failed, .tool-missing { color: var(--orange-ink); }
+.test-suite { border: 1px solid var(--rule); padding: 12px 14px; margin-top: 8px; font-size: 12px; }
+.test-suite > summary { cursor: pointer; font-weight: 700; }
+.test-suite pre { overflow-x: auto; }
 .controls-list { display: grid; gap: 8px; }
 .control { border: 1px solid var(--rule); padding: 14px; }
 .control > summary { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; font-weight: 700; }
@@ -323,6 +331,8 @@ td { overflow-wrap: anywhere; }
 | fixture | impossible | Benign data fixture, no target execution. |
 </pre></details></div></details>
     <details class="panel"><summary><span class="pill blue">Stacks</span>Coverage by stack<span class="meta-label">Python · Node · Solana · NEAR</span></summary><div class="panel-body"><p class="note">Stack profile unavailable or predates ecosystem detection; per-stack coverage cannot be derived.</p></div></details>
+    
+    
     
     <section id="crosscheck" aria-label="Cross-check"><h2><span>05</span> Cross-check</h2><div class="filter-group" role="group" aria-label="Filter clusters by status"><button type="button" class="filter-btn" data-cross-filter="AGREED" aria-pressed="false">AGREED</button><button type="button" class="filter-btn" data-cross-filter="CONFIRMED" aria-pressed="false">CONFIRMED</button><button type="button" class="filter-btn" data-cross-filter="LIKELY" aria-pressed="false">LIKELY</button><button type="button" class="filter-btn" data-cross-filter="DISPUTED" aria-pressed="false">DISPUTED</button><button type="button" class="filter-btn" data-cross-filter="REFUTED" aria-pressed="false">REFUTED</button><button type="button" class="filter-btn" data-cross-filter="INSUFFICIENT_EVIDENCE" aria-pressed="false">INSUFFICIENT_EVIDENCE</button></div><table><thead><tr><th>Cluster</th><th>Status</th><th>Rounds</th><th>Judge vendor</th><th>Alternate judge</th><th>Verified</th><th>Discarded</th><th>Conformity suspect</th></tr></thead><tbody><tr data-status="AGREED"><td>Agreed check</td><td><span class="pill green" data-status="AGREED">AGREED</span></td><td>0 rounds</td><td>none</td><td>no</td><td>0</td><td>0</td><td>0</td></tr><tr data-status="DISPUTED"><td>Missing owner check</td><td><span class="pill orange" data-status="DISPUTED">DISPUTED</span></td><td>2 rounds</td><td>deepseek</td><td>yes</td><td>2</td><td>2</td><td>1</td></tr><tr data-status="LIKELY"><td>Logged secret</td><td><span class="pill blue" data-status="LIKELY">LIKELY</span></td><td>1 rounds</td><td>deepseek</td><td>yes</td><td>0</td><td>0</td><td>0</td></tr><tr data-status="CAPPED"><td>Unchecked arithmetic</td><td><span class="pill" data-status="CAPPED">CAPPED</span></td><td>0 rounds</td><td>—</td><td>no</td><td>0</td><td>0</td><td>0</td></tr></tbody></table><h3>Not debated (cap)</h3><ul><li>CLUSTER-3 debate_cap</li></ul></section><section id="general-review" aria-label="General review"><h2><span>06</span> General review</h2><div class="prose"><h3>General review</h3><p>&lt;script&gt;alert(1)&lt;/script&gt;</p><p>Model agreement and passing checks do not certify security.
 </p></div><h3>Coverage and gaps</h3><table><thead><tr><th>Surface</th><th>Covered</th><th>Gaps</th></tr></thead><tbody><tr><td>S1</td><td>yes</td><td>debate_cap</td></tr></tbody></table><h3>Open disagreements</h3><ul><li>CLUSTER-1: Quotes disagree.</li></ul><p>Reviewers cli-claude-opus, nearai-deepseek-ai-deepseek-v4, nearai-qwen-qwen3-8-max, nearai-meta-llama-llama-5-70b, scripted-baseline. Orchestrator cli:codex:gpt-5.5. Passes 2. Tool budget 40. Debate rounds 2. Judges: CLUSTER-1: nearai-deepseek-ai-deepseek-v4 (alternate).</p><h3>Contributions</h3><table><thead><tr><th>Reviewer</th><th>Unique confirmed</th><th>Refuted</th><th>Tool calls</th><th>Cost</th></tr></thead><tbody><tr><td>cli-claude-opus</td><td>0</td><td>0</td><td>4</td><td>0</td></tr><tr><td>nearai-deepseek-ai-deepseek-v4</td><td>0</td><td>0</td><td>4</td><td>0</td></tr><tr><td>nearai-qwen-qwen3-8-max</td><td>0</td><td>0</td><td>4</td><td>0</td></tr><tr><td>nearai-meta-llama-llama-5-70b</td><td>1</td><td>0</td><td>4</td><td>0</td></tr><tr><td>scripted-baseline</td><td>0</td><td>0</td><td>4</td><td>0</td></tr></tbody></table><p>Model agreement and passing checks do not certify security.</p></section>

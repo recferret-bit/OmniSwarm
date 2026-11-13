@@ -1,6 +1,6 @@
-// Dev/e2e only. The request lifecycle as a pure function of time since payment:
-// awaiting_payment -> queued -> running -> publishing -> done, or, with the
-// REVIEW_FAILED control, running -> failed -> refunded (INTAKE section 4).
+// Dev/e2e only. The request lifecycle as a pure function of time since the job
+// started: queued -> running -> publishing -> done, or, with the REVIEW_FAILED
+// control, running -> failed (INTAKE section 4).
 import type { Progress, Status } from '@/lib/api/schema.gen';
 import type { MockRequest } from './db';
 
@@ -15,7 +15,6 @@ const RUNNING_MS = RUN_STEPS * STEP_MS;
 const PUBLISH_MS = 900;
 export const DONE_AFTER_MS = QUEUED_MS + RUNNING_MS + PUBLISH_MS;
 const FAIL_AT_MS = QUEUED_MS + 4 * STEP_MS;
-const REFUND_AT_MS = FAIL_AT_MS + 900;
 
 export interface Snapshot {
   status: Status;
@@ -64,11 +63,9 @@ function runningProgress(elapsed: number): Progress {
 }
 
 export function snapshotAt(request: MockRequest, now: number): Snapshot {
-  if (request.paidAt === null) return { status: 'awaiting_payment' };
-  const elapsed = now - request.paidAt;
+  const elapsed = now - request.startedAt;
   if (elapsed < QUEUED_MS) return { status: 'queued' };
   if (request.fails) {
-    if (elapsed >= REFUND_AT_MS) return { status: 'refunded' };
     if (elapsed >= FAIL_AT_MS) return { status: 'failed', progress: { phase: 'review' } };
   }
   if (elapsed < QUEUED_MS + RUNNING_MS) return { status: 'running', progress: runningProgress(elapsed - QUEUED_MS) };

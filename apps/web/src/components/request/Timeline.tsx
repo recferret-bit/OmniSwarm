@@ -1,9 +1,8 @@
 import type { Status } from '@/lib/api/schema.gen';
 
-const HAPPY: Status[] = ['awaiting_payment', 'queued', 'running', 'publishing', 'done'];
+const HAPPY: Status[] = ['queued', 'running', 'publishing', 'done'];
 const LABEL: Record<Status, string> = {
-  awaiting_payment: 'Awaiting payment', queued: 'Queued', running: 'Running', publishing: 'Publishing',
-  done: 'Done', failed: 'Failed', refunded: 'Refunded', expired: 'Expired (not paid)',
+  queued: 'Queued', running: 'Running', publishing: 'Publishing', done: 'Done', failed: 'Failed',
 };
 
 export function statusLabel(status: Status): string {
@@ -11,9 +10,7 @@ export function statusLabel(status: Status): string {
 }
 
 function steps(current: Status): Status[] {
-  if (current === 'failed') return ['awaiting_payment', 'queued', 'running', 'failed'];
-  if (current === 'refunded') return ['awaiting_payment', 'queued', 'running', 'failed', 'refunded'];
-  return HAPPY;
+  return current === 'failed' ? ['queued', 'running', 'failed'] : HAPPY;
 }
 
 export function Timeline({ status, phases }: { status: Status; phases: string[] }) {

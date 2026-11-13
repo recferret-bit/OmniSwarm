@@ -11,7 +11,7 @@ function goodConfig() {
       migrate: { ...hardened, restart: 'no', environment: { DATABASE_URL: 'postgres://o:pw@postgres/o' } },
       api: {
         ...hardened,
-        environment: { DATABASE_URL: 'postgres://o:pw@postgres/o', SESSION_SECRET: 's3', ADMIN_TOKEN: 'a7' },
+        environment: { DATABASE_URL: 'postgres://o:pw@postgres/o', SESSION_SECRET: 's3', ACCOUNT_KEYS_SECRET: 'a7' },
         depends_on: { migrate: { condition: 'service_completed_successfully' } },
       },
       web: { ...hardened, environment: { PORT: '3000' } },
@@ -69,7 +69,7 @@ test('a secret leaking to another service is caught, by name and by value', () =
   c.services.nginx.environment = { SOMETHING: 'prefix-a7' };
   const errors = checkPolicy(c).join('\n');
   assert.match(errors, /web receives SESSION_SECRET/);
-  assert.match(errors, /nginx receives the value of ADMIN_TOKEN under another name/);
+  assert.match(errors, /nginx receives the value of ACCOUNT_KEYS_SECRET under another name/);
 });
 
 test('api starting before migrations finish is caught (the skeleton had depends_on: [postgres])', () => {

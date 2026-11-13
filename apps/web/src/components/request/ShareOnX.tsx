@@ -13,7 +13,7 @@ export interface ShareOnXProps {
   index?: ReportIndexResponse | null;
 }
 
-/** An absolute https link to the report page, or null where the page is not on https (local sandbox). */
+/** An absolute https link to the report page, or null where the page is not on https (a local dev stack). */
 function reportLink(index: ReportIndexResponse | null, requestId: string): string | null {
   const candidates = [index?.reportUrl, typeof window === 'undefined' ? null : `${window.location.origin}/r/${requestId}`];
   for (const candidate of candidates) {
@@ -45,10 +45,10 @@ export function ShareOnX({ requestId, incomplete, index: given }: ShareOnXProps)
 
   const link = reportLink(index, requestId);
   const suggested = useMemo(() => buildReviewPost({
-    repo: index?.attestation?.repo,
-    maxSeverity: index?.attestation?.maxSeverity,
-    passed: index?.receipt?.check.passed,
-    total: index?.receipt?.check.total,
+    repo: index?.repo,
+    maxSeverity: index?.maxSeverity,
+    passed: index?.check?.passed,
+    total: index?.check?.total,
     incomplete,
   }), [index, incomplete]);
   const text = draft ?? suggested;

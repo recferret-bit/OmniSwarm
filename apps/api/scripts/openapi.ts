@@ -11,11 +11,11 @@ import { systemClock } from '../src/shared/clock.ts';
 import { createLogger } from '../src/shared/logger.ts';
 import { APP_ROOT } from '../src/shared/paths.ts';
 
-const env = { DATABASE_URL: 'postgres://openapi@127.0.0.1:1/none', SESSION_SECRET: 'o'.repeat(32), INTAKE_RECIPIENT: 'omniswarm.testnet', CONTRACT_ID: 'review-registry.testnet', NODE_ENV: 'test' };
+const env = { DATABASE_URL: 'postgres://openapi@127.0.0.1:1/none', SESSION_SECRET: 'o'.repeat(32), NODE_ENV: 'test' };
 const config = loadConfig('api', env);
 const unused = new Proxy({}, { get: () => { throw new Error('openapi generation does not call adapters'); } });
 const deps = {
-  config, pool: createPool(config.db.url, 1), clock: systemClock, chain: unused, github: unused, guard: unused,
+  config, pool: createPool(config.db.url, 1), clock: systemClock, keys: unused, github: unused,
   boss: createBoss(config, 'sender'), events: unused, log: createLogger('silent', 'openapi'),
 } as unknown as ApiDeps;
 const app = await buildApp(deps);

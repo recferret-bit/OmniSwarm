@@ -48,7 +48,7 @@ export function Foundations() {
           <Swatch name="Ember hi" cls="sw-ember-hi" />
           <Swatch name="Ember ink" cls="sw-ember-ink" />
           <Swatch name="Cite hi" cls="sw-cite-hi" />
-          <Swatch name="Attested" cls="sw-ok" />
+          <Swatch name="Verified" cls="sw-ok" />
           <Swatch name="Fault" cls="sw-fault" />
           <Swatch name="Warn" cls="sw-warn" />
         </div>
@@ -91,12 +91,12 @@ export function Foundations() {
         <div className="cols-3">
           <div className="variant plate"><span className="label">Hero · swarm</span><p className="say">Several models. One cited report.</p></div>
           <div className="variant v-cite plate"><span className="label">Hero · evidence</span><p className="say">If it has no line number, it is not a finding.</p></div>
-          <div className="variant v-paper plate"><span className="label">Hero · chain</span><p className="say">The hash is on NEAR. Recompute it here.</p></div>
+          <div className="variant v-paper plate"><span className="label">Hero · hash</span><p className="say">The report has a hash. Recompute it here.</p></div>
         </div>
         <div className="cols-4">
-          <div className="voice"><span className="label">System</span><p>Quote ready. 1 NEAR on testnet. 2 passes, 40 tool calls each.</p></div>
+          <div className="voice"><span className="label">System</span><p>Review queued. 3 reviewers, 2 passes, 40 tool calls each.</p></div>
           <div className="voice judge"><span className="label">Judge</span><p>One disputed finding remains. Quotes disagree.</p></div>
-          <div className="voice alert"><span className="label">Alert</span><p>The review cannot run. The deposit is refunded on chain.</p></div>
+          <div className="voice alert"><span className="label">Alert</span><p>The review cannot run. Nothing was charged.</p></div>
           <div className="voice"><span className="label">Report</span><p>Model agreement does not certify security. The report says what was checked.</p></div>
         </div>
         <div className="cols-4">
@@ -124,7 +124,7 @@ export function Foundations() {
           <Icon label="Cite"><path d="M7 4v16M7 4h8l-2 4 2 4H7" /></Icon>
           <Icon label="Debate"><path d="M4 8h8v6H7L4 17V8zM12 10h8v6h-3l-3 3v-3" /></Icon>
           <Icon label="Judge"><path d="M12 4v3M6 8h12l-1 6H7L6 8zM8 19h8" /></Icon>
-          <Icon label="Attest"><path d="M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6l7-3z" /></Icon>
+          <Icon label="Verify"><path d="M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6l7-3z" /></Icon>
           <Icon label="Sandbox"><path d="M4 8l8-4 8 4-8 4-8-4zM4 8v8l8 4 8-4V8" /></Icon>
           <Icon label="Hash"><path d="M9 4L7 20M17 4l-2 16M4 9h16M5 15h16" /></Icon>
           <Icon label="Near"><path d="M5 17l7-12 7 12H5z" /></Icon>

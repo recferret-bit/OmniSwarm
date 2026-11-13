@@ -6,7 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
 import { classifyAuditFailure, FAILURE_MESSAGES } from './audit-process.mjs';
-import { verificationHealth } from './verification-health.mjs';
+import { toolsBlock, verificationHealth } from './verification-health.mjs';
 import { REVIEW_WORKFLOW } from './review-workflow.mjs';
 import { readCanonicalSubmission } from './audit-submission.mjs';
 import { isReviewerId, reviewersOfMeta } from './reviewer-registry.mjs';
@@ -16,7 +16,7 @@ import { expectedJobNames } from './reviewer-plan-assign.mjs';
 import { sha256Json } from './hash-util.mjs';
 import { MAX_REPORT_BYTES as MAX_BYTES, readReportJson, readReportText, writeReportFile } from './report-files.mjs';
 import { adapterOf, citation, filledText as text, validCrosscheckRow, validateAuditor } from './report-contract-auditor.mjs';
-import { reviewerReportErrors, runRecordErrors, sourceReadDigestProblem } from './report-contract-health.mjs';
+import { reviewerReportErrors, runRecordErrors, sandboxRecordProblem, sourceReadDigestProblem } from './report-contract-health.mjs';
 import { stage1DefersDebates } from './report-incompletion.mjs';
 
 export { readReportJson, readReportText, writeReportFile };
@@ -192,12 +192,17 @@ export function loadAuditors(root, options = {}) {
   if (Array.isArray(meta.stageFailures) && meta.stageFailures.length) errors.push('One or more review stages failed.');
   errors.push(...reviewerReportErrors(root));
   const assignments = crosscheckAssignments(root, meta, reports, explain, errors);
-  const verification = meta.workflow === REVIEW_WORKFLOW ? verificationHealth(root, rel => readReportJson(root, rel, 40 * 1024 * 1024)) : null;
-  const reviewState = errors.length ? 'incomplete' : 'validated_outputs';
-  if (verification) errors.push(...verification.gaps);
+  // Complete or incomplete is decided by the agents' review alone: reviewer, cross-check and budget records above.
+  // The target's own tests (`tests`) and the audit's scanners and sandbox record (`tools`) are shown in their own
+  // blocks and never add an error here.
+  const checked = meta.workflow === REVIEW_WORKFLOW ? verificationHealth(root, rel => readReportJson(root, rel, 40 * 1024 * 1024)) : null;
+  const { tests = null, tools: scanned = null, ...verification } = checked || {};
+  const sandboxNote = sandboxRecordProblem(root);
+  const tools = scanned || sandboxNote ? toolsBlock({ scanners: scanned?.scanners || [], notes: [...(scanned?.notes || []), ...(sandboxNote ? [sandboxNote] : [])] }) : null;
+  const state = errors.length ? 'incomplete' : 'validated_outputs';
   return {
     meta, reports, assignments,
-    health: { state: errors.length ? 'incomplete' : 'validated_outputs', reviewState, verification, expected, accepted: reports.map((r) => r.name), errors, provenance: 'unverified', executionEvidence: 'not_collected' },
+    health: { state, reviewState: state, verification: checked ? verification : null, tests, tools, expected, accepted: reports.map((r) => r.name), errors, provenance: 'unverified', executionEvidence: 'not_collected' },
   };
 }
 

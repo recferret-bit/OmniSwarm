@@ -29,7 +29,8 @@ esac
 
 env_file="${2:?env file}"
 state="${3:?state dir}"
-value() { grep -E "^$1=" "$env_file" | tail -n 1 | cut -d= -f2-; }
+# An absent key is an empty value (grep exits 1 on no match, which set -e + pipefail would turn into a silent exit).
+value() { { grep -E "^$1=" "$env_file" || true; } | tail -n 1 | cut -d= -f2-; }
 mkdir -p "$state/workers" "$state/runs" "$state/secrets"
 stop_workers "$state"
 for n in 1 2; do
@@ -37,39 +38,28 @@ for n in 1 2; do
     database_url="postgres://omniswarm:$(value POSTGRES_PASSWORD)@127.0.0.1:$(value OMNI_PG_PORT)/omniswarm"
     session_secret="$(value SESSION_SECRET)"
     reports_base_url="http://$(value OMNI_REPORTS_DOMAIN):$(value OMNI_HTTP_PORT)"
-    contract_id="$(value CONTRACT_ID)"
-    network="$(value NETWORK)"
-    recipient="$(value INTAKE_RECIPIENT)"
     export NODE_ENV=development WORKER_CONCURRENCY=1
-    # Dashboard jobs are account-nearai and carry their own run config. HOSTED_PRESET only has to pass the
-    # cli engine's startup check (a preset of an omniswarm.config.json); the paid wallet flow that would
-    # use it is dormant. Without a root omniswarm.config.json, the example config supplies `hosted`.
-    export HOSTED_PRESET=hosted
+    # Dashboard jobs are account-nearai and carry their own run config. Without a root
+    # omniswarm.config.json the example config is used.
     if [ -z "${ENGINE_CONFIG:-}" ] && [ ! -f "$ROOT/omniswarm.config.json" ]; then
       export ENGINE_CONFIG="$ROOT/engine/omniswarm.config.example.json"
     fi
     export WORKER_ID="worker-$n" ENGINE_ROOT="$ROOT" DATABASE_URL="$database_url"
-    # Outside production SESSION_SECRET also seals accounts' own NEAR AI keys (no ACCOUNT_KEYS_SECRET here).
+    # Accounts' own NEAR AI keys are sealed under ACCOUNT_KEYS_SECRET when the stack env sets it
+    # (the api container gets the same value), else under SESSION_SECRET outside production.
     export SESSION_SECRET="$session_secret"
+    keys_secret="$(value ACCOUNT_KEYS_SECRET)"
+    if [ -n "$keys_secret" ]; then export ACCOUNT_KEYS_SECRET="$keys_secret"; else unset ACCOUNT_KEYS_SECRET; fi
     export REPORTS_ROOT="$state/reports" REPORTS_BASE_URL="$reports_base_url" RUNS_ROOT="$state/runs"
     export GITHUB_ADAPTER=live
-    # NEAR_LOCAL=1: the local sandbox demo uses the mock engine (recorded report,
-    # no model call) and still attests on the sandbox registry. The host worker uses 127.0.0.1:3030
-    # and the operator key. Do not pass host.docker.internal; that name is for
-    # the API container only.
-    # LOCAL_ENGINE_RUNNER=cli keeps the sandbox chain but runs the real engine, so a dashboard review on
-    # the account's own NEAR AI key is paid by bob.test.near, reviewed by real models and attested on the
-    # sandbox registry. The scripted preset is then refused.
-    if [ "${NEAR_LOCAL:-0}" = 1 ]; then
-      export ENGINE_RUNNER="${LOCAL_ENGINE_RUNNER:-mock}"
-      export NEAR_NETWORK=sandbox NETWORK=sandbox CHAIN_ADAPTER=near
-      export CONTRACT_ID=registry.test.near INTAKE_RECIPIENT=treasury.test.near
-      unset RPC_URLS
+    # OMNI_LIVE=1 runs the real engine (CLI panel and the account's own NEAR AI Cloud key).
+    # Otherwise the mock engine returns a recorded report with no model call, so the
+    # home-page review finishes without keys. Set in the shell that runs `npm run stack:local`.
+    if [ "${OMNI_LIVE:-0}" = 1 ]; then
+      export ENGINE_RUNNER=cli OMNI_LIVE=1
     else
-      export ENGINE_RUNNER=cli
-      unset NEAR_NETWORK RPC_URLS
-      export CHAIN_ADAPTER=mock CONTRACT_ID="$contract_id" NETWORK="$network"
-      export INTAKE_RECIPIENT="$recipient"
+      export ENGINE_RUNNER=mock
+      unset OMNI_LIVE
     fi
     cd "$ROOT"
     exec npm run worker -w @omniswarm/api

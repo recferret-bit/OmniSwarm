@@ -33,6 +33,7 @@ import { loadAuditors, readReportJson, validCrosscheckRow, writeReportFile } fro
 import { reviewersOfMeta, vendorOfJob } from './reviewer-registry.mjs';
 import { mergeDebateOutcome } from './verify-and-adjudicate-debate.mjs';
 import { buildIncompletionNotes, stage1DefersDebates } from './report-incompletion.mjs';
+import { testsText, toolsText } from './report-tests.mjs';
 import { newestReportDir } from './report-util-files.mjs';
 
 const SEVERITY_WEIGHT = {
@@ -228,11 +229,14 @@ export function printSummary(reportDir, { scoredFindings, health, auditorCount }
   for (const f of scoredFindings) {
     console.log(String(f.score).padEnd(7) + f.severity.toUpperCase().padEnd(10) + (f.finalStatus || f.status).padEnd(22) + f.vendors.join(',').padEnd(20) + f.title.slice(0, 50));
   }
+  // The target's own suites and the audit's own scanners are shown on every run and never change the validation
+  // line above: complete or incomplete is decided by the agents' review alone.
+  for (const block of [testsText(health.tests), toolsText(health.tools)]) if (block.length) console.log(`\n${block.join('\n')}`);
   if (health.state === 'incomplete') {
     const cancelledIn = (health.incompletionNotes || []).find((note) => note.code === 'run_cancelled');
     if (cancelledIn) console.error(`CANCELLED: ${cancelledIn.reason} This is not an audit result.`);
     console.error(health.reviewState === 'validated_outputs'
-      ? 'INCOMPLETE VERIFICATION: review outputs validated, but required execution coverage has gaps; this is not a security pass.'
+      ? 'INCOMPLETE: review outputs validated, but the report could not be finished; see the errors below.'
       : 'INCOMPLETE: missing, failed or invalid review outputs; zero findings is not a clean audit.');
     for (const line of groupedErrors(health.errors, health.expected)) console.error(`  - ${line}`);
     if (Array.isArray(health.incompletionNotes) && health.incompletionNotes.length) {

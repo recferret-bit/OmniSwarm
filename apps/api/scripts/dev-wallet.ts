@@ -1,13 +1,13 @@
-// A development wallet: an ed25519 key (random, or derived from a seed for reproducible vectors) that
-// builds the canonical request message and signs it the way a NEP-413 wallet does (base64 signature).
-// Used by scripts/sign-request.ts and the tests; never by src/.
+// A development NEAR wallet: an ed25519 key (random, or derived from a seed for reproducible vectors) that
+// signs the sign-in message the way a NEP-413 wallet does (base64 signature). Used by the tests; never by src/.
+// It needs no chain: with KEY_VERIFIER=mock any key is a full-access key unless a test pins it.
 import crypto from 'node:crypto';
-import { canonicalRequestMessage, type RequestMessageFields } from '@omniswarm/schemas/canonical-message';
 import { encodePublicKey, rawPublicKey, signNep413 } from '../src/modules/auth/nep413.ts';
+import { loginMessage } from '../src/modules/auth/near-login.ts';
 
 const PKCS8_ED25519 = Buffer.from('302e020100300506032b657004220420', 'hex');
 
-export interface SignedBody { accountId: string; publicKey: string; signature: string; message: string; nonce: string }
+export interface NearLoginBody { accountId: string; publicKey: string; signature: string; nonce: string }
 
 export class DevWallet {
   readonly accountId: string;
@@ -22,14 +22,9 @@ export class DevWallet {
     this.publicKey = encodePublicKey(rawPublicKey(crypto.createPublicKey(this.#key)));
   }
 
-  /** Sign an arbitrary message string (tests use this to sign non-canonical messages). */
-  signMessage(message: string, nonce: string, recipient: string): SignedBody {
-    const signature = signNep413(this.#key, message, Buffer.from(nonce, 'base64'), recipient);
-    return { accountId: this.accountId, publicKey: this.publicKey, signature, message, nonce };
-  }
-
-  signRequest(fields: Omit<RequestMessageFields, 'account'> & { account?: string }, recipient: string): SignedBody {
-    const message = canonicalRequestMessage({ ...fields, account: fields.account ?? this.accountId });
-    return this.signMessage(message, fields.nonce, recipient);
+  /** The body of POST /api/login/near for `nonce` (from POST /api/challenge). */
+  login(nonce: string, recipient: string): NearLoginBody {
+    const signature = signNep413(this.#key, loginMessage(this.accountId, nonce), Buffer.from(nonce, 'base64'), recipient);
+    return { accountId: this.accountId, publicKey: this.publicKey, signature, nonce };
   }
 }

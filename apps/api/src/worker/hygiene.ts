@@ -1,12 +1,9 @@
 // Disk hygiene (W09-19), run by the maintenance cron. Policy:
-//  RUNS_ROOT (host-only attempt dirs): requests still in flight or `failed` (an operator may need the
-//    logs) are never touched. A `done` request keeps only the attempt it published; its failed or
-//    interrupted attempts are removed. Of the finished requests (done, refunded, expired) the newest
-//    KEEP_RUNS (by last status change) keep their dirs; older ones are removed.
-//  REPORTS_ROOT (published, served): a report of a `done` request is never removed, nor one whose
-//    request may still attest (running, publishing) or is `failed`. Only an orphan (the request was
-//    refunded or expired after publication, e.g. an admin refund racing the publish) orphaned for more
-//    than ORPHAN_REPORT_RETENTION_H is removed, plus `.staging/` leftovers older than an hour.
+//  RUNS_ROOT (host-only attempt dirs): requests still in flight are never touched. A `done` request keeps
+//    only the attempt it published; its failed or interrupted attempts are removed. Of the finished requests
+//    (done or failed) the newest KEEP_RUNS (by last status change) keep their dirs; older ones are removed.
+//  REPORTS_ROOT (published, served): a published report is never removed. Only `.staging/` leftovers older
+//    than an hour are.
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Db } from '../db/pool.ts';
@@ -18,11 +15,10 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const STAGING_MAX_AGE_MS = 3600 * 1000;
 // A dir the database has no request for is left alone: a worker pointed at the wrong (or a restored)
 // database must not read every report as an orphan.
-const FINISHED: ReadonlySet<Status | 'unknown'> = new Set(['done', 'refunded', 'expired']);
-const ORPHANED: ReadonlySet<Status | 'unknown'> = new Set(['refunded', 'expired']);
+const FINISHED: ReadonlySet<Status | 'unknown'> = new Set(['done', 'failed']);
 
-export interface HygienePolicy { runsRoot: string; reportsRoot: string; keepRuns: number; orphanReportRetentionH: number }
-export interface HygieneResult { runsRemoved: number; attemptsRemoved: number; reportsRemoved: number; stagingRemoved: number }
+export interface HygienePolicy { runsRoot: string; reportsRoot: string; keepRuns: number }
+export interface HygieneResult { runsRemoved: number; attemptsRemoved: number; stagingRemoved: number }
 /** What the database knows of a request: its status and when it last changed (orders finished runs). */
 export interface KnownRequest { status: Status; updatedMs: number }
 type Known = Map<string, KnownRequest>;
@@ -81,25 +77,11 @@ function cleanStaging(reportsRoot: string, now: number): number {
   return removed;
 }
 
-function cleanReports(policy: HygienePolicy, known: Known, now: number): number {
-  const cutoff = now - policy.orphanReportRetentionH * 3600 * 1000;
-  let removed = 0;
-  for (const report of requestDirs(policy.reportsRoot)) {
-    // Never a done request's report, whatever its age: it is (or is about to be) attested on chain.
-    if (!ORPHANED.has(statusIn(known, report.id))) continue;
-    // Orphaned since the later of publication and the refund/expiry.
-    if (Math.max(report.mtimeMs, known.get(report.id)?.updatedMs ?? 0) > cutoff) continue;
-    removeTree(report.dir);
-    removed++;
-  }
-  return removed;
-}
-
 export async function runHygiene(policy: HygienePolicy, lookup: Lookup, now = Date.now()): Promise<HygieneResult> {
   const ids = [...new Set([...requestDirs(policy.runsRoot), ...requestDirs(policy.reportsRoot)].map((entry) => entry.id))];
   const known: Known = ids.length ? await lookup(ids) : new Map();
   const runs = cleanRuns(policy, known);
-  return { ...runs, reportsRemoved: cleanReports(policy, known, now), stagingRemoved: cleanStaging(policy.reportsRoot, now) };
+  return { ...runs, stagingRemoved: cleanStaging(policy.reportsRoot, now) };
 }
 
 /** Request statuses from the database; an id with no row is absent from the map ("unknown"). */

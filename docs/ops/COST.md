@@ -38,7 +38,7 @@ How much one review can call:
 - A reply without `usage.cost` and a model without a configured price add nothing, so the ceiling does not bind a NEAR AI model until `prices.nearai.<model>` is set.
 - The hard stop is the balance or limit on the account's own NEAR AI key.
 
-The `hosted` preset in `engine/omniswarm.config.example.json` (six NEAR AI models, round-robin, `maxCostUsd: 25`) serves only the dormant paid wallet flow. It would need an operator key, which OmniSwarm does not install.
+The `hosted` preset in `engine/omniswarm.config.example.json` (six NEAR AI models, round-robin, `maxCostUsd: 25`) is not used by dashboard reviews. It would need an operator key, which OmniSwarm does not install.
 
 The API's limits (`MAX_QUEUE`, `REQUESTS_PER_DAY`, the nginx rate limits) are the throttle on VM time.
 
@@ -49,9 +49,9 @@ The API's limits (`MAX_QUEUE`, `REQUESTS_PER_DAY`, the nginx rate limits) are th
 | Review sandbox image | Docker data root | about 8 GB (measured: `audit-sandbox` is 7.8 GB locally), rebuilt when `engine/docker/` changes | old ones: `docker image prune` (the prune timer removes dangling images after 7 days) |
 | api / web images | Docker data root | about 430 MB / 410 MB per release, mostly shared layers | images of pruned releases are removed daily (`prune.sh`) |
 | Releases | `/srv/omniswarm/releases` | source about 1.3 MB per release, plus `node_modules` for the api workspace and `engine/runtime` | newest 3 kept (`release.sh`) |
-| Published reports | `/srv/omniswarm/reports` | one folder per review (HTML and JSON; a few MB, measure with `du -sh` after the first run) | never pruned: attestations point at them |
+| Published reports | `/srv/omniswarm/reports` | one folder per review (HTML and JSON; a few MB, measure with `du -sh` after the first run) | never pruned: users' report links point at them |
 | Private attempt dirs | `/srv/omniswarm/work/runs` | per attempt: the engine's report copy, `result.json`, and `worker.log` (at most `ENGINE_LOG_MAX_BYTES`, 5 MB) | the worker's own hygiene keeps the newest `KEEP_RUNS` (20) finished requests and removes the rest (`apps/api`) |
-| Engine staging | `/srv/omniswarm/work/{tmp,targets}` | the target checkout while a review runs (at most `MAX_REPO_KB`, 200 MB) | crash leftovers pruned after 2 days |
+| Engine staging | `/srv/omniswarm/work/{tmp,targets}` | the target checkout while a review runs (a few hundred MB at most) | crash leftovers pruned after 2 days |
 | Postgres | volume `pgdata` | kilobytes per request | none needed at demo scale |
 | Backups | `/srv/omniswarm/backup` | 1 database dump + 1 reports tarball per night | newest 7 of each (`backup.sh`); the reports tarball grows with the reports |
 | Container logs | Docker data root | json-file | 20 MB × 5 per container (`compose.yml`, `infra/hosts/daemon.json`) |
@@ -64,7 +64,7 @@ At demo scale (tens of reviews), expect about 20–30 GB used, mostly images. `o
 
 Run this on the host, once, after the first deploy. Each step is an owner action, because it spends real money.
 
-Dashboard jobs are refused on testnet today (`assertDashboardChain`, README "Hosted flow" gaps). Until that changes, measure on the local sandbox with `OMNI_LIVE=1 LOCAL_ENGINE_RUNNER=cli npm run stack:local`; the steps are the same.
+You can rehearse the same steps locally with `OMNI_LIVE=1 npm run stack:local`.
 
 1. Sign in on the dashboard with your own account, save your own NEAR AI Cloud key, and choose the models to measure. The calls are billed to your key. Check the key is present first, on your own machine (offline: prints a fingerprint, makes no call):
    ```sh

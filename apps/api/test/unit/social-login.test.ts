@@ -87,16 +87,16 @@ function nonceJar(): Db & { queries: number } {
   return jar as unknown as Db & { queries: number };
 }
 
-function chainOf(kind: 'mock' | 'near', permission: 'FullAccess' | 'FunctionCall' | null = 'FullAccess') {
-  const chain = {
-    kind,
+function keysOf(permission: 'FullAccess' | 'FunctionCall' | null = 'FullAccess') {
+  const keys = {
+    kind: 'rpc' as const,
     calls: 0,
     async keyPermission(): Promise<'FullAccess' | 'FunctionCall' | null> {
-      chain.calls += 1;
+      keys.calls += 1;
       return permission;
     },
   };
-  return chain;
+  return keys;
 }
 
 function signedLogin(accountId = 'alice.testnet', recipient = RECIPIENT): NearLoginBody {
@@ -106,8 +106,8 @@ function signedLogin(accountId = 'alice.testnet', recipient = RECIPIENT): NearLo
   return { accountId, publicKey: encodePublicKey(rawPublicKey(publicKey)), signature, nonce };
 }
 
-function nearDeps(network: 'testnet' | 'mainnet' | 'sandbox', chain: ReturnType<typeof chainOf>, db: Db): NearLoginDeps {
-  return { config: { intake: { network, recipient: RECIPIENT } }, chain, db, now: NOW };
+function nearDeps(keys: ReturnType<typeof keysOf>, db: Db): NearLoginDeps {
+  return { config: { intake: { loginRecipient: RECIPIENT } }, keys, db, now: NOW };
 }
 
 test('social account id is stable, fits an account id, and differs for google and x', () => {
@@ -204,47 +204,37 @@ test('the login message is the exact JSON object, and verifyNep413 checks that s
   assert.equal(verifyNep413(raw, signature, loginMessage('bob.testnet', nonce), nonceBytes, RECIPIENT), false);
 });
 
-test('NEAR login accepts that signature, skips the chain on sandbox and mock, and requires FullAccess on testnet', async () => {
-  const sandbox = chainOf('near');
-  const sandboxDb = nonceJar();
+test('NEAR login accepts that signature and requires a FullAccess key of the account', async () => {
+  const allowed = keysOf('FullAccess');
+  const db = nonceJar();
   const first = signedLogin();
-  const session = await loginNear(nearDeps('sandbox', sandbox, sandboxDb), first);
+  const session = await loginNear(nearDeps(allowed, db), first);
   assert.deepEqual(session, { account: 'alice.testnet', label: 'alice.testnet', provider: 'near' });
-  assert.equal(sandbox.calls, 0, 'sandbox must not ask the RPC');
-  assert.equal(sandboxDb.queries, 1);
-  const reused = await rejected(() => loginNear(nearDeps('sandbox', sandbox, sandboxDb), first));
+  assert.equal(allowed.calls, 1);
+  assert.equal(db.queries, 1);
+  const reused = await rejected(() => loginNear(nearDeps(allowed, db), first));
   assert.equal(reused.code, 'NONCE_USED');
 
-  const mock = chainOf('mock');
-  const mockSession = await loginNear(nearDeps('testnet', mock, nonceJar()), signedLogin());
-  assert.equal(mockSession.provider, 'near');
-  assert.equal(mock.calls, 0, 'the mock adapter has no testnet keys to check');
-
-  const limited = chainOf('near', 'FunctionCall');
+  const limited = keysOf('FunctionCall');
   const limitedDb = nonceJar();
-  const denied = await rejected(() => loginNear(nearDeps('testnet', limited, limitedDb), signedLogin()));
+  const denied = await rejected(() => loginNear(nearDeps(limited, limitedDb), signedLogin()));
   assert.equal(denied.code, 'KEY_NOT_FULL_ACCESS');
   assert.equal(limited.calls, 1);
   assert.equal(limitedDb.queries, 0, 'a rejected key does not consume the nonce');
 
-  const mainnet = chainOf('near', 'FunctionCall');
-  const mainnetDenied = await rejected(() => loginNear(nearDeps('mainnet', mainnet, nonceJar()), signedLogin()));
-  assert.equal(mainnetDenied.code, 'KEY_NOT_FULL_ACCESS');
-  assert.equal(mainnet.calls, 1);
-
-  const allowed = chainOf('near', 'FullAccess');
-  const allowedSession = await loginNear(nearDeps('testnet', allowed, nonceJar()), signedLogin());
-  assert.equal(allowedSession.account, 'alice.testnet');
-  assert.equal(allowed.calls, 1);
+  const absent = keysOf(null);
+  assert.equal((await rejected(() => loginNear(nearDeps(absent, nonceJar()), signedLogin()))).code, 'KEY_NOT_FULL_ACCESS', 'a key the account does not have');
 
   const tampered = signedLogin();
   const tamperedDb = nonceJar();
-  const bad = await rejected(() => loginNear(nearDeps('sandbox', chainOf('near'), tamperedDb), { ...tampered, accountId: 'bob.testnet' }));
+  const unasked = keysOf();
+  const bad = await rejected(() => loginNear(nearDeps(unasked, tamperedDb), { ...tampered, accountId: 'bob.testnet' }));
   assert.equal(bad.code, 'SIG_INVALID');
   assert.equal(tamperedDb.queries, 0);
+  assert.equal(unasked.calls, 0, 'a bad signature never reaches the RPC');
 
   const unknown = await rejected(() => loginNear(
-    nearDeps('sandbox', chainOf('near'), { async query() { return { rowCount: 0, rows: [] }; } } as unknown as Db),
+    nearDeps(keysOf(), { async query() { return { rowCount: 0, rows: [] }; } } as unknown as Db),
     signedLogin(),
   ));
   assert.equal(unknown.code, 'NONCE_UNKNOWN');
@@ -271,17 +261,17 @@ async function appWith(deps: ApiDeps): Promise<FastifyInstance> {
 
 test('password, social and near routes set a sid cookie; an old {a, e} cookie still reads', async () => {
   const jar = nonceJar();
-  const chain = chainOf('near');
+  const keys = keysOf();
   const deps = {
     config: {
       env: 'test',
       dashboard: { login: null, password: null },
       http: { rateLimitPerMinute: 60, cookieSecure: false },
-      intake: { network: 'sandbox', recipient: RECIPIENT },
+      intake: { loginRecipient: RECIPIENT },
     },
     clock: { now: () => NOW },
     pool: jar,
-    chain,
+    keys,
   } as unknown as ApiDeps;
   const app = await appWith(deps);
   try {
@@ -333,7 +323,7 @@ test('password, social and near routes set a sid cookie; an old {a, e} cookie st
     });
     assert.equal(near.statusCode, 200, near.body);
     assert.deepEqual(near.json(), { account: 'alice.testnet', label: 'alice.testnet', provider: 'near' });
-    assert.equal(chain.calls, 0);
+    assert.equal(keys.calls, 1, 'the signing key is checked against the account');
     const replay = await app.inject({
       method: 'POST', url: '/api/login/near', headers: { 'content-type': 'application/json' }, payload: nearBody,
     });

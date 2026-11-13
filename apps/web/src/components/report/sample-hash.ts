@@ -6,8 +6,8 @@ export function isReportHash(value: string): boolean {
 }
 
 export function readSampleHash(): Promise<string> {
-  return fetch('/sample/attestation.json')
-    .then((response) => (response.ok ? response.json() as Promise<{ report_sha256?: unknown }> : null))
-    .then((body) => (typeof body?.report_sha256 === 'string' && isReportHash(body.report_sha256) ? body.report_sha256 : ''))
+  return fetch('/sample/report-hash.json')
+    .then((response) => (response.ok ? response.json() as Promise<{ reportSha256?: unknown }> : null))
+    .then((body) => (typeof body?.reportSha256 === 'string' && isReportHash(body.reportSha256) ? body.reportSha256 : ''))
     .catch(() => '');
 }

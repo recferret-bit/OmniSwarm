@@ -2,9 +2,9 @@ import Link from 'next/link';
 
 const STEPS = [
   { k: '01', title: 'Sign in', body: 'Google, X or a NEAR wallet. No password to create.' },
-  { k: '02', title: 'Paste your key', body: 'Save your NEAR AI Cloud API key on the dashboard. It is stored encrypted and shown only as a fingerprint.' },
+  { k: '02', title: 'Paste your key', body: 'Save your own NEAR AI Cloud API key on the dashboard. It is stored encrypted and shown only as a fingerprint.' },
   { k: '03', title: 'Pick models', body: 'Choose up to six NEAR AI models. The first one orchestrates; every one reviews.' },
-  { k: '04', title: 'Submit', body: 'Name a public GitHub repository and the scope. The report lands in your review history.' },
+  { k: '04', title: 'Submit', body: 'Name a public GitHub repository and the scope. The report lands in your review history, with a hash you can verify in the browser.' },
 ];
 
 /** The landing call to action: the cloud runs only on the visitor's own NEAR AI key, and the local CLI stays free. */

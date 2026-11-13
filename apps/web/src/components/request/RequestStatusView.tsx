@@ -6,7 +6,6 @@ import { api, requestReportHref } from '@/lib/api/client';
 import { messageFor } from '@/lib/api/errors';
 import { phasesSeen, reviewerRows, selectRequestView, useRequestStatus } from '@/stores/request-status';
 import { selectAnnounce, useUi } from '@/stores/ui';
-import { ReceiptSection } from '../report/ReceiptSection';
 import { RequestReport } from '../report/RequestReport';
 import { Alert } from '../ui/Alert';
 import { Button } from '../ui/Button';
@@ -37,7 +36,7 @@ export function RequestStatusView({ id }: { id: string }) {
   const current = view.status;
   return (
     <>
-      <Panel id="status" title={<>Request status <Pill tone={current.status === 'done' ? 'good' : current.status === 'refunded' || current.status === 'failed' ? 'bad' : 'info'}>{statusLabel(current.status)}</Pill></>}>
+      <Panel id="status" title={<>Request status <Pill tone={current.status === 'done' ? 'good' : current.status === 'failed' ? 'bad' : 'info'}>{statusLabel(current.status)}</Pill></>}>
         {view.mode === 'polling' ? <Alert tone="info">Live updates paused — refreshing every 5 seconds.</Alert> : null}
         {/* With the engine's snapshot the phases and reviewers come from it; otherwise from the events seen since load. */}
         <Timeline status={current.status} phases={current.progress?.detail ? [] : phasesSeen(view.events)} />
@@ -75,7 +74,6 @@ export function RequestStatusView({ id }: { id: string }) {
             {queuedNext.kind === 'advise' ? 'Follow-up Step 2 advice queued.' : 'Follow-up debate round queued.'}
           </Alert>
         ) : null}
-        {current.status === 'done' || current.status === 'refunded' ? <ReceiptSection id={id} /> : null}
         {current.status === 'done' ? <ShareOnX requestId={id} incomplete={current.incomplete} /> : null}
         {current.status === 'done' ? (
           <p>
@@ -85,7 +83,7 @@ export function RequestStatusView({ id }: { id: string }) {
           </p>
         ) : null}
       </Panel>
-      {current.status === 'done' && open ? <RequestReport id={id} attestTx={current.attestTx} /> : null}
+      {current.status === 'done' && open ? <RequestReport id={id} /> : null}
     </>
   );
 }
