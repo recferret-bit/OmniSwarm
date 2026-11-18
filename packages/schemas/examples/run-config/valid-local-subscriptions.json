@@ -1,9 +1,9 @@
 {
   "reviewers": [
-    "cli:claude:opus",
-    "cli:codex:gpt-6.1-sol",
+    "cli:claude:fable",
+    "cli:codex:gpt-6.2-astra",
     "cli:grok:grok-4.7",
-    "cli:agy:gemini-4-argon-high",
+    "cli:agy:gemini-4-carbon-high",
     "nearai:Qwen/Qwen3.8-Max",
     "nearai:deepseek-ai/DeepSeek-V4"
   ],

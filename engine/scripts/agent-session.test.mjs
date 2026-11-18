@@ -432,7 +432,9 @@ test('subscription environments omit credential and routing overrides', () => {
 test('a model alias matches its full id, and a new pass is told to submit', () => {
   assert.equal(modelMatches('opus', 'claude-opus-5-5'), true);
   assert.equal(modelMatches('opus', 'claude-sonnet-5-5'), false);
-  assert.equal(modelMatches('gpt-6.1-sol', 'gpt-6.1-sol'), true);
+  assert.equal(modelMatches('fable', 'claude-fable-5-2'), true);
+  assert.equal(modelMatches('fable', 'claude-opus-5-5'), false);
+  assert.equal(modelMatches('gpt-6.2-astra', 'gpt-6.2-astra'), true);
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'audit-continuation-'));
   const options = { bridgeArgs: ['--report-dir', root], identity: { name: 'claude-s1-auth' } };
   assert.match(continuationText(options), /no committed report yet/);

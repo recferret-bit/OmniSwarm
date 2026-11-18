@@ -1,12 +1,12 @@
 {
-  "reviewers": ["cli:claude:opus", "cli:codex:gpt-6.1-sol", "cli:grok:grok-4.7", "cli:agy:gemini-4-argon-high"],
+  "reviewers": ["cli:claude:fable", "cli:codex:gpt-6.2-astra", "cli:grok:grok-4.7", "cli:agy:gemini-4-carbon-high"],
   "orchestrator": "recommended",
   "passes": 2,
   "toolBudget": 40,
   "debate": { "rounds": 2, "toolBudget": 12, "maxClusters": 25 },
   "presets": {
     "local-subscriptions": {
-      "reviewers": ["cli:claude:opus", "cli:codex:gpt-6.1-sol", "cli:grok:grok-4.7", "cli:agy:gemini-4-argon-high"],
+      "reviewers": ["cli:claude:fable", "cli:codex:gpt-6.2-astra", "cli:grok:grok-4.7", "cli:agy:gemini-4-carbon-high"],
       "orchestrator": "recommended",
       "assign": "matrix"
     },
@@ -17,7 +17,7 @@
       "maxCostUsd": 25
     },
     "mixed": {
-      "reviewers": ["cli:claude:opus", "cli:codex:gpt-6.1-sol", "cli:grok:grok-4.7", "cli:agy:gemini-4-argon-high", "nearai:Qwen/Qwen3.8-Max", "nearai:deepseek-ai/DeepSeek-V4"],
+      "reviewers": ["cli:claude:fable", "cli:codex:gpt-6.2-astra", "cli:grok:grok-4.7", "cli:agy:gemini-4-carbon-high", "nearai:Qwen/Qwen3.8-Max", "nearai:deepseek-ai/DeepSeek-V4"],
       "orchestrator": "recommended",
       "assign": "matrix"
     },

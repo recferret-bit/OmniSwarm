@@ -211,7 +211,7 @@ Options (run):
   -o, --out <dir>          report directory (default: reports/<timestamp>-<repo>)
   --reviewers <list>       comma-separated reviewer specs <family>:<provider>:<model>[#label]. Families: cli (claude, codex, grok, agy),
                            nearai (NEAR AI Cloud <org>/<model>, your own NEARAI_API_KEY), scripted (fixture strategies, demo only).
-                           Example: cli:claude:opus,cli:codex:gpt-6.1-sol,nearai:deepseek-ai/DeepSeek-V4,nearai:Qwen/Qwen3.8-Max
+                           Example: cli:claude:fable,cli:codex:gpt-6.2-astra,nearai:deepseek-ai/DeepSeek-V4,nearai:Qwen/Qwen3.8-Max
   --config <file>          run config (default: omniswarm.config.json at the OmniSwarm repository root, if present); see engine/omniswarm.config.example.json
   --preset <name>          a preset from the config file (local-subscriptions, api-only, mixed, hosted, demo)
   --assign <mode>          matrix (every reviewer x every surface; default with --reviewers/--preset up to 8 reviewers)
@@ -258,9 +258,9 @@ Examples:
   audit run --github https://github.com/owner/repo
   audit run --github owner/repo --ref v1.2.0 --surface s1 --clean
   audit run --repo ~/work/my-app --agents claude,grok,agy,codex
-  audit run --repo . --surface s1 --model-codex gpt-6.1-sol
-  audit run --repo . --models claude=opus,codex=gpt-6.1-sol --plan
-  audit run --repo . --reviewers cli:claude:opus,cli:codex:gpt-6.1-sol --assign matrix --plan
+  audit run --repo . --surface s1 --model-codex gpt-6.2-astra
+  audit run --repo . --models claude=fable,codex=gpt-6.2-astra --plan
+  audit run --repo . --reviewers cli:claude:fable,cli:codex:gpt-6.2-astra --orchestrator cli:claude:opus --assign matrix --plan
   audit run --repo . --preset local-subscriptions --plan
 EOF
     ;;

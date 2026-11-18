@@ -57,7 +57,7 @@ test('duplicates, injection and malformed specs are rejected', () => {
 
 test('legacy meta (agents + models) maps to adapter-named reviewers; new meta is used as written', () => {
   const old = reviewersOfMeta({ agents: ['claude', 'codex'], models: { claude: 'opus' } });
-  assert.deepEqual(old.map((r) => [r.id, r.vendor, r.model]), [['claude', 'anthropic', 'opus'], ['codex', 'openai', 'gpt-6.1-sol']]);
+  assert.deepEqual(old.map((r) => [r.id, r.vendor, r.model]), [['claude', 'anthropic', 'opus'], ['codex', 'openai', 'gpt-6.2-astra']]);
   const fresh = [{ id: 'cli-claude-sonnet', family: 'cli', provider: 'claude', vendor: 'anthropic', model: 'sonnet' }];
   assert.equal(reviewersOfMeta({ agents: ['cli-claude-sonnet'], reviewers: fresh }), fresh);
   assert.deepEqual(reviewersOfMeta({}), []);
@@ -73,7 +73,7 @@ test('job names resolve to reviewers even when ids contain hyphens', () => {
 });
 
 test('--agents style input maps to cli specs with defaults and overrides', () => {
-  assert.deepEqual(cliSpecsFromAgents(['claude', 'codex'], { claude: 'sonnet' }), ['cli:claude:sonnet', 'cli:codex:gpt-6.1-sol']);
+  assert.deepEqual(cliSpecsFromAgents(['claude', 'codex'], { claude: 'sonnet' }), ['cli:claude:sonnet', 'cli:codex:gpt-6.2-astra']);
   assert.throws(() => cliSpecsFromAgents(['nope']), { code: 'REVIEWER_SPEC_INVALID' });
 });
 

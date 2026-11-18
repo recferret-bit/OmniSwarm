@@ -11,11 +11,13 @@ export class ReviewerError extends Error {
 
 export const FAMILIES = ['cli', 'key', 'nearai', 'scripted'];
 
-// Default model per cli provider when only an adapter name is given (--agents claude).
+// Default reviewer model per cli provider when only an adapter name is given (--agents claude).
 // Kept here, not in shell, so every entry point agrees (ORCHESTRATION section 1 "Defaults").
+// Claude reviews with the `fable` alias (the newest Fable that CLI resolves). Opus stays the
+// orchestrator: ORCHESTRATOR_ORDER and `audit local` pass cli:claude:opus separately.
 // Key order is the default reviewer order of `audit run` without --agents/--reviewers.
 export const CLI_DEFAULT_MODELS = Object.freeze({
-  claude: 'opus', grok: 'grok-4.7', agy: 'gemini-4-argon-high', codex: 'gpt-6.1-sol',
+  claude: 'fable', grok: 'grok-4.7', agy: 'gemini-4-carbon-high', codex: 'gpt-6.2-astra',
 });
 
 const CLI_VENDORS = { claude: 'anthropic', codex: 'openai', grok: 'xai', agy: 'google' };

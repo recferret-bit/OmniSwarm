@@ -11,9 +11,9 @@ export const MODELS: readonly Mark[] = [
   { id: 'codex', label: 'CODEX', paths: ['M5 7 L11 12 L5 17 M13 17 H19'] },
   { id: 'agy', label: 'AGY', paths: ['M12 3.5 L19.5 8 V16 L12 20.5 L4.5 16 V8 Z'] },
   { id: 'qwen', label: 'QWEN', paths: ['M12 5.5 a6.5 6.5 0 1 0 0.2 0', 'M15.2 15.2 L20 20'] },
-  { id: 'opus', label: 'OPUS', paths: ['M6 18 L12 4 L18 18', 'M8.5 13 H15.5'] },
-  { id: 'sol', label: 'SOL', paths: ['M5 16 C8 6 16 6 19 16', 'M8 16 H16'] },
-  { id: 'argon', label: 'ARGON', paths: ['M12 4 L20 12 L12 20 L4 12 Z', 'M12 8 V16 M8 12 H16'] },
+  { id: 'fable', label: 'FABLE', paths: ['M6 18 L12 4 L18 18', 'M8.5 13 H15.5'] },
+  { id: 'astra', label: 'ASTRA', paths: ['M5 16 C8 6 16 6 19 16', 'M8 16 H16'] },
+  { id: 'carbon', label: 'CARBON', paths: ['M12 4 L20 12 L12 20 L4 12 Z', 'M12 8 V16 M8 12 H16'] },
 ];
 
 export const ORCHESTRATOR: Mark = {

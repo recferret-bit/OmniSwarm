@@ -50,7 +50,7 @@ function prepare(argv) {
     `  ./bin/audit run --repo ${target} --config engine/omniswarm.config.example.json --preset local-subscriptions --out ${report}${scoped}`,
     '',
     'A cheaper first pass (two CLIs, one surface):',
-    `  ./bin/audit run --repo ${target} --reviewers cli:claude:opus,cli:codex:gpt-6.1-sol --orchestrator cli:claude:opus --surface s3 --out ${report}${scoped}`,
+    `  ./bin/audit run --repo ${target} --reviewers cli:claude:fable,cli:codex:gpt-6.2-astra --orchestrator cli:claude:opus --surface s3 --out ${report}${scoped}`,
     '',
     'Then score it:',
     `  node engine/eval/live.mjs score ${report}${scoped}`,

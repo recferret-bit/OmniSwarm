@@ -57,6 +57,7 @@ describe('how stage pictures', () => {
   });
 
   it('walks contract, infra, and app, then a second pass on the same line', () => {
+    expect(paint(0, 0)).toContain('FABLE');
     expect(paint(0, 0)).toContain('CONTRACT · contracts/vault/src/lib.rs');
     expect(paint(0, 0)).toContain('LEAD · NOT A FINDING YET');
     expect(paint(0, 2800)).toContain('INFRA · infra/nginx/edge.conf');

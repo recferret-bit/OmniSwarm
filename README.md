@@ -19,7 +19,7 @@ From this directory:
 ./bin/audit local --github owner/repo
 ```
 
-`audit local` uses every installed CLI among `claude`, `codex`, `grok` and `agy`. Claude Opus is the orchestrator when `claude` is installed. If only one CLI is installed, that model is both the orchestrator and the reviewer (Agy alone means Argon). The report is written under `reports/`.
+`audit local` uses every installed CLI among `claude`, `codex`, `grok` and `agy`. Claude reviews with Fable, Codex with `gpt-6.2-astra`, Grok with `grok-4.7` and AGY with `gemini-4-carbon-high`. Claude Opus is the orchestrator when `claude` is installed. If only one CLI is installed, that model is both the orchestrator and the reviewer (Agy alone means Carbon). The report is written under `reports/`.
 
 ### 2. Local stack: landing, dashboard, admin, two workers
 
@@ -124,7 +124,7 @@ Review only repositories you own or are explicitly authorized to review.
 ./bin/audit run --github owner/repo --ref v1.2.0
 ```
 
-`--plan` prints the reviewer table, the reviewer × surface matrix, the budgets and the orchestrator choice, then exits before anything runs. Without other flags the reviewers are the four CLI subscriptions you are already logged in to (Claude `opus`, Codex `gpt-6.1-sol`, Grok `grok-4.7`, AGY `gemini-4-argon-high`), one per surface.
+`--plan` prints the reviewer table, the reviewer × surface matrix, the budgets and the orchestrator choice, then exits before anything runs. Without other flags the reviewers are the four CLI subscriptions you are already logged in to (Claude `fable`, Codex `gpt-6.2-astra`, Grok `grok-4.7`, AGY `gemini-4-carbon-high`), one per surface. `recommended` orchestrates with Claude `opus`.
 
 Presets live in a config file. Copy the example to the repository root (`omniswarm.config.json` is gitignored), or pass it with `--config`:
 
@@ -135,7 +135,7 @@ cp engine/omniswarm.config.example.json omniswarm.config.json
 
 | Preset | Reviewers | Orchestrator |
 |---|---|---|
-| `local-subscriptions` | `cli:claude:opus`, `cli:codex:gpt-6.1-sol`, `cli:grok:grok-4.7`, `cli:agy:gemini-4-argon-high` | `recommended` |
+| `local-subscriptions` | `cli:claude:fable`, `cli:codex:gpt-6.2-astra`, `cli:grok:grok-4.7`, `cli:agy:gemini-4-carbon-high` | `recommended` (`cli:claude:opus`) |
 | `api-only` | `nearai:deepseek-ai/DeepSeek-V4`, `nearai:Qwen/Qwen3.8-Max`, cost ceiling 25 USD | `nearai:deepseek-ai/DeepSeek-V4` |
 | `mixed` | the four CLIs plus `nearai:Qwen/Qwen3.8-Max` and `nearai:deepseek-ai/DeepSeek-V4` | `recommended` |
 | `hosted` | six NEAR AI Cloud models, round-robin, 25 USD ceiling. Used only by the dormant paid wallet flow | `nearai:meta-llama/Llama-5-70B`, alternate judge `nearai:openai/gpt-oss-120b` |

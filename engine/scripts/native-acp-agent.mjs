@@ -11,7 +11,7 @@ import { SessionError } from './agent-rpc.mjs';
 
 const UUID = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i;
 
-// AGY's model list uses the full id (gemini-4-argon-high). A longer served id that still names that id matches.
+// AGY's model list uses the full id (gemini-4-carbon-high). A longer served id that still names that id matches.
 function sameModel(requested, reported) {
   const live = String(reported || '').split('[')[0];
   if (!live || live === requested) return true;

@@ -64,7 +64,7 @@ export OMNI_LIVE=1               # explicit opt-in to real, billed provider call
 ./bin/audit local --nearai deepseek-ai/DeepSeek-V4 --with-clis   # plus your installed CLIs
 
 # any mix, explicitly
-./bin/audit run --repo . --reviewers nearai:deepseek-ai/DeepSeek-V4,nearai:Qwen/Qwen3.8-Max,cli:claude:opus \
+./bin/audit run --repo . --reviewers nearai:deepseek-ai/DeepSeek-V4,nearai:Qwen/Qwen3.8-Max,cli:claude:fable \
   --orchestrator nearai:deepseek-ai/DeepSeek-V4 --plan
 ./bin/audit check-agents --reviewers nearai:deepseek-ai/DeepSeek-V4     # key present? never prints it
 

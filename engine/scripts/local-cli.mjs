@@ -1,6 +1,6 @@
-// One-command local review. Uses every installed reviewer CLI. Opus is the
-// orchestrator when Claude is installed. A machine with only one CLI uses that
-// model as both orchestrator and reviewer (Agy alone -> Argon).
+// One-command local review. Uses every installed reviewer CLI. Opus orchestrates
+// when Claude is installed; Fable is the Claude reviewer. A machine with only one
+// CLI uses that model as both orchestrator and reviewer (Agy alone -> Carbon).
 // `--provider <id> --models <m1,...>` reviews with one API provider from the provider catalog
 // (packages/schemas/providers.mjs: today only nearai, NEAR AI Cloud) instead. The first model orchestrates and every
 // model reviews. `--nearai <m1,...>` is shorthand for `--provider nearai --models <m1,...>`. The provider's
@@ -13,10 +13,10 @@ import { fileURLToPath } from 'node:url';
 import { apiProviders, isModelId, providerById, specFor } from '../../packages/schemas/providers.mjs';
 
 export const LOCAL_CLIS = [
-  { bin: 'claude', spec: 'cli:claude:opus' },
-  { bin: 'codex', spec: 'cli:codex:gpt-6.1-sol' },
+  { bin: 'claude', spec: 'cli:claude:fable', orchestrator: 'cli:claude:opus' },
+  { bin: 'codex', spec: 'cli:codex:gpt-6.2-astra' },
   { bin: 'grok', spec: 'cli:grok:grok-4.7' },
-  { bin: 'agy', spec: 'cli:agy:gemini-4-argon-high' },
+  { bin: 'agy', spec: 'cli:agy:gemini-4-carbon-high' },
 ];
 
 /** First matching executable on PATH. Does not run the CLI. */
@@ -38,14 +38,14 @@ export function installedClis(env = process.env) {
   return LOCAL_CLIS.filter((cli) => findExecutable(cli.bin, env)).map((cli) => cli.bin);
 }
 
-/** Reviewers are every installed CLI, in LOCAL_CLIS order. Orchestrator prefers Opus. */
+/** Reviewers are every installed CLI, in LOCAL_CLIS order. Claude orchestrates with Opus. */
 export function selectLocalPanel(installed) {
   const present = LOCAL_CLIS.filter((cli) => installed.includes(cli.bin));
   if (!present.length) return null;
-  const opus = present.find((cli) => cli.bin === 'claude');
+  const claude = present.find((cli) => cli.bin === 'claude');
   return {
     reviewers: present.map((cli) => cli.spec),
-    orchestrator: (opus ?? present[0]).spec,
+    orchestrator: claude?.orchestrator ?? present[0].spec,
   };
 }
 

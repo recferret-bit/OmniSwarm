@@ -11,7 +11,7 @@ import { verifyAdmittedBinary } from '../native/admission-common.mjs';
 import { providerDiagnostic } from './provider-error-diagnostic.mjs';
 
 export const CODEX_SOURCE = '092d3acd6bec3e3a14bdc7e7a2810ab628ab759d';
-export const DEFAULT_CODEX_MODEL = 'gpt-6.1-sol';
+export const DEFAULT_CODEX_MODEL = 'gpt-6.2-astra';
 const CACHE = fileURLToPath(new URL('../native/.cache/', import.meta.url));
 const BINARY = path.join(CACHE, 'target/debug/omniswarm-codex-review');
 const REASONS = new Set(['native_input_contract_rejected', 'native_output_contract_rejected', 'native_startup_policy_incompatible', 'native_configuration_rejected', 'native_subscription_auth_required', 'native_runtime_failed', 'native_execution_event_rejected', 'native_deadline_exceeded']);

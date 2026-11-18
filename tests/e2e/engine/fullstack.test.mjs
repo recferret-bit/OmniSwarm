@@ -134,7 +134,7 @@ test('the plan prints for the local, hosted and demo presets without starting a 
   };
   const local = plan('local-subscriptions');
   assert.match(local, /Assignment: matrix \(24 jobs\)/);
-  assert.match(local, /cli-claude-opus\s+cli\s+anthropic/);
+  assert.match(local, /cli-claude-fable\s+cli\s+anthropic\s+fable/);
   const hosted = plan('hosted', ['--surface', 's3'], { NEARAI_API_KEY: 'nk-not-a-key' });
   assert.match(hosted, /Assignment: round-robin \(6 jobs\)/);
   assert.match(hosted, /max cost \$25 per reviewer/);

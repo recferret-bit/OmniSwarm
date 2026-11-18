@@ -2,29 +2,29 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { localAuditArgs, parseLocalArgs, selectLocalPanel, selectProviderPanel } from './local-cli.mjs';
 
-test('opus orchestrates when claude is installed, and every installed CLI reviews', () => {
+test('opus orchestrates when claude is installed, and every installed CLI reviews with its worker model', () => {
   const panel = selectLocalPanel(['agy', 'claude', 'grok']);
   assert.deepEqual(panel, {
-    reviewers: ['cli:claude:opus', 'cli:grok:grok-4.7', 'cli:agy:gemini-4-argon-high'],
+    reviewers: ['cli:claude:fable', 'cli:grok:grok-4.7', 'cli:agy:gemini-4-carbon-high'],
     orchestrator: 'cli:claude:opus',
   });
 });
 
-test('a machine with only agy uses argon as orchestrator and reviewer', () => {
+test('a machine with only agy uses carbon as orchestrator and reviewer', () => {
   const panel = selectLocalPanel(['agy']);
   assert.deepEqual(panel, {
-    reviewers: ['cli:agy:gemini-4-argon-high'],
-    orchestrator: 'cli:agy:gemini-4-argon-high',
+    reviewers: ['cli:agy:gemini-4-carbon-high'],
+    orchestrator: 'cli:agy:gemini-4-carbon-high',
   });
 });
 
 test('codex is the orchestrator when it is the first installed CLI and claude is absent', () => {
-  assert.equal(selectLocalPanel(['codex', 'grok']).orchestrator, 'cli:codex:gpt-6.1-sol');
+  assert.equal(selectLocalPanel(['codex', 'grok']).orchestrator, 'cli:codex:gpt-6.2-astra');
   assert.equal(selectLocalPanel([]), null);
 });
 
 test('the local command reviews the current directory unless a target is passed', () => {
-  const panel = { reviewers: ['cli:agy:gemini-4-argon-high'], orchestrator: 'cli:agy:gemini-4-argon-high' };
+  const panel = { reviewers: ['cli:agy:gemini-4-carbon-high'], orchestrator: 'cli:agy:gemini-4-carbon-high' };
   assert.deepEqual(localAuditArgs(panel, { repo: '', github: '' }).slice(0, 4), ['run', '--repo', '.', '--reviewers']);
   assert.deepEqual(localAuditArgs(panel, { repo: '', github: 'near/near-sdk-rs' }).slice(0, 3), ['run', '--github', 'near/near-sdk-rs']);
 });
@@ -42,7 +42,7 @@ test('--nearai makes the first NEAR AI model the orchestrator and every model a 
 
 test('--with-clis adds installed CLIs after the NEAR AI models and keeps NEAR AI orchestrating', () => {
   const panel = selectProviderPanel('nearai', ['m1'], { installed: ['claude', 'grok'], withClis: true });
-  assert.deepEqual(panel, { reviewers: ['nearai:m1', 'cli:claude:opus', 'cli:grok:grok-4.7'], orchestrator: 'nearai:m1' });
+  assert.deepEqual(panel, { reviewers: ['nearai:m1', 'cli:claude:fable', 'cli:grok:grok-4.7'], orchestrator: 'nearai:m1' });
 });
 
 test('--nearai rejects a missing or malformed model and --with-clis needs --nearai', () => {

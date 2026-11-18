@@ -2,7 +2,7 @@ import { drawMark } from './draw-marks';
 import { BEAT_MS, beat, caption, clipText, easeOut, meter, mono, panel, type HowScene } from './how-scene';
 import { MODELS, type Mark } from './model-marks';
 
-const FAMILY_IDS = ['opus', 'codex', 'grok', 'agy'] as const;
+const FAMILY_IDS = ['fable', 'codex', 'grok', 'agy'] as const;
 
 const FAMILIES: Mark[] = FAMILY_IDS.flatMap((id) => {
   const mark = MODELS.find((item) => item.id === id);
