@@ -91,7 +91,11 @@ export function installPage(doc, win) {
   const crossButtons = all('[data-cross-filter]');
   crossButtons.forEach((button) => button.addEventListener('click', () => {
     const on = button.getAttribute('aria-pressed') !== 'true';
-    crossButtons.forEach((item) => item.setAttribute('aria-pressed', String(on && item === button)));
+    crossButtons.forEach((item) => {
+      const pressed = on && item === button;
+      item.setAttribute('aria-pressed', String(pressed));
+      item.classList.toggle('active', pressed);
+    });
     const status = on ? button.dataset.crossFilter : '';
     all('#crosscheck tbody tr').forEach((row) => { row.hidden = Boolean(status) && row.dataset.status !== status; });
   }));

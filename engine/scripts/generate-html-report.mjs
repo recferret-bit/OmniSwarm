@@ -44,8 +44,9 @@ function reportBody(ctx, v2, models) {
   return `${hero(ctx)}${v2 ? v2.slot('hero') : ''}${notice(ctx)}
   ${overviewSections(ctx, v2)}
   <section id="evidence" aria-label="Evidence and scope">${sectionTitle('03', 'Evidence & scope', 'Full detail on demand')}
-    ${evidencePanels(ctx, models.rows)}${v2 ? v2.slot('evidence') : ''}
-  </section>`;
+    ${evidencePanels(ctx, models.rows)}
+  </section>
+  ${v2 ? v2.slot('evidence') : ''}`;
 }
 
 function legacyModelBody(ctx, models) {
@@ -56,9 +57,7 @@ function legacyModelBody(ctx, models) {
   <details class="panel"><summary>Requested models & validation<span class="meta-label">Identity unverified</span></summary><div class="panel-body">${validationDetails(ctx, models.rows)}${isolationDetails(ctx)}</div></details>`;
 }
 
-export async function renderReport(reportDir) {
-  printSummary(reportDir, await adjudicate(reportDir));
-  refreshReviewerReports(reportDir);
+export async function writeReportPages(reportDir) {
   const ctx = loadContext(reportDir);
   const v2 = loadV2(reportDir);
   const models = loadModelRows(ctx);
@@ -68,6 +67,12 @@ export async function renderReport(reportDir) {
   const byReviewer = v2?.pages().find((page) => page.rel === 'findings-by-model.html');
   writeReportFile(reportDir, 'findings-by-model.html', byReviewer ? shell.page(byReviewer.body, byReviewer.opts) : shell.page(legacyModelBody(ctx, models), { modelPage: true }));
   return ctx.health;
+}
+
+export async function renderReport(reportDir) {
+  printSummary(reportDir, await adjudicate(reportDir));
+  refreshReviewerReports(reportDir);
+  return writeReportPages(reportDir);
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

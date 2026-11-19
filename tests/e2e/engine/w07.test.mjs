@@ -31,10 +31,13 @@ test('a v2 run grows the rail, the hero, the debate card and the reviewer pages'
   assert.match(html, /<details id="finding-CLUSTER-1"/);
   const card = html.slice(html.indexOf('<details id="finding-CLUSTER-1"'), html.indexOf('<details id="finding-', html.indexOf('<details id="finding-CLUSTER-1"') + 10));
   for (const text of [/<summary>Debate<\/summary>/, /devil's advocate/, /✗ quote_not_found/, /✗ unchecked/, /conformity suspect/, /Verified quotes disagree/, /data-status="DISPUTED"/]) assert.match(card, text);
-  assert.match(html, /Agreed check[\s\S]{0,200}0 rounds/);
-  assert.match(html, /<li>CLUSTER-3 debate_cap<\/li>/);
+  assert.match(html, /Agreed check[\s\S]{0,400}<td class="num">0<\/td>/);
+  assert.match(html, /id="crosscheck-cap"[\s\S]*Unchecked arithmetic/);
   assert.match(html, /Not debated \(cap\)/);
+  assert.equal(html.includes('<li>CLUSTER-3 debate_cap</li>'), false);
   const table = html.slice(html.indexOf('id="crosscheck"'), html.indexOf('id="general-review"'));
+  assert.match(table, /id="crosscheck-debated"[\s\S]*Missing owner check/);
+  assert.ok(table.indexOf('Missing owner check') < table.indexOf('Agreed check'), 'severity order puts the high finding ahead of the agreed low one');
   assert.equal((table.match(/<tr data-status=/g) || []).length, JSON.parse(read(dir, 'debate/clusters.json')).clusters.length);
   assert.match(table, /<td>deepseek<\/td><td>yes<\/td>/);
   assert.equal(html.includes('<script>alert(1)</script>'), false);
@@ -60,8 +63,8 @@ test('a v2 run grows the rail, the hero, the debate card and the reviewer pages'
   assert.match(model, /<th scope="row">cli-claude-opus<\/th><td>[^]*?<\/td><td>1<\/td><td>0<\/td><td>1<\/td><td>2<\/td><td>COMPLETE<\/td>/);
   assert.equal(PAGES.some(([page]) => page === 'reviewers.html'), true);
   const printed = printableHtml(html);
-  assert.match(printed, /05<\/span> Cross-check/);
-  assert.match(printed, /06<\/span> General review/);
+  assert.match(printed, /<span class="section-num">05<\/span>Cross-check/);
+  assert.match(printed, /<span class="section-num">06<\/span>General review/);
   const browser = findBrowser();
   if (!browser) return;
   const pdf = spawnSync(path.join(ROOT, 'bin', 'audit'), ['pdf', dir], { cwd: ROOT, encoding: 'utf8', timeout: 120_000, env: { ...process.env, CHROME_PATH: browser } });

@@ -237,6 +237,33 @@ td { overflow-wrap: anywhere; }
   .chart-row { grid-template-columns: minmax(0, 1fr) 35px; gap: 10px; }
   .chart-track { grid-column: 1 / -1; grid-row: 2; }
 }
+.report-block > .section-heading { margin-top: 28px; }
+.report-block .filter-group { margin: 0 0 12px; }
+.report-block .note { max-width: 78rem; }
+.dense-table th, .dense-table td { padding: 6px 8px; vertical-align: middle; line-height: 1.35; }
+.dense-table th, .dense-table .pill { white-space: nowrap; }
+.dense-table td.num, .dense-table th.num { width: 1%; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.dense-table .cluster { line-height: 1.35; }
+.cluster a { text-decoration: none; }
+.cluster a:hover { text-decoration: underline; }
+.cluster-id { display: inline-block; margin-right: 6px; color: var(--muted); font: 10px var(--mono); }
+.sev { font: 10px var(--mono); text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; }
+.sev-critical { color: var(--red); }
+.sev-high { color: #9d1c2e; }
+.sev-medium { color: var(--orange-ink); }
+.sev-low, .sev-info { color: var(--blue); }
+.review-prose { color: var(--ink); font-size: 14px; line-height: 1.5; max-width: 78rem; }
+.prose h3 { margin: 18px 0 8px; font-size: 15px; letter-spacing: -.02em; color: var(--ink); }
+.prose .md-kicker { margin: 16px 0 4px; font-weight: 700; color: var(--ink); }
+.prose .md-kicker.sev-critical { color: var(--red); }
+.prose .md-kicker.sev-high { color: #9d1c2e; }
+.prose .md-kicker.sev-medium { color: var(--orange-ink); }
+.prose ul ul, .prose ol ol { margin: 4px 0; }
+.method-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin: 8px 0 14px; }
+.method-grid div { background: white; border: 1px solid var(--rule); padding: 10px 12px; }
+.method-grid .method-wide { grid-column: 1 / -1; }
+.method-grid dt { margin: 0; color: var(--muted); font: 10px var(--mono); text-transform: uppercase; letter-spacing: .06em; }
+.method-grid dd { margin: 4px 0 0; font-weight: 700; overflow-wrap: anywhere; }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
 @media print {
   body { background: white; }
@@ -244,6 +271,7 @@ td { overflow-wrap: anywhere; }
   .workspace { margin: 0; }
   main { padding: 20px 0; }
   .finding, .panel { break-inside: avoid; }
+  #crosscheck .panel, #general-review .panel { break-inside: auto; }
   .finding[hidden] { display: block !important; }
   .hero-status, .stat { print-color-adjust: exact; }
 }
@@ -330,12 +358,13 @@ td { overflow-wrap: anywhere; }
     <details class="panel"><summary><span class="pill blue">Coverage</span>Sandbox & checks<span class="meta-label">1 records</span></summary><div class="panel-body"><p class="note">0 finished · 0 failed · 1 not started. Sandbox-reported records are not authenticated execution evidence. Finished does not mean passed; failed or not started is not a pass.</p><div class="table-scroll"><table><thead><tr><th>Check</th><th>Observed status</th><th>Coverage & limits</th></tr></thead><tbody><tr><td>fixture</td><td class="result-impossible">Not started</td><td>Benign data fixture, no target execution.</td></tr></tbody></table></div><details class="disclosure"><summary>Original sandbox record</summary><pre># Sandbox
 | fixture | impossible | Benign data fixture, no target execution. |
 </pre></details></div></details>
-    <details class="panel"><summary><span class="pill blue">Stacks</span>Coverage by stack<span class="meta-label">Python · Node · Solana · NEAR · EVM</span></summary><div class="panel-body"><p class="note">Stack profile unavailable or predates ecosystem detection; per-stack coverage cannot be derived.</p></div></details>
+    <details class="panel"><summary><span class="pill blue">Stacks</span>Coverage by stack<span class="meta-label">Python · Node · NEAR</span></summary><div class="panel-body"><p class="note">Stack profile unavailable or predates ecosystem detection; per-stack coverage cannot be derived.</p></div></details>
     
     
     
-    <section id="crosscheck" aria-label="Cross-check"><h2><span>05</span> Cross-check</h2><div class="filter-group" role="group" aria-label="Filter clusters by status"><button type="button" class="filter-btn" data-cross-filter="AGREED" aria-pressed="false">AGREED</button><button type="button" class="filter-btn" data-cross-filter="CONFIRMED" aria-pressed="false">CONFIRMED</button><button type="button" class="filter-btn" data-cross-filter="LIKELY" aria-pressed="false">LIKELY</button><button type="button" class="filter-btn" data-cross-filter="DISPUTED" aria-pressed="false">DISPUTED</button><button type="button" class="filter-btn" data-cross-filter="REFUTED" aria-pressed="false">REFUTED</button><button type="button" class="filter-btn" data-cross-filter="INSUFFICIENT_EVIDENCE" aria-pressed="false">INSUFFICIENT_EVIDENCE</button></div><table><thead><tr><th>Cluster</th><th>Status</th><th>Rounds</th><th>Judge vendor</th><th>Alternate judge</th><th>Verified</th><th>Discarded</th><th>Conformity suspect</th></tr></thead><tbody><tr data-status="AGREED"><td>Agreed check</td><td><span class="pill green" data-status="AGREED">AGREED</span></td><td>0 rounds</td><td>none</td><td>no</td><td>0</td><td>0</td><td>0</td></tr><tr data-status="DISPUTED"><td>Missing owner check</td><td><span class="pill orange" data-status="DISPUTED">DISPUTED</span></td><td>2 rounds</td><td>deepseek</td><td>yes</td><td>2</td><td>2</td><td>1</td></tr><tr data-status="LIKELY"><td>Logged secret</td><td><span class="pill blue" data-status="LIKELY">LIKELY</span></td><td>1 rounds</td><td>deepseek</td><td>yes</td><td>0</td><td>0</td><td>0</td></tr><tr data-status="CAPPED"><td>Unchecked arithmetic</td><td><span class="pill" data-status="CAPPED">CAPPED</span></td><td>0 rounds</td><td>—</td><td>no</td><td>0</td><td>0</td><td>0</td></tr></tbody></table><h3>Not debated (cap)</h3><ul><li>CLUSTER-3 debate_cap</li></ul></section><section id="general-review" aria-label="General review"><h2><span>06</span> General review</h2><p class="notice"><b>INCOMPLETE</b> General review not run.</p><p>Model agreement and passing checks do not certify security.</p></section>
-  </section><footer class="footer"><span>Audit / Core · Source security review</span><span>Model assertions · Unverified provenance</span><span>2026-11-02</span></footer></main></div>
+    
+  </section>
+  <section id="crosscheck" class="report-block" aria-label="Cross-check"><div class="section-heading"><h2><span class="section-num">05</span>Cross-check</h2><span class="meta-label">4 clusters · sorted by severity</span></div><p class="note">Highest severity first. Agreed rows were not debated: two vendors cited the same defect, so rounds are 0 and the other counts are a dash. A dash means those counts were not measured.</p><div class="filter-group" role="group" aria-label="Filter clusters by status"><button type="button" class="filter-btn" data-cross-filter="AGREED" aria-pressed="false">Agreed</button><button type="button" class="filter-btn" data-cross-filter="CONFIRMED" aria-pressed="false">Confirmed</button><button type="button" class="filter-btn" data-cross-filter="LIKELY" aria-pressed="false">Likely</button><button type="button" class="filter-btn" data-cross-filter="DISPUTED" aria-pressed="false">Disputed</button><button type="button" class="filter-btn" data-cross-filter="REFUTED" aria-pressed="false">Refuted</button><button type="button" class="filter-btn" data-cross-filter="INSUFFICIENT_EVIDENCE" aria-pressed="false">Insufficient Evidence</button></div><details class="panel" id="crosscheck-debated" open><summary>Debated and agreed<span class="meta-label">3 clusters</span></summary><div class="panel-body"><div class="table-scroll"><table class="dense-table cross-table"><thead><tr><th>Severity</th><th>Cluster</th><th>Status</th><th class="num">Rounds</th><th>Judge</th><th>Alternate</th><th class="num">Verified</th><th class="num">Discarded</th><th class="num">Conformity</th></tr></thead><tbody><tr data-status="DISPUTED" data-severity="high"><td><span class="sev sev-high">high</span></td><td class="cluster"><a href="#finding-CLUSTER-1"><span class="cluster-id">CLUSTER-1</span> Missing owner check</a></td><td><span class="pill orange" data-status="DISPUTED">DISPUTED</span></td><td class="num">2</td><td>deepseek</td><td>yes</td><td class="num">2</td><td class="num">2</td><td class="num">1</td></tr><tr data-status="LIKELY" data-severity="medium"><td><span class="sev sev-medium">medium</span></td><td class="cluster"><a href="#finding-CLUSTER-4"><span class="cluster-id">CLUSTER-4</span> Logged secret</a></td><td><span class="pill blue" data-status="LIKELY">LIKELY</span></td><td class="num">1</td><td>deepseek</td><td>yes</td><td class="num">—</td><td class="num">—</td><td class="num">—</td></tr><tr data-status="AGREED" data-severity="low"><td><span class="sev sev-low">low</span></td><td class="cluster"><a href="#finding-CLUSTER-2"><span class="cluster-id">CLUSTER-2</span> Agreed check</a></td><td><span class="pill green" data-status="AGREED">AGREED</span></td><td class="num">0</td><td>triage</td><td>—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td></tr></tbody></table></div></div></details><details class="panel" id="crosscheck-cap"><summary>Not debated (cap)<span class="meta-label">1 clusters</span></summary><div class="panel-body"><p class="note">These findings were reported, then left outside the debate cap, so nobody argued them. The status is the citation-rule result. Expanding this table shows the finding title and severity.</p><div class="table-scroll"><table class="dense-table"><thead><tr><th>Severity</th><th>Cluster</th><th>Status</th><th>Why</th></tr></thead><tbody><tr data-status="CAPPED" data-severity="low"><td><span class="sev sev-low">low</span></td><td class="cluster"><a href="#finding-CLUSTER-3"><span class="cluster-id">CLUSTER-3</span> Unchecked arithmetic</a></td><td><span class="pill" data-status="CAPPED">CAPPED</span></td><td>Debate cap</td></tr></tbody></table></div></div></details></section><section id="general-review" class="report-block" aria-label="General review"><div class="section-heading"><h2><span class="section-num">06</span>General review</h2></div><p class="notice"><b>INCOMPLETE</b> General review not run.</p><p class="note">Model agreement and passing checks do not certify security.</p></section><footer class="footer"><span>Audit / Core · Source security review</span><span>Model assertions · Unverified provenance</span><span>2026-11-02</span></footer></main></div>
     <script nonce="NONCE">(function installReport(doc, matches) {
   const all = (selector) => [...doc.querySelectorAll(selector)];
   const cards = all('.finding');
@@ -418,7 +447,11 @@ td { overflow-wrap: anywhere; }
   const crossButtons = all('[data-cross-filter]');
   crossButtons.forEach((button) => button.addEventListener('click', () => {
     const on = button.getAttribute('aria-pressed') !== 'true';
-    crossButtons.forEach((item) => item.setAttribute('aria-pressed', String(on && item === button)));
+    crossButtons.forEach((item) => {
+      const pressed = on && item === button;
+      item.setAttribute('aria-pressed', String(pressed));
+      item.classList.toggle('active', pressed);
+    });
     const status = on ? button.dataset.crossFilter : '';
     all('#crosscheck tbody tr').forEach((row) => { row.hidden = Boolean(status) && row.dataset.status !== status; });
   }));
