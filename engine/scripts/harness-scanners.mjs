@@ -31,6 +31,25 @@ function recordScanner(tool, result, scope = '.') {
 // longer on a busy host, so a fixed 180s limit killed it on mid-sized repositories. The sandbox passes the time
 // the whole lead scan has (AUDIT_HARNESS_BUDGET_MS); semgrep gets that less a minute, which the harness needs to
 // write its results.
+const DEFAULT_SEMGREP_RULES = '/opt/audit-scanners/semgrep-rules';
+const NEAR_SEMGREP_CANDIDATES = [
+  '/opt/audit/semgrep-near-rules.yaml',
+  path.resolve(path.dirname(new URL(import.meta.url).pathname), '../docker/semgrep-near-rules.yaml'),
+];
+
+export function semgrepConfigArgs(baseRules = DEFAULT_SEMGREP_RULES, nearCandidates = NEAR_SEMGREP_CANDIDATES) {
+  const args = [`--config=${baseRules}`];
+  let bundledHasNear = false;
+  try {
+    bundledHasNear = fs.existsSync(baseRules) && fs.readFileSync(baseRules, 'utf8').includes('near.security.');
+  } catch { /* unreadable base bundle is reported by semgrep itself */ }
+  if (!bundledHasNear) {
+    const extra = nearCandidates.find((candidate) => fs.existsSync(candidate));
+    if (extra) args.push(`--config=${extra}`);
+  }
+  return args;
+}
+
 export function semgrepTimeoutMs(env = process.env) {
   const budget = Number(env.AUDIT_HARNESS_BUDGET_MS);
   return Number.isFinite(budget) && budget > 0 ? Math.max(30_000, budget - 60_000) : 15 * 60_000;
@@ -338,7 +357,7 @@ async function prepareWriteTools(root, outDir, runOsv = (fn) => fn()) {
   const semgrepPromise = hasSemgrep
     ? runCmd('semgrep', [
       'scan', '--metrics=off', '--disable-version-check', '--json', '--timeout=30',
-      '--config=/opt/audit-scanners/semgrep-rules', '--disable-nosem', '--no-git-ignore',
+      ...semgrepConfigArgs(), '--disable-nosem', '--no-git-ignore',
       '--exclude=node_modules', '--exclude=target', '--exclude=dist', '--exclude=harness-fixtures',
       root,
     ], '/tmp', semgrepTimeoutMs(), cleanEnv({ SEMGREP_SEND_METRICS: 'off' }))
@@ -380,7 +399,7 @@ async function prepareWriteTools(root, outDir, runOsv = (fn) => fn()) {
       lines.push('semgrep: not on PATH. SAST fell back to the regex in web.md.');
       missingScanner('semgrep', 'Executable unavailable');
     } else {
-      lines.push(`## semgrep pinned upstream OWASP and Solidity security rules (exit ${semgrepRes.code})`);
+      lines.push(`## semgrep pinned upstream OWASP, Solidity and NEAR security rules (exit ${semgrepRes.code})`);
       lines.push(recordScanner('semgrep', semgrepRes) ? summariseSemgrep(semgrepRes.stdout, root) : ['FAILED: scanner did not produce a complete SAST result.', killedDetail(semgrepRes)].filter(Boolean).join(' '));
       lines.push('');
     }

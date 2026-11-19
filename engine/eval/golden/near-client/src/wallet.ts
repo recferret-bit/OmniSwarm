@@ -27,3 +27,12 @@ export function verifyLogin(publicKey: string, message: string, nonce: Uint8Arra
   const payload = Buffer.concat([Buffer.from(message), Buffer.from(nonce)]);
   return utils.PublicKey.fromString(publicKey).verify(payload, signature);
 }
+
+export async function relayDelegate(relayerAccount: { signedDelegate: (arg: unknown) => Promise<unknown> }, signedDelegate: unknown) {
+  return relayerAccount.signedDelegate(signedDelegate);
+}
+
+export async function hasFullAccessKey(provider: { query: (arg: Record<string, string>) => Promise<{ permission: unknown }> }, accountId: string, publicKey: string) {
+  const key = await provider.query({ request_type: 'view_access_key', finality: 'final', account_id: accountId, public_key: publicKey });
+  return key.permission === 'FullAccess';
+}

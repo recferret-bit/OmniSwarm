@@ -1,6 +1,6 @@
 // Per-surface reviewer guidance tables of audit-plans.mjs renderSurfaceSkillGuidance: the surface titles and the
-// stack-specific lines (Node, Python, Solana, NEAR contract and client, wallet flows, infrastructure). The EVM checklist is in
-// audit-plans-data-evm.mjs. The renderer
+// stack-specific lines (Node, Python, Solana, wallet flows, infrastructure). The NEAR and EVM checklists are in
+// audit-plans-data-near.mjs and audit-plans-data-evm.mjs. The renderer
 // groups them by review layer (harness-layers.mjs): Python and Node are web2; Solana, NEAR, EVM and wallet flows are web3;
 // INFRA_SURFACE is infra. Data only; imports nothing.
 
@@ -52,20 +52,6 @@ export const SOLANA_SURFACE = {
   S4: ['- Solana: audit who holds the upgrade authority and each program authority, whether authority keypairs or deploy wallets are committed or referenced by path, hard-coded program ids and cluster URLs, and what `msg!` logs reveal.'],
   S6: ['- Solana: audit Solana Actions/Blinks (`/actions.json`, `/api/actions/*`) and wallet transaction signing flows.'],
   S5: ['- Solana: audit verifiable-build pinning (`cargo-build-sbf`, `solana-verify`) and RustSec advisories in `Cargo.lock`.'],
-};
-
-export const NEAR_CONTRACT_SURFACE = {
-  S1: ['- NEAR contract: every public method is intentional. Callbacks use `#[private]` or an equivalent predecessor check. Authorization chooses `predecessor_account_id` or `signer_account_id` deliberately. Sensitive methods requiring a deposit-capable key use one yoctoNEAR; this does not replace caller authorization. Review initialization, migrations, duplicate inputs and account/amount bounds. Read the checklist in source; do not fetch it from the sandbox.'],
-  S3: ['- NEAR contract: users pay for storage growth, collection prefixes are unique, balances are locked before a transfer, and callbacks are `#[private]` and settle success and failure. `ft_on_transfer` checks the fungible-token predecessor. `ft_resolve_transfer` is private. Release builds set `overflow-checks = true` or use checked arithmetic. Callbacks must remain safe if the callback receipt itself fails: bound result bytes before parsing, handle malformed results without panicking, bound inputs/loops/logs, and budget gas from measured worst cases with a margin (measurement remains unverified offline). Preserve invariants between receipts; record the original account, amount and operation state, settle once, and provide access-controlled recovery for stuck operations without double credits or refunds. Credit deposits only after success; lock withdrawals before scheduling and restore only on confirmed failure. Keep storage/refund liquidity available. `ft_on_transfer` returns the unused amount; `ft_resolve_transfer` refunds at most the original transfer and the receiver balance. Review initialization, upgrades/migrations, duplicate inputs, account/amount bounds, storage deletion refunds, and monitoring for failed callbacks. In `markdown_summary` add a NEAR paragraph: files reviewed, controls verified, and that cargo test was not run.'],
-  S4: ['- NEAR contract: audit who can deploy, upgrade or migrate the contract (full-access keys, an owner or DAO account, an `upgrade` method), hard-coded account ids, and what logs and view methods expose.'],
-  S5: ['- NEAR contract: record the `near-sdk` pin. RustSec still runs through the existing offline `cargo audit` when `Cargo.lock` is present. `cargo near build reproducible-wasm` needs Docker and ignores uncommitted changes, so it is outside this review. Do not install the wasm target and do not deploy.'],
-};
-
-export const NEAR_CLIENT_SURFACE = {
-  S1: ['- NEAR client: `KeyPair.fromString`, an `ed25519:` secret, and the near CLI keychain are key custody. Report the source. Do not extract or use the key, and do not read the CLI configuration.'],
-  S3: ['- NEAR Intents: `@defuse-protocol/one-click-sdk-typescript`, `@defuse-protocol/intents-sdk`, and `@near-intents-agent-api/sdk` are recognition only. Do not request a quote, submit a deposit, or call the agent API.'],
-  S5: ['- NEAR AI: `@neardefi/shade-agent-js` is an unaudited published library, not a deprecated package to remove. Do not install it. Do not run `npx skills add` or `npm install` of NEAR SDKs during the review.'],
-  S6: ['- NEAR client: `@hot-labs/near-connect` and `near-api-js` sign and broadcast. Review how the wallet is asked to sign. `v1.signer` is a lead, not a mainnet read. Do not call `cloud-api.near.ai`, `1click.chaindefuser.com`, `agentsonintents.com`, OutLayer, or NEAR MCP.'],
 };
 
 // Chain-neutral wallet flow checks, shown when production code imports a chain SDK or calls an injected wallet.

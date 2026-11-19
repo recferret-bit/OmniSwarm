@@ -154,3 +154,37 @@ test('EVM guidance and the EVM lead file appear only for an EVM target', (t) => 
   assert.equal(evm.layers.counts.web3, 2);
   assert.deepEqual(evm.layers.present, ['web3']);
 });
+
+test('NEAR Wallet Selector, Chain Signatures, Shade Agent attestation and Python NEAR AI packages route kinds, layers and crypto plans', (t) => {
+  const walletAndAi = analyzeStackAndPlans(tree(t, {
+    'web/package.json': JSON.stringify({ dependencies: { '@near-wallet-selector/core': '^8.9.0', 'chainsig.js': '^0.4.0', '@nearai/inference-sdk': '^0.1.0', 'near-kit': '^0.3.0' } }),
+    'web/src/sign.ts': "import { setupWalletSelector } from '@near-wallet-selector/core';\nimport { chainAdapters } from 'chainsig.js';\n",
+    'web/src/ai.ts': "import { InferenceClient } from '@nearai/inference-sdk/node';\n",
+    'verifier/Cargo.toml': '[package]\nname = "verifier"\n[dependencies]\nshade-attestation = "0.1.0"\n',
+    'verifier/src/lib.rs': 'pub fn check() {}\n',
+    'tests/only/package.json': JSON.stringify({ dependencies: { '@defuse-protocol/intents-sdk': '1.0.0' } }),
+  }));
+  assert.equal(walletAndAi.ecosystems.near.detected, true);
+  assert.equal(walletAndAi.ecosystems.near.contracts, false);
+  assert.deepEqual(walletAndAi.ecosystems.near.kinds, ['ai', 'client']);
+  assert.ok(walletAndAi.ecosystems.node.frameworks.includes('near-wallet-selector'));
+  assert.ok(walletAndAi.ecosystems.node.frameworks.includes('near-chainsig'));
+  assert.ok(walletAndAi.ecosystems.node.frameworks.includes('near-ai'));
+  assert.ok(walletAndAi.detectedStacks.includes('crypto'));
+  assert.ok(walletAndAi.layers.files.web3.includes('web/src/sign.ts'));
+  assert.ok(walletAndAi.layers.files.web3.includes('web/src/ai.ts'));
+  assert.ok(walletAndAi.layers.files.web3.includes('verifier/src/lib.rs'));
+  assert.match(renderSurfaceSkillGuidance('S1', walletAndAi), /- NEAR client \[Wallet client, NEP-413 and NEP-366\]/);
+  assert.match(renderSurfaceSkillGuidance('S1', walletAndAi), /- NEAR AI \[NEAR AI Cloud, Shade Agents and TEEs\]/);
+  assert.doesNotMatch(renderSurfaceSkillGuidance('S1', walletAndAi), /- NEAR contract \[/);
+  assert.doesNotMatch(renderSurfaceSkillGuidance('S1', walletAndAi), /- NEAR Intents \[/);
+
+  // A pure near-sdk contract with no JS crypto library still activates the crypto risk domain and S2 contract checks.
+  const pureContract = analyzeStackAndPlans(tree(t, {
+    'Cargo.toml': '[package]\nname = "escrow"\n[dependencies]\nnear-sdk = "5.6.0"\n',
+    'src/lib.rs': 'use near_sdk::near;\n#[near(contract_state)]\npub struct Escrow {}\n',
+  }));
+  assert.ok(pureContract.detectedStacks.includes('crypto'));
+  assert.match(renderSurfaceSkillGuidance('S2', pureContract), /- NEAR contract \[/);
+  assert.doesNotMatch(renderSurfaceSkillGuidance('S6', pureContract), /- NEAR client \[/);
+});

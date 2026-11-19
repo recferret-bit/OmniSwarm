@@ -54,6 +54,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends python3-venv \
     && ln -s /opt/semgrep/bin/semgrep /usr/local/bin/semgrep
 
 COPY prepare-scanner-rules.py /opt/prepare-scanner-rules.py
+COPY semgrep-near-rules.yaml /opt/semgrep-near-rules.yaml
 COPY prepare-cargo-cache.py /opt/prepare-cargo-cache.py
 COPY prepare-python-env.py /opt/prepare-python-env.py
 

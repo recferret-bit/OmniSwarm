@@ -138,6 +138,8 @@ export const CONFIG_PATTERNS = [
     note: 'Privileged container. Confirm it is not reachable from untrusted input.' },
   { id: 'docker-sock', cls: 'S4 container', re: /docker\.sock\b/g,
     note: 'Docker socket mounted. That is root on the host.' },
+  { id: 'tee-enclave-sock', cls: 'S4 container / TEE', re: /(?:dstack|tappd)\.sock\b|\b(?:DSTACK|TAPPD)_SIMULATOR_ENDPOINT\b/g,
+    note: 'TEE enclave socket mount (dstack.sock / tappd.sock) or simulator override. Any container reaching the socket can derive enclave keys and quotes; simulator endpoints bypass hardware attestation.' },
   { id: 'image-latest', cls: 'S5 container', re: /\b(?:FROM|image:)\s+[\w./-]+:latest\b/g,
     note: 'Moving image tag. Pin a version and a digest so the build is repeatable.' },
   { id: 'debug-port', cls: 'S4 container', re: /--inspect(?:-brk)?=0\.0\.0\.0|\b9229:9229\b/g,

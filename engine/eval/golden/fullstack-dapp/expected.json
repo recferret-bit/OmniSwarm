@@ -229,9 +229,18 @@
       "layer": "web3"
     },
     {
+      "file": "frontend/src/wallet.js",
+      "startLine": 61,
+      "endLine": 61,
+      "class": "nep413-replay",
+      "title": "NEP-413 login signs with an all-zero nonce and a caller-supplied recipient",
+      "severity": "high",
+      "layer": "web3"
+    },
+    {
       "file": "contracts/tipjar/src/lib.rs",
-      "startLine": 32,
-      "endLine": 32,
+      "startLine": 34,
+      "endLine": 34,
       "class": "missing-access-control",
       "title": "set_owner has no caller check",
       "severity": "critical",
@@ -239,8 +248,8 @@
     },
     {
       "file": "contracts/tipjar/src/lib.rs",
-      "startLine": 42,
-      "endLine": 42,
+      "startLine": 44,
+      "endLine": 44,
       "class": "signer-vs-predecessor",
       "title": "set_fee authorizes the transaction signer instead of the predecessor",
       "severity": "medium",
@@ -251,8 +260,8 @@
     },
     {
       "file": "contracts/tipjar/src/lib.rs",
-      "startLine": 27,
-      "endLine": 27,
+      "startLine": 28,
+      "endLine": 28,
       "class": "storage-collision",
       "title": "two collections share the storage prefix b",
       "severity": "high",
@@ -260,8 +269,8 @@
     },
     {
       "file": "contracts/tipjar/src/lib.rs",
-      "startLine": 50,
-      "endLine": 50,
+      "startLine": 52,
+      "endLine": 52,
       "class": "unchecked-arithmetic",
       "title": "fee math is unchecked and fee_bps is unbounded with overflow-checks off",
       "severity": "medium",
@@ -269,8 +278,8 @@
     },
     {
       "file": "contracts/tipjar/src/lib.rs",
-      "startLine": 61,
-      "endLine": 61,
+      "startLine": 63,
+      "endLine": 63,
       "class": "callback-settlement",
       "title": "withdraw transfers before the balance is locked",
       "severity": "critical",
@@ -278,8 +287,8 @@
     },
     {
       "file": "contracts/tipjar/src/lib.rs",
-      "startLine": 65,
-      "endLine": 65,
+      "startLine": 67,
+      "endLine": 67,
       "class": "public-callback",
       "title": "on_withdraw callback is not #[private]",
       "severity": "critical",
@@ -287,11 +296,38 @@
     },
     {
       "file": "contracts/tipjar/src/lib.rs",
-      "startLine": 72,
-      "endLine": 72,
+      "startLine": 74,
+      "endLine": 74,
       "class": "ft-receiver",
       "title": "ft_on_transfer credits any caller without checking the token contract",
       "severity": "high",
+      "layer": "web3"
+    },
+    {
+      "file": "contracts/tipjar/src/lib.rs",
+      "startLine": 96,
+      "endLine": 96,
+      "class": "ecrecover-malleability",
+      "title": "claim_voucher accepts malleable secp256k1 signatures with no signer check or replay nonce",
+      "severity": "critical",
+      "layer": "web3"
+    },
+    {
+      "file": "contracts/tipjar/src/lib.rs",
+      "startLine": 104,
+      "endLine": 104,
+      "class": "unauthenticated-yield-resume",
+      "title": "resume_settlement lets any caller resume a public NEP-519 yield_id",
+      "severity": "critical",
+      "layer": "web3"
+    },
+    {
+      "file": "contracts/tipjar/src/lib.rs",
+      "startLine": 108,
+      "endLine": 108,
+      "class": "callback-log-abort",
+      "title": "mt_resolve_deposit is public and formats an unbounded batch log that can hit the 16 KB receipt-log cap",
+      "severity": "critical",
       "layer": "web3"
     },
     {
@@ -779,18 +815,34 @@
     },
     {
       "file": "contracts/tipjar/src/lib.rs",
-      "startLine": 37,
-      "endLine": 37,
+      "startLine": 39,
+      "endLine": 39,
       "reason": "set_paused checks the predecessor against the owner",
       "claim": "set_paused has no access control",
       "layer": "web3"
     },
     {
       "file": "contracts/tipjar/src/lib.rs",
-      "startLine": 85,
-      "endLine": 85,
+      "startLine": 87,
+      "endLine": 87,
       "reason": "fees are zeroed before the transfer, behind one yocto and the owner check",
       "claim": "collect_fees can be drained twice",
+      "layer": "web3"
+    },
+    {
+      "file": "contracts/tipjar/src/lib.rs",
+      "startLine": 114,
+      "endLine": 114,
+      "reason": "ecrecover enforces malleability_flag true, hashes all 64 pubkey bytes with keccak256 and consumes the nonce",
+      "claim": "verify_signed_voucher accepts malleable or replayed signatures",
+      "layer": "web3"
+    },
+    {
+      "file": "contracts/tipjar/src/lib.rs",
+      "startLine": 123,
+      "endLine": 123,
+      "reason": "on_yield_settled is #[private], bounds return bytes with promise_result_checked and restores locked funds on timeout",
+      "claim": "on_yield_settled is callable externally or unbounded",
       "layer": "web3"
     },
     {

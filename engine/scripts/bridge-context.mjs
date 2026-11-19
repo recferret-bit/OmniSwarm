@@ -2,6 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { renderReviewPlansMarkdown, renderSurfaceSkillGuidance } from './audit-plans.mjs';
+import { compactLeadText, nearWeb2Applies } from './orchestrator-prompts.mjs';
 import { REVIEW_SCOPE } from './review-workflow.mjs';
 
 const LEAD_FILES = [
@@ -50,9 +51,10 @@ export async function getAuditContext(ctx) {
   if (summary != null) parts.push('## Harness Summary', summary);
   parts.push(...planSection(ctx, profile));
   for (const [file, title, absent, surfaces, layers] of LEAD_FILES) {
-    if (!leadApplies(surfaces, ctx.surface) || !inScope(layers, ctx.scope)) continue;
-    const text = readHarness(ctx, file);
-    if (text != null && !text.includes(absent)) parts.push(`## ${title}`, text.slice(0, 6000));
+    if (!leadApplies(surfaces, ctx.surface)) continue;
+    const raw = readHarness(ctx, file);
+    if (!inScope(layers, ctx.scope) && !nearWeb2Applies(file, ctx.scope, profile || undefined, raw)) continue;
+    if (raw != null && !raw.includes(absent)) parts.push(`## ${title}`, compactLeadText(raw, 6000, ctx.scope, profile?.layers));
   }
   if (ctx.role === 'crosscheck' && ctx.reportDir) {
     const inbox = path.join(ctx.reportDir, 'crosscheck', `${ctx.agent}.json`);

@@ -1,6 +1,6 @@
-use near_sdk::collections::LookupMap;
+use near_sdk::collections::{LookupMap, LookupSet};
 use near_sdk::json_types::U128;
-use near_sdk::{env, near, require, AccountId, Gas, NearToken, PanicOnDefault, Promise, PromiseResult};
+use near_sdk::{env, near, require, AccountId, CryptoHash, Gas, NearToken, PanicOnDefault, Promise, PromiseResult};
 
 const CALLBACK_GAS: Gas = Gas::from_tgas(5);
 
@@ -12,6 +12,7 @@ pub struct TipJar {
     paused: bool,
     balances: LookupMap<AccountId, u128>,
     token_balances: LookupMap<AccountId, u128>,
+    used_nonces: LookupSet<u64>,
     fees: u128,
 }
 
@@ -25,6 +26,7 @@ impl TipJar {
             paused: false,
             balances: LookupMap::new(b"b"),
             token_balances: LookupMap::new(b"b"),
+            used_nonces: LookupSet::new(b"n"),
             fees: 0,
         }
     }
@@ -88,5 +90,39 @@ impl TipJar {
 
     pub fn balance_of(&self, account: AccountId) -> U128 {
         U128(self.balances.get(&account).unwrap_or(0))
+    }
+
+    pub fn claim_voucher(&mut self, digest: [u8; 32], sig: [u8; 64], v: u8, amount: U128) {
+        if let Some(_pk) = env::ecrecover(&digest, &sig, v, false) {
+            let caller = env::predecessor_account_id();
+            let current = self.balances.get(&caller).unwrap_or(0);
+            self.balances.insert(&caller, &(current + amount.0));
+        }
+    }
+
+    pub fn resume_settlement(&mut self, yield_id: CryptoHash, payload: Vec<u8>) -> bool {
+        env::promise_yield_resume(&yield_id, &payload)
+    }
+
+    pub fn mt_resolve_deposit(&mut self, accounts: Vec<AccountId>, amount: U128) -> U128 {
+        env::log_str(&format!("resolving deposit batch {accounts:?}"));
+        amount
+    }
+
+    pub fn verify_signed_voucher(&mut self, digest: [u8; 32], sig: [u8; 64], v: u8, nonce: u64, expected_eth: [u8; 20]) -> bool {
+        require!(!self.used_nonces.contains(&nonce), "nonce used");
+        let Some(pk) = env::ecrecover(&digest, &sig, v, true) else { return false };
+        let hash = env::keccak256(&pk);
+        require!(hash[12..32] == expected_eth, "wrong signer");
+        self.used_nonces.insert(&nonce);
+        true
+    }
+
+    #[private]
+    pub fn on_yield_settled(&mut self, account: AccountId, locked: U128) {
+        if !matches!(env::promise_result_checked(0, 256), Ok(bytes) if bytes == b"ok") {
+            let current = self.balances.get(&account).unwrap_or(0);
+            self.balances.insert(&account, &current.saturating_add(locked.0));
+        }
     }
 }

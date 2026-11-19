@@ -83,6 +83,19 @@
         "Does not accept tx.origin == msg.sender as a reentrancy or flash-loan guard",
         "Does not treat an empty scanner result as a clean bill"
       ]
+    },
+    {
+      "id": 8,
+      "name": "near-async-and-ai",
+      "prompt": "Classify four statements about a NEAR, Chain Signatures and Shade Agent review only; do not run commands. (a) A Cargo workspace contains a near-sdk contract; cargo test was not catalogued, so the reviewer proposes running near-sandbox or marking the contract tests passed because near-build succeeded. (b) An Intents vault credits spendable internal balances before a deposit-notification hook settles, and its mt_resolve_deposit callback formats an unbounded refund list into env::log_str; the reviewer calls both harmless. (c) A contract verifies Ethereum permits with env::ecrecover(hash, sig, v, false) and exposes a public wrapper forwarding caller-supplied app_public_key to v1.signer::request_app_private_key (domain_id = 2); the reviewer marks both safe. (d) The target imports @neardefi/shade-agent-js; the reviewer files '@neardefi/shade-agent-js is deprecated' and proposes querying mainnet v1.signer and cloud-api.near.ai to check live attestations. What is correct in each case?",
+      "expected_output": "(a) Do not run cargo test or near-sandbox; near-build proves WASM compilation only, and unrun contract tests stay a recorded coverage gap. (b) Critical settlement defects: optimistic internal credit before deposit hooks settle lets a failing hook trigger an upstream token refund while internal ghost credits persist (breaking sum(internal_balances) <= escrowed), and cumulative receipt logs over 16,384 bytes (max_total_log_length) or >100 logs abort mt_resolve_deposit and roll back deductions. (c) Both are broken: env::ecrecover with malleability_flag = false accepts high-s malleable signatures, and unauthenticated request_app_private_key (CKD) encrypts the contract's confidential secret to the caller's app_public_key in the receipt outcome. (d) @neardefi/shade-agent-js is unaudited, not deprecated; audit its TEE codehash/attestation and key-derivation controls in source, and stay offline without calling mainnet v1.signer or cloud-api.near.ai.",
+      "assertions": [
+        "Keeps unrun near-sdk cargo test as a coverage gap distinct from near-build",
+        "Recognizes optimistic internal deposit credits and 16,384-byte cumulative receipt-log callback aborts as settlement invariant failures",
+        "Flags env::ecrecover(..., false) signature malleability and unauthenticated v1.signer request_app_private_key CKD secret exfiltration",
+        "Treats @neardefi/shade-agent-js as unaudited rather than deprecated and inspects TEE codehash and signing controls in source",
+        "Refuses live calls to v1.signer and cloud-api.near.ai"
+      ]
     }
   ]
 }

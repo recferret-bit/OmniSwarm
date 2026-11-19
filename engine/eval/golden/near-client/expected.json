@@ -16,6 +16,17 @@
       "class": "fixed-signature-nonce",
       "title": "signLogin signs with an all-zero nonce, so a signature can be replayed",
       "severity": "high"
+    },
+    {
+      "file": "src/wallet.ts",
+      "startLine": 32,
+      "endLine": 32,
+      "class": "unrestricted-nep366-relayer",
+      "title": "relayDelegate submits any NEP-366 SignedDelegate without receiver, action, gas or expiry checks",
+      "severity": "high",
+      "missedBy": [
+        "baseline"
+      ]
     }
   ],
   "decoys": [
@@ -32,6 +43,13 @@
       "endLine": 28,
       "reason": "the signature is verified against the public key",
       "claim": "verifyLogin trusts the caller"
+    },
+    {
+      "file": "src/wallet.ts",
+      "startLine": 37,
+      "endLine": 37,
+      "reason": "view_access_key is queried at final finality and requires FullAccess permission",
+      "claim": "hasFullAccessKey accepts a third-party FunctionCall access key"
     }
   ]
 }

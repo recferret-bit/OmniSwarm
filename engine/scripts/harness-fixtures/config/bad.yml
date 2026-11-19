@@ -6,6 +6,7 @@ jobs:
         run: curl https://example.com/install.sh | bash
       - privileged: true
         volume: /var/run/docker.sock
+        enclave: /var/run/dstack.sock
         node-version: 18
 services:
   db:

@@ -1,0 +1,14 @@
+{
+  "name": "near-shade-agent-worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@defuse-protocol/one-click-sdk-typescript": "^0.1.20",
+    "@nearai/inference-sdk": "^0.1.0",
+    "@neardefi/shade-agent-js": "^0.2.0",
+    "@phala/dstack-sdk": "^0.2.0",
+    "near-api-js": "^5.0.0",
+    "nearai-cloud-verifier": "^0.2.0"
+  }
+}

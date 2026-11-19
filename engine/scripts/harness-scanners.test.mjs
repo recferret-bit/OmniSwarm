@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { runAllScanners, runCmd, scannerChecks, semgrepTimeoutMs, setScannerOutputDir } from './harness-scanners.mjs';
+import { fileURLToPath } from 'node:url';
+import { runAllScanners, runCmd, scannerChecks, semgrepConfigArgs, semgrepTimeoutMs, setScannerOutputDir } from './harness-scanners.mjs';
 import { scannerEvidence } from './scanner-evidence.mjs';
 
 function writeShim(binDir, name, body) {
@@ -131,7 +133,7 @@ console.log(JSON.stringify({ results: [] }));
   assert.match(deps, /## cargo-audit Cargo\.lock \(exit 0\)/);
   assert.match(deps, /## npm audit package-lock\.json \(exit 0\)/);
   assert.match(tools, /## gitleaks \(exit 0\)/);
-  assert.match(tools, /## semgrep pinned upstream OWASP and Solidity security rules \(exit 0\)/);
+  assert.match(tools, /## semgrep pinned upstream OWASP, Solidity and NEAR security rules \(exit 0\)/);
   assert.match(tools, /## osv-scanner \(exit 0\)/);
 });
 
@@ -228,4 +230,97 @@ test('a scanner that outlives its time limit is recorded as timed out, and semgr
   assert.equal(semgrepTimeoutMs({ AUDIT_HARNESS_BUDGET_MS: String(20 * 60_000) }), 19 * 60_000);
   assert.equal(semgrepTimeoutMs({ AUDIT_HARNESS_BUDGET_MS: '15000' }), 30_000);
   assert.equal(semgrepTimeoutMs({ AUDIT_HARNESS_BUDGET_MS: 'nonsense' }), 15 * 60_000);
+});
+
+test('semgrepConfigArgs avoids duplicate NEAR rule IDs when bundled and validates curated NEAR SAST rules', (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'omni-semgrep-near-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const nearRules = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../docker/semgrep-near-rules.yaml');
+  assert.equal(fs.existsSync(nearRules), true);
+
+  const legacyBundle = path.join(dir, 'legacy-rules.yaml');
+  fs.writeFileSync(legacyBundle, 'rules:\n  - id: solidity.tx-origin\n');
+  assert.deepEqual(semgrepConfigArgs(legacyBundle, [nearRules]), [`--config=${legacyBundle}`, `--config=${nearRules}`]);
+
+  const mergedBundle = path.join(dir, 'merged-rules.yaml');
+  fs.writeFileSync(mergedBundle, 'rules:\n  - id: near.security.rust.ecrecover-malleable-signature\n');
+  assert.deepEqual(semgrepConfigArgs(mergedBundle, [nearRules]), [`--config=${mergedBundle}`]);
+
+  const hasRealSemgrep = spawnSync('which', ['semgrep'], { encoding: 'utf8' }).status === 0;
+  if (!hasRealSemgrep) return;
+
+  const val = spawnSync('semgrep', ['scan', '--validate', `--config=${nearRules}`, '--metrics=off', '--disable-version-check'], { encoding: 'utf8', timeout: 30_000 });
+  assert.equal(val.status, 0, val.stderr);
+
+  fs.writeFileSync(path.join(dir, 'bad.rs'), [
+    'use near_sdk::env::{ecrecover, ed25519_verify};',
+    'use near_sdk::{env, near, require, AccountId, NearToken, Promise};',
+    '#[near]',
+    'impl Vault {',
+    '  pub fn bad(&mut self, h: [u8; 32], s: [u8; 64], pk: [u8; 32], memo: String) {',
+    '    let _ = ecrecover(&h, &s, 0, false);',
+    '    ed25519_verify(&s, &h, &pk);',
+    '    require!(',
+    '      env::signer_account_id() == self.owner,',
+    '      "owner"',
+    '    );',
+    '    let caller = env::signer_account_id();',
+    '    require!(caller == self.owner, "owner2");',
+    '    let _ = env::promise_result(0);',
+    '    Promise::new(self.owner.clone()).use_global_contract_by_account_id(self.owner.clone());',
+    '    env::log_str(&format!("EVENT_JSON:{{\\"standard\\":\\"nep141\\",\\"memo\\":\\"{memo}\\"}}"));',
+    '  }',
+    '  pub fn reclaim(&mut self, k: AccountId) -> Promise {',
+    '    let before = env::storage_usage();',
+    '    self.m.remove(&k);',
+    '    let _ = before;',
+    '    Promise::new(env::predecessor_account_id()).transfer(NearToken::from_yoctonear(1))',
+    '  }',
+    '  pub fn reclaim_local(&mut self, k: AccountId) -> Promise {',
+    '    let caller = env::predecessor_account_id();',
+    '    let freed = u128::from(self.saved_storage - env::storage_usage());',
+    '    let _ = k;',
+    '    Promise::new(caller).transfer(NearToken::from_yoctonear(freed))',
+    '  }',
+    '}',
+  ].join('\n'));
+  fs.writeFileSync(path.join(dir, 'good.rs'), [
+    'use near_sdk::{env, near, require, AccountId, NearToken, Promise};',
+    '#[near]',
+    'impl Vault {',
+    '  pub fn good(&mut self, h: [u8; 32], s: [u8; 64], pk: [u8; 32], code_hash: Vec<u8>, payer: AccountId) -> Promise {',
+    '    let _ = env::ecrecover(&h, &s, 0, true);',
+    '    require!(env::ed25519_verify(&s, &h, &pk), "bad sig");',
+    '    require!(env::predecessor_account_id() == self.owner, "owner");',
+    '    let _ = env::promise_result_checked(0, 1024);',
+    '    let before = env::storage_usage();',
+    '    let _ = before;',
+    '    Promise::new(self.owner.clone()).use_global_contract(code_hash).then(Promise::new(payer).transfer(NearToken::from_yoctonear(1)))',
+    '  }',
+    '  #[payable]',
+    '  pub fn nft_mint(&mut self, id: String) {',
+    '    let initial = env::storage_usage();',
+    '    self.m.insert(&id, &env::predecessor_account_id());',
+    '    let cost = u128::from(env::storage_usage() - initial) * env::storage_byte_cost().as_yoctonear();',
+    '    let attached = env::attached_deposit().as_yoctonear();',
+    '    require!(attached >= cost, "deposit");',
+    '    let excess = attached - cost;',
+    '    if excess > 0 {',
+    '      Promise::new(env::predecessor_account_id()).transfer(NearToken::from_yoctonear(excess));',
+    '    }',
+    '  }',
+    '}',
+  ].join('\n'));
+  fs.writeFileSync(path.join(dir, 'bad.ts'), 'const a = near.signerAccountId() === owner;\nconst b = process.env.DSTACK_SIMULATOR_ENDPOINT;\nconst c = import.meta.env.VITE_NEARAI_API_KEY;\n');
+  fs.writeFileSync(path.join(dir, 'good.ts'), 'const a = near.predecessorAccountId() === owner;\nconst b = "/var/run/dstack.sock";\nconst c = process.env.NEARAI_API_KEY;\n');
+  fs.writeFileSync(path.join(dir, 'bad.py'), 'import os\nsim = os.environ.get("DSTACK_SIMULATOR_ENDPOINT", "/var/run/dstack.sock")\n');
+  fs.writeFileSync(path.join(dir, 'good.py'), 'SOCK = "/var/run/dstack.sock"\n');
+
+  const scan = spawnSync('semgrep', ['scan', '--metrics=off', '--disable-version-check', '--json', `--config=${nearRules}`, dir], { encoding: 'utf8', timeout: 30_000 });
+  assert.equal(scan.status, 0, scan.stderr);
+  const parsed = JSON.parse(scan.stdout);
+  assert.deepEqual(parsed.errors, []);
+  const hitFiles = new Set(parsed.results.map((r) => path.basename(r.path)));
+  assert.deepEqual([...hitFiles].sort(), ['bad.py', 'bad.rs', 'bad.ts']);
+  assert.equal(parsed.results.length, 13);
 });

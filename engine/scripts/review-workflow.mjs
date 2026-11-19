@@ -56,11 +56,20 @@ function evmNpmBlocked(pkg) {
 }
 
 const NEAR_NPM_NOT_OFFLINE = ['@defuse-protocol/one-click-sdk-typescript', '@defuse-protocol/intents-sdk', '@near-intents-agent-api/sdk'];
+const NEAR_NPM_SANDBOX = ['near-workspaces', 'near-workspaces-ava', 'near-sandbox'];
 const VENDORED_MANIFEST = /(?:^|\/)(?:node_modules|vendor|target|dist|build)\//;
+const hasNearSandboxCargo = (info) => isNearCargo(info, true) || info.dependencies.some((d) => d.package === 'near-workspaces');
 
 function nearNpmBlocked(pkg) {
   const deps = { ...pkg.dependencies, ...pkg.devDependencies, ...pkg.peerDependencies, ...pkg.optionalDependencies };
   return NEAR_NPM_NOT_OFFLINE.find((name) => name === pkg.name || Object.prototype.hasOwnProperty.call(deps, name)) || null;
+}
+
+function nearNpmSandboxBlocked(pkg) {
+  const deps = { ...pkg.dependencies, ...pkg.devDependencies, ...pkg.peerDependencies, ...pkg.optionalDependencies };
+  const dep = NEAR_NPM_SANDBOX.find((name) => name === pkg.name || Object.prototype.hasOwnProperty.call(deps, name));
+  if (dep) return dep;
+  return /\bnear-sandbox\b/.test(String(pkg.scripts?.test || '')) ? 'near-sandbox' : null;
 }
 
 export function buildExistingTestCatalog(snapshot, manifest) {
@@ -68,6 +77,7 @@ export function buildExistingTestCatalog(snapshot, manifest) {
   const tests = [];
   const coverageGaps = [];
   const nearContractDirs = [];
+  const nearSandboxDirs = [];
   const unresolvedCargoDirs = [];
   for (const file of manifest.files) {
     if (path.posix.basename(file.path) !== 'Cargo.toml' || VENDORED_MANIFEST.test(file.path)) continue;
@@ -76,6 +86,7 @@ export function buildExistingTestCatalog(snapshot, manifest) {
     try { info = cargoInfo(snapshot, path.join(snapshot, file.path)); } catch { unresolvedCargoDirs.push(path.posix.dirname(file.path)); continue; }
     if (info.error) unresolvedCargoDirs.push(path.posix.dirname(file.path));
     if (isNearCargo(info, true)) nearContractDirs.push(path.posix.dirname(file.path));
+    if (hasNearSandboxCargo(info)) nearSandboxDirs.push(path.posix.dirname(file.path));
   }
   for (const file of manifest.files) {
     const cwd = path.posix.dirname(file.path);
@@ -86,8 +97,10 @@ export function buildExistingTestCatalog(snapshot, manifest) {
         const pkg = JSON.parse(fs.readFileSync(path.join(snapshot, file.path), 'utf8'));
         if (typeof pkg.scripts?.test === 'string') {
           const blocked = nearNpmBlocked(pkg);
+          const nearSbx = nearNpmSandboxBlocked(pkg);
           const evmTool = evmNpmBlocked(pkg);
           if (blocked) coverageGaps.push(`NEAR package tests in ${cwd} (${blocked}) are not catalogued as an offline suite. Do not call 1Click, the Intents SDK, or the Intents agent API.`);
+          else if (nearSbx) coverageGaps.push(`NEAR sandbox tests in ${cwd} (${nearSbx}) are a local-sandbox coverage gap. near-workspaces starts near-sandbox or connects to testnet and is not run offline.`);
           else if (evmTool) coverageGaps.push(evmTestGap(cwd, evmTool));
           else kind = 'npm';
         }
@@ -97,11 +110,11 @@ export function buildExistingTestCatalog(snapshot, manifest) {
       try { text = fs.readFileSync(path.join(snapshot, file.path), 'utf8'); } catch { text = ''; }
       if (/\[(?:package|workspace)\]/.test(text)) {
         const info = cargoInfo(snapshot, path.join(snapshot, file.path));
-        const selfNear = isNearCargo(info, true);
+        const selfNear = hasNearSandboxCargo(info);
         if (info.error) { coverageGaps.push(`Cargo manifest in ${cwd} could not be parsed; tests are not catalogued.`); continue; }
         const workspace = /^\s*\[workspace\]/m.test(text);
         if (workspace && unresolvedCargoDirs.some(dir => cwd === '.' || dir.startsWith(`${cwd}/`))) { coverageGaps.push(`Cargo workspace in ${cwd} contains an unresolved manifest; tests are not catalogued.`); continue; }
-        const containsNear = workspace && nearContractDirs.some((dir) => cwd === '.' ? dir !== '.' : dir.startsWith(`${cwd}/`));
+        const containsNear = workspace && nearSandboxDirs.some((dir) => cwd === '.' ? dir !== '.' : dir.startsWith(`${cwd}/`));
         if (selfNear || containsNear) coverageGaps.push(nearSandboxGap(cwd));
         else kind = 'cargo';
         if (nearContractDirs.includes(cwd) && isNearCargo(info) && /^\s*\[package\]/m.test(text) && tests.length < 126) {

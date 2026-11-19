@@ -1,0 +1,227 @@
+rules:
+  - id: near.security.rust.ecrecover-malleable-signature
+    languages: [rust]
+    severity: ERROR
+    message: >-
+      ecrecover called with malleability_flag = false accepts high-s malleable secp256k1 signatures,
+      allowing signature-hash replay bypasses. Pass true as the fourth argument, normalize recovery byte v to 0..=1
+      (raw Ethereum 27/28 aborts with HostError), and bind domain, nonce and deadline.
+    metadata:
+      category: security
+      technology: [near]
+      owasp: ["A02:2021 - Cryptographic Failures"]
+      cwe: ["CWE-347"]
+    pattern-either:
+      - pattern: "env::ecrecover($HASH, $SIG, $V, false)"
+      - pattern: "near_sdk::env::ecrecover($HASH, $SIG, $V, false)"
+      - pattern: "ecrecover($HASH, $SIG, $V, false)"
+
+  - id: near.security.rust.ed25519-verify-unchecked-return
+    languages: [rust]
+    severity: ERROR
+    message: >-
+      ed25519_verify returns a bool and does not panic on an invalid signature; discarding its return value
+      accepts forged signatures. Assert the result with require!(env::ed25519_verify(...)).
+    metadata:
+      category: security
+      technology: [near]
+      owasp: ["A07:2021 - Identification and Authentication Failures"]
+      cwe: ["CWE-252", "CWE-347"]
+    pattern-either:
+      - pattern: "env::ed25519_verify($SIG, $MSG, $PK);"
+      - pattern: "near_sdk::env::ed25519_verify($SIG, $MSG, $PK);"
+      - pattern: "ed25519_verify($SIG, $MSG, $PK);"
+
+  - id: near.security.rust.signer-account-id-auth
+    languages: [rust]
+    severity: WARNING
+    message: >-
+      Comparing env::signer_account_id() for authorization allows confused-deputy phishing across intermediate
+      contracts and misidentifies the user under NEP-366 SignedDelegate relayers. Check env::predecessor_account_id().
+    metadata:
+      category: security
+      technology: [near]
+      owasp: ["A01:2021 - Broken Access Control"]
+      cwe: ["CWE-863"]
+    pattern-either:
+      - pattern: "env::signer_account_id() == $AUTH"
+      - pattern: "$AUTH == env::signer_account_id()"
+      - pattern: "env::signer_account_id() != $AUTH"
+      - pattern: "$AUTH != env::signer_account_id()"
+      - pattern-regex: '\b(?:require|assert|assert_eq|assert_ne)!\s*\([^;]{0,240}?\bsigner_account_id\s*\(\s*\)'
+      - patterns:
+          - pattern-inside: |
+              fn $FN(...) {
+                ...
+                let $CALLER = env::signer_account_id();
+                ...
+              }
+          - pattern-either:
+              - pattern: "$CALLER == $AUTH"
+              - pattern: "$AUTH == $CALLER"
+              - pattern: "$CALLER != $AUTH"
+              - pattern: "$AUTH != $CALLER"
+      - pattern-regex: 'let\s+(?<caller>[A-Za-z_][A-Za-z0-9_]*)\s*=\s*(?:near_sdk::)?env::signer_account_id\s*\(\s*\)\s*;[\s\S]{0,300}?\b(?:require|assert|assert_eq|assert_ne)!\s*\([^;]{0,200}?\b(?P=caller)\b'
+
+  - id: near.security.rust.unbounded-callback-promise-result
+    languages: [rust]
+    severity: WARNING
+    message: >-
+      env::promise_result reads unbounded cross-contract return bytes, allowing an untrusted callee to exhaust
+      callback gas before error handling runs. Prefer env::promise_result_checked(index, max_bytes).
+    metadata:
+      category: security
+      technology: [near]
+      owasp: ["A04:2021 - Insecure Design"]
+      cwe: ["CWE-400"]
+    pattern-either:
+      - pattern: "env::promise_result($IDX)"
+      - pattern: "near_sdk::env::promise_result($IDX)"
+      - pattern: "promise_result($IDX)"
+
+  - id: near.security.rust.global-contract-mutable-account
+    languages: [rust]
+    severity: WARNING
+    message: >-
+      NEP-591 use_global_contract_by_account_id delegates future logic updates to a mutable publisher AccountId.
+      Prefer immutable code-hash binding (use_global_contract) unless publisher upgrade authority is intended.
+    metadata:
+      category: security
+      technology: [near]
+      owasp: ["A08:2021 - Software and Data Integrity Failures"]
+      cwe: ["CWE-829"]
+    pattern-either:
+      - pattern: "$PROMISE.use_global_contract_by_account_id($PUBLISHER)"
+      - pattern: "env::promise_batch_action_use_global_contract_by_account_id($IDX, $PUBLISHER)"
+      - pattern: "near_sdk::env::promise_batch_action_use_global_contract_by_account_id($IDX, $PUBLISHER)"
+
+  - id: near.security.rust.storage-refund-to-predecessor
+    languages: [rust]
+    severity: WARNING
+    message: >-
+      Refunding env::storage_usage() shrinkage directly to env::predecessor_account_id() lets an arbitrary caller
+      trigger state cleanup and steal staked NEAR paid by the original depositor. Refund the recorded storage payer.
+    metadata:
+      category: security
+      technology: [near]
+      owasp: ["A01:2021 - Broken Access Control"]
+      cwe: ["CWE-639"]
+    pattern-either:
+      - patterns:
+          - pattern-inside: |
+              fn $FN(...) {
+                ...
+                <... env::storage_usage() ...>;
+                ...
+              }
+          - pattern-not-inside: |
+              fn $FN(...) {
+                ...
+                <... env::attached_deposit() ...>;
+                ...
+              }
+          - pattern: "Promise::new(env::predecessor_account_id()).transfer($AMT)"
+      - patterns:
+          - pattern-inside: |
+              fn $FN(...) {
+                ...
+                let $CALLER = env::predecessor_account_id();
+                ...
+              }
+          - pattern-inside: |
+              fn $FN(...) {
+                ...
+                <... env::storage_usage() ...>;
+                ...
+              }
+          - pattern-not-inside: |
+              fn $FN(...) {
+                ...
+                <... env::attached_deposit() ...>;
+                ...
+              }
+          - pattern: "Promise::new($CALLER).transfer($AMT)"
+
+  - id: near.security.rust.nep297-event-json-format-injection
+    languages: [rust]
+    severity: WARNING
+    message: >-
+      Building NEP-297 EVENT_JSON logs with format! string interpolation lets unescaped user strings inject forged
+      indexer/relayer events or newlines. Serialize structured event structs via serde_json or #[near(event_json(...))].
+    metadata:
+      category: security
+      technology: [near]
+      owasp: ["A03:2021 - Injection"]
+      cwe: ["CWE-117"]
+    pattern-regex: '\bformat!\s*\(\s*(?:r#*"|")EVENT_JSON:\s*\{\{'
+
+  - id: near.security.js.near-sdk-js-signer-auth
+    languages: [javascript, typescript]
+    severity: WARNING
+    message: >-
+      near.signerAccountId() is preserved across cross-contract calls and equals the relayer under NEP-366
+      meta-transactions. Authorize against near.predecessorAccountId() instead.
+    metadata:
+      category: security
+      technology: [near]
+      owasp: ["A01:2021 - Broken Access Control"]
+      cwe: ["CWE-863"]
+    pattern-either:
+      - pattern: "near.signerAccountId() === $AUTH"
+      - pattern: "$AUTH === near.signerAccountId()"
+      - pattern: "near.signerAccountId() !== $AUTH"
+      - pattern: "$AUTH !== near.signerAccountId()"
+      - pattern: "near.signerAccountId() == $AUTH"
+      - pattern: "$AUTH == near.signerAccountId()"
+
+  - id: near.security.js.shade-dstack-simulator-override
+    languages: [javascript, typescript]
+    severity: WARNING
+    message: >-
+      Reading DSTACK_SIMULATOR_ENDPOINT or TAPPD_SIMULATOR_ENDPOINT in production Shade Agent / TEE worker code
+      can redirect enclave key derivation and TDX attestation away from /var/run/dstack.sock.
+    metadata:
+      category: security
+      technology: [near]
+      owasp: ["A07:2021 - Identification and Authentication Failures"]
+      cwe: ["CWE-290"]
+    pattern-either:
+      - pattern: "process.env.DSTACK_SIMULATOR_ENDPOINT"
+      - pattern: "process.env.TAPPD_SIMULATOR_ENDPOINT"
+      - pattern: "import.meta.env.VITE_DSTACK_SIMULATOR_ENDPOINT"
+
+  - id: near.security.js.nearai-browser-public-api-key
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: >-
+      Public framework environment variable (NEXT_PUBLIC_*, VITE_*, REACT_APP_*, PUBLIC_*) bundles NEARAI_API_KEY
+      into client-side JavaScript. Keep NEAR AI Cloud keys on the server.
+    metadata:
+      category: security
+      technology: [near]
+      owasp: ["A02:2021 - Cryptographic Failures"]
+      cwe: ["CWE-200"]
+    pattern-either:
+      - pattern: "process.env.NEXT_PUBLIC_NEARAI_API_KEY"
+      - pattern: "import.meta.env.VITE_NEARAI_API_KEY"
+      - pattern: "process.env.REACT_APP_NEARAI_API_KEY"
+      - pattern: "import.meta.env.PUBLIC_NEARAI_API_KEY"
+
+  - id: near.security.python.shade-dstack-simulator-override
+    languages: [python]
+    severity: WARNING
+    message: >-
+      Reading DSTACK_SIMULATOR_ENDPOINT or TAPPD_SIMULATOR_ENDPOINT in Python Shade Agent / NEAR AI TEE code
+      can redirect enclave key derivation and quote generation to an untrusted simulator.
+    metadata:
+      category: security
+      technology: [near]
+      owasp: ["A07:2021 - Identification and Authentication Failures"]
+      cwe: ["CWE-290"]
+    pattern-either:
+      - pattern: 'os.environ.get("DSTACK_SIMULATOR_ENDPOINT", ...)'
+      - pattern: 'os.getenv("DSTACK_SIMULATOR_ENDPOINT", ...)'
+      - pattern: 'os.environ["DSTACK_SIMULATOR_ENDPOINT"]'
+      - pattern: 'os.environ.get("TAPPD_SIMULATOR_ENDPOINT", ...)'
+      - pattern: 'os.getenv("TAPPD_SIMULATOR_ENDPOINT", ...)'
+      - pattern: 'os.environ["TAPPD_SIMULATOR_ENDPOINT"]'

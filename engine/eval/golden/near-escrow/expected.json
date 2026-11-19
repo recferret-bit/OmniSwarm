@@ -19,6 +19,14 @@
       "missedBy": [
         "paranoid"
       ]
+    },
+    {
+      "file": "src/lib.rs",
+      "startLine": 45,
+      "endLine": 45,
+      "class": "unchecked-ed25519-verify",
+      "title": "release_by_sig discards the bool return value of env::ed25519_verify",
+      "severity": "critical"
     }
   ],
   "decoys": [
@@ -35,6 +43,13 @@
       "endLine": 32,
       "reason": "release asserts the predecessor is the arbiter",
       "claim": "release is callable by anyone"
+    },
+    {
+      "file": "src/lib.rs",
+      "startLine": 53,
+      "endLine": 53,
+      "reason": "on_release is #[private] and bounds callback bytes with promise_result_checked",
+      "claim": "on_release is callable externally"
     }
   ]
 }

@@ -121,16 +121,16 @@ export const DOMAIN_SPECS = [
     title: 'Cryptography, Web3 Signatures & On-Chain Custody',
     surfaces: ['S1', 'S3', 'S4', 'S6'],
     alwaysActive: false,
-    summary: 'Solana/Anchor programs, Ed25519/SIWS authentication, Merkle roots & proofs, deterministic PRNG seeds, and key custody.',
+    summary: 'Solana, NEAR and EVM contracts, NEP-413/SIWS/EIP-712 authentication, Chain Signatures & TEE attestation, Merkle proofs, PRNG seeds, and key custody.',
     fileMarkers: [
-      { re: /@solana\/web3\.js|\b(?:anchor_lang|solana_program|tweetnacl|ed25519|ethers|viem|createHash|subtle\.digest|solders\b|\bnacl\b|\bPyNaCl\b|cryptography\.hazmat|\bjose\.jwt\b|\bhmac\.compare_digest)\b/g, label: 'Crypto / Web3 / PRNG stack' },
+      { re: /@solana\/web3\.js|@near-js\/|@near-wallet-selector\/|@hot-labs\/near-connect|@defuse-protocol\/|@near-intents-agent-api\/sdk|@neardefi\/shade-agent|@nearai\/|@fastnear\/|@phala\/dstack-sdk|@tappd\/sdk|(?:cloud-api|api)\.near\.ai|\/v1\/attestation\/report|\bv1\.signer\b|\b(?:anchor_lang|solana_program|near_sdk|near-sdk(?:-js)?|near[_-]crypto|near[_-]primitives|near[_-]api|near[_-]jsonrpc[_-]client|NearBindgen|near-api-js|near-kit|chainsig\.js|omni-bridge-sdk|near-ca|shade[_-]attestation|near-ai-cloud|nearai(?:[-_]cloud[-_]verifier)?|py[-_]near|dcap[_-]qvl|dstack[_-]sdk|tappd_sdk|DstackClient|TappdClient|ecrecover|ed25519_verify|bls12381_\w+|alt_bn128_\w+|request_app_private_key|CKDRequestArgs|verify_foreign_transaction|tweetnacl|ed25519|ethers|viem|createHash|subtle\.digest|solders\b|\bnacl\b|\bPyNaCl\b|cryptography\.hazmat|\bjose\.jwt\b|\bhmac\.compare_digest)\b/g, label: 'Crypto / Web3 / PRNG stack' },
     ],
     leads: [
       {
         id: 'crypto-sig-challenge',
         title: 'Signature Verification, SIWS Challenges & Nonces',
-        re: /\b(?:sign\.detached\.verify|verifyMessage|solana:signIn|signMessage|challenge|nonce|verify_signature|VerifyKey|BadSignatureError|Signature\.from_bytes|compare_digest)\b/g,
-        note: 'Verify the signed payload is compared byte-for-byte against the server-issued challenge (domain, wallet, nonce, expiry) and consumed once.',
+        re: /\/v1\/attestation\/report\b|\b(?:sign\.detached\.verify|verifyMessage|solana:signIn|signMessage|ecrecover|ed25519_verify|bls12381_\w+|alt_bn128_\w+|request_app_private_key|CKDRequestArgs|verify_foreign_transaction|verifyAttestation\w*|challenge|nonce|verify_signature|VerifyKey|BadSignatureError|Signature\.from_bytes|compare_digest)\b/g,
+        note: 'Verify the signed payload is compared byte-for-byte against the server-issued challenge (domain, wallet, nonce, expiry), malleability is rejected, and nonces are consumed once.',
       },
       {
         id: 'crypto-merkle-hash',

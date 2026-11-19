@@ -68,15 +68,29 @@ function solanaVersions(root, marks) {
 }
 
 function nearVersions(root, contract) {
-  if (!contract) return ['No near-sdk manifest in this mark set. Contract version and overflow-checks are not applied.'];
   const lines = [];
   walk(root, (file) => {
-    if (path.basename(file) !== 'Cargo.toml' || !isProductionPath(rel(root, file))) return;
+    const base = path.basename(file);
+    const r = rel(root, file);
+    if (!isProductionPath(r)) return;
+    if (base === 'package.json') {
+      try {
+        const pkg = JSON.parse(readText(file) || '{}');
+        const ver = pkg?.dependencies?.['near-sdk-js'] || pkg?.devDependencies?.['near-sdk-js'];
+        if (ver) lines.push(`${r}: near-sdk-js ${ver} (JS/TS WASM contract: inspect @call privateFunction/payableFunction guards and BigInt yoctoNEAR math).`);
+      } catch { /* malformed package.json is handled elsewhere */ }
+      return;
+    }
+    if (base !== 'Cargo.toml') return;
     const info = cargoInfo(root, file);
-    if (!isNearCargo(info)) return;
+    const nearRustDeps = info.dependencies.filter((d) => (['shade-attestation', 'near-crypto', 'near-primitives', 'near-api', 'near-jsonrpc-client'].includes(d.package) || (isNearCargo(info) && d.package === 'dcap-qvl')) && /(?:^|\.)dependencies$/.test(d.group)).map((d) => `${d.package} ${d.version || 'unresolved'}`);
+    if (nearRustDeps.length) lines.push(`${r}: ${nearRustDeps.join(', ')}.`);
+    if (!contract || !isNearCargo(info)) return;
     const versions = info.dependencies.filter(d => d.package === 'near-sdk').map(d => d.version || 'unresolved');
-    lines.push(`${rel(root, file)}: near-sdk ${versions.join(', ')}.`, nearReleaseEvidence(root, file));
+    const legacy = versions.some((v) => /^[~^=]?\s*[0-4]\./.test(v)) ? ' (legacy near-sdk <5: check #[near_bindgen] / Borsh layout compatibility and RustSec advisories)' : '';
+    lines.push(`${r}: near-sdk ${versions.join(', ')}${legacy}.`, nearReleaseEvidence(root, file));
   });
+  if (!contract && !lines.length) return ['No near-sdk manifest in this mark set. Contract version and overflow-checks are not applied.'];
   return lines.length ? lines : ['LEAD: NEAR manifest evidence could not be resolved.'];
 }
 
@@ -84,32 +98,36 @@ export function writeNear(root, eco) {
   const kinds = new Set(eco?.kinds || []);
   const contract = Boolean(eco?.contracts) || kinds.has('contract');
   const markedClient = ['client', 'intents', 'ai'].some((kind) => kinds.has(kind));
-  const absent = '# NEAR leads\n\nNo production near-sdk Cargo.toml and no production manifest for near-api-js, NEAR Connect, NEAR Intents, or NEAR AI. NEAR surface absent.\n';
-  const nodeExt = new Set(['.js', '.mjs', '.cjs', '.ts', '.tsx', '.jsx']);
-  const js = collect(root, (file, ext) => (nodeExt.has(ext) || path.basename(file) === 'package.json') && isProductionPath(rel(root, file)), NEAR_CLIENT_PATTERNS);
+  const absent = '# NEAR leads\n\nNo production near-sdk Cargo.toml and no production manifest for near-api-js, NEAR Wallet Selector, NEAR Connect, Chain Signatures, NEAR Intents, or NEAR AI. NEAR surface absent.\n';
+  const clientExt = new Set(['.js', '.mjs', '.cjs', '.ts', '.tsx', '.jsx', '.vue', '.svelte', '.py', ...(!contract ? ['.rs'] : [])]);
+  const js = collect(root, (file, ext) => ((clientExt.has(ext) && !file.endsWith('.min.js')) || path.basename(file) === 'package.json') && isProductionPath(rel(root, file)), NEAR_CLIENT_PATTERNS);
   const jsSection = section(NEAR_CLIENT_PATTERNS, js.found);
-  // v1.signer and the hosted APIs are leads in production source. They do not mark the stack.
-  if (!eco?.detected && !contract && jsSection.total === 0) return { leads: 0, files: 0, body: absent };
+  const hasRecognitionLead = NEAR_CLIENT_PATTERNS.some((p) => p.recognition && (js.found.get(p.id)?.length || 0) > 0);
+  // v1.signer and the hosted APIs are leads in production source. Generic TEE/delegate identifiers without a NEAR mark do not wake near.md.
+  if (!eco?.detected && !contract && !hasRecognitionLead) return { leads: 0, files: 0, body: absent };
   let files = js.files;
   let total = 0;
   const parts = [];
-  if (contract) {
+  if (contract || kinds.has('ai')) {
     const rust = collect(root, (file, ext) => ext === '.rs' && isProductionPath(rel(root, file)), NEAR_CONTRACT_PATTERNS);
-    files += rust.files;
     const sec = section(NEAR_CONTRACT_PATTERNS, rust.found);
-    total += sec.total;
-    parts.push(sec.body);
+    if (contract || sec.total > 0) {
+      files += rust.files;
+      total += sec.total;
+      parts.push(sec.body);
+    }
   }
-  if (markedClient || eco?.detected || jsSection.total > 0) {
+  if (markedClient || eco?.detected || hasRecognitionLead) {
     total += jsSection.total;
     parts.push(jsSection.body);
   }
   const header = [
     '# NEAR leads',
     '',
-    'Regex leads only. Not findings. Reviewers read source against the NEAR smart contract security checklist. Do not fetch that page from the sandbox.',
+    'Regex leads only. Not findings. Reviewers read source against the NEAR smart contract security checklist, NEP standards and NEAR AI / Chain Signatures controls. Do not fetch external pages from the sandbox.',
     'Checklist: https://docs.near.org/smart-contracts/security/checklist',
-    'Do not deploy, do not run near-sandbox, do not call NEAR RPC, the faucet, NEAR AI Cloud, 1Click, the Intents agent API, OutLayer, or NEAR MCP, and do not read the near CLI keychain.',
+    'Grep cannot close: a public method, CKD wrapper or yield-resume handler with no caller check, optimistic internal credit before deposit-notification hooks settle (sum(internal_balances) <= escrowed), state clobbered by snapshot rollback or DeleteAccount push-payout DoS, callback abort via the 16 KB cumulative receipt-log cap or gas starvation, ecrecover malleability, storage-shrinkage refund theft, shared Chain Signature derivation paths, unverified NEP-413 FullAccess key ownership, or bypassed TEE codehash checks. Those are a source read.',
+    'Do not deploy, do not run near-sandbox, do not call NEAR RPC, the faucet, NEAR AI Cloud, 1Click, the Intents agent API, OutLayer, Phala/Dstack, or NEAR MCP, and do not read the near CLI keychain.',
     `Kinds: ${[...kinds].join(', ') || 'unspecified'}. Contracts: ${contract ? 'yes' : 'no'}. Marks: ${(eco?.marks || []).join(', ') || 'none'}.`,
     ...nearVersions(root, contract),
     `Files scanned: ${files}. Leads listed: ${total} (capped at ${PER_PATTERN} per pattern).`,

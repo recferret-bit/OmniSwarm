@@ -1,0 +1,90 @@
+{
+  "stack": "near-shade-agent",
+  "bugs": [
+    {
+      "file": "src/lib.rs",
+      "startLine": 40,
+      "endLine": 40,
+      "class": "unverified-tee-worker",
+      "title": "register_worker records any caller and codehash without TDX quote verification or an approved_codehashes check",
+      "severity": "critical"
+    },
+    {
+      "file": "src/lib.rs",
+      "startLine": 45,
+      "endLine": 45,
+      "class": "ckd-secret-exfiltration",
+      "title": "request_app_private_key forwards caller-supplied app_public_key and derivation_path to v1.signer on domain_id 2 without authenticating an attested worker",
+      "severity": "critical"
+    },
+    {
+      "file": "src/lib.rs",
+      "startLine": 52,
+      "endLine": 52,
+      "class": "storage-refund-theft",
+      "title": "reclaim_expired_order refunds freed storage stake to env::predecessor_account_id() instead of the original storage payer",
+      "severity": "high",
+      "missedBy": [
+        "paranoid"
+      ]
+    },
+    {
+      "file": "src/lib.rs",
+      "startLine": 57,
+      "endLine": 57,
+      "class": "optimistic-deposit-ghost-credit",
+      "title": "credit_intent_deposit credits spendable internal_balances before the deposit-notification hook settles",
+      "severity": "critical"
+    },
+    {
+      "file": "src/agent.ts",
+      "startLine": 9,
+      "endLine": 9,
+      "class": "tee-simulator-bypass",
+      "title": "createEnclaveClient allows DSTACK_SIMULATOR_ENDPOINT to redirect enclave key derivation away from /var/run/dstack.sock",
+      "severity": "critical"
+    },
+    {
+      "file": "src/agent.ts",
+      "startLine": 17,
+      "endLine": 17,
+      "class": "nep413-missing-full-access-check",
+      "title": "verifyNep413Session accepts any key signature without consuming a server nonce or checking view_access_key FullAccess ownership",
+      "severity": "high",
+      "missedBy": [
+        "baseline"
+      ]
+    },
+    {
+      "file": "src/agent.ts",
+      "startLine": 23,
+      "endLine": 23,
+      "class": "unvalidated-intents-quote",
+      "title": "executeOneClickQuote sends funds to quote.depositAddress without validating assets, minAmountOut, recipient or deadline",
+      "severity": "high"
+    }
+  ],
+  "decoys": [
+    {
+      "file": "src/lib.rs",
+      "startLine": 64,
+      "endLine": 64,
+      "reason": "execute_worker_action requires a registered worker with an owner-approved codehash and enforces a deterministic cap",
+      "claim": "execute_worker_action lets unverified workers mint uncapped balances"
+    },
+    {
+      "file": "src/lib.rs",
+      "startLine": 72,
+      "endLine": 72,
+      "reason": "on_mpc_sign is #[private], bounds return bytes with promise_result_checked and restores debited balance only when v1.signer failed",
+      "claim": "on_mpc_sign refunds users after v1.signer already produced a public signature"
+    },
+    {
+      "file": "src/agent.ts",
+      "startLine": 30,
+      "endLine": 30,
+      "reason": "verifyConfidentialModelReply issues a fresh 32-byte random nonce and verifies the attestation report and per-response signature",
+      "claim": "verifyConfidentialModelReply trusts NEAR AI Cloud responses without checking enclave attestation"
+    }
+  ]
+}

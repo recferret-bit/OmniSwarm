@@ -28,15 +28,18 @@ const PY_FRAMEWORKS = [
   ['sqlalchemy', /\bsqlalchemy\b/i], ['alembic', /\balembic\b/i], ['pydantic', /\bpydantic\b/i], ['celery', /\bcelery\b/i],
   ['redis', /\bredis\b/i], ['websockets', /\bwebsockets\b/i], ['python-jose', /python-jose|\bjose\b/i], ['pyjwt', /\bpyjwt\b|\bimport jwt\b/i],
   ['boto3', /\bboto3\b/i], ['grpc', /\bgrpcio\b/i], ['solana-py', /\bsolders\b|\bsolana\b/i],
-  ['py-near', /\bpy-near\b/i],
+  ['py-near', /\bpy[-_]near\b/i], ['nearai', /\bnearai(?:[-_]cloud[-_]verifier)?\b/i],
 ];
 const NODE_FRAMEWORKS = [
   ['express', /["']express["']/], ['nestjs', /@nestjs\//], ['fastify', /["']fastify["']/], ['next', /["']next["']/],
   ['react', /["']react["']/], ['vite', /["']vite["']/], ['solana-web3', /@solana\/web3\.js|@solana\/kit|@coral-xyz|@anchor-lang/],
-  ['near-api-js', /["']near-api-js["']|@near-js\//],
-  ['near-connect', /["']@hot-labs\/near-connect["']/],
-  ['near-intents', /["']@defuse-protocol\/(?:one-click-sdk-typescript|intents-sdk)["']|["']@near-intents-agent-api\/sdk["']/],
-  ['near-ai', /["']@neardefi\/shade-agent-js["']|cloud-api\.near\.ai|["']near-ai-cloud["']/],
+  ['near-sdk-js', /["']near-sdk-js["']\s*:/],
+  ['near-api-js', /["'](?:near-api-js|@near-js\/[\w.-]+|near-kit|@fastnear\/[\w.-]+)["']\s*:/],
+  ['near-wallet-selector', /["']@near-wallet-selector\/[\w.-]+["']\s*:/],
+  ['near-connect', /["']@hot-labs\/near-connect["']\s*:/],
+  ['near-chainsig', /["'](?:chainsig\.js|omni-bridge-sdk|near-ca)["']\s*:/],
+  ['near-intents', /["'](?:@defuse-protocol\/(?:one-click-sdk-typescript|intents-sdk)|@near-intents-agent-api\/sdk)["']\s*:/],
+  ['near-ai', /["'](?:@neardefi\/shade-agent(?:-js|-cli)?|@nearai\/[\w.-]+|nearai-cloud-verifier|near-ai-cloud)["']\s*:|cloud-api\.near\.ai/],
   ['evm-client', /["'](?:ethers|viem|wagmi|web3|@wagmi\/core|@rainbow-me\/rainbowkit|@metamask\/sdk|@web3modal\/[\w-]+)["']/],
   ['hardhat', /["'](?:hardhat|@nomicfoundation\/[\w-]+)["']/],
 ];
@@ -102,9 +105,15 @@ export function detectEcosystems(targetRoot) {
     const prod = isProductionPath(rel);
     if (PY_MANIFEST.test(name)) {
       py.manifests.push(rel);
-      if (/^(?:requirements|pyproject|Pipfile|setup\.cfg)/.test(name)) {
+      if (/^(?:requirements|pyproject|Pipfile|setup\.(?:cfg|py)|poetry\.lock|uv\.lock|pdm\.lock)/.test(name)) {
         const text = read(file);
-        for (const [id, re] of PY_FRAMEWORKS) if (re.test(text)) py.frameworks.add(id);
+        const uncommented = text.replace(/^\s*#.*$/gm, '');
+        for (const [id, re] of PY_FRAMEWORKS) if (re.test(uncommented)) py.frameworks.add(id);
+        const nearPyKinds = [];
+        if (/\bpy[-_]near\b/i.test(uncommented)) nearPyKinds.push('client');
+        if (/\bnearai(?:[-_]cloud[-_]verifier)?\b/i.test(uncommented)) nearPyKinds.push('ai');
+        if (nearPyKinds.length && /\bdstack[-_]sdk\b/i.test(uncommented)) nearPyKinds.push('ai');
+        markNear(rel, nearPyKinds);
       }
     } else if (/^Dockerfile/.test(name) || name.endsWith('.dockerfile')) py.dockerfiles.push(rel);
     if (name === 'package.json') {
@@ -112,9 +121,11 @@ export function detectEcosystems(targetRoot) {
       const text = read(file);
       for (const [id, re] of NODE_FRAMEWORKS) if (re.test(text)) node.frameworks.add(id);
       const nearKinds = [];
-      if (/["']near-api-js["']|@near-js\/|["']@hot-labs\/near-connect["']/.test(text)) nearKinds.push('client');
-      if (/["']@defuse-protocol\/(?:one-click-sdk-typescript|intents-sdk)["']|["']@near-intents-agent-api\/sdk["']/.test(text)) nearKinds.push('intents');
-      if (/["']@neardefi\/shade-agent-js["']|cloud-api\.near\.ai|["']near-ai-cloud["']/.test(text)) nearKinds.push('ai');
+      if (/["']near-sdk-js["']\s*:/.test(text)) nearKinds.push('contract');
+      if (/["'](?:near-api-js|@near-js\/[\w.-]+|@near-wallet-selector\/[\w.-]+|@hot-labs\/near-connect|chainsig\.js|near-kit|@fastnear\/[\w.-]+|omni-bridge-sdk|near-ca|near-seed-phrase)["']\s*:/.test(text)) nearKinds.push('client');
+      if (/["'](?:@defuse-protocol\/(?:one-click-sdk-typescript|intents-sdk)|@near-intents-agent-api\/sdk)["']\s*:/.test(text)) nearKinds.push('intents');
+      if (/["'](?:@neardefi\/shade-agent(?:-js|-cli)?|@nearai\/[\w.-]+|nearai-cloud-verifier|near-ai-cloud)["']\s*:|cloud-api\.near\.ai/.test(text)) nearKinds.push('ai');
+      if (nearKinds.length && /["'](?:@phala\/dstack-sdk|@tappd\/sdk)["']\s*:/.test(text)) nearKinds.push('ai');
       markNear(rel, nearKinds);
       if (prod && EVM_CLIENT_DEP.test(text)) { evm.marks.push(rel); evm.kinds.add('client'); }
     } else if (['package-lock.json', 'yarn.lock', 'pnpm-lock.yaml'].includes(name)) node.lockfiles.push(rel);
@@ -122,8 +133,14 @@ export function detectEcosystems(targetRoot) {
       rust.manifests.push(rel);
       const text = read(file);
       if (/anchor-lang|solana-program|solana-sdk|pinocchio/.test(text)) solana.marks.push(rel);
-      // docs.near.org/tools/sdk: the only official contract SDK is near-sdk-rs, crate near-sdk.
-      if (isNearCargo(cargoInfo(root, file))) markNear(rel, ['contract']);
+      // Rust contracts use near-sdk; Shade Agent TEE crates use shade-attestation (or near-sdk + dcap-qvl).
+      const info = cargoInfo(root, file);
+      const hasProdDep = (pkg) => info.dependencies.some((d) => d.package === pkg && /(?:^|\.)dependencies$/.test(d.group));
+      const nearRustKinds = [];
+      if (isNearCargo(info)) nearRustKinds.push('contract');
+      if (['near-crypto', 'near-primitives', 'near-api', 'near-jsonrpc-client'].some(hasProdDep)) nearRustKinds.push('client');
+      if (hasProdDep('shade-attestation') || (isNearCargo(info) && hasProdDep('dcap-qvl'))) nearRustKinds.push('ai');
+      markNear(rel, nearRustKinds);
     } else if (name === 'Anchor.toml') solana.marks.push(rel);
     else if (EVM_PROJECT_FILE.test(name) && prod && !EVM_VENDORED.test(rel)) {
       evm.marks.push(rel);

@@ -14,7 +14,7 @@ import { analyzeStackAndPlans, renderReviewPlansMarkdown } from './audit-plans.m
 import { scannerChecks, missingScanner, setScannerOutputDir, runAllScanners } from './harness-scanners.mjs';
 import { solanaStack, writeConfig, writeEvm, writeNear, writeSolana, writePython, writeNode, writeWeb } from './harness-leads.mjs';
 import { SOLANA_PATTERNS, NEAR_CONTRACT_PATTERNS, NEAR_CLIENT_PATTERNS, EVM_CONTRACT_PATTERNS, EVM_CLIENT_PATTERNS } from './harness-patterns-chain.mjs';
-import { PY_PATTERNS, NODE_PATTERNS } from './harness-patterns-app.mjs';
+import { PY_PATTERNS, NODE_PATTERNS, CONFIG_PATTERNS } from './harness-patterns-app.mjs';
 
 function parseArgs(argv) {
   const out = { target: '', outDir: '', noDeps: false, selfTest: false };
@@ -120,11 +120,7 @@ function selfTest() {
     ['wallet-sign', web.body], ['tx-deserialize', web.body], ['skip-preflight', web.body],
     ...PY_PATTERNS.map((p) => [p.id, python.body]),
     ...NODE_PATTERNS.map((p) => [p.id, nodeLeads.body]),
-    ['eol-runtime', config.body],
-    ['pr-target', config.body], ['unpinned-action', config.body], ['curl-pipe-sh', config.body],
-    ['docker-privileged', config.body], ['docker-sock', config.body],
-    ...['image-latest', 'debug-port', 'db-bind-all', 'default-password', 'env-secret', 'tls-verify-env', 'ci-write-all', 'ci-secret-echo',
-      'ci-script-injection', 'proxy-plain-http', 'proxy-autoindex', 'proxy-cors-star', 'proxy-forwarded-passthrough', 'k8s-privilege', 'open-ingress'].map((id) => [id, config.body]),
+    ...CONFIG_PATTERNS.map((p) => [p.id, config.body]),
   ];
   const bad = [];
   for (const [id, body] of must) {

@@ -1,5 +1,6 @@
 // The "Evidence & scope" panels: review status and limits, isolation policy, sandbox records, per-stack coverage,
 // control assertions and attached diagram source. Shared by report.html and the pre-v2 findings-by-model.html.
+import path from 'node:path';
 import { disclosure, esc, prose } from './report-cards.mjs';
 import { suiteLabel, testsHeadline, testsHtml, toolsHeadline, toolsHtml } from './report-tests.mjs';
 
@@ -39,14 +40,59 @@ function sandboxDetails({ sandboxRows }) {
   return `<p class="note">${n('ran')} finished · ${n('failed')} failed · ${n('impossible')} not started. Sandbox-reported records are not authenticated execution evidence. Finished does not mean passed; failed or not started is not a pass.</p><div class="table-scroll"><table><thead><tr><th>Check</th><th>Observed status</th><th>Coverage & limits</th></tr></thead><tbody>${sandboxRows.map((r) => `<tr><td>${esc(r.name)}</td><td class="result-${r.result}">${label(r)}</td><td>${esc(r.detail)}</td></tr>`).join('')}</tbody></table></div>`;
 }
 
-function stackRows(eco, suiteRows, gapRows) {
+function nearCoverageRow(eco, catalogTests, formatSuite, gaps, gapRows) {
   const near = eco.near;
+  if (!near?.detected) return ['NEAR', false, 'absent', [], []];
+  const marks = near.marks || [];
+  const cargoDirs = marks.filter((m) => m.endsWith('Cargo.toml')).map((m) => path.posix.dirname(m));
+  const nodeDirs = marks.filter((m) => m.endsWith('package.json')).map((m) => path.posix.dirname(m));
+  const pyDirs = marks.filter((m) => !m.endsWith('Cargo.toml') && !m.endsWith('package.json')).map((m) => path.posix.dirname(m));
+  const nearRust = Boolean(near.contracts) && (cargoDirs.length > 0 || (!marks.length && Boolean(eco.rust?.detected)));
+  const nearJsContract = Boolean(near.contracts) && (Boolean(eco.node?.frameworks?.includes('near-sdk-js')) || (!nearRust && nodeDirs.length > 0));
+  const contractLabel = !near.contracts
+    ? 'no near-sdk crate'
+    : nearRust && nearJsContract
+      ? 'near-sdk + near-sdk-js contracts'
+      : nearRust
+        ? 'near-sdk contract'
+        : 'near-sdk-js contract';
+  const detail = `${contractLabel}; kinds ${(near.kinds || []).join(', ') || 'none'}; ${marks.join(', ') || 'no manifest mark'}`;
+
+  const nodeHit = (cwd, dirs) => dirs.some((d) => d === '.' || d === cwd || cwd.startsWith(`${d}/`));
+  const dirHit = (cwd, dirs) => dirs.some((d) => d === '.' || cwd === '.' || d === cwd || d.startsWith(`${cwd}/`) || cwd.startsWith(`${d}/`));
+  const matchedSuites = catalogTests.filter((t) => {
+    if (t.kind === 'near-build' || t.kind === 'near-clippy') return true;
+    if (t.kind === 'cargo') return cargoDirs.length ? dirHit(t.cwd, cargoDirs) : (!marks.length && !nearRust && Boolean(eco.rust?.detected));
+    if (t.kind === 'npm') return nodeDirs.length ? nodeHit(t.cwd, nodeDirs) : (!marks.length && Boolean(eco.node?.detected));
+    if (t.kind === 'pytest') return pyDirs.length ? dirHit(t.cwd, pyDirs) : (!marks.length && Boolean(eco.python?.detected));
+    return false;
+  });
+
+  const existing = [];
+  if (nearRust) existing.push('cargo test not run: local near-sandbox or testnet');
+  if (nearJsContract || gaps.some((g) => /^NEAR sandbox tests\b/.test(g))) existing.push('npm sandbox tests not run: near-workspaces / near-sandbox');
+  if (gaps.some((g) => /^NEAR package tests\b/.test(g))) existing.push('npm Intents SDK tests not run offline');
+  existing.push(...matchedSuites.map(formatSuite));
+
+  const suiteDescriptions = matchedSuites.map((t) => `${t.description}:`);
+  const suiteGaps = gaps.filter((g) => suiteDescriptions.some((prefix) => g.startsWith(prefix)));
+  const openGaps = [
+    ...new Set([
+      ...gapRows(/\bNEAR\b|near-sandbox|near-workspaces|near-build|near-clippy/),
+      ...suiteGaps,
+      'near-sandbox, cargo near reproducible-wasm, mainnet v1.signer reads, live Intents / NEAR AI Cloud / TEE attestation calls, and deployed code-hash comparison are outside this offline review.',
+    ]),
+  ];
+  return ['NEAR', true, detail, existing, openGaps];
+}
+
+function stackRows(eco, catalogTests, formatSuite, suiteRows, gaps, gapRows) {
   const evm = eco.evm;
   return [
     ['Python', eco.python.detected, `${eco.python.sourceFiles} production files; ${eco.python.frameworks.join(', ') || 'no framework recognised'}${eco.python.declaredVersion ? `; declared Python ${eco.python.declaredVersion.version}` : ''}`, suiteRows(['pytest']), gapRows(/python-deps|osv-scanner|semgrep|pytest/)],
     ['Node / TypeScript', eco.node.detected, `${eco.node.sourceFiles} production files; ${eco.node.frameworks.join(', ') || 'no framework recognised'}`, suiteRows(['npm']), gapRows(/npm-audit|node-deps|npm existing/)],
     ['Solana program', eco.solana.detected, eco.solana.marks.join(', ') || 'none', suiteRows(['cargo']), [...gapRows(/cargo-audit|cargo existing/), 'Reproducible build and deployed-bytes comparison are outside this review by policy.']],
-    ['NEAR', Boolean(near?.detected), !near?.detected ? 'absent' : `${near.contracts ? 'near-sdk contract' : 'no near-sdk crate'}; kinds ${(near.kinds || []).join(', ') || 'none'}; ${(near.marks || []).join(', ') || 'no manifest mark'}`, !near?.detected ? [] : near.contracts ? ['cargo test not run: local near-sandbox or testnet', ...suiteRows(['near-build', 'near-clippy'])] : suiteRows(['npm']), !near?.detected ? [] : [...gapRows(/NEAR|near-sandbox|cargo existing/), 'near-sandbox, cargo near reproducible-wasm, mainnet v1.signer reads, and deployed code-hash comparison are outside this offline review.']],
+    nearCoverageRow(eco, catalogTests, formatSuite, gaps, gapRows),
     ['EVM', Boolean(evm?.detected), !evm?.detected ? 'absent' : `${evm.contracts ? `${evm.sourceFiles} contract file(s)` : 'no contract source'}; kinds ${(evm.kinds || []).join(', ') || 'none'}; tooling ${(evm.tooling || []).join(', ') || 'none'}`, !evm?.detected ? [] : evm.contracts ? ['contract tests not run: no forge, hardhat or solc in the sandbox'] : suiteRows(['npm']), !evm?.detected ? [] : [...gapRows(/EVM contract tests/), 'Deployed bytecode and on-chain state are outside this review by policy.']],
   ];
 }
@@ -67,9 +113,11 @@ function stackCoverage({ profile, catalog, health }) {
     if (suite) return `${suiteLabel(suite.state)}${suite.counts ? ` (${suite.counts.passed} passed, ${suite.counts.failed} failed or errored, ${suite.counts.skipped} skipped)` : ''}`;
     return suites.get(test.id) === 'passed' ? 'passed' : suites.get(test.id) === 'failed_or_unverified' ? 'failed or unverified' : 'not run';
   };
-  const suiteRows = (kinds) => (catalog.tests || []).filter((test) => kinds.includes(test.kind)).map((test) => `${test.description}: ${suiteState(test)}`);
+  const catalogTests = catalog.tests || [];
+  const formatSuite = (test) => `${test.description}: ${suiteState(test)}`;
+  const suiteRows = (kinds) => catalogTests.filter((test) => kinds.includes(test.kind)).map(formatSuite);
   const gapRows = (pattern) => gaps.filter((gap) => pattern.test(gap));
-  const rows = stackRows(eco, suiteRows, gapRows);
+  const rows = stackRows(eco, catalogTests, formatSuite, suiteRows, gaps, gapRows);
   return `<div class="table-scroll"><table><thead><tr><th>Stack</th><th>Detected</th><th>Existing tests</th><th>Open coverage gaps</th></tr></thead><tbody>${rows.map(([name, detected, detail, tests, open]) => `<tr><td><b>${esc(name)}</b><br><small>${esc(detail)}</small></td><td>${detected ? 'yes' : 'absent'}</td><td>${detected ? (tests.length ? tests.map(esc).join('<br>') : 'no suite catalogued') : '—'}</td><td>${detected ? (open.length ? open.map(esc).join('<br>') : 'none recorded') : '—'}</td></tr>`).join('')}</tbody></table></div><p class="note">Source review of a detected stack is performed by the assigned surfaces S1–S6 (see the surface map); this table shows only tool-reported test and scanner coverage. A failed or missing item is not a pass.</p>`;
 }
 
@@ -98,7 +146,7 @@ export function evidencePanels(ctx, modelRows) {
   const { complete, health, sandboxRows, sandboxMd, diagrams } = ctx;
   return `<details class="panel" id="validation"><summary><span class="pill orange">${complete ? 'Validated' : 'Incomplete'}</span>Review status & limitations<span class="meta-label">${health.errors?.length || 0} gaps</span></summary><div class="panel-body">${validationDetails(ctx, modelRows)}${isolationDetails(ctx)}</div></details>
     <details class="panel"><summary><span class="pill blue">Coverage</span>Sandbox & checks<span class="meta-label">${sandboxRows.length} records</span></summary><div class="panel-body">${sandboxDetails(ctx)}${sandboxMd ? disclosure('Original sandbox record', `<pre>${esc(sandboxMd)}</pre>`) : ''}</div></details>
-    <details class="panel"><summary><span class="pill blue">Stacks</span>Coverage by stack<span class="meta-label">Python · Node · Solana · NEAR</span></summary><div class="panel-body">${stackCoverage(ctx)}</div></details>
+    <details class="panel"><summary><span class="pill blue">Stacks</span>Coverage by stack<span class="meta-label">Python · Node · Solana · NEAR · EVM</span></summary><div class="panel-body">${stackCoverage(ctx)}</div></details>
     ${testsPanel(ctx)}
     ${toolsPanel(ctx)}
     ${controlsDetails(ctx)}

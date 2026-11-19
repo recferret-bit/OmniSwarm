@@ -40,4 +40,19 @@ impl Escrow {
     pub fn balance(&self) -> u128 {
         self.balance
     }
+
+    pub fn release_by_sig(&mut self, sig: [u8; 64], note: Vec<u8>, pk: [u8; 32]) -> Promise {
+        env::ed25519_verify(&sig, &note, &pk);
+        let amount = self.balance;
+        self.balance = 0;
+        Promise::new(self.owner.clone()).transfer(NearToken::from_yoctonear(amount))
+    }
+
+    #[private]
+    pub fn on_release(&mut self, restored: u128) {
+        if env::promise_result_checked(0, 64).is_err() {
+            self.balance = self.balance.saturating_add(restored);
+            self.released = false;
+        }
+    }
 }

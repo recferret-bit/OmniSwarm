@@ -56,4 +56,9 @@ export async function signPrepared(provider, base64Tx) {
   return signed.serialize().toString('base64');
 }
 
+export async function signNep413Login(wallet, message, untrustedRecipient) {
+  const nonce = new Uint8Array(32);
+  return wallet.signMessage({ message, recipient: untrustedRecipient, nonce });
+}
+
 export { VAULT_PROGRAM };

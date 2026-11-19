@@ -5,13 +5,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { renderReviewPlansMarkdown, renderSurfaceSkillGuidance } from './audit-plans.mjs';
 import { REVIEW_SCOPE } from './review-workflow.mjs';
-import { scopeNote } from './harness-layers.mjs';
+import { layerOfPath, scopeNote } from './harness-layers.mjs';
 
 // Lead files: [file, heading, marker the harness writes when the stack is absent, limit, surfaces (null = all),
 // layers a scoped run (--scope) shows the file to].
 const LEAD_FILES = [
   ['solana.md', 'Solana Leads', 'Solana surface absent', 3000, null, ['web3']],
-  ['near.md', 'NEAR Leads', 'NEAR surface absent', 3000, null, ['web3']],
+  ['near.md', 'NEAR Leads', 'NEAR surface absent', 4000, null, ['web3']],
   ['evm.md', 'EVM Leads', 'EVM surface absent', 3500, null, ['web3']],
   ['python.md', 'Python Leads', 'Python surface absent', 4000, ['S1', 'S2', 'S3', 'S4'], ['web2']],
   ['node.md', 'Node Leads', 'Node surface absent', 4000, ['S1', 'S2', 'S4', 'S6'], ['web2']],
@@ -22,9 +22,63 @@ const LEAD_FILES = [
 
 function harnessReader(reportDir) {
   const dir = path.join(reportDir, 'harness');
-  const text = (name, max) => { try { return fs.readFileSync(path.join(dir, name), 'utf8').slice(0, max); } catch { return ''; } };
+  const raw = (name) => {
+    try { return fs.readFileSync(path.join(dir, name), 'utf8'); } catch { return ''; }
+  };
+  const text = (name, max, scope = '', layers = null) => compactLeadText(raw(name), max, scope, layers);
   const profile = () => { try { return JSON.parse(fs.readFileSync(path.join(dir, 'stack-profile.json'), 'utf8')); } catch { return undefined; } };
-  return { text, profile };
+  return { text, raw, profile };
+}
+
+export function hasLayerLead(rawText, layer, layers) {
+  if (!rawText) return false;
+  for (const m of rawText.matchAll(/^- ([^\s:]+:\d+)\b/gm)) {
+    if (layerOfPath(m[1], layers) === layer) return true;
+  }
+  return false;
+}
+
+export function nearWeb2Applies(file, scope, profile, rawText) {
+  return file === 'near.md' && scope === 'web2' && (
+    Boolean(profile?.ecosystems?.near?.kinds?.some((kind) => kind === 'ai' || kind === 'intents'))
+    || hasLayerLead(rawText, 'web2', profile?.layers)
+  );
+}
+
+// When a multi-section lead file (such as near.md or evm.md) outgrows the prompt slice or runs under --scope,
+// keep in-scope file:line hits first and drop empty `no hit` sections so bottom sections are not cut off.
+export function compactLeadText(rawText, max, scope = '', layers = null) {
+  if (!rawText) return '';
+  let out = rawText;
+  if ((scope === 'web2' || scope === 'web3' || scope === 'infra') && out.includes('\n## ')) {
+    const [header, ...sections] = out.split('\n## ');
+    const kept = [];
+    let hadAnyHit = false;
+    for (const sec of sections) {
+      const filtered = [];
+      let sectionHits = 0;
+      for (const line of sec.split('\n')) {
+        const m = line.match(/^- ([^\s:]+:\d+)\b/);
+        if (m) {
+          hadAnyHit = true;
+          if (layerOfPath(m[1], layers) === scope) {
+            filtered.push(line);
+            sectionHits += 1;
+          }
+        } else {
+          filtered.push(line);
+        }
+      }
+      if (sectionHits > 0) kept.push(filtered.join('\n'));
+    }
+    if (kept.length > 0 || hadAnyHit) {
+      out = kept.length > 0 ? `${header}\n## ${kept.join('\n## ')}` : `${header}\n`;
+    }
+  }
+  if (out.length > max) {
+    out = out.replace(/\n## [^\n]+\n[^\n]+\nno hit\n/g, '');
+  }
+  return out.slice(0, max);
 }
 
 function planBlock(read, surfaceCode, profile, scope) {
@@ -43,8 +97,9 @@ export function readHarnessContext(reportDir, surfaceCode, scope = '') {
   if (plans) blocks.push(plans);
   for (const [file, heading, absent, limit, surfaces, layers] of LEAD_FILES) {
     if (surfaces && !surfaces.includes(surfaceCode)) continue;
-    if (scope && scope !== 'full' && !layers.includes(scope)) continue;
-    const text = read.text(file, limit);
+    const raw = read.raw(file);
+    if (scope && scope !== 'full' && !layers.includes(scope) && !nearWeb2Applies(file, scope, profile, raw)) continue;
+    const text = compactLeadText(raw, limit, scope, profile?.layers);
     if (text && !(absent && text.includes(absent))) blocks.push(`### ${heading}\n${text}`);
   }
   return blocks.join('\n\n');
