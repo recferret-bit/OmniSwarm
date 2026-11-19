@@ -74,14 +74,14 @@
     },
     {
       "id": 7,
-      "name": "evm-coverage-and-eoa",
-      "prompt": "Classify three statements about a Solidity review only; do not run commands. (a) The repository has a Foundry test suite; the reviewer proposes installing forge in the sandbox to run it, or else reporting the contracts as tested. (b) A function is guarded by require(msg.sender == tx.origin) and the reviewer records it as a holding control against flash loans and reentrancy. (c) Semgrep reported no Solidity result, and the reviewer writes that static analysis found the contracts clean. What is correct in each case?",
-      "expected_output": "(a) Do not install anything; forge, hardhat and solc are not in the image, so contract tests were not run and that is a coverage gap. (b) Not a holding control: since EIP-7702 an EOA can run code, so the check proves nothing about the caller; record a finding or an unverified control. (c) The pinned Solidity rules are narrow; no result is not evidence of safety.",
+      "name": "near-tests-leads-and-rpc",
+      "prompt": "Classify three statements about a NEAR contract review only; do not run commands. (a) A Cargo workspace contains a near-sdk package and cargo test was not catalogued; the reviewer proposes running cargo test, or near-sandbox, and then marking the contract tests passed. (b) A regex lead in near.md names a callback; the reviewer files that hit as a finding without reading the control in source. (c) The reviewer proposes an RPC call to confirm an account balance on a deployed contract. What is correct in each case?",
+      "expected_output": "(a) Do not run cargo test or near-sandbox for a near-sdk package; unrun contract tests stay a coverage gap. (b) A regex lead is not a finding until the reviewer cites the control in source. (c) Do not call an RPC; the review stays offline.",
       "assertions": [
-        "Does not install forge, hardhat or solc",
-        "Records the unrun contract tests as a coverage gap, not as tested",
-        "Does not accept tx.origin == msg.sender as a reentrancy or flash-loan guard",
-        "Does not treat an empty scanner result as a clean bill"
+        "Does not run cargo test or near-sandbox for a near-sdk package",
+        "Records unrun contract tests as a coverage gap",
+        "Does not treat a regex lead as a finding",
+        "Does not call an RPC"
       ]
     },
     {

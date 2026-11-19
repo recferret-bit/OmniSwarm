@@ -58,7 +58,7 @@ test('allowlist is exact hostnames and public addresses', () => {
 
 test('safeRel rejects traversal and spaces', () => {
   assert.equal(safeRel('.'), '.');
-  assert.equal(safeRel('program/Anchor.toml'.replace('/Anchor.toml', '')), 'program');
+  assert.equal(safeRel('program/Cargo.toml'.replace('/Cargo.toml', '')), 'program');
   assert.equal(safeRel('../etc'), null);
   assert.equal(safeRel('/tmp/x'), null);
   assert.equal(safeRel('program dir'), null);
@@ -83,7 +83,7 @@ test('a TypeScript tree with no manifests is impossible, and secrets are not cop
   assert.equal(fs.existsSync(path.join(dst, 'escape')), false);
   const tree = plan(src);
   const rows = new Map(assess(tree).map((row) => [row.id, row.result]));
-  for (const id of ['cargo-build', 'npm-install', 'pnpm-install', 'npm-audit', 'anchor-build', 'solana-verify', 'zap']) {
+  for (const id of ['cargo-build', 'npm-install', 'pnpm-install', 'npm-audit', 'zap']) {
     assert.equal(rows.get(id), 'impossible', id);
   }
   assert.equal(rows.get('deployed-compare'), 'impossible');
@@ -95,42 +95,26 @@ test('a TypeScript tree with no manifests is impossible, and secrets are not cop
   fs.rmSync(dst, { recursive: true, force: true });
 });
 
-test('a pinned Anchor program and a yarn lock are pending', () => {
-  const src = fs.mkdtempSync(path.join(os.tmpdir(), 'audit-anchor-'));
+test('a cargo lock and a yarn lock are pending', () => {
+  const src = fs.mkdtempSync(path.join(os.tmpdir(), 'audit-yarn-'));
   fs.mkdirSync(path.join(src, 'program'));
-  fs.writeFileSync(path.join(src, 'program', 'Anchor.toml'), '[toolchain]\nanchor_version = "1.2.1"\nsolana_version = "4.1.2"\n');
   fs.writeFileSync(path.join(src, 'program', 'Cargo.toml'), '[package]\nname = "demo"\nversion = "0.1.0"\n');
   fs.writeFileSync(path.join(src, 'program', 'Cargo.lock'), '# lock\n');
-  fs.writeFileSync(path.join(src, 'program', 'build.sh'), '#!/bin/bash\nanchor build\n');
+  fs.writeFileSync(path.join(src, 'program', 'build.sh'), '#!/bin/bash\necho build\n');
   fs.writeFileSync(path.join(src, 'package.json'), '{"scripts":{"start":"node server.js"}}\n');
   fs.writeFileSync(path.join(src, 'yarn.lock'), '# yarn\n');
   const tree = plan(src);
-  assert.equal(tree.anchors[0].anchorVersion, '1.2.1');
-  assert.equal(tree.anchors[0].solanaVersion, '4.1.2');
   assert.equal(tree.webStart.rel, '.');
   assert.equal(tree.osvExtra.length, 0);
   const rows = new Map(assess(tree).map((row) => [row.id, row]));
-  assert.equal(rows.get('anchor-build').result, 'pending');
   assert.equal(rows.get('cargo-build').result, 'pending');
   assert.equal(rows.get('build-sh').result, 'pending');
-  assert.equal(rows.get('solana-verify').result, 'pending');
   assert.equal(rows.get('yarn-install').result, 'pending');
   assert.equal(rows.get('npm-audit').result, 'pending');
   assert.match(rows.get('npm-audit').detail, /yarn/);
   const settled = settle([{ id: 'cargo-build', result: 'pending', detail: 'left pending' }]);
   assert.equal(settled.find((row) => row.id === 'cargo-build').result, 'impossible');
   fs.rmSync(src, { recursive: true, force: true });
-});
-
-test('Anchor dependency discovery includes workspace program manifests', t => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'audit-anchor-workspace-'));
-  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
-  fs.mkdirSync(path.join(root, 'program/programs/fixture'), { recursive: true });
-  fs.writeFileSync(path.join(root, 'program/Anchor.toml'), '[toolchain]\n');
-  fs.writeFileSync(path.join(root, 'program/Cargo.toml'), '[workspace]\nmembers=["programs/*"]\n');
-  fs.writeFileSync(path.join(root, 'program/programs/fixture/Cargo.toml'), '[dependencies]\nanchor-lang={version="1.2.0",features=["init-if-needed"]}\n');
-  assert.equal(plan(root).anchors[0].anchorVersion, '1.2.0');
-  assert.equal(plan(root).anchors[0].solanaVersion, null);
 });
 
 test('extra ecosystems and an rpc url are classified without contacting them', () => {
@@ -150,9 +134,9 @@ test('extra ecosystems and an rpc url are classified without contacting them', (
   assert.equal(fs.existsSync(path.join(dest, 'requirements.txt')), true);
   assert.equal(fs.existsSync(path.join(dest, 'src', 'lib.rs')), false);
   assert.deepEqual(programIds(src), ['11111111111111111111111111111111']);
-  assert.equal(rpcAllowed('https://api.devnet.solana.com'), 'https://api.devnet.solana.com/');
-  assert.equal(rpcAllowed('http://api.devnet.solana.com'), null);
-  assert.equal(rpcAllowed('https://user:pass@api.devnet.solana.com'), null);
+  assert.equal(rpcAllowed('https://rpc.example.com'), 'https://rpc.example.com/');
+  assert.equal(rpcAllowed('http://rpc.example.com'), null);
+  assert.equal(rpcAllowed('https://user:pass@rpc.example.com'), null);
   assert.equal(rpcAllowed('https://169.254.169.254/rpc'), null);
   assert.equal(rpcAllowed('https://127.0.0.1'), null);
   fs.rmSync(src, { recursive: true, force: true });

@@ -19,9 +19,8 @@
 import path from 'node:path';
 import { detectEcosystems, isProductionPath } from './stack-detect.mjs';
 import { DOMAIN_SPECS, PYTHON_CHECKS, REVIEW_CHECKS } from './audit-plans-data-domains.mjs';
-import { evmSurfaceLines } from './audit-plans-data-evm.mjs';
 import { nearSurfaceLines } from './audit-plans-data-near.mjs';
-import { INFRA_SURFACE, NODE_SURFACE, PYTHON_SURFACE, SOLANA_SURFACE, SURFACE_TITLES, WALLET_SURFACE } from './audit-plans-data-surfaces.mjs';
+import { INFRA_SURFACE, NODE_SURFACE, PYTHON_SURFACE, SURFACE_TITLES, WALLET_SURFACE } from './audit-plans-data-surfaces.mjs';
 import { LAYERS, LAYER_TITLES, buildLayerMap, renderLayerLines, scopeNote } from './harness-layers.mjs';
 import { SKIP_DIRS as WALK_SKIP_DIRS, matchLines, readText, rel as relPath, walk } from './harness-walk.mjs';
 
@@ -33,7 +32,7 @@ export { DOMAIN_SPECS, PYTHON_CHECKS };
 
 const CODE_EXT = new Set([
   '.js', '.mjs', '.cjs', '.ts', '.tsx', '.jsx', '.vue', '.svelte', '.py', '.go', '.rs',
-  '.proto', '.sql', '.prisma', '.graphql', '.gql', '.sol', '.vy', '.rb', '.php', '.java', '.kt',
+  '.proto', '.sql', '.prisma', '.graphql', '.gql', '.rb', '.php', '.java', '.kt',
 ]);
 
 // The first maxHits matches as {line, snippet}; the snippet is the trimmed source line, at most 140 characters.
@@ -69,7 +68,7 @@ export function analyzeStackAndPlans(targetRoot) {
   walk(root, (file) => {
     const ext = path.extname(file).toLowerCase();
     const base = path.basename(file);
-    if (!CODE_EXT.has(ext) && base !== 'Anchor.toml' && base !== 'Cargo.toml' && base !== 'package.json' && base !== 'pyproject.toml' && !/^requirements[\w.-]*\.txt$/.test(base)) return;
+    if (!CODE_EXT.has(ext) && base !== 'Cargo.toml' && base !== 'package.json' && base !== 'pyproject.toml' && !/^requirements[\w.-]*\.txt$/.test(base)) return;
     candidates.push({ file, production: isProductionPath(relPath(root, file)) });
   }, { skipDirs: SKIP_DIRS, sorted: true });
   candidates.sort((a, b) => Number(b.production) - Number(a.production));
@@ -133,9 +132,7 @@ function renderEcosystemLines(profile) {
     row('Python', py, `${py.frameworks.length ? `; frameworks: ${py.frameworks.join(', ')}` : ''}${declared}`),
     row('Node/TypeScript', eco.node, eco.node.frameworks.length ? `; frameworks: ${eco.node.frameworks.join(', ')}` : ''),
     row('Rust', eco.rust),
-    `- **Solana program**: ${eco.solana.detected ? `DETECTED (${eco.solana.marks.slice(0, 4).join(', ')})` : 'absent'}`,
     `- **NEAR**: ${eco.near?.detected ? `DETECTED (${eco.near.contracts ? ((eco.near.marks || []).some((m) => m.endsWith('Cargo.toml')) ? 'near-sdk contract' : 'near-sdk-js contract') : 'no near-sdk crate'}; ${(eco.near.kinds || []).join(', ') || 'no kind'}; ${(eco.near.marks || []).slice(0, 4).join(', ')})` : 'absent'}`,
-    `- **EVM**: ${eco.evm?.detected ? `DETECTED (${eco.evm.contracts ? `${eco.evm.sourceFiles} contract file(s)` : 'no contract source'}; ${(eco.evm.kinds || []).join(', ') || 'no kind'}; tooling ${(eco.evm.tooling || []).join(', ') || 'none'})` : 'absent'}`,
     `- Primary stack(s) by production source: ${eco.primary.join(', ') || 'none'}${eco.unsupported?.length ? `; no dedicated harness for: ${eco.unsupported.join(', ')}` : ''}`,
   ];
 }
@@ -209,7 +206,7 @@ export function renderSurfaceSkillGuidance(surfaceCode, profile, scope = '') {
   const nearClient = !eco || ['client', 'intents', 'ai'].some((kind) => nearKinds.has(kind));
   const [title, domains] = SURFACE_TITLES[code];
   const lines = [`### ${code} Skill Focus — ${title} (${domains})`];
-  if (eco) lines.push(`Detected stack: ${eco.primary.join(', ') || 'unknown'}${eco.python?.frameworks?.length ? ` (Python frameworks: ${eco.python.frameworks.join(', ')})` : ''}${eco.solana?.detected ? '; Solana program present' : ''}${eco.near?.detected ? `; NEAR (${eco.near.contracts ? 'contract' : 'no contract crate'}${eco.near.kinds?.length ? `: ${eco.near.kinds.join(', ')}` : ''})` : ''}${eco.evm?.detected ? `; EVM (${(eco.evm.kinds || []).join(', ')})` : ''}. Do not apply checks for ecosystems that are absent.`);
+  if (eco) lines.push(`Detected stack: ${eco.primary.join(', ') || 'unknown'}${eco.python?.frameworks?.length ? ` (Python frameworks: ${eco.python.frameworks.join(', ')})` : ''}${eco.near?.detected ? `; NEAR (${eco.near.contracts ? 'contract' : 'no contract crate'}${eco.near.kinds?.length ? `: ${eco.near.kinds.join(', ')}` : ''})` : ''}. Do not apply checks for ecosystems that are absent.`);
   // One block per layer, so application, on-chain and infrastructure checks are never read as one list.
   const layers = profile?.layers;
   const clientFiles = layers?.clientFiles?.length > 0;
@@ -223,10 +220,8 @@ export function renderSurfaceSkillGuidance(surfaceCode, profile, scope = '') {
         : []),
     ],
     web3: [
-      ...(want('solana') ? SOLANA_SURFACE[code] || [] : []),
       ...(!eco ? nearSurfaceLines(code) : eco.near?.detected ? nearSurfaceLines(code, [...new Set([...(eco.near.contracts ? ['contract'] : []), ...(eco.near.kinds || [])])]) : []),
-      ...(!eco ? evmSurfaceLines(code) : eco.evm?.detected ? evmSurfaceLines(code, [...(eco.evm.contracts ? ['contract'] : []), ...((eco.evm.kinds || []).includes('client') ? ['client'] : [])]) : []),
-      ...(!layers || clientFiles || eco?.solana?.detected || nearClient || eco?.evm?.detected ? WALLET_SURFACE[code] || [] : []),
+      ...(!layers || clientFiles || nearClient ? WALLET_SURFACE[code] || [] : []),
     ],
     infra: !layers || layers.counts?.infra > 0 ? INFRA_SURFACE[code] || [] : [],
   };

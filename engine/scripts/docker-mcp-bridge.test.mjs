@@ -387,14 +387,14 @@ test('end-to-end one-shot Docker container + MCP bridge orchestrates audit, cros
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'audit-e2e-docker-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
 
-  const targetDir = path.join(root, 'solana-target');
+  const targetDir = path.join(root, 'near-target');
   fs.mkdirSync(path.join(targetDir, 'src'), { recursive: true });
-  fs.writeFileSync(path.join(targetDir, 'Cargo.toml'), '[package]\nname = "escrow"\nversion = "0.1.0"\n[dependencies]\nanchor-lang = "0.30.1"\n');
+  fs.writeFileSync(path.join(targetDir, 'Cargo.toml'), '[package]\nname = "escrow"\nversion = "0.1.0"\n[dependencies]\nnear-sdk = "5.29.0"\n');
   fs.writeFileSync(path.join(targetDir, 'src', 'lib.rs'), [
-    'use anchor_lang::prelude::*;',
-    '#[derive(Accounts)]',
-    'pub struct Withdraw<\'info> {',
-    '    pub vault: UncheckedAccount<\'info>,',
+    'use near_sdk::env;',
+    'pub struct Withdraw {}',
+    'pub fn auth() {',
+    '    let _ = env::signer_account_id();',
     '}',
   ].join('\n') + '\n');
 
@@ -453,7 +453,7 @@ const toolsRes = await rpc('tools/list');
 const toolNames = toolsRes.result.tools.map((t) => t.name);
 
 const listOut = await rpc('tools/call', { name: 'list_files', arguments: { path: '/work/src' } });
-const searchOut = await rpc('tools/call', { name: 'search_code', arguments: { pattern: 'UncheckedAccount' } });
+const searchOut = await rpc('tools/call', { name: 'search_code', arguments: { pattern: 'signer_account_id' } });
 const readOut = await rpc('tools/call', { name: 'read_file', arguments: { path: 'src/lib.rs', start_line: 1, end_line: 10 } });
 const catalogOut = await rpc('tools/call', { name: 'list_existing_tests', arguments: {} });
 const entry = JSON.parse(catalogOut.result.content[0].text).tests.find(test => test.kind==='npm');
@@ -559,8 +559,9 @@ process.exitCode=result.stageFailures.length||html.status!==0?2:0;
   assert.equal(findings[0].status, 'MODEL_AGREEMENT');
   assert.deepEqual(findings[0].locations, ['src/lib.rs:4']);
 
-  assert.equal(fs.existsSync(path.join(outDir, 'harness', 'solana.md')), true);
-  assert.match(fs.readFileSync(path.join(outDir, 'harness', 'solana.md'), 'utf8'), /src\/lib\.rs:4/);
+  assert.equal(fs.existsSync(path.join(outDir, 'harness', 'near.md')), true);
+  assert.match(fs.readFileSync(path.join(outDir, 'harness', 'near.md'), 'utf8'), /NEAR leads/);
+  assert.match(fs.readFileSync(path.join(outDir, 'harness', 'near.md'), 'utf8'), /src\/lib\.rs:4/);
   assert.equal(fs.existsSync(path.join(outDir, 'harness', 'review-plans.md')), true);
   assert.equal(fs.existsSync(path.join(outDir, 'harness', 'stack-profile.json')), true);
   assert.match(fs.readFileSync(path.join(outDir, 'harness', 'review-plans.md'), 'utf8'), /Cryptography, Web3 Signatures & On-Chain Custody/);

@@ -53,10 +53,12 @@
 .land-kicker { display: flex; gap: 12px; align-items: baseline; }
 .land-kicker i { font-style: normal; font-family: var(--os-font-mono); color: var(--os-ember-text); letter-spacing: 0.14em; }
 
-.feature-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.feature-grid, .near-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
 .feature-card { min-height: 180px; display: flex; flex-direction: column; gap: 8px; transition: border-color var(--os-dur-quick) ease, background var(--os-dur-quick) ease; }
-.feature-card p { margin: 0; color: var(--os-text-2); }
-.feature-card:hover, .pipeline button:hover, .stat:hover, .hero-stats li:hover {
+.feature-card p, .near-card p { margin: 0; color: var(--os-text-2); }
+.near-card { min-height: 180px; display: flex; flex-direction: column; gap: 8px; }
+.near-card .near-libs { font-family: var(--os-font-mono); font-size: 12px; line-height: 1.45; color: var(--os-steel); overflow-wrap: anywhere; }
+.feature-card:hover, .near-card:hover, .pipeline button:hover, .stat:hover, .hero-stats li:hover {
   border-color: var(--os-ember); background: var(--os-ember-dim);
 }
 
@@ -100,7 +102,7 @@
 .trust__service { margin: 0; color: var(--os-steel); }
 
 @media (max-width: 960px) {
-  .feature-grid, .pipeline, .example, .hero-stats { grid-template-columns: 1fr 1fr; }
+  .feature-grid, .near-grid, .pipeline, .example, .hero-stats { grid-template-columns: 1fr 1fr; }
 }
 @media (max-width: 800px) {
   .hero-stage { min-height: 0; display: block; }
@@ -112,6 +114,6 @@
 }
 @media (max-width: 640px) {
   .land-section { padding: var(--os-s7) 0; }
-  .feature-grid, .pipeline, .example, .hero-stats { grid-template-columns: 1fr; }
+  .feature-grid, .near-grid, .pipeline, .example, .hero-stats { grid-template-columns: 1fr; }
   .hero-actions .btn { white-space: normal; }
 }

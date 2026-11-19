@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { tomlFacts, cargoManifestFacts, cargoInfo, isNearCargo } from './cargo-manifest.mjs';
+import { tomlFacts, cargoInfo, isNearCargo } from './cargo-manifest.mjs';
 import { isProductionPath } from './stack-detect.mjs';
 
 export const REVIEW_WORKFLOW = 'source_security_review_v1';
@@ -18,7 +18,7 @@ const PY_TEST_FILE = /(?:^|\/)(?:conftest|test_[^/]*|[^/]*_test)\.py$/;
 export function testCommand(kind) {
   // Large Vitest/Nest suites run past 90s; the cold-build budget is the same one cargo gets.
   if (kind === 'npm') return { command: 'npm', args: ['--offline', '--ignore-scripts', 'run', 'test'], timeoutMs: 900000 };
-  // A cold Solana/LiteSVM test build exceeds the small JavaScript suite budget.
+  // A cold Cargo test build exceeds the small JavaScript suite budget.
   if (kind === 'cargo') return { command: 'cargo', args: ['test', '--locked', '--offline'], timeoutMs: 900000 };
   // Interpreter and dependencies are prepared by docker/prepare-python-env.py before the network is disconnected.
   // Python suites that start disposable PostgreSQL/Redis servers outgrow the Cargo budget.
@@ -44,16 +44,6 @@ const isCdylib = (text) => { try { return (tomlFacts(text).facts.get('["lib","cr
 const catalogEntry = (manifest, files, kind, cwd, file, description) => ({
   id: `test-${hash(`${manifest.digest}:${kind}:${cwd}`).slice(0, 24)}`, kind, cwd, files: [{ path: file, sha256: files.get(file).sha256 }], description,
 });
-
-// Hardhat and Truffle download a Solidity compiler and Foundry is not in the sandbox image: none is an offline suite.
-const EVM_TOOLING = /^(?:hardhat|truffle|@nomicfoundation\/.+|@nomiclabs\/.+)$/;
-export const evmTestGap = (cwd, tool) => `EVM contract tests in ${cwd} (${tool}) are not run: forge, hardhat and solc are not in the sandbox image and are not installed during a review.`;
-function evmNpmBlocked(pkg) {
-  const deps = { ...pkg.dependencies, ...pkg.devDependencies };
-  const dep = Object.keys(deps).find((name) => EVM_TOOLING.test(name));
-  if (dep) return dep;
-  return /\b(?:hardhat|forge|truffle)\b/.test(String(pkg.scripts?.test || '')) ? 'test script' : null;
-}
 
 const NEAR_NPM_NOT_OFFLINE = ['@defuse-protocol/one-click-sdk-typescript', '@defuse-protocol/intents-sdk', '@near-intents-agent-api/sdk'];
 const NEAR_NPM_SANDBOX = ['near-workspaces', 'near-workspaces-ava', 'near-sandbox'];
@@ -98,10 +88,8 @@ export function buildExistingTestCatalog(snapshot, manifest) {
         if (typeof pkg.scripts?.test === 'string') {
           const blocked = nearNpmBlocked(pkg);
           const nearSbx = nearNpmSandboxBlocked(pkg);
-          const evmTool = evmNpmBlocked(pkg);
           if (blocked) coverageGaps.push(`NEAR package tests in ${cwd} (${blocked}) are not catalogued as an offline suite. Do not call 1Click, the Intents SDK, or the Intents agent API.`);
           else if (nearSbx) coverageGaps.push(`NEAR sandbox tests in ${cwd} (${nearSbx}) are a local-sandbox coverage gap. near-workspaces starts near-sandbox or connects to testnet and is not run offline.`);
-          else if (evmTool) coverageGaps.push(evmTestGap(cwd, evmTool));
           else kind = 'npm';
         }
       } catch { /* malformed manifest is a review lead */ }
@@ -122,8 +110,6 @@ export function buildExistingTestCatalog(snapshot, manifest) {
           else for (const [build, label] of [['near-build', 'NEAR WASM build (cargo near build non-reproducible-wasm)'], ['near-clippy', 'NEAR clippy for wasm32-unknown-unknown']]) tests.push(catalogEntry(manifest, files, build, cwd, file.path, `${label} in ${cwd}`));
         }
       }
-    } else if (name === 'foundry.toml' && isProductionPath(file.path) && !VENDORED_MANIFEST.test(file.path) && !/(?:^|\/)lib\//.test(file.path)) {
-      coverageGaps.push(evmTestGap(cwd, 'foundry'));
     } else if (name === 'test.sh') kind = 'shell';
     if (!kind) continue;
     tests.push(catalogEntry(manifest, files, kind, cwd, file.path, `${kind} existing tests in ${cwd}`));
@@ -154,11 +140,7 @@ export function selectExistingTest(catalog, id, sourceDigest) {
 
 // Fixed trusted program. No model-provided executable, arguments, code, env or URL.
 export const EXISTING_TEST_RUNNER = `
-const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto'),{spawn,spawnSync}=require('node:child_process');
-${tomlFacts.toString()}
-${cargoManifestFacts.toString()}
-${cargoInfo.toString()}
-${isNearCargo.toString()}
+const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto'),{spawn}=require('node:child_process');
 (async()=>{
  let input='';for await(const chunk of process.stdin)input+=chunk;
  const entry=JSON.parse(input),root=(process.argv&&process.argv[1])||'/work/src';
@@ -184,61 +166,6 @@ ${isNearCargo.toString()}
   if(fs.realpathSync(path.dirname(target))!==path.dirname(target))throw Error('Test artifact destination changed');
   const fd=fs.openSync(target,fs.constants.O_WRONLY|fs.constants.O_CREAT|fs.constants.O_NOFOLLOW|fs.constants.O_NONBLOCK,0o644);
   try{const stat=fs.fstatSync(fd);if(!stat.isFile()||stat.nlink!==1)throw Error('Test artifact destination changed');fs.ftruncateSync(fd,0);fs.writeFileSync(fd,bytes)}finally{fs.closeSync(fd)}
- }
- const programs=[],builds=['cargo','bash'].includes(entry.command)&&!String(entry.kind||'').startsWith('near-');
- // Other runners (pytest fixtures reading target/idl) still need the workspace target link.
- if(builds||(entry.artifacts||[]).length){
-  const manifests=[],skip=new Set(['.git','node_modules','target','dist','.cargo']);
-  (function walk(dir,depth){
-   if(depth>4)return;
-   let ents=[];try{ents=fs.readdirSync(dir,{withFileTypes:true})}catch{return}
-   for(const e of ents){
-    if(e.isSymbolicLink()||skip.has(e.name))continue;
-    const p=path.join(dir,e.name);
-    if(e.isDirectory())walk(p,depth+1);
-    else if(e.isFile()&&e.name==='Cargo.toml')manifests.push(p);
-   }
-  })(root,0);
-  for(const manifest of manifests){
-   const toml=fs.readFileSync(manifest,'utf8');
-   if(!/\\bcrate-type\\s*=\\s*\\[[^\\]]*"cdylib"/.test(toml))continue;
-   const dir=path.dirname(manifest);
-   const info=cargoInfo(root,manifest);
-   if(info.error||isNearCargo(info,true))continue;
-   const solanaPackages=new Set(['anchor-lang','solana-program','solana-cpi','solana-sdk','solana-zk','pinocchio']);
-   if(!info.dependencies.some(d=>solanaPackages.has(d.package)&&/(?:^|\\.)dependencies$/.test(d.group)))continue;
-   const lib=(toml.match(/\\[lib\\][\\s\\S]*?\\bname\\s*=\\s*"([^"]+)"/)?.[1]||toml.match(/\\[package\\][\\s\\S]*?\\bname\\s*=\\s*"([^"]+)"/)?.[1]||'').replace(/-/g,'_');
-   programs.push({manifest,dir,lib});
-  }
- }
- // Supplied program bytes replace the SBF build; an IDL-only import still builds the programs.
- if(builds&&!(entry.artifacts||[]).some(file=>file.path.startsWith('deploy/'))&&fs.existsSync('/opt/platform-tools/rust/bin/cargo')){
-  for(const {manifest,dir,lib} of programs){
-   if(lib&&fs.existsSync(path.join('/work/target/deploy',lib+'.so')))continue;
-   const sbfEnv={...process.env,CI:'1',CARGO_NET_OFFLINE:'true',CARGO_TARGET_DIR:'/work/target',RUSTC:'/opt/platform-tools/rust/bin/rustc',RUSTFLAGS:'-C strip=debuginfo',PATH:'/opt/platform-tools/rust/bin:/opt/platform-tools/llvm/bin:'+(process.env.PATH||'/usr/local/cargo/bin:/usr/local/bin:/usr/bin:/bin')};
-   delete sbfEnv.RUSTUP_TOOLCHAIN;
-   const sbf=spawnSync('/opt/platform-tools/rust/bin/cargo',['build','--locked','--offline','--release','--target','sbpf-solana-solana','--manifest-path',manifest],{cwd:dir,env:sbfEnv,stdio:['ignore','pipe','pipe'],timeout:Math.max(30000,timeoutMs-30000)});
-   if(sbf.status!==0){process.stderr.write(sbf.stderr||sbf.stdout||'');throw Error('Failed to build Solana SBF program artifact for '+manifest)}
-   const relDir='/work/target/sbpf-solana-solana/release',depDir='/work/target/deploy';
-   if(fs.existsSync(relDir)){
-    fs.mkdirSync(depDir,{recursive:true});
-    for(const f of fs.readdirSync(relDir))if(f.endsWith('.so'))fs.copyFileSync(path.join(relDir,f),path.join(depDir,f));
-   }
-  }
- }
- // Tests commonly load <workspace>/target/deploy/*.so; CARGO_TARGET_DIR moved that output to /work/target.
- // Point an absent workspace target at it in the disposable source copy; an existing target is left alone.
- if(fs.existsSync('/work/target/deploy')||fs.existsSync('/work/target/idl'))for(const {dir} of programs){
-  let workspace=dir;
-  for(let d=dir;d===root||d.startsWith(root+'/');d=path.dirname(d)){
-   const toml=path.join(d,'Cargo.toml');
-   if(fs.existsSync(toml)&&/^\\s*\\[workspace\\]/m.test(fs.readFileSync(toml,'utf8'))){workspace=d;break}
-   if(d===root)break;
-  }
-  const link=path.join(workspace,'target');
-  let present=true;try{fs.lstatSync(link)}catch{present=false}
-  // A read-only source mount keeps the default layout; tests then fail with the missing-artifact detail.
-  if(!present&&fs.realpathSync(workspace)===workspace)try{fs.symlinkSync('/work/target',link)}catch{}
  }
  // A NEAR build passes only with a fresh WASM module under target/near; its digest is the build evidence.
  const nearArtifact=since=>{

@@ -30,7 +30,7 @@ Do not read, print, commit or copy `infra/compose/.local/stack.env`, `infra/comp
 
 ## What this repository is
 
-OmniSwarm is multichain: Solana, NEAR (contracts, clients, Intents, NEAR AI), EVM (Solidity and Vyper contracts, wallet clients), Rust, Python, and Node/TypeScript. It runs `source_security_review_v1`: an authorized source review by Claude, Codex, Grok, and AGY through a restricted MCP bridge into one offline Docker sandbox. Findings need `file:line` evidence and a defensive fix. The bridge does not accept exploits, arbitrary commands, deployed probes, or transactions.
+OmniSwarm covers NEAR (contracts, clients, Intents, NEAR AI), Rust, Python, and Node/TypeScript. It runs `source_security_review_v1`: an authorized source review by Claude, Codex, Grok, and AGY through a restricted MCP bridge into one offline Docker sandbox. Findings need `file:line` evidence and a defensive fix. The bridge does not accept exploits, arbitrary commands, deployed probes, or transactions.
 
 Operator entry is `./bin/audit` (also `./bin/omniswarm`). The review engine lives under `engine/`: the workflow in `engine/scripts/`. The image is `engine/docker/sandbox.Dockerfile`. Native Codex and Grok admission gates are under `engine/native/`.
 
@@ -61,13 +61,10 @@ npm run stack:local                               # local HTTP stack and two hos
 
 | Stack | Signal | Follow-on |
 |---|---|---|
-| Solana | `Anchor.toml` or `anchor-lang`, `solana-program`, `solana-sdk`, `pinocchio` in `Cargo.toml` | `solana.md`, Solana guidance, offline SBF compile of matching `cdylib` crates |
 | NEAR contract | production `near-sdk =` | `near.md`, checklist guidance, no `cargo test` for that package or a workspace that contains it |
 | NEAR client | `near-api-js`, `@hot-labs/near-connect` | client leads; npm test stays catalogued |
 | NEAR Intents | `@defuse-protocol/one-click-sdk-typescript`, `@defuse-protocol/intents-sdk`, `@near-intents-agent-api/sdk` | leads only; do not catalog that package's npm test as offline |
 | NEAR AI | `@neardefi/shade-agent-js`, `near-ai-cloud`, `cloud-api.near.ai` | recognition leads; do not call the hosts |
-| EVM contract | production `.sol`/`.vy` source, `foundry.toml`, `hardhat.config.*`, `truffle-config.js` (not `*.t.sol`, `*.s.sol` or `lib/`) | `evm.md`, the EVM checklist by OWASP Smart Contract Top 10 2026 entry (`audit-plans-data-evm.mjs`), Semgrep's Solidity security rules; Foundry, Hardhat and Truffle tests are a coverage gap (no `forge`, `hardhat` or `solc` in the image) |
-| EVM client | `ethers`, `viem`, `wagmi`, `web3` in a production `package.json` | client leads in `evm.md`; npm test stays catalogued |
 
 `v1.signer` and the hosted API strings are leads in `near.md`. They are not stack marks. Absent ecosystems do not receive checks.
 
@@ -104,7 +101,6 @@ The skill tells reviewers how to inspect a target. It does not authorize new too
 - Preparation may fetch locked crates.io crates and lockfile-pinned npm packages with scripts ignored. It does not run target builds, install scripts, or tests while the network is attached.
 - Do not add `near deploy`, faucet calls, NEAR AI Cloud as a target integration, 1Click, the Intents agent API, OutLayer, NEAR MCP, or a `v1.signer` mainnet read to the review path. NEAR AI Cloud as a chosen reviewer provider (`nearai:`) is allowed; it is a model provider, not something the audit probes.
 - The sandbox image provisions `cargo-near` 0.22.0 and the `wasm32-unknown-unknown` target at build time. Nothing installs them during a review, and only the catalogued `near-build` (`cargo near build non-reproducible-wasm --locked --no-abi`) and `near-clippy` checks use them. Do not run `cargo near build reproducible-wasm`; that Docker build ignores uncommitted snapshot edits.
-- Do not send a `near-sdk` crate through the Solana SBF compile.
 - Leads are regex hits. A hit is not a finding until a reviewer cites the control in source.
 - Existing-test output is evidence about that suite. A pass is not a safety certificate. A missing scanner or a skipped NEAR `cargo test` stays a coverage gap.
 

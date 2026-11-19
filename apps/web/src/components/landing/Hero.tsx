@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { HeroCanvas } from './StageCanvas';
 
-export const HERO = 'A swarm of AI reviewers that argue over your code, then publish a report you can verify';
+export const HERO = 'A swarm of AI reviewers for NEAR contracts and NEAR AI code, then a report you can verify';
 
 const STATS = [
   { label: 'Panel', value: 'You choose', note: 'Models on your own NEAR AI key' },
@@ -16,12 +16,12 @@ export function Hero() {
       <HeroCanvas />
       <div className="hero-stage__shade" aria-hidden="true" />
       <div className="container-wide hero-stage__copy">
-        <p className="eyebrow">Your own NEAR AI key · Offline sandbox · File and line</p>
+        <p className="eyebrow">NEAR contracts · NEAR AI · Offline sandbox</p>
         <h1 id="hero-title" className="display">{HERO}</h1>
         <p className="lede">
-          Pick a repository. A panel of AI models you choose, running on your own NEAR AI key, reviews it in an offline
-          sandbox, cross-checks and debates each finding with cited evidence, and a judge writes the general review. You get a
-          report whose hash you can verify in the browser.
+          Pick a NEAR repository: a contract, a wallet client, Intents, or a NEAR AI app, and the application around it.
+          A panel you choose, on your own NEAR AI key, reviews it in an offline sandbox against the security-audit skill,
+          then debates each finding with cited evidence. You get a report whose hash you can verify in the browser.
         </p>
         <div className="hero-actions">
           <a className="btn btn-primary btn-lg" href="#start">Review a repo</a>

@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { createSnapshot, disposeSnapshot } from './worker-isolation.mjs';
-import { REVIEW_WORKFLOW, REVIEW_TOOLS, NEAR_BUILD_ARTIFACT, EXISTING_TEST_RUNNER, buildExistingTestCatalog, evmTestGap, nearSandboxGap, selectExistingTest } from './review-workflow.mjs';
+import { REVIEW_WORKFLOW, REVIEW_TOOLS, NEAR_BUILD_ARTIFACT, EXISTING_TEST_RUNNER, buildExistingTestCatalog, nearSandboxGap, selectExistingTest } from './review-workflow.mjs';
 import { callBridgeTool, toolDefinitions } from './docker-mcp-bridge.mjs';
 import { permissionDecision } from './agent-session.mjs';
 import { auditToolDecision } from './audit-tool-policy.mjs';
@@ -209,48 +209,4 @@ test('a Python project with tests gets a fixed, hash-bound pytest entry and no c
   assert.equal(selected.command, '/work/venv/bin/python');
   assert.deepEqual(selected.args, ['-m', 'pytest', '-p', 'no:cacheprovider', '-q', '--tb=line', '-rfEs', '--continue-on-collection-errors']);
   assert.equal(selected.timeoutMs, 1800000);
-});
-
-test('SBF discovery excludes NEAR even under Anchor and preserves actual Solana crates', async () => {
-  const { default: vm } = await import('node:vm');
-  const { EXISTING_TEST_RUNNER } = await import('./review-workflow.mjs');
-  const manifest = dep => '[package]\nname="contract"\nversion="0.1.0"\n[lib]\ncrate-type=["cdylib"]\n' + dep;
-  const files = {
-    '/work/src/Anchor.toml': '',
-    '/work/src/Cargo.toml': '[workspace]\nmembers=["near","solana"]\n[workspace.dependencies]\nsdk={package="near-sdk",version="5.29.0"}',
-    '/work/src/near/Cargo.toml': manifest('[dependencies]\nsdk.workspace=true'),
-    '/work/src/solana/Cargo.toml': manifest('[dependencies]\nanchor-lang="0.30.1"'),
-  };
-  const dirs = { '/work/src': ['Anchor.toml', 'Cargo.toml', 'near', 'solana'], '/work/src/near': ['Cargo.toml'], '/work/src/solana': ['Cargo.toml'] };
-  const fakeFs = {
-    existsSync: p => p in files || p in dirs || p === '/opt/platform-tools/rust/bin/cargo', realpathSync: p => p,
-    readFileSync: p => { if (!(p in files)) throw Error('missing'); return files[p]; },
-    readdirSync: p => (dirs[p] || []).map(name => ({ name, isSymbolicLink: () => false, isDirectory: () => path.join(p, name) in dirs, isFile: () => path.join(p, name) in files })),
-  };
-  const builds = [];
-  const process = { env: {}, stdin: (async function* () { yield JSON.stringify({ files: [], cwd: '.', command: 'bash', args: ['./test.sh'], timeoutMs: 900000 }); })(), stderr: { write() {} } };
-  await vm.runInNewContext(EXISTING_TEST_RUNNER, {
-    require: name => name === 'node:fs' ? fakeFs : name === 'node:path' ? path : name === 'node:crypto' ? {} : { spawnSync: (command, args) => { builds.push(args.at(-1)); return { status: 1, stderr: 'inert mock' }; } },
-    process, console: { error() {} }, setTimeout, clearTimeout,
-  });
-  assert.deepEqual(builds, ['/work/src/solana/Cargo.toml']);
-});
-
-test('Foundry and Hardhat contract tests are coverage gaps, and an ordinary npm suite beside them still runs', t => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'security-review-evm-'));
-  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
-  const put = (rel, text) => { fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true }); fs.writeFileSync(path.join(root, rel), text); };
-  put('contracts/foundry.toml', '[profile.default]\n');
-  put('contracts/lib/forge-std/foundry.toml', '[profile.default]\n');
-  put('hh/package.json', JSON.stringify({ scripts: { test: 'hardhat test' }, devDependencies: { hardhat: '^2.22.0' } }));
-  put('scripted/package.json', JSON.stringify({ scripts: { test: 'forge test -vvv' } }));
-  put('api/package.json', JSON.stringify({ scripts: { test: 'node --test' }, dependencies: { ethers: '^6.13.0' } }));
-  const snapshot = createSnapshot(root);
-  const catalog = buildExistingTestCatalog(snapshot.snapshot, snapshot.manifest);
-  disposeSnapshot(snapshot);
-  // A package that only uses a client library is an ordinary offline npm suite.
-  assert.deepEqual(catalog.tests.map((row) => `${row.kind}:${row.cwd}`), ['npm:api']);
-  assert.deepEqual(catalog.coverageGaps.filter((gap) => gap.startsWith('EVM')).sort(), [evmTestGap('contracts', 'foundry'), evmTestGap('hh', 'hardhat'), evmTestGap('scripted', 'test script')].sort());
-  // The vendored forge-std project is not a second gap.
-  assert.equal(catalog.coverageGaps.some((gap) => gap.includes('lib/forge-std')), false);
 });

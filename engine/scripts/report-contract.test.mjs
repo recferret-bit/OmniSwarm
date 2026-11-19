@@ -388,7 +388,7 @@ test('a failing target suite is shown in the Tests block and does not make a val
   f.put('harness/existing-tests.json', {
     version: 1, workflow: 'source_security_review_v1', sourceDigest: 'source',
     tests: [{ id: 'test-py', kind: 'pytest', cwd: 'backend', description: 'pytest existing tests in backend' }, { id: 'test-rs', kind: 'cargo', cwd: 'program', description: 'cargo existing tests in program' }],
-    coverageGaps: ['EVM contract tests in evm (foundry) are not run: forge, hardhat and solc are not in the sandbox image and are not installed during a review.'],
+    coverageGaps: ['NEAR contract tests in contracts are a local-sandbox coverage gap. cargo test can start near-sandbox or deploy to testnet and is not run offline.'],
   });
   const output = { stdout: 'FAILED tests/test_cash.py::test_start - AssertionError: bigint: Failed to load <bindings>\nFAILED tests/test_cash.py::test_claim - AssertionError: bigint: Failed to load <bindings>\n2 failed, 11768 passed, 500 skipped in 1036.86s (0:17:16)\n', stderr: '' };
   f.put('harness/existing-test-output-verification-0.json', output);
@@ -409,7 +409,7 @@ test('a failing target suite is shown in the Tests block and does not make a val
   assert.equal('tests' in health.verification, false, 'the Tests block is its own top-level block');
   assert.equal(health.tests.state, 'failed');
   assert.deepEqual(health.tests.suites.map((suite) => [suite.id, suite.state, suite.counts]), [['test-py', 'failed', { passed: 11768, failed: 2, skipped: 500 }], ['test-rs', 'not_run', null]]);
-  assert.deepEqual(health.tests.notes, ['EVM contract tests in evm (foundry) are not run: forge, hardhat and solc are not in the sandbox image and are not installed during a review.']);
+  assert.deepEqual(health.tests.notes, ['NEAR contract tests in contracts are a local-sandbox coverage gap. cargo test can start near-sandbox or deploy to testnet and is not run offline.']);
   assert.deepEqual(health.incompletionNotes, []);
 
   assert.match(rendered.stdout, /Tests \(the target project's own suites; they do not decide whether this report is complete\):/);
@@ -500,7 +500,7 @@ test('both skill copies stay identical and describe incomplete reviews', () => {
   const evals = JSON.parse(fs.readFileSync(path.join(ENGINE_ROOT, 'skills/security-audit/evals.json')));
   assert.equal(evals.mode, 'classification_only');
   assert.equal(evals.evals.length, 8);
-  assert.deepEqual(evals.evals.map((e) => e.name).slice(3), ['audit-not-pentest', 'layer-separation', 'hold-position-on-evidence', 'evm-coverage-and-eoa', 'near-async-and-ai']);
+  assert.deepEqual(evals.evals.map((e) => e.name).slice(3), ['audit-not-pentest', 'layer-separation', 'hold-position-on-evidence', 'near-tests-leads-and-rpc', 'near-async-and-ai']);
   assert.ok(evals.evals.every((e) => e.prompt.includes('do not run commands')));
 });
 

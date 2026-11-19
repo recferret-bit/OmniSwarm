@@ -74,13 +74,13 @@ export function Foundations() {
           <div className="font-card plate"><div className="aa mono">Aa</div><div className="fname">IBM Plex Mono</div><p>Telemetry: eyebrows, labels, paths, hashes, statuses.</p></div>
         </div>
         <div className="type-scale">
-          <div className="type-row"><span className="label">Display</span><span className="display">Sign the verdict</span></div>
+          <div className="type-row"><span className="label">Display</span><span className="display">Verify the report</span></div>
           <div className="type-row"><span className="label">H1</span><span className="h1">Four stages, then a hash</span></div>
           <div className="type-row"><span className="label">H2</span><span className="h2">What you can run today</span></div>
           <div className="type-row"><span className="label">H3</span><span className="h3">File and line</span></div>
-          <div className="type-row"><span className="label">Eyebrow</span><span className="eyebrow">03 · Example</span></div>
-          <div className="type-row"><span className="label">Product H1</span><span className="h1">A swarm of AI reviewers that argue over your code, then sign the verdict on NEAR</span></div>
-          <div className="type-row"><span className="label">Body L</span><span className="lede">Independent models review a public repository and a judge writes the general review.</span></div>
+          <div className="type-row"><span className="label">Eyebrow</span><span className="eyebrow">04 · Example</span></div>
+          <div className="type-row"><span className="label">Product H1</span><span className="h1">A swarm of AI reviewers for NEAR contracts and NEAR AI code, then a report you can verify</span></div>
+          <div className="type-row"><span className="label">Body L</span><span className="lede">A panel reviews a NEAR repository against the security-audit skill, and a judge writes the general review.</span></div>
           <div className="type-row"><span className="label">Readout</span><span className="readout c-ember">2 <small className="label">passes</small> · <span className="c-cite">40</span></span></div>
           <div className="type-row"><span className="label">Label</span><span className="label">src/lib.rs:30 · disputed</span></div>
         </div>

@@ -4,18 +4,14 @@ import { sha256Hex } from './hash-util.mjs';
 import { writeReportFile } from './report-files.mjs';
 
 // Explicit operator input, kept separate from the text-only source snapshot.
-// Import program bytes and Anchor IDL only; never import generated deployment keypairs.
+// Import operator-supplied ELF program bytes only. JSON files, including keypairs, are not imported.
 const KINDS = [
   { dir: 'deploy', name: /^[a-zA-Z0-9_][a-zA-Z0-9_-]*\.so$/, maxBytes: 64 * 1024 * 1024 },
-  { dir: 'idl', name: /^[a-zA-Z0-9_][a-zA-Z0-9_-]*\.json$/, maxBytes: 8 * 1024 * 1024 },
 ];
-export const TEST_ARTIFACT_PATH = /^(?:deploy\/[a-zA-Z0-9_][a-zA-Z0-9_-]*\.so|idl\/[a-zA-Z0-9_][a-zA-Z0-9_-]*\.json)$/;
+export const TEST_ARTIFACT_PATH = /^deploy\/[a-zA-Z0-9_][a-zA-Z0-9_-]*\.so$/;
 
 function validArtifact(dir, bytes) {
-  // Both supported SBF architectures use ELF containers.
-  if (dir === 'deploy') return bytes.length >= 64 && bytes.subarray(0, 4).equals(Buffer.from([0x7f, 0x45, 0x4c, 0x46]));
-  // An Anchor IDL describes instructions; anything else (keypairs are JSON arrays) is refused.
-  try { const idl = JSON.parse(bytes.toString('utf8')); return !!idl && !Array.isArray(idl) && Array.isArray(idl.instructions); } catch { return false; }
+  return bytes.length >= 64 && bytes.subarray(0, 4).equals(Buffer.from([0x7f, 0x45, 0x4c, 0x46]));
 }
 
 export function stageTestArtifacts(directory, reportDir, sourceDigest) {
@@ -36,7 +32,7 @@ export function stageTestArtifacts(directory, reportDir, sourceDigest) {
         if (!stat.isFile() || stat.nlink !== 1 || stat.size > kind.maxBytes || total + stat.size > 128 * 1024 * 1024 || files.length >= 64) throw new Error('Invalid or oversized test artifact');
         bytes = fs.readFileSync(fd);
       } finally { fs.closeSync(fd); }
-      if (!validArtifact(kind.dir, bytes)) throw new Error(kind.dir === 'deploy' ? 'Test program artifact is not ELF' : 'Test IDL artifact is not an Anchor IDL');
+      if (!validArtifact(kind.dir, bytes)) throw new Error('Test program artifact is not ELF');
       total += bytes.length;
       const relative = `${kind.dir}/${name}`;
       const staged = path.join(reportDir, 'harness/sandbox-run/test-artifacts', relative);
@@ -47,7 +43,7 @@ export function stageTestArtifacts(directory, reportDir, sourceDigest) {
       files.push({ path: relative, sha256: sha256Hex(bytes), bytes: bytes.length });
     }
   }
-  if (!files.length) throw new Error('No deploy/*.so or idl/*.json test artifacts were supplied');
+  if (!files.length) throw new Error('No deploy/*.so test artifacts were supplied');
   const manifest = { version: 1, sourceDigest, provenance: 'operator_supplied_unverified_build', files };
   writeReportFile(reportDir, 'harness/test-artifacts.json', JSON.stringify(manifest, null, 2));
   return manifest;

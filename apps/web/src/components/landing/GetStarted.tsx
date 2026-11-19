@@ -13,7 +13,7 @@ export function GetStarted() {
     <section className="land-section" id="start" aria-labelledby="start-title">
       <div className="container-wide">
         <header className="land-head">
-          <p className="land-kicker"><i>07</i><span className="eyebrow">Start</span></p>
+          <p className="land-kicker"><i>08</i><span className="eyebrow">Start</span></p>
           <h2 id="start-title" className="h2">Review in the cloud with your own NEAR AI key</h2>
           <p className="lede">
             OmniSwarm charges nothing. You pay NEAR AI directly for the model calls, and reviewed source is sent to NEAR AI Cloud under

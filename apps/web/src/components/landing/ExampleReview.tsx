@@ -17,9 +17,9 @@ export function ExampleReview() {
     <section className="land-section band" id="example" aria-labelledby="example-title">
       <div className="container-wide">
         <header className="land-head">
-          <p className="land-kicker"><i>03</i><span className="eyebrow">Example</span></p>
+          <p className="land-kicker"><i>04</i><span className="eyebrow">Example</span></p>
           <h2 id="example-title" className="h2">One disputed line, three citations</h2>
-          <p className="lede">From the bundled sample. High severity. Agreement is not a certificate.</p>
+          <p className="lede">From the bundled NEAR sample. High severity. Agreement is not a certificate.</p>
         </header>
         <div className="ex-grid">
           <div className="stack">

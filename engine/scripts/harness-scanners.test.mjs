@@ -133,7 +133,7 @@ console.log(JSON.stringify({ results: [] }));
   assert.match(deps, /## cargo-audit Cargo\.lock \(exit 0\)/);
   assert.match(deps, /## npm audit package-lock\.json \(exit 0\)/);
   assert.match(tools, /## gitleaks \(exit 0\)/);
-  assert.match(tools, /## semgrep pinned upstream OWASP, Solidity and NEAR security rules \(exit 0\)/);
+  assert.match(tools, /## semgrep pinned upstream OWASP and NEAR security rules \(exit 0\)/);
   assert.match(tools, /## osv-scanner \(exit 0\)/);
 });
 

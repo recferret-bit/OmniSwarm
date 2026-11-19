@@ -1,11 +1,11 @@
 // Read-only walk of the untrusted target tree: the staged copy (named secret files and symlinks stay behind) and the
-// preparation plan (lockfiles, build/test scripts, Anchor/Solana pins, OSV extras, a local web start script).
+// preparation plan (lockfiles, build/test scripts, OSV extras, a local web start script).
 import fs from 'node:fs';
 import path from 'node:path';
 
 const SKIP_DIR = new Set(['.git', 'node_modules', 'target', 'dist', '.next', 'coverage', '.cargo', '.ssh', '.aws', '.docker', '.kube', 'secrets']);
 const MAX = 4;
-const SEMVER = /^\d+\.\d+\.\d+$/;
+
 // Lockfiles whose offline OSV database is not baked into the image.
 // The host downloads these. The target container never reaches the OSV API.
 const OSV_NAME = new Map([
@@ -60,24 +60,6 @@ export function readText(file) {
   } catch { return ''; }
 }
 
-function quoted(text, key) {
-  const m = String(text || '').match(new RegExp(`^\\s*${key}\\s*=\\s*"(\\d+\\.\\d+\\.\\d+)"`, 'm'));
-  return m && SEMVER.test(m[1]) ? m[1] : null;
-}
-
-function anchorLang(text) {
-  const direct = String(text || '').match(/anchor-lang\s*=\s*"(\d+\.\d+\.\d+)"/);
-  if (direct && SEMVER.test(direct[1])) return direct[1];
-  const obj = String(text || '').match(/anchor-lang\s*=\s*\{[^}]*version\s*=\s*"(\d+\.\d+\.\d+)"/);
-  return obj && SEMVER.test(obj[1]) ? obj[1] : null;
-}
-
-function cliSolana(text) {
-  const section = String(text || '').split('[workspace.metadata.cli]')[1];
-  if (!section) return null;
-  return quoted(section.split(/\n\[/)[0], 'solana');
-}
-
 function shallow(rel, name) {
   return rel === name || new RegExp(`^[^/]+/${name}$`).test(rel);
 }
@@ -110,7 +92,6 @@ export function plan(root) {
   const cargoLocks = [];
   const buildScripts = [];
   const testScripts = [];
-  const anchors = [];
   const npmLocks = [];
   const pnpmLocks = [];
   const packageJsonNoLock = [];
@@ -128,23 +109,6 @@ export function plan(root) {
     if (shallow(f.rel, 'test.sh')) testScripts.push(f.rel);
     if (f.rel.endsWith('/package-lock.json') || f.rel === 'package-lock.json') npmLocks.push(f.rel);
     if (f.rel.endsWith('/pnpm-lock.yaml') || f.rel === 'pnpm-lock.yaml') pnpmLocks.push(f.rel);
-  }
-  for (const f of files) {
-    if (!f.rel.endsWith('/Anchor.toml') && f.rel !== 'Anchor.toml') continue;
-    const dir = f.rel.includes('/') ? f.rel.slice(0, f.rel.lastIndexOf('/')) : '.';
-    const cargoRel = dir === '.' ? 'Cargo.toml' : `${dir}/Cargo.toml`;
-    const rootCargo = files.find((x) => x.rel === 'Cargo.toml');
-    const anchorText = readText(f.abs);
-    const cargoText = readText(path.join(root, cargoRel));
-    const rootText = rootCargo ? readText(rootCargo.abs) : '';
-    const childVersions = [...new Set(files.filter(item => item.rel.startsWith(dir === '.' ? 'programs/' : `${dir}/programs/`) && item.rel.endsWith('/Cargo.toml')).map(item => anchorLang(readText(item.abs))).filter(Boolean))];
-    const rel = safeRel(dir);
-    if (!rel) continue;
-    anchors.push({
-      rel,
-      anchorVersion: quoted(anchorText, 'anchor_version') || anchorLang(cargoText) || anchorLang(rootText) || (childVersions.length === 1 ? childVersions[0] : null),
-      solanaVersion: quoted(anchorText, 'solana_version') || cliSolana(cargoText) || cliSolana(rootText),
-    });
   }
   for (const f of files) {
     if (!f.rel.endsWith('/package.json') && f.rel !== 'package.json') continue;
@@ -167,7 +131,7 @@ export function plan(root) {
     cargoLocks: cap(cargoLocks),
     buildScripts: cap(buildScripts),
     testScripts: cap(testScripts),
-    anchors: anchors.slice(0, MAX),
+    anchors: [],
     npmLocks: cap(npmLocks),
     pnpmLocks: cap(pnpmLocks),
     packageJsonNoLock: cap(packageJsonNoLock),

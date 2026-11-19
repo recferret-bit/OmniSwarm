@@ -316,7 +316,7 @@ test('publishReport output alone (after deleting source harness/ and sessions/) 
     fs.writeFileSync(path.join(sourceDir, 'harness/source-read-digest.json'), `${JSON.stringify({ version: 1, source: '/src', digest: manifest.digest, files: manifest.files, at: new Date().toISOString() }, null, 2)}\n`);
     fs.writeFileSync(path.join(sourceDir, 'harness/sandbox.md'), '# Sandbox\n\n| check | status | detail |\n|---|---|---|\n| gitleaks | ran | 0 leaks |\n');
     fs.writeFileSync(path.join(sourceDir, 'harness/stack-profile.json'), `${JSON.stringify(analyzeStackAndPlans(targetDir), null, 2)}\n`);
-    fs.writeFileSync(path.join(sourceDir, 'harness/solana.md'), '# Solana leads\n\n- src/lib.rs:30\n');
+    fs.writeFileSync(path.join(sourceDir, 'harness/near.md'), '# NEAR leads\n\n- src/lib.rs:30 env::signer_account_id\n');
     const testId = 'cargo-test-root';
     fs.writeFileSync(path.join(sourceDir, 'harness/existing-tests.json'), `${JSON.stringify({ version: 1, sourceDigest: manifest.digest, tests: [{ id: testId, kind: 'cargo-test', cwd: '.', description: 'cargo test' }], coverageGaps: [] }, null, 2)}\n`);
     const testRaw = JSON.stringify({ stdout: 'running 1 test\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out\n', stderr: '', omittedBytes: 0 });

@@ -2,7 +2,7 @@
   "name": "omniswarm",
   "version": "1.0.0",
   "private": true,
-  "description": "Multichain multi-agent security review suite for Solana, NEAR, Rust, Python, TypeScript, and Web3 systems",
+  "description": "NEAR and NEAR AI security review for contracts, clients, Intents, and the application around them",
   "type": "module",
   "main": "engine/scripts/docker-agent-orchestrator.mjs",
   "bin": {
@@ -47,7 +47,6 @@
     "readme:eval": "node tools/readme-eval-table.mjs"
   },
   "keywords": [
-    "solana",
     "near",
     "security",
     "audit",

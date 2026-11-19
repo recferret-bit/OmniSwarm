@@ -100,7 +100,7 @@ export function testSetupCause(stdout, stderr) {
   if (fetched) return `The test script fetches ${decodeURIComponent(fetched)} through npx, which the offline sandbox cannot do; declare it as a locked devDependency.`;
   if (/Cannot find module '\.prisma\/client/.test(out)) return 'Prisma client is not generated (install scripts are disabled in the sandbox), so suites importing it cannot load.';
   if (/failed to find a workspace root/.test(out)) return 'Cargo crate inherits from a workspace root that is not in the review snapshot.';
-  if (/run `anchor build` first/.test(out)) return 'Test needs a prebuilt Solana program or IDL ("run `anchor build` first"); build it separately and supply --test-artifacts <cargo-target-dir>.';
+  if (/run `anchor build` first/.test(out)) return 'The suite asked for a program build this review does not run.';
   const input = out.match(/couldn't read `([^`]+)`: No such file or directory/)?.[1];
   if (input && !/\/deploy\/[\w-]+\.so$/.test(input)) return `Test input missing from the review snapshot: ${input.replace(/^\/work\/src\//, '')}.`;
   return null;

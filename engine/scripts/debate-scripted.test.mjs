@@ -23,12 +23,12 @@ async function debateGolden(name, rounds) {
 
 test('the seeded bugs stay (LIKELY) and the decoys are REFUTED, judged by the cluster that cites them', async () => {
   const { expected, status } = await debateGolden('near-escrow', 3);
-  for (const bug of expected.bugs) assert.equal(status(bug), 'LIKELY', `${bug.title}`);
+  for (const bug of expected.bugs) if (!bug.misjudgedBy) assert.equal(status(bug), 'LIKELY', `${bug.title}`);
   for (const decoy of expected.decoys) assert.equal(status(decoy), 'REFUTED', `${decoy.claim}`);
 });
 
 test('a confident wrong control assertion refutes a real single-source bug; the eval counts it as lost', async () => {
-  const { expected, status } = await debateGolden('solana-vault', 2);
+  const { expected, status } = await debateGolden('near-escrow', 2);
   const misjudged = expected.bugs.find((bug) => bug.misjudgedBy);
   assert.equal(status(misjudged), 'REFUTED');
 });

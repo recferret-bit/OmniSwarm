@@ -399,7 +399,7 @@ async function prepareWriteTools(root, outDir, runOsv = (fn) => fn()) {
       lines.push('semgrep: not on PATH. SAST fell back to the regex in web.md.');
       missingScanner('semgrep', 'Executable unavailable');
     } else {
-      lines.push(`## semgrep pinned upstream OWASP, Solidity and NEAR security rules (exit ${semgrepRes.code})`);
+      lines.push(`## semgrep pinned upstream OWASP and NEAR security rules (exit ${semgrepRes.code})`);
       lines.push(recordScanner('semgrep', semgrepRes) ? summariseSemgrep(semgrepRes.stdout, root) : ['FAILED: scanner did not produce a complete SAST result.', killedDetail(semgrepRes)].filter(Boolean).join(' '));
       lines.push('');
     }

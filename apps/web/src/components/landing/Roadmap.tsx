@@ -33,7 +33,7 @@ export function Roadmap() {
     <section className="land-section" id="roadmap" aria-labelledby="roadmap-title">
       <div className="container-wide">
         <header className="land-head">
-          <p className="land-kicker"><i>05</i><span className="eyebrow">Later</span></p>
+          <p className="land-kicker"><i>06</i><span className="eyebrow">Later</span></p>
           <h2 id="roadmap-title" className="h2">Not in this build</h2>
           <p className="lede">None of these is switched on. Hover a card. It flips.</p>
         </header>

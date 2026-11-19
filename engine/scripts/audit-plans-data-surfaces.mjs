@@ -1,7 +1,7 @@
 // Per-surface reviewer guidance tables of audit-plans.mjs renderSurfaceSkillGuidance: the surface titles and the
-// stack-specific lines (Node, Python, Solana, wallet flows, infrastructure). The NEAR and EVM checklists are in
-// audit-plans-data-near.mjs and audit-plans-data-evm.mjs. The renderer
-// groups them by review layer (harness-layers.mjs): Python and Node are web2; Solana, NEAR, EVM and wallet flows are web3;
+// stack-specific lines (Node, Python, wallet flows, infrastructure). The NEAR checklist is in
+// audit-plans-data-near.mjs. The renderer
+// groups them by review layer (harness-layers.mjs): Python and Node are web2; NEAR and wallet flows are web3;
 // INFRA_SURFACE is infra. Data only; imports nothing.
 
 export const SURFACE_TITLES = {
@@ -47,19 +47,12 @@ export const PYTHON_SURFACE = {
   ],
 };
 
-export const SOLANA_SURFACE = {
-  S3: ['- Solana/Anchor: audit escrow invariants: `Signer` == stored authority, account owner checks, canonical PDA bumps, fixed CPI targets, `reload()` after CPI, closing/initialization and Merkle proof/root attestation rules. In `markdown_summary` add a dedicated "Solana program" paragraph: files reviewed, controls verified, and whether tests or builds actually ran.'],
-  S4: ['- Solana: audit who holds the upgrade authority and each program authority, whether authority keypairs or deploy wallets are committed or referenced by path, hard-coded program ids and cluster URLs, and what `msg!` logs reveal.'],
-  S6: ['- Solana: audit Solana Actions/Blinks (`/actions.json`, `/api/actions/*`) and wallet transaction signing flows.'],
-  S5: ['- Solana: audit verifiable-build pinning (`cargo-build-sbf`, `solana-verify`) and RustSec advisories in `Cargo.lock`.'],
-};
-
-// Chain-neutral wallet flow checks, shown when production code imports a chain SDK or calls an injected wallet.
+// Chain-neutral wallet flow checks, shown when production code imports a NEAR SDK or calls window.near.
 export const WALLET_SURFACE = {
   S1: ['- Wallet sign-in: the signed text is the exact server-issued challenge (domain, account, nonce, expiry), the nonce is single-use, and the verified public key is bound to the account the session is issued for.'],
   S3: ['- Off-chain ledger vs chain: a balance, credit or payout recorded by the backend must follow a transaction the server verified itself (hash, recipient, amount, finality), never a client report; payouts are idempotent and debited before they are sent.'],
   S4: ['- Key custody: signing keys held by a server or a script (environment, file, literal fallback, logs). Report where the key lives and who can read it. Do not read or use the key.'],
-  S6: ['- Wallet signing intent: what the user is asked to sign and who chose it. Flag transactions or messages built from URL parameters, `postMessage` data or API responses and signed without showing the user the recipient and amount; access keys or approvals wider than the flow needs; `skipPreflight`; and hard-coded RPC endpoints without failover.'],
+  S6: ['- Wallet signing intent: what the user is asked to sign and who chose it. Flag transactions or messages built from URL parameters, `postMessage` data or API responses and signed without showing the user the recipient and amount; access keys or approvals wider than the flow needs; and hard-coded RPC endpoints without failover.'],
 };
 
 // Infrastructure checks, shown when the target has container, CI, proxy, deploy or environment files.

@@ -1,10 +1,10 @@
 // Runs inside the disposable container. Writes /out/results.json as it goes.
-// Host-owned rows (solana-verify, and ZAP once a server is listening) stay pending.
+// Host-owned rows (ZAP once a server is listening) stay pending.
 // The checks live in sandbox-inside-*.mjs; sandbox.sh mounts every one of them flat under /opt/audit.
 import fs from 'node:fs';
 import path from 'node:path';
 import { assess, plan } from './sandbox-lib.mjs';
-import { anchorBuild, cargoLocked, scripts } from './sandbox-inside-builds.mjs';
+import { cargoLocked, scripts } from './sandbox-inside-builds.mjs';
 import { CARGO_ENV, brief, log, run, sweepSpills } from './sandbox-inside-exec.mjs';
 import { npmFetch, npmInstall, pnpmInstall, yarnInstall } from './sandbox-inside-node.mjs';
 import { audits, cargoAudit, maybeServe, osv } from './sandbox-inside-scans.mjs';
@@ -69,7 +69,6 @@ async function runOwnedChecks(tree, want) {
     ['cargo-test', () => cargoLocked('cargo-test', ['test', '--locked'], tree.cargoLocks.items)],
     ['build-sh', () => scripts('build-sh', tree.buildScripts.items)],
     ['test-sh', () => scripts('test-sh', tree.testScripts.items)],
-    ['anchor-build', () => anchorBuild(tree)],
     ['npm-install', () => npmInstall(tree.npmLocks.items)],
     ['pnpm-install', () => pnpmInstall(tree.pnpmLocks.items)],
     ['yarn-install', () => yarnInstall(tree.yarnOnly.items)],

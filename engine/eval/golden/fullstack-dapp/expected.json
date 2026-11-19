@@ -166,24 +166,6 @@
       "layer": "web2"
     },
     {
-      "file": "frontend/src/app.js",
-      "startLine": 44,
-      "endLine": 44,
-      "class": "postmessage-origin",
-      "title": "message listener signs a transaction for any origin",
-      "severity": "critical",
-      "layer": "web2"
-    },
-    {
-      "file": "frontend/src/app.js",
-      "startLine": 59,
-      "endLine": 59,
-      "class": "unconfirmed-transfer",
-      "title": "a link with ?tip=&to= sends a transfer on page load",
-      "severity": "high",
-      "layer": "web2"
-    },
-    {
       "file": "frontend/src/api.js",
       "startLine": 2,
       "endLine": 2,
@@ -212,8 +194,8 @@
     },
     {
       "file": "frontend/src/wallet.js",
-      "startLine": 16,
-      "endLine": 16,
+      "startLine": 14,
+      "endLine": 14,
       "class": "wallet-access-key",
       "title": "function-call key covers every method with a 250 NEAR allowance",
       "severity": "medium",
@@ -221,17 +203,8 @@
     },
     {
       "file": "frontend/src/wallet.js",
-      "startLine": 54,
-      "endLine": 54,
-      "class": "blind-signing",
-      "title": "a serialized transaction from outside is signed without inspection",
-      "severity": "high",
-      "layer": "web3"
-    },
-    {
-      "file": "frontend/src/wallet.js",
-      "startLine": 61,
-      "endLine": 61,
+      "startLine": 30,
+      "endLine": 30,
       "class": "nep413-replay",
       "title": "NEP-413 login signs with an all-zero nonce and a caller-supplied recipient",
       "severity": "high",
@@ -336,291 +309,6 @@
       "endLine": 17,
       "class": "release-profile",
       "title": "release profile turns overflow checks off",
-      "severity": "medium",
-      "layer": "web3"
-    },
-    {
-      "file": "programs/tip_vault/src/lib.rs",
-      "startLine": 73,
-      "endLine": 73,
-      "class": "reinitialization",
-      "title": "initialize can be re-run on a live vault",
-      "severity": "low",
-      "layer": "web3"
-    },
-    {
-      "file": "programs/tip_vault/src/lib.rs",
-      "startLine": 32,
-      "endLine": 32,
-      "class": "unchecked-arithmetic",
-      "title": "vault total uses unchecked addition",
-      "severity": "low",
-      "layer": "web3",
-      "missedBy": [
-        "paranoid"
-      ]
-    },
-    {
-      "file": "programs/tip_vault/src/lib.rs",
-      "startLine": 38,
-      "endLine": 38,
-      "class": "unchecked-arithmetic",
-      "title": "withdraw fee math can overflow and underflow",
-      "severity": "medium",
-      "layer": "web3"
-    },
-    {
-      "file": "programs/tip_vault/src/lib.rs",
-      "startLine": 101,
-      "endLine": 101,
-      "class": "missing-signer",
-      "title": "withdraw authority is not a signer and is not bound to the vault",
-      "severity": "critical",
-      "layer": "web3"
-    },
-    {
-      "file": "programs/tip_vault/src/lib.rs",
-      "startLine": 62,
-      "endLine": 62,
-      "class": "arbitrary-cpi",
-      "title": "notify invokes a caller-chosen program",
-      "severity": "high",
-      "layer": "web3"
-    },
-    {
-      "file": "contracts/evm/src/TipVault.sol",
-      "startLine": 2,
-      "endLine": 2,
-      "class": "compiler",
-      "title": "floating pre-0.8 compiler: arithmetic is unchecked",
-      "severity": "medium",
-      "layer": "web3"
-    },
-    {
-      "file": "contracts/evm/src/TipVault.sol",
-      "startLine": 41,
-      "endLine": 41,
-      "class": "unprotected-initializer",
-      "title": "initialize can be called by anyone, at any time, to take ownership",
-      "severity": "critical",
-      "layer": "web3"
-    },
-    {
-      "file": "contracts/evm/src/TipVault.sol",
-      "startLine": 51,
-      "endLine": 51,
-      "class": "tx-origin",
-      "title": "setFeeCollector authorizes tx.origin",
-      "severity": "medium",
-      "layer": "web3",
-      "missedBy": [
-        "baseline"
-      ]
-    },
-    {
-      "file": "contracts/evm/src/TipVault.sol",
-      "startLine": 57,
-      "endLine": 57,
-      "class": "unchecked-arithmetic",
-      "title": "unbounded feeBps makes the tip subtraction underflow",
-      "severity": "medium",
-      "layer": "web3"
-    },
-    {
-      "file": "contracts/evm/src/TipVault.sol",
-      "startLine": 64,
-      "endLine": 64,
-      "class": "unchecked-erc20",
-      "title": "token tip ignores the transferFrom result and credits the requested amount",
-      "severity": "medium",
-      "layer": "web3"
-    },
-    {
-      "file": "contracts/evm/src/TipVault.sol",
-      "startLine": 70,
-      "endLine": 70,
-      "class": "reentrancy",
-      "title": "withdraw sends ether before it debits the balance",
-      "severity": "critical",
-      "layer": "web3"
-    },
-    {
-      "file": "contracts/evm/src/TipVault.sol",
-      "startLine": 83,
-      "endLine": 83,
-      "class": "signature-replay",
-      "title": "withdrawFor signature has no nonce, deadline or domain and pays whoever submits it",
-      "severity": "critical",
-      "layer": "web3"
-    },
-    {
-      "file": "contracts/evm/src/TipVault.sol",
-      "startLine": 85,
-      "endLine": 85,
-      "class": "unchecked-arithmetic",
-      "title": "withdrawFor debits without a balance check and underflows",
-      "severity": "high",
-      "layer": "web3",
-      "missedBy": [
-        "paranoid"
-      ]
-    },
-    {
-      "file": "contracts/evm/src/TipVault.sol",
-      "startLine": 90,
-      "endLine": 90,
-      "class": "delegatecall",
-      "title": "execute delegatecalls an arbitrary target with the vault storage",
-      "severity": "high",
-      "layer": "web3"
-    },
-    {
-      "file": "contracts/evm/src/TipVault.sol",
-      "startLine": 106,
-      "endLine": 106,
-      "class": "missing-access-control",
-      "title": "destroy has no caller check",
-      "severity": "critical",
-      "layer": "web3"
-    },
-    {
-      "file": "frontend/src/evm.js",
-      "startLine": 7,
-      "endLine": 7,
-      "class": "key-custody",
-      "title": "a relayer private key is embedded in the browser bundle",
-      "severity": "high",
-      "layer": "web3"
-    },
-    {
-      "file": "frontend/src/evm.js",
-      "startLine": 22,
-      "endLine": 22,
-      "class": "unlimited-approval",
-      "title": "token tip approves the vault for the whole balance",
-      "severity": "medium",
-      "layer": "web3"
-    },
-    {
-      "file": "frontend/src/evm.js",
-      "startLine": 28,
-      "endLine": 28,
-      "class": "blind-signing",
-      "title": "login uses eth_sign on a server-supplied message",
-      "severity": "high",
-      "layer": "web3"
-    },
-    {
-      "file": "contracts/evm/src/TipShares.sol",
-      "startLine": 41,
-      "endLine": 41,
-      "class": "eoa-check",
-      "title": "onlyHuman treats tx.origin == msg.sender as proof the caller has no code",
-      "severity": "medium",
-      "layer": "web3",
-      "missedBy": [
-        "baseline"
-      ]
-    },
-    {
-      "file": "contracts/evm/src/TipShares.sol",
-      "startLine": 59,
-      "endLine": 59,
-      "class": "donation",
-      "title": "totalAssets reads the live token balance, which anyone can raise by a transfer",
-      "severity": "high",
-      "layer": "web3"
-    },
-    {
-      "file": "contracts/evm/src/TipShares.sol",
-      "startLine": 63,
-      "endLine": 63,
-      "class": "share-inflation",
-      "title": "the first depositor can inflate the share price so later deposits mint zero shares",
-      "severity": "critical",
-      "layer": "web3"
-    },
-    {
-      "file": "contracts/evm/src/TipShares.sol",
-      "startLine": 77,
-      "endLine": 77,
-      "class": "oracle-staleness",
-      "title": "the feed answer is used with no sign, freshness or sequencer check",
-      "severity": "high",
-      "layer": "web3"
-    },
-    {
-      "file": "contracts/evm/src/TipShares.sol",
-      "startLine": 83,
-      "endLine": 83,
-      "class": "spot-price",
-      "title": "the borrow limit is priced from pool reserves a flash loan can move",
-      "severity": "critical",
-      "layer": "web3"
-    },
-    {
-      "file": "contracts/evm/src/TipShares.sol",
-      "startLine": 91,
-      "endLine": 91,
-      "class": "precision",
-      "title": "the fee divides before it multiplies and rounds small amounts to zero",
-      "severity": "low",
-      "layer": "web3",
-      "missedBy": [
-        "paranoid"
-      ]
-    },
-    {
-      "file": "contracts/evm/src/TipShares.sol",
-      "startLine": 96,
-      "endLine": 96,
-      "class": "narrowing-cast",
-      "title": "a recorded tip is truncated to 96 bits",
-      "severity": "medium",
-      "layer": "web3"
-    },
-    {
-      "file": "contracts/evm/src/TipShares.sol",
-      "startLine": 100,
-      "endLine": 100,
-      "class": "denial-of-service",
-      "title": "payAll loops over every creator and one failing transfer blocks all payouts",
-      "severity": "medium",
-      "layer": "web3"
-    },
-    {
-      "file": "contracts/evm/src/TipShares.sol",
-      "startLine": 117,
-      "endLine": 117,
-      "class": "unprotected-upgrade",
-      "title": "anyone can set the implementation the fallback delegatecalls",
-      "severity": "critical",
-      "layer": "web3"
-    },
-    {
-      "file": "frontend/src/evm.js",
-      "startLine": 41,
-      "endLine": 41,
-      "class": "unlimited-approval",
-      "title": "the vault is approved for the whole NFT collection",
-      "severity": "medium",
-      "layer": "web3"
-    },
-    {
-      "file": "frontend/src/evm.js",
-      "startLine": 46,
-      "endLine": 46,
-      "class": "eip7702-delegation",
-      "title": "an EIP-7702 delegation is signed for a contract taken from the URL, valid on every chain",
-      "severity": "critical",
-      "layer": "web3"
-    },
-    {
-      "file": "frontend/src/evm.js",
-      "startLine": 51,
-      "endLine": 51,
-      "class": "untrusted-chain",
-      "title": "the wallet is asked to add a network whose RPC URL comes from an API response",
       "severity": "medium",
       "layer": "web3"
     },
@@ -799,8 +487,8 @@
     },
     {
       "file": "frontend/src/app.js",
-      "startLine": 51,
-      "endLine": 51,
+      "startLine": 36,
+      "endLine": 36,
       "reason": "the status listener checks the origin first",
       "claim": "status listener trusts any origin",
       "layer": "web2"
@@ -843,54 +531,6 @@
       "endLine": 123,
       "reason": "on_yield_settled is #[private], bounds return bytes with promise_result_checked and restores locked funds on timeout",
       "claim": "on_yield_settled is callable externally or unbounded",
-      "layer": "web3"
-    },
-    {
-      "file": "programs/tip_vault/src/lib.rs",
-      "startLine": 82,
-      "endLine": 82,
-      "reason": "the vault PDA is re-derived with the stored canonical bump",
-      "claim": "deposit accepts a forged vault account",
-      "layer": "web3"
-    },
-    {
-      "file": "programs/tip_vault/src/lib.rs",
-      "startLine": 113,
-      "endLine": 113,
-      "reason": "close requires has_one and a signing authority",
-      "claim": "anyone can close the vault",
-      "layer": "web3"
-    },
-    {
-      "file": "contracts/evm/src/TipVault.sol",
-      "startLine": 75,
-      "endLine": 75,
-      "reason": "the guard is set and the balance is debited before the token call",
-      "claim": "token withdraw is reentrant",
-      "layer": "web3"
-    },
-    {
-      "file": "contracts/evm/src/TipVault.sol",
-      "startLine": 100,
-      "endLine": 100,
-      "reason": "ownership transfer is two-step and only the pending owner can accept",
-      "claim": "anyone can accept ownership",
-      "layer": "web3"
-    },
-    {
-      "file": "contracts/evm/src/TipShares.sol",
-      "startLine": 46,
-      "endLine": 46,
-      "reason": "the initializer runs once and is guarded by a flag",
-      "claim": "initialize can be called again to take ownership",
-      "layer": "web3"
-    },
-    {
-      "file": "contracts/evm/src/TipShares.sol",
-      "startLine": 112,
-      "endLine": 112,
-      "reason": "the claim is EIP-712 typed data with the chain id, a consumed nonce, a deadline and a zero-address check",
-      "claim": "the claim signature can be replayed",
       "layer": "web3"
     },
     {

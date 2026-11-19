@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Disposable sandbox for one audit run.
-# No host secrets, SSH keys, Solana keys, or Docker socket are mounted.
+# No host secrets, SSH keys, chain keys, or Docker socket are mounted.
 # The target container sits on an internal network. Its only egress is the
 # allowlist proxy (crates.io, registry.npmjs.org, registry.yarnpkg.com, pypi.org, files.pythonhosted.org, GitHub, port 443).
 # A check that cannot be started is written as "impossible" in harness/sandbox.md
@@ -56,9 +56,7 @@ PROXY="audit-proxy-$ID"
 INIT="audit-init-$ID"
 SBX="audit-sbx-$ID"
 ZAP="audit-zap-$ID"
-SVERIFY="audit-sverify-$ID"
 OSVFETCH="audit-osv-$ID"
-TOOLS="audit-tools-$ID"
 EXPORT="audit-export-$ID"
 SEAL="audit-seal-$ID"
 VOL="audit-work-$ID"
@@ -70,7 +68,7 @@ RENDERED=0
 VOLUME_READY=0
 
 cleanup_docker() {
-  docker rm -f "$SBX" "$INIT" "$PROXY" "$ZAP" "$SVERIFY" "$OSVFETCH" "$TOOLS" "$EXPORT" "$SEAL" >/dev/null 2>&1 || true
+  docker rm -f "$SBX" "$INIT" "$PROXY" "$ZAP" "$OSVFETCH" "$EXPORT" "$SEAL" >/dev/null 2>&1 || true
   docker network rm "$NET" "$OUTNET" >/dev/null 2>&1 || true
   docker volume rm "$VOL" >/dev/null 2>&1 || true
   if [ -n "$STAGE" ] && [ -d "$STAGE" ]; then rm -rf "$STAGE"; fi
@@ -109,8 +107,7 @@ render() {
   RENDERED=1
 }
 
-# The work volume is removed in cleanup. Copy built programs out first.
-# solana-verify already wrote its .so on the host; anchor/cargo wrote theirs on the volume.
+# The work volume is removed in cleanup. Copy cargo output out first.
 export_files() {
   [ "$VOLUME_READY" -eq 1 ] || return 0
   mkdir -p "$OUT/files"
@@ -134,9 +131,6 @@ export_files() {
       /opt/audit/sandbox-lib.mjs export /work /export build \
       >"$RUN/export.log" 2>&1 || true
     chmod -R a+rwX "$OUT/files" || true
-  fi
-  if [ -d "$RUN/sbf-out" ]; then
-    node "$LIB" export "$RUN/sbf-out" "$OUT/files" sbf >>"$RUN/export.log" 2>&1 || true
   fi
   if [ ! -f "$OUT/files/manifest.json" ]; then
     printf '[]\n' > "$OUT/files/manifest.json" || true
@@ -178,7 +172,6 @@ fi
 
 OSV_CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/omniswarm-audit/osv"
 OSV_MOUNTS=()
-TOOLS_DIR=""
 
 if [ "$SKIP_PREP" -eq 0 ]; then
   # Host downloads the extra OSV databases. The seed is only the lockfiles.
@@ -206,55 +199,6 @@ if [ "$SKIP_PREP" -eq 0 ]; then
       case "$base" in crates.io|npm) continue ;; esac
       OSV_MOUNTS+=(-v "$dir:/opt/osv-cache/osv-scalibr/$base:ro")
     done
-  fi
-fi
-
-# Platform-tools are fetched by the Solana Foundation image on the host
-# network, from a one-file crate we write. The target sources are not mounted.
-# The version comes only from a pinned solana_version.
-prefetch_tools() {
-  local ver="$1" cache
-  case "$ver" in
-    ''|*[!0-9.]*) return 1 ;;
-  esac
-  cache="${XDG_CACHE_HOME:-$HOME/.cache}/omniswarm-audit/platform-tools/${ver}"
-  if find "$cache/.cache/solana" -type d -name platform-tools -print -quit 2>/dev/null | grep -q .; then
-    printf '%s' "$cache"
-    return 0
-  fi
-  mkdir -p "$cache" "$RUN/sbf-dummy/src"
-  printf '%s\n' '[package]' 'name = "prefetch"' 'version = "0.0.0"' 'edition = "2021"' '' '[lib]' 'crate-type = ["cdylib"]' \
-    > "$RUN/sbf-dummy/Cargo.toml"
-  printf '#![no_std]\n' > "$RUN/sbf-dummy/src/lib.rs"
-  if ! docker pull --platform linux/amd64 "solanafoundation/solana-verifiable-build:${ver}" >"$RUN/platform-tools-pull.log" 2>&1; then
-    return 1
-  fi
-  docker run --name "$TOOLS" --platform linux/amd64 \
-    --cap-drop ALL \
-    --security-opt no-new-privileges \
-    --pids-limit 1024 \
-    --memory "$MEMORY" \
-    -e HOME=/home/solana \
-    -e CARGO_HOME=/tmp/cargo \
-    -e CARGO_TARGET_DIR=/tmp/target \
-    --tmpfs /tmp:size=4g \
-    -v "$cache":/home/solana \
-    -v "$RUN/sbf-dummy":/build:ro \
-    -w /build \
-    "solanafoundation/solana-verifiable-build:${ver}" \
-    cargo-build-sbf >"$RUN/platform-tools.log" 2>&1 || true
-  docker rm -f "$TOOLS" >/dev/null 2>&1 || true
-  if find "$cache/.cache/solana" -type d -name platform-tools -print -quit 2>/dev/null | grep -q .; then
-    printf '%s' "$cache"
-    return 0
-  fi
-  return 1
-}
-
-if [ "$REVIEW_ONLY" -eq 0 ]; then
-  SOLANA_EARLY="$(node "$LIB" solana "$RUN/plan.json" 2>/dev/null || true)"
-  if [ -n "$SOLANA_EARLY" ]; then
-    TOOLS_DIR="$(prefetch_tools "${SOLANA_EARLY%%$'\t'*}" || true)"
   fi
 fi
 
@@ -352,7 +296,6 @@ if ! docker run -d --name "$SBX" \
   -e NODE_USE_ENV_PROXY=1 \
   -e GIT_TERMINAL_PROMPT=0 \
   -e OPENSSL_NO_VENDOR=1 \
-  ${TOOLS_DIR:+-e SOLANA_PLATFORM_TOOLS_DIR=/opt/platform-tools} \
   -e SANDBOX_OUT=/out \
   -e SANDBOX_BUDGET_MS="$BUDGET_MS" \
   -e SANDBOX_REVIEW_ONLY="$REVIEW_ONLY" \
@@ -391,14 +334,12 @@ if ! docker run -d --name "$SBX" \
   -v "$SCRIPT_DIR/harness-walk.mjs:/opt/audit/harness-walk.mjs:ro" \
   -v "$SCRIPT_DIR/audit-plans.mjs:/opt/audit/audit-plans.mjs:ro" \
   -v "$SCRIPT_DIR/audit-plans-data-domains.mjs:/opt/audit/audit-plans-data-domains.mjs:ro" \
-  -v "$SCRIPT_DIR/audit-plans-data-evm.mjs:/opt/audit/audit-plans-data-evm.mjs:ro" \
   -v "$SCRIPT_DIR/audit-plans-data-near.mjs:/opt/audit/audit-plans-data-near.mjs:ro" \
   -v "$SCRIPT_DIR/audit-plans-data-surfaces.mjs:/opt/audit/audit-plans-data-surfaces.mjs:ro" \
   -v "$SCRIPT_DIR/scanner-evidence.mjs:/opt/audit/scanner-evidence.mjs:ro" \
   -v "$SCRIPT_DIR/stack-detect.mjs:/opt/audit/stack-detect.mjs:ro" \
   -v "$SCRIPT_DIR/cargo-manifest.mjs:/opt/audit/cargo-manifest.mjs:ro" \
   ${OSV_MOUNTS[@]+"${OSV_MOUNTS[@]}"} \
-  ${TOOLS_DIR:+-v "$TOOLS_DIR/.cache/solana:/opt/platform-tools:ro"} \
   audit-sandbox:local \
   node /opt/audit/sandbox-inside.mjs >"$RUN/container.id" 2>"$RUN/container.log"; then
   note_blocked "The sandbox container did not start. See harness/sandbox-run/container.log."
@@ -453,87 +394,9 @@ elif [ "$ZAP_PENDING" -eq 1 ] && [ "$SEEN" -eq 0 ]; then
   node "$LIB" merge "$RUN/results.json" zap impossible "The sandbox did not report a local server, so ZAP was not started." || true
 fi
 
-SOLANA_LINE=""
-if [ "$REVIEW_ONLY" -eq 0 ] && [ "${SANDBOX_FAST:-0}" != "1" ]; then
-  SOLANA_LINE="$(node "$LIB" solana "$RUN/plan.json" 2>/dev/null || true)"
-fi
-if [ -n "$SOLANA_LINE" ]; then
-  SOLANA_VERSION="${SOLANA_LINE%%$'\t'*}"
-  SOLANA_REL="${SOLANA_LINE#*$'\t'}"
-  WORK="/build"
-  [ "$SOLANA_REL" = "." ] || WORK="/build/${SOLANA_REL}"
-  if docker pull --platform linux/amd64 "solanafoundation/solana-verifiable-build:${SOLANA_VERSION}" >"$RUN/solana-verify-pull.log" 2>&1; then
-    mkdir -p "$RUN/sbf-out"
-    chmod 777 "$RUN/sbf-out" || true
-    TOOLS_NOTE=""
-    # ${var:-word} would insert the cache path itself when the variable is set.
-    SBF_HOME=(-e HOME=/tmp/home)
-    if [ -n "$TOOLS_DIR" ]; then
-      TOOLS_NOTE=" Platform-tools were mounted read-only from the host prefetch."
-      SBF_HOME=(
-        -e HOME=/opt/platform-home
-        -e SOLANA_PLATFORM_TOOLS_DIR=/opt/platform-home/.cache/solana
-        -v "$TOOLS_DIR:/opt/platform-home:ro"
-      )
-    fi
-    docker run --name "$SVERIFY" \
-      --platform linux/amd64 \
-      --network "$NET" \
-      --cap-drop ALL \
-      --security-opt no-new-privileges \
-      --pids-limit 1024 \
-      --memory "$MEMORY" \
-      --tmpfs /tmp:size=4g \
-      -e HTTP_PROXY -e HTTPS_PROXY -e http_proxy -e https_proxy -e NO_PROXY -e no_proxy \
-      -e GIT_TERMINAL_PROMPT=0 \
-      -e OPENSSL_NO_VENDOR=1 \
-      -e CARGO_HOME=/tmp/cargo \
-      -e CARGO_TARGET_DIR=/sbf-out \
-      "${SBF_HOME[@]}" \
-      -v "$STAGE/src:/build:ro" \
-      -v "$RUN/sbf-out:/sbf-out" \
-      -w "$WORK" \
-      "solanafoundation/solana-verifiable-build:${SOLANA_VERSION}" \
-      cargo-build-sbf \
-      >"$RUN/solana-verify.log" 2>&1 &
-    SPID=$!
-    SLEFT=150
-    while kill -0 "$SPID" 2>/dev/null && [ "$SLEFT" -gt 0 ]; do
-      sleep 10
-      SLEFT=$((SLEFT - 1))
-    done
-    if kill -0 "$SPID" 2>/dev/null; then
-      docker rm -f "$SVERIFY" >/dev/null 2>&1 || true
-      wait "$SPID" || true
-      node "$LIB" merge "$RUN/results.json" solana-verify failed "Timed out after 25 minutes in solanafoundation/solana-verifiable-build:${SOLANA_VERSION}. The Docker socket was not mounted.${TOOLS_NOTE}" || true
-    else
-      wait "$SPID" || SCODE=$?
-      SCODE="${SCODE:-0}"
-      TAIL="$(tail -n 3 "$RUN/solana-verify.log" 2>/dev/null | tr '\n' ' ' | cut -c1-240)"
-      if [ "$SCODE" -eq 0 ]; then
-        node "$LIB" merge "$RUN/results.json" solana-verify ran "cargo-build-sbf in solanafoundation/solana-verifiable-build:${SOLANA_VERSION} (${SOLANA_REL}). Socket not mounted.${TOOLS_NOTE} ${TAIL}" || true
-      else
-        node "$LIB" merge "$RUN/results.json" solana-verify failed "exit ${SCODE} in solanafoundation/solana-verifiable-build:${SOLANA_VERSION}. Socket not mounted.${TOOLS_NOTE} ${TAIL}" || true
-      fi
-    fi
-  else
-    node "$LIB" merge "$RUN/results.json" solana-verify impossible "Image solanafoundation/solana-verifiable-build:${SOLANA_VERSION} was not pulled. The Docker socket was not mounted." || true
-  fi
-fi
-
-# The host sends this request. The URL is the one the user passed. The container never sees it.
+# A passed RPC URL is not queried. The review does not compare deployed code.
 if [ -n "$RPC" ]; then
-  if RPC_URL="$(node "$LIB" rpc "$RPC" 2>/dev/null)"; then
-    if node "$LIB" compare "$RPC_URL" "$STAGE/src" "$RUN/sbf-out" >"$RUN/deployed.json" 2>"$RUN/deployed.err"; then
-      CMP="$(node -e 'const o=JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8")); process.stdout.write(o.result+"\n"+o.detail)' "$RUN/deployed.json")"
-      node "$LIB" merge "$RUN/results.json" deployed-compare "${CMP%%$'\n'*}" "${CMP#*$'\n'}" || true
-    else
-      ERR="$(tail -n 2 "$RUN/deployed.err" 2>/dev/null | tr '\n' ' ' | cut -c1-180)"
-      node "$LIB" merge "$RUN/results.json" deployed-compare failed "The deployed comparison did not finish. ${ERR}" || true
-    fi
-  else
-    node "$LIB" merge "$RUN/results.json" deployed-compare impossible "The --rpc URL was refused. It must be https, with no credentials, and not a private, link-local, or metadata address." || true
-  fi
+  node "$LIB" merge "$RUN/results.json" deployed-compare impossible "This pass does not contact an RPC." || true
 fi
 
 render

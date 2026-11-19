@@ -79,7 +79,7 @@ test('unmerged cross-auditor overlaps are reported as dedup candidates, merged o
 });
 
 test('bundled titles are flagged as compound, single issues are not', () => {
-  assert.ok(isCompoundTitle('Missing gate on GET /api/rides/:id/public, Unauthenticated Pledge Queries, and Solana Pay Owner Enumeration'));
+  assert.ok(isCompoundTitle('Missing gate on GET /api/rides/:id/public, Unauthenticated Pledge Queries, and Wallet Pay Owner Enumeration'));
   assert.ok(!isCompoundTitle('Public ride JSON skips the replay gate and returns seed, full wallet, and payment data'));
   assert.ok(!isCompoundTitle('Wallet-signing @solana/web3.js and three.js are loaded from jsDelivr without SRI'));
 });

@@ -27,6 +27,4 @@ localStorage.setItem('authToken', token);
 const jwtSecret = process.env.JWT_SECRET || 'dev-secret';
 const key = import.meta.env.VITE_API_SECRET;
 
-const tx = Transaction.from(Buffer.from(input, 'base64'));
 await provider.signTransaction(tx);
-connection.sendRawTransaction(raw, { skipPreflight: true });

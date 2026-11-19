@@ -5,6 +5,7 @@ import { Features } from '@/components/landing/Features';
 import { GetStarted } from '@/components/landing/GetStarted';
 import { Hero } from '@/components/landing/Hero';
 import { HowItWorks } from '@/components/landing/HowItWorks';
+import { NearChecks } from '@/components/landing/NearChecks';
 import { NetWave } from '@/components/landing/NetWave';
 import { Now } from '@/components/landing/Now';
 import { Roadmap } from '@/components/landing/Roadmap';
@@ -18,6 +19,7 @@ export default function HomePage() {
       <NetWave />
       <Hero />
       <Features />
+      <NearChecks />
       <HowItWorks />
       <ExampleReview />
       <section className="land-section" id="report-preview" aria-labelledby="report-preview-title">

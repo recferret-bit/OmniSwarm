@@ -29,11 +29,11 @@ test('web3 keeps chain trees, web2 drops them, and full keeps every theme', () =
 });
 
 test('a chain project nested under backend is web3, and the app slice leaves it out', () => {
-  const files = ['backend/programs/Anchor.toml', 'backend/src/index.ts', 'frontend/package.json', 'infra/nginx.conf', 'scripts/build.sh', 'docs/readme.md'];
+  const files = ['backend/contracts/Cargo.toml', 'backend/src/index.ts', 'frontend/package.json', 'infra/nginx.conf', 'scripts/build.sh', 'docs/readme.md'];
   const web3 = partitionTree(files, 'web3');
-  assert.deepEqual(web3, [{ theme: 'web3', dirs: ['backend/programs'] }]);
+  assert.deepEqual(web3, [{ theme: 'web3', dirs: ['backend/contracts'] }]);
   const full = partitionTree(files, 'full');
-  assert.deepEqual(full.find((slice) => slice.theme === 'apps'), { theme: 'apps', dirs: ['backend', 'frontend'], exclude: ['backend/programs'] });
+  assert.deepEqual(full.find((slice) => slice.theme === 'apps'), { theme: 'apps', dirs: ['backend', 'frontend'], exclude: ['backend/contracts'] });
   assert.deepEqual(partitionTree(files, 'web2').map((slice) => slice.theme), ['apps', 'infra', 'scripts']);
 });
 
@@ -49,9 +49,9 @@ test('a small full review stays one job; a large or scoped review is queued per 
 });
 
 test('root files are not themes, and each slice receives only the root files of its own layer', () => {
-  const files = ['Anchor.toml', 'README.md', 'package.json', 'docker-compose.yml', '.env', 'Dockerfile', 'backend/src/index.ts', 'programs/vault/src/lib.rs', 'infra/nginx.conf'];
-  assert.deepEqual(partitionTree(files, 'full'), [{ theme: 'web3', dirs: ['programs'] }, { theme: 'apps', dirs: ['backend'] }, { theme: 'infra', dirs: ['infra'] }]);
-  assert.deepEqual(rootFileThemes('Anchor.toml'), ['web3']);
+  const files = ['README.md', 'package.json', 'docker-compose.yml', '.env', 'Dockerfile', 'backend/src/index.ts', 'contracts/vault/src/lib.rs', 'infra/nginx.conf'];
+  assert.deepEqual(partitionTree(files, 'full'), [{ theme: 'web3', dirs: ['contracts'] }, { theme: 'apps', dirs: ['backend'] }, { theme: 'infra', dirs: ['infra'] }]);
+  assert.equal(rootFileThemes('Cargo.toml').length, 4);
   assert.deepEqual(rootFileThemes('.env.production'), ['infra']);
   assert.deepEqual(rootFileThemes('Dockerfile'), ['apps', 'infra']);
   assert.equal(rootFileThemes('package.json').length, 4);
@@ -69,19 +69,17 @@ test('root files are not themes, and each slice receives only the root files of 
     return fs.readdirSync(dest).sort();
   };
   assert.deepEqual(rootOf('apps'), ['Dockerfile', 'README.md', 'backend', 'package.json']);
-  assert.deepEqual(rootOf('web3'), ['Anchor.toml', 'README.md', 'package.json', 'programs']);
+  assert.deepEqual(rootOf('web3'), ['README.md', 'contracts', 'package.json']);
   assert.deepEqual(rootOf('infra'), ['.env', 'Dockerfile', 'README.md', 'docker-compose.yml', 'infra', 'package.json']);
 });
 
-test('EVM projects are web3 themes, wherever they sit', () => {
-  assert.equal(themeOf('evm'), 'web3');
-  assert.equal(themeOf('solidity'), 'web3');
-  assert.equal(themeOf('evmos-docs-site'), 'apps');
-  const files = ['backend/onchain/foundry.toml', 'backend/onchain/src/Vault.sol', 'backend/src/index.ts', 'packages/hh/hardhat.config.ts', 'packages/hh/contracts/Token.sol', 'packages/ui/src/app.tsx'];
-  assert.deepEqual(partitionTree(files, 'web3'), [{ theme: 'web3', dirs: ['backend/onchain', 'packages/hh'] }]);
+test('a nested NEAR contract tree is a web3 theme, wherever it sits', () => {
+  assert.equal(themeOf('near'), 'web3');
+  assert.equal(themeOf('contracts'), 'web3');
+  assert.equal(themeOf('readme'), 'apps');
+  const files = ['backend/contracts/Cargo.toml', 'backend/src/index.ts', 'packages/ui/src/app.tsx'];
+  assert.deepEqual(partitionTree(files, 'web3'), [{ theme: 'web3', dirs: ['backend/contracts'] }]);
   const apps = partitionTree(files, 'web2').find((slice) => slice.theme === 'apps');
-  assert.deepEqual(apps, { theme: 'apps', dirs: ['backend', 'packages'], exclude: ['backend/onchain', 'packages/hh'] });
-  assert.deepEqual(rootFileThemes('foundry.toml'), ['web3']);
-  assert.deepEqual(rootFileThemes('hardhat.config.ts'), ['web3']);
-  assert.equal(rootFileThemes('hardhat.md').length, 4);
+  assert.deepEqual(apps, { theme: 'apps', dirs: ['backend', 'packages'], exclude: ['backend/contracts'] });
+  assert.equal(rootFileThemes('Cargo.toml').length, 4);
 });

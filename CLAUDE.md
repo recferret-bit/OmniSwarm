@@ -60,6 +60,6 @@ The "no `cargo test` for `near-sdk`" rule in this file and in AGENTS.md is about
 
 Edit `packages/schemas/**` only as the lead, in a wave pre-step.
 
-Keep stack behavior consistent across `stack-detect.mjs`, `harness.mjs`, `audit-plans.mjs`, `review-workflow.mjs`, the HTML coverage row, and both skill copies. A NEAR `near-sdk` package must remain absent from the offline `cargo test` catalog. A Solana `cdylib` must still compile with platform-tools. Absent ecosystems must not receive checks.
+Keep stack behavior consistent across `stack-detect.mjs`, `harness.mjs`, `audit-plans.mjs`, `review-workflow.mjs`, the HTML coverage row, and both skill copies. A NEAR `near-sdk` package must remain absent from the offline `cargo test` catalog. Absent ecosystems must not receive checks.
 
 Do not commit `reports/`, `engine/runtime/node_modules/`, or `pocs/` output. Do not overwrite an existing report directory to "clean up" unless asked.

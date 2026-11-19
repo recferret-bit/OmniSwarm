@@ -1,5 +1,5 @@
-// End-to-end on engine/eval/golden/fullstack-dapp: a deliberately vulnerable frontend, backend, wallet
-// integration, NEAR contract, Solana program and infra tree with a line-accurate answer key. It drives every
+// End-to-end on engine/eval/golden/fullstack-dapp: a deliberately vulnerable frontend, backend, NEAR wallet
+// integration, NEAR contract and infra tree with a line-accurate answer key. It drives every
 // offline mode of the engine over the same target: stack routing, the layer map (web2 / web3 / infra), the lead
 // scan, the reviewer guidance, the plan for each preset, the intake's theme split, and a scripted review with
 // the debate at 1, 2 and 3 rounds through to the HTML report. Nothing here calls a provider, a chain or Docker.
@@ -64,22 +64,20 @@ test('the answer key follows the source and seeds every layer', () => {
   for (const rel of source) assert.doesNotMatch(fs.readFileSync(path.join(FIXTURE, rel), 'utf8'), /\b(?:BUG|VULN|FIXME|decoy|insecure|vulnerab)/i, rel);
 });
 
-test('stack routing finds the Node apps, the Solana program, the NEAR and EVM contracts and clients, and nothing else', () => {
+test('stack routing finds the Node apps and the NEAR contract and client', () => {
   const eco = detectEcosystems(FIXTURE);
   assert.deepEqual(eco.primary, ['node', 'rust']);
   assert.equal(eco.python.detected, false);
-  assert.deepEqual(eco.solana.marks, ['Anchor.toml', 'programs/tip_vault/Cargo.toml']);
   assert.deepEqual(eco.near.kinds, ['client', 'contract']);
-  assert.deepEqual([eco.evm.contracts, eco.evm.kinds, eco.evm.tooling], [true, ['client', 'contract'], ['foundry']]);
   assert.equal(eco.near.contracts, true);
-  for (const framework of ['express', 'near-api-js', 'solana-web3']) assert.ok(eco.node.frameworks.includes(framework), framework);
+  for (const framework of ['express', 'near-api-js']) assert.ok(eco.node.frameworks.includes(framework), framework);
 });
 
 test('every seeded row lands in the layer the answer key names', () => {
   const { layers } = harness().profile;
   assert.deepEqual(layers.present, LAYERS);
   for (const row of [...expected.bugs, ...expected.decoys]) assert.equal(layerOfPath(where(row), layers), row.layer, where(row));
-  assert.deepEqual(layers.roots.web3, ['contracts/evm', 'contracts/tipjar', 'programs/tip_vault']);
+  assert.deepEqual(layers.roots.web3, ['contracts/tipjar']);
   // A backend file that signs chain transactions is web3; the rest of the backend is not.
   assert.equal(layerOfPath('backend/src/payout.js', layers), 'web3');
   assert.equal(layerOfPath('backend/src/auth.js', layers), 'web2');
@@ -88,7 +86,7 @@ test('every seeded row lands in the layer the answer key names', () => {
 test('the lead scan reaches each layer with its own lead file', () => {
   const { dir } = harness();
   const read = (name) => fs.readFileSync(path.join(dir, name), 'utf8');
-  const leadFiles = { web2: ['web.md', 'node.md', 'review-plans.md'], web3: ['solana.md', 'near.md', 'evm.md', 'web.md', 'review-plans.md'], infra: ['config.md'] };
+  const leadFiles = { web2: ['web.md', 'node.md', 'review-plans.md'], web3: ['near.md', 'web.md', 'review-plans.md'], infra: ['config.md'] };
   // A lead within two lines of the seeded line points a reviewer at the same statement.
   const near = (row) => [-2, -1, 0, 1, 2].map((delta) => `${row.file}:${row.startLine + delta}`);
   const hit = (row) => leadFiles[row.layer].some((name) => near(row).some((cite) => new RegExp(`${cite.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(read(name))));
@@ -150,8 +148,8 @@ test('the plan prints for the local, hosted and demo presets without starting a 
 test('the intake splits the tree into web3, apps and infra themes for the full, web2 and web3 scopes', () => {
   const files = fs.readdirSync(FIXTURE, { recursive: true }).filter((rel) => fs.statSync(path.join(FIXTURE, rel)).isFile()).map((rel) => rel.split(path.sep).join('/'));
   const dirs = (scope) => Object.fromEntries(partitionTree(files, scope).map((slice) => [slice.theme, [...slice.dirs].sort()]));
-  assert.deepEqual(dirs('full'), { web3: ['contracts', 'programs'], apps: ['backend', 'frontend'], infra: ['.github', 'infra'] });
-  assert.deepEqual(dirs('web3'), { web3: ['contracts', 'programs'] });
+  assert.deepEqual(dirs('full'), { web3: ['contracts'], apps: ['backend', 'frontend'], infra: ['.github', 'infra'] });
+  assert.deepEqual(dirs('web3'), { web3: ['contracts'] });
   assert.deepEqual(dirs('web2'), { apps: ['backend', 'frontend'], infra: ['.github', 'infra'] });
 });
 

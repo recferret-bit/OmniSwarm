@@ -9,7 +9,7 @@ import { digestReport } from '@omniswarm/schemas/canonical-json';
 import { listFiles, scan } from '../../../apps/web/scripts/bundle-scan.mjs';
 import { axeViolations, BASE, buildMockApp, removeMockWorker, startMockApp } from './app.mjs';
 
-const HERO = 'A swarm of AI reviewers that argue over your code, then publish a report you can verify';
+const HERO = 'A swarm of AI reviewers for NEAR contracts and NEAR AI code, then a report you can verify';
 const USDC_MAINNET = '17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1';
 let server;
 let browser;
@@ -62,7 +62,12 @@ describe('landing on mocks', { concurrency: false }, () => {
     const page = await newPage();
     const main = await page.locator('main').innerText();
     assert.match(main, new RegExp(HERO));
-    for (const id of ['how', 'trust', 'start', 'support']) await page.locator(`#${id}`).waitFor();
+    for (const id of ['near', 'how', 'trust', 'start', 'support']) await page.locator(`#${id}`).waitFor();
+    const near = await page.locator('#near').innerText();
+    assert.match(near, /near-sdk/);
+    assert.match(near, /security-audit skill/);
+    assert.match(near, /cargo-near 0\.22\.0/);
+    assert.doesNotMatch(near, /Solana|Ethereum|EVM|Solidity/);
     assert.match(await page.getByTestId('service-status').innerText(), /Service: mock \(dev\)/);
     // No pricing, no payment and no chain story: the call to action is the dashboard on your own NEAR AI key.
     assert.equal(await page.locator('#pricing').count(), 0);

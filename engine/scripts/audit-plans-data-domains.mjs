@@ -121,15 +121,15 @@ export const DOMAIN_SPECS = [
     title: 'Cryptography, Web3 Signatures & On-Chain Custody',
     surfaces: ['S1', 'S3', 'S4', 'S6'],
     alwaysActive: false,
-    summary: 'Solana, NEAR and EVM contracts, NEP-413/SIWS/EIP-712 authentication, Chain Signatures & TEE attestation, Merkle proofs, PRNG seeds, and key custody.',
+    summary: 'NEAR contracts, NEP-413 authentication, Chain Signatures and TEE attestation, Merkle proofs, PRNG seeds, and key custody.',
     fileMarkers: [
-      { re: /@solana\/web3\.js|@near-js\/|@near-wallet-selector\/|@hot-labs\/near-connect|@defuse-protocol\/|@near-intents-agent-api\/sdk|@neardefi\/shade-agent|@nearai\/|@fastnear\/|@phala\/dstack-sdk|@tappd\/sdk|(?:cloud-api|api)\.near\.ai|\/v1\/attestation\/report|\bv1\.signer\b|\b(?:anchor_lang|solana_program|near_sdk|near-sdk(?:-js)?|near[_-]crypto|near[_-]primitives|near[_-]api|near[_-]jsonrpc[_-]client|NearBindgen|near-api-js|near-kit|chainsig\.js|omni-bridge-sdk|near-ca|shade[_-]attestation|near-ai-cloud|nearai(?:[-_]cloud[-_]verifier)?|py[-_]near|dcap[_-]qvl|dstack[_-]sdk|tappd_sdk|DstackClient|TappdClient|ecrecover|ed25519_verify|bls12381_\w+|alt_bn128_\w+|request_app_private_key|CKDRequestArgs|verify_foreign_transaction|tweetnacl|ed25519|ethers|viem|createHash|subtle\.digest|solders\b|\bnacl\b|\bPyNaCl\b|cryptography\.hazmat|\bjose\.jwt\b|\bhmac\.compare_digest)\b/g, label: 'Crypto / Web3 / PRNG stack' },
+      { re: /@near-js\/|@near-wallet-selector\/|@hot-labs\/near-connect|@defuse-protocol\/|@near-intents-agent-api\/sdk|@neardefi\/shade-agent|@nearai\/|@fastnear\/|@phala\/dstack-sdk|@tappd\/sdk|(?:cloud-api|api)\.near\.ai|\/v1\/attestation\/report|\bv1\.signer\b|\b(?:near_sdk|near-sdk(?:-js)?|near[_-]crypto|near[_-]primitives|near[_-]api|near[_-]jsonrpc[_-]client|NearBindgen|near-api-js|near-kit|chainsig\.js|omni-bridge-sdk|near-ca|shade[_-]attestation|near-ai-cloud|nearai(?:[-_]cloud[-_]verifier)?|py[-_]near|dcap[_-]qvl|dstack[_-]sdk|tappd_sdk|DstackClient|TappdClient|ecrecover|ed25519_verify|bls12381_\w+|alt_bn128_\w+|request_app_private_key|CKDRequestArgs|verify_foreign_transaction|tweetnacl|ed25519|createHash|subtle\.digest|\bnacl\b|\bPyNaCl\b|cryptography\.hazmat|\bjose\.jwt\b|\bhmac\.compare_digest)\b/g, label: 'Crypto / Web3 / PRNG stack' },
     ],
     leads: [
       {
         id: 'crypto-sig-challenge',
-        title: 'Signature Verification, SIWS Challenges & Nonces',
-        re: /\/v1\/attestation\/report\b|\b(?:sign\.detached\.verify|verifyMessage|solana:signIn|signMessage|ecrecover|ed25519_verify|bls12381_\w+|alt_bn128_\w+|request_app_private_key|CKDRequestArgs|verify_foreign_transaction|verifyAttestation\w*|challenge|nonce|verify_signature|VerifyKey|BadSignatureError|Signature\.from_bytes|compare_digest)\b/g,
+        title: 'Signature Verification, Challenges & Nonces',
+        re: /\/v1\/attestation\/report\b|\b(?:sign\.detached\.verify|verifyMessage|signMessage|ecrecover|ed25519_verify|bls12381_\w+|alt_bn128_\w+|request_app_private_key|CKDRequestArgs|verify_foreign_transaction|verifyAttestation\w*|challenge|nonce|verify_signature|VerifyKey|BadSignatureError|Signature\.from_bytes|compare_digest)\b/g,
         note: 'Verify the signed payload is compared byte-for-byte against the server-issued challenge (domain, wallet, nonce, expiry), malleability is rejected, and nonces are consumed once.',
       },
       {
@@ -233,7 +233,7 @@ export const REVIEW_CHECKS = {
   grpc: ['Inspect protobuf schemas, authentication metadata, message bounds, deadlines and stream cancellation in source.', 'Check existing tests for authorization and resource-limit handling; do not send traffic to services.'],
   websockets: ['Trace upgrade authentication, Origin checks, room membership and per-message authorization in source.', 'Inspect frame bounds, cleanup, rate limits and existing coverage.'],
   databases: ['Trace queries, transactions, lock ordering, uniqueness constraints and rollback behavior.', 'Inspect parameter binding and existing concurrency tests; disclose untested schedules.'],
-  crypto: ['Trace signer/owner checks, authority binding, PDA seeds, nonce expiry, custody and payout invariants.', 'Inspect dependency pins and existing signature/account-validation tests without constructing transactions or PoCs.'],
+  crypto: ['Trace signer/owner checks, authority binding, nonce expiry, custody and payout invariants.', 'Inspect dependency pins and existing signature/account-validation tests without constructing transactions or PoCs.'],
   scopes_roles: ['Map resource ownership and role checks from authenticated identity to each handler.', 'Compare admin, user and public entry points and cite inconsistent boundaries in source.'],
   abuse_economy: ['Inspect server authority, replay validation, uniqueness, deadlines and value-bearing state transitions.', 'Assess abuse resistance from source and existing tests; do not build automation clients or forged requests.'],
   api_dto_abuse: ['Compare response DTOs and errors with authorization and data-minimization requirements.', 'Trace field selection and enumeration differences in source; do not probe accounts or endpoints.'],
@@ -256,7 +256,7 @@ export const PYTHON_CHECKS = {
   ],
   crypto: [
     'python-jose/PyJWT: `decode` must pin `algorithms`, verify signature, `exp`, `aud` and `iss`; flag `options={"verify_signature": False}`, `verify=False`, HS/RS confusion and key material loaded from request data.',
-    'Wallet auth (solders/PyNaCl/solana-py): confirm the signed message is the exact server-issued challenge (domain, nonce, expiry), nonce is single-use and stored atomically, and comparisons use `hmac.compare_digest`.',
+    'Wallet auth (PyNaCl): confirm the signed message is the exact server-issued challenge (domain, nonce, expiry), nonce is single-use and stored atomically, and comparisons use `hmac.compare_digest`.',
     '`random`/`uuid1` must not generate tokens, nonces or seeds; require `secrets`/`os.urandom`. `pickle`, `marshal`, `yaml.load`, `jsonpickle` on untrusted input are code execution.',
   ],
   scopes_roles: ['Trace `Depends(get_current_user)`/permission dependencies into each handler and confirm the loaded object belongs to the caller (`owner_id == user.id`) before read or mutation, including admin/staff routes and background-job entry points.'],

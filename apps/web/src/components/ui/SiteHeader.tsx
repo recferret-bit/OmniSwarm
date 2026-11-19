@@ -9,6 +9,7 @@ export function SiteHeader() {
         <nav className="site-header__nav" aria-label="Main">
           <Link className="site-header__brand" href="/">OmniSwarm</Link>
           <Link href="/#features">Features</Link>
+          <Link href="/#near">NEAR checks</Link>
           <Link href="/#how">How it works</Link>
           <Link href="/#example">Example</Link>
           <Link href="/#now">Now</Link>

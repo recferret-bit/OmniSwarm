@@ -26,7 +26,9 @@
       "endLine": 45,
       "class": "unchecked-ed25519-verify",
       "title": "release_by_sig discards the bool return value of env::ed25519_verify",
-      "severity": "critical"
+      "severity": "critical",
+      "missedBy": ["baseline"],
+      "misjudgedBy": "baseline"
     }
   ],
   "decoys": [

@@ -24,7 +24,7 @@ export function Trust() {
     <section className="land-section" id="trust" aria-labelledby="trust-title">
       <div className="container-wide">
         <header className="land-head">
-          <p className="land-kicker"><i>06</i><span className="eyebrow">Trust</span></p>
+          <p className="land-kicker"><i>07</i><span className="eyebrow">Trust</span></p>
           <h2 id="trust-title" className="h2">What you can rely on</h2>
         </header>
         <ul className="trust__list">

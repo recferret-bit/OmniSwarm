@@ -40,10 +40,6 @@ cap), so the table measures the protocol and not the cap. Totals are micro-avera
 | rust-crate | majority | 0.5 | 0.5 | 0.5 | 1 | 0 | 0 |
 | rust-crate | debate-1 | 1 | 1 | 0 | 1 | 0 | 0 |
 | rust-crate | debate-2 | 1 | 1 | 0 | 1 | 0.2 | 0 |
-| solana-vault | union | 1 | 0.5 | 1 | 1 | 0 | 0 |
-| solana-vault | majority | 0.5 | 0.5 | 0.5 | 1 | 0 | 0 |
-| solana-vault | debate-1 | 0.5 | 1 | 0 | 1 | 0 | 0 |
-| solana-vault | debate-2 | 0.5 | 1 | 0 | 1 | 0.27 | 0 |
 | ts-api | union | 1 | 0.5 | 1 | 1 | 0 | 0 |
 | ts-api | majority | 1 | 0.67 | 0.5 | 1 | 0 | 0 |
 | ts-api | debate-1 | 1 | 1 | 0 | 1 | 0 | 0 |

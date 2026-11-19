@@ -333,7 +333,7 @@ function seedVerificationCompleteHarness(out, target) {
     path.join(out, 'harness', 'stack-profile.json'),
     `${JSON.stringify(analyzeStackAndPlans(target), null, 2)}\n`,
   );
-  fs.writeFileSync(path.join(out, 'harness', 'solana.md'), '# Solana leads\n\n- src/lib.rs:30 unchecked owner\n');
+  fs.writeFileSync(path.join(out, 'harness', 'near.md'), '# NEAR leads\n\n- src/lib.rs:30 env::signer_account_id used for auth\n');
 
   const testId = 'cargo-test-root';
   fs.writeFileSync(
@@ -531,9 +531,9 @@ test('Cloud published continuation restores full harness evidence without secret
     }
     const ctx = attachBudget(parseBridgeArgs([...bridgeArgs, '--demo-host', DEMO_FIXTURE]));
     ctx.sourceDigestChecked = true;
-    // Verify restored allow-listed lead file (solana.md) is readable through the MCP bridge!
-    const leadText = await callBridgeTool(ctx, 'read_file', { path: '/out/harness/solana.md' });
-    assert.match(leadText, /Solana leads/);
+    // Verify restored allow-listed lead file (near.md) is readable through the MCP bridge.
+    const leadText = await callBridgeTool(ctx, 'read_file', { path: '/out/harness/near.md' });
+    assert.match(leadText, /NEAR leads/);
     const assignment = readReportJson(reportDir, `harness/assignments/${identity.name}.json`);
     if (identity.role === 'debater') {
       await callBridgeTool(ctx, 'submit_debate_turn', { verdict: 'upheld', citations: [CITE], argument: 'Verified missing owner check.' });

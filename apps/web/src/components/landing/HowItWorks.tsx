@@ -19,7 +19,7 @@ export function HowItWorks() {
     <section className="land-section" id="how" aria-labelledby="how-title">
       <div className="container-wide">
         <header className="land-head">
-          <p className="land-kicker"><i>02</i><span className="eyebrow">How it works</span></p>
+          <p className="land-kicker"><i>03</i><span className="eyebrow">How it works</span></p>
           <h2 id="how-title" className="h2">Four stages, then a hash</h2>
           <p className="lede">Pick a stage. The picture moves through it: two reviewers by default, up to six, on one sealed snapshot, the orchestrator running debate and the write-up, then the report hash you can recompute in your browser.</p>
         </header>

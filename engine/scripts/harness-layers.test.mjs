@@ -20,6 +20,7 @@ const MIXED = {
   'api/src/payout.ts': "import { connect } from 'near-api-js';\n",
   'web/src/app.tsx': 'export const App = () => null;\n',
   'web/src/wallet.ts': 'export const connect = () => window.solana.connect();\n',
+  'web/src/near.ts': 'export const connect = () => window.near.requestSignIn();\n',
   'contracts/escrow/Cargo.toml': '[dependencies]\nnear-sdk = "5.1.0"\n',
   'contracts/escrow/src/lib.rs': 'pub fn f() {}\n',
   'contracts/escrow/Dockerfile': 'FROM rust:1.80\n',
@@ -37,9 +38,9 @@ test('every file lands in exactly one layer', () => {
   const layers = buildLayerMap(tree(MIXED));
   const of = (rel) => layerOfPath(rel, layers);
   assert.deepEqual(layers.roots.web3, ['contracts/escrow']);
-  for (const rel of ['api/src/server.ts', 'web/src/app.tsx', 'services/indexer/src/main.rs', 'services/indexer/Cargo.toml']) assert.equal(of(rel), 'web2', rel);
-  // A chain crate, and application files that import a chain SDK or call an injected wallet.
-  for (const rel of ['contracts/escrow/src/lib.rs', 'contracts/escrow/Cargo.toml', 'api/src/payout.ts', 'web/src/wallet.ts']) assert.equal(of(rel), 'web3', rel);
+  for (const rel of ['api/src/server.ts', 'web/src/app.tsx', 'web/src/wallet.ts', 'services/indexer/src/main.rs', 'services/indexer/Cargo.toml']) assert.equal(of(rel), 'web2', rel);
+  // A NEAR crate, a NEAR client import, and window.near. window.solana is not a chain signal.
+  for (const rel of ['contracts/escrow/src/lib.rs', 'contracts/escrow/Cargo.toml', 'api/src/payout.ts', 'web/src/near.ts']) assert.equal(of(rel), 'web3', rel);
   // Deploy configuration is infra wherever it sits, including inside a contract directory or a deploy script.
   for (const rel of ['Dockerfile', 'docker-compose.yml', '.env.production', '.github/workflows/ci.yml', 'deploy/main.tf', 'contracts/escrow/Dockerfile', 'deploy/release.ts']) assert.equal(of(rel), 'infra', rel);
   assert.equal(Object.values(layers.counts).reduce((a, b) => a + b, 0), Object.keys(MIXED).length);
@@ -48,16 +49,18 @@ test('every file lands in exactly one layer', () => {
   assert.equal(of('contracts/escrow/src/lib.rs:42'), 'web3');
 });
 
-test('a chain crate at the repository root does not turn the whole tree into web3', () => {
-  const layers = buildLayerMap(tree({ 'Cargo.toml': '[dependencies]\nanchor-lang = "0.30"\n', 'src/lib.rs': 'pub fn f() {}\n', 'app/index.ts': 'export {};\n', 'Anchor.toml': '[programs]\n' }));
+test('a NEAR crate at the repository root does not turn the whole tree into web3', () => {
+  const layers = buildLayerMap(tree({ 'Cargo.toml': '[dependencies]\nnear-sdk = "5.1.0"\n', 'src/lib.rs': 'pub fn f() {}\n', 'app/index.ts': 'export {};\n', 'Anchor.toml': '[programs]\n' }));
   assert.equal(layerOfPath('src/lib.rs', layers), 'web3');
-  assert.equal(layerOfPath('Anchor.toml', layers), 'web3');
+  assert.equal(layerOfPath('Cargo.toml', layers), 'web3');
+  assert.equal(layerOfPath('Anchor.toml', layers), 'web2');
   assert.equal(layerOfPath('app/index.ts', layers), 'web2');
 });
 
-test('without a layer map the path rules still separate infra and chain source', () => {
+test('without a layer map the path rules still separate infra from application source', () => {
   assert.equal(layerOfPath('infra/nginx.conf'), 'infra');
-  assert.equal(layerOfPath('contracts/Token.sol'), 'web3');
+  assert.equal(layerOfPath('contracts/Token.sol'), 'web2');
+  assert.equal(layerOfPath('foundry.toml'), 'web2');
   assert.equal(layerOfPath('src/index.js'), 'web2');
 });
 
@@ -75,14 +78,16 @@ test('the plan lists the layers and the guidance shows only the layers that are 
   assert.match(renderSurfaceSkillGuidance('S4'), /#### Web2:[\s\S]+#### Web3:[\s\S]+#### Infra:/);
 });
 
-test('an EVM project directory and EVM wallet code are web3', () => {
+test('Solidity, Foundry, Hardhat and non-NEAR wallet code are not web3', () => {
   const layers = buildLayerMap(tree({
     'contracts/evm/foundry.toml': '[profile.default]\n', 'contracts/evm/src/Vault.sol': 'contract Vault {}\n', 'contracts/evm/test/Vault.t.sol': 'contract T {}\n',
     'contracts/evm/package.json': '{}', 'web/src/evm.ts': "import { Contract } from 'ethers';\n", 'web/src/chain.ts': "import { createPublicClient } from 'viem';\n",
+    'web/src/solana.ts': 'export const connect = () => window.solana.connect();\n', 'web/src/eth.ts': 'export const connect = () => window.ethereum.request({});\n',
+    'py/chain.py': 'import solders\nfrom solana.rpc.api import Client\nimport web3\nfrom eth_account import Account\n',
     'web/src/page.tsx': 'export const Page = () => null;\n', 'hardhat.config.ts': 'export default {};\n', 'src/Token.sol': 'contract Token {}\n', 'src/server.ts': 'export {};\n',
+    'web/src/near.ts': "import { connect } from 'near-api-js';\n",
   }));
-  assert.deepEqual(layers.roots.web3, ['contracts/evm']);
-  for (const rel of ['contracts/evm/src/Vault.sol', 'contracts/evm/test/Vault.t.sol', 'contracts/evm/package.json', 'web/src/evm.ts', 'web/src/chain.ts', 'hardhat.config.ts', 'src/Token.sol']) assert.equal(layerOfPath(rel, layers), 'web3', rel);
-  // A root-level project file marks itself, not every file beside it.
-  for (const rel of ['web/src/page.tsx', 'src/server.ts']) assert.equal(layerOfPath(rel, layers), 'web2', rel);
+  assert.deepEqual(layers.roots.web3, []);
+  for (const rel of ['contracts/evm/foundry.toml', 'contracts/evm/src/Vault.sol', 'contracts/evm/test/Vault.t.sol', 'contracts/evm/package.json', 'web/src/evm.ts', 'web/src/chain.ts', 'web/src/solana.ts', 'web/src/eth.ts', 'py/chain.py', 'hardhat.config.ts', 'src/Token.sol', 'web/src/page.tsx', 'src/server.ts']) assert.equal(layerOfPath(rel, layers), 'web2', rel);
+  assert.equal(layerOfPath('web/src/near.ts', layers), 'web3');
 });

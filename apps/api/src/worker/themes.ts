@@ -9,7 +9,7 @@ export const THEME_ORDER: readonly ThemeName[] = ['web3', 'apps', 'infra', 'scri
 const SKIP = new Set(['node_modules', 'target', 'dist', 'build', 'coverage', 'docs', 'doc', 'examples', 'fixtures', 'vendor']);
 
 const RULES: { theme: ThemeName; test: (name: string) => boolean }[] = [
-  { theme: 'web3', test: (name) => /^(contracts?|programs?|crates|anchor|solana|near|chain|evm|solidity|foundry|hardhat)$/i.test(name) || /(^|[-_])(contract|program|onchain|on-chain)([-_]|$)/i.test(name) },
+  { theme: 'web3', test: (name) => /^(contracts?|programs?|crates|near|chain)$/i.test(name) || /(^|[-_])(contract|program|onchain|on-chain)([-_]|$)/i.test(name) },
   { theme: 'infra', test: (name) => /^(infra|deploy|ops|k8s|kubernetes|terraform|docker)$/i.test(name) || name === '.github' },
   { theme: 'scripts', test: (name) => /^(scripts?|tools|bin|ci)$/i.test(name) },
   { theme: 'apps', test: (name) => /^(apps?|frontend|backend|web|api|services?|packages|src|server|client)$/i.test(name) },
@@ -37,19 +37,18 @@ const DOCKERFILE = /^(?:Dockerfile.*|.+\.dockerfile)$/i;
 
 /**
  * Which theme slices a file at the repository root is copied into. Deploy configuration and committed
- * environment files belong to infra only, and a root Anchor.toml to web3 only, so a web2 slice is not
- * routed as a Solana project and infra findings are not repeated in every theme. A Dockerfile also stays
+ * environment files belong to infra only, so infra findings are not repeated in every theme. A contract
+ * directory (contracts, programs, near) is the web3 root. A Dockerfile also stays
  * with apps: the engine reads the declared Python version from it. Everything else (manifests, lockfiles,
  * README) is shared.
  */
 export function rootFileThemes(name: string): readonly ThemeName[] {
   if (INFRA_ROOT_FILE.test(name)) return ['infra'];
   if (DOCKERFILE.test(name)) return ['apps', 'infra'];
-  if (name === 'Anchor.toml' || name === 'foundry.toml' || name === 'remappings.txt' || /^hardhat\.config\.[cm]?[jt]s$/.test(name)) return ['web3'];
   return THEME_ORDER;
 }
 
-const CHAIN_DIR = /^(programs?|contracts?|anchor)$/i;
+const CHAIN_DIR = /^(programs?|contracts?|near)$/i;
 
 /** A chain project nested under an app, such as backend/programs, is its own web3 root. */
 export function web3Roots(files: readonly string[]): string[] {
@@ -57,7 +56,6 @@ export function web3Roots(files: readonly string[]): string[] {
   for (const file of files) {
     const parts = file.split('/');
     const base = parts[parts.length - 1] ?? '';
-    if (base === 'Anchor.toml' || base === 'foundry.toml' || /^hardhat\.config\.[cm]?[jt]s$/.test(base)) roots.add(parts.slice(0, -1).join('/') || '.');
     const at = parts.findIndex((part) => CHAIN_DIR.test(part));
     if (at >= 0) roots.add(parts.slice(0, at + 1).join('/'));
   }

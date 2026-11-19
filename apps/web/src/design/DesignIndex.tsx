@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { DesignNav } from '@/design/DesignNav';
 
 const PAGES = [
-  { href: '/', k: '01 · Page', title: 'Landing', body: 'The public page: a live canvas, a cited example, what ships today, and what does not.' },
+  { href: '/', k: '01 · Page', title: 'Landing', body: 'The public page: NEAR checks, a live canvas, a cited example, what ships today, and what does not.' },
   { href: '/design/foundations', k: '02 · Guide', title: 'Foundations', body: 'Color, contrast, type, voice, plates, spacing and the rules that keep the system strict.' },
   { href: '/design/storybook', k: '03 · Components', title: 'Storybook', body: 'Every view control in the app, with canvas and docs, on field and on paper.' },
   { href: '/design/motion', k: '04 · Motion', title: 'Motion', body: 'Latch, sweep and step. Twelve specimens. Pause and reduced motion both hold still.' },

@@ -1,12 +1,10 @@
 # TipJar
 
-Tip your favourite creators with NEAR, SOL or ETH.
+Tip your favourite creators with NEAR.
 
-- `frontend/` static site, wallet connect (NEAR, Solana and EVM)
+- `frontend/` static site, NEAR wallet connect
 - `backend/` Express API: wallet sign-in, tip ledger, payouts
 - `contracts/tipjar/` NEAR escrow contract
-- `contracts/evm/` EVM vault (Foundry)
-- `programs/tip_vault/` Solana vault program (Anchor)
 - `infra/` Dockerfile, compose, nginx; `.github/workflows/` deploy
 
 ```sh

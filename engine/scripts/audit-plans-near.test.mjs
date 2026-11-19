@@ -76,6 +76,12 @@ test('the checklist describes defensive controls and sandbox limits, never explo
     'storage-refund theft',
     'cache aliasing',
     'SignedDelegate',
+    'zero shares',
+    '.take()',
+    'storage_deposit',
+    'partial fill',
+    'WebAuthn',
+    'maximum age',
     'U128',
     'codehash',
     '/v1/attestation/report',
@@ -193,7 +199,7 @@ test('contract leads match risky NEAR, Chain Signatures, yield-resume, global-co
   assert.equal(contract('callback-shaped', '#[private]\n#[handle_result]\npub fn on_withdraw(&mut self) -> Result<(), String> {'), false);
 });
 
-test('client, near-sdk-js, NEP-413, NEP-366, Intents and NEAR AI leads match NEAR idioms without firing on EVM, Solana or WebCrypto', () => {
+test('client, near-sdk-js, NEP-413, NEP-366, Intents and NEAR AI leads match NEAR idioms and miss unrelated signing helpers', () => {
   assert.ok(client('nep413-sign-message', "await wallet.signMessage({ message, recipient: 'app.near', nonce });"));
   assert.ok(client('nep413-sign-message', `await wallet.signMessage({\n  message: '${'x'.repeat(280)}',\n  meta: { nested: true },\n  nonce,\n  recipient: 'app.near',\n});`));
   assert.ok(client('nep413-sign-message', 'const TAG = 2147484061;'));
@@ -253,8 +259,8 @@ test('writeNear scans Python NEAR AI agents, flags legacy near-sdk <5 and shade-
   assert.match(shadeLeads.body, /## tee-attestation-verify /);
 
   const nonNear = tree(t, {
-    'package.json': '{"dependencies":{"express":"^4.19.0","viem":"^2.0.0"}}',
-    'src/index.ts': 'export async function sign(s: any, b: Uint8Array) { return s.signMessage(b); }\n',
+    'requirements.txt': 'fastapi==0.115.0\n',
+    'app/main.py': 'async def sign(payload: bytes):\n    return payload\n',
   });
   const nonNearEco = detectEcosystems(nonNear);
   assert.equal(nonNearEco.near.detected, false);
@@ -331,17 +337,18 @@ test('edge cases: empty dir, malformed manifests, v1.signer lead without stack m
   assert.ok(rustWorkspacesSuite.coverageGaps.some((gap) => /NEAR contract tests in \./.test(gap)));
 });
 
-test('non-NEAR Phala Dstack / EVM repos do not wake near.md, while Shade Agent compose files emit infra TEE leads', (t) => {
-  const evmPhala = tree(t, {
-    'package.json': JSON.stringify({ description: 'Unrelated to near-api-js', homepage: 'https://example.com/@near-js/docs', dependencies: { viem: '^2.0.0', '@phala/dstack-sdk': '^0.2.0' } }),
+test('non-NEAR Phala Dstack repos do not wake near.md, while Shade Agent compose files emit infra TEE leads', (t) => {
+  const phala = tree(t, {
+    'package.json': JSON.stringify({ description: 'Unrelated to near-api-js', homepage: 'https://example.com/@near-js/docs', dependencies: { '@phala/dstack-sdk': '^0.2.0' } }),
     'src/enclave.ts': "import { DstackClient } from '@phala/dstack-sdk';\nconst c = new DstackClient('/var/run/dstack.sock');\nexport interface SignedDelegate { id: string }\n",
     'docker-compose.yml': 'services:\n  worker:\n    image: app:1.0@sha256:1111111111111111111111111111111111111111111111111111111111111111\n    volumes:\n      - /var/run/dstack.sock:/var/run/dstack.sock\n',
   });
-  const eco = detectEcosystems(evmPhala);
+  const eco = detectEcosystems(phala);
   assert.equal(eco.near.detected, false);
-  assert.equal(eco.evm.detected, true);
-  assert.match(writeNear(evmPhala, eco.near).body, /NEAR surface absent/);
-  assert.match(writeConfig(evmPhala).body, /## tee-enclave-sock[\s\S]*docker-compose\.yml:5/);
+  assert.equal('solana' in eco, false);
+  assert.equal('evm' in eco, false);
+  assert.match(writeNear(phala, eco.near).body, /NEAR surface absent/);
+  assert.match(writeConfig(phala).body, /## tee-enclave-sock[\s\S]*docker-compose.yml:5/);
 });
 
 test('--scope web3 and --scope web2 both work cleanly across NEAR AI SDK files, Python PEP-503 packages, and pure HTTP callers', async (t) => {
@@ -498,7 +505,15 @@ test('HTML report stack coverage preserves npm/pytest/cargo suites and near-work
     sandboxMd: '',
     verifiedSafe: [],
     diagrams: [],
-    profile,
+    // The coverage table still reads these keys. Detection no longer returns them.
+    profile: {
+      ...profile,
+      ecosystems: {
+        ...profile.ecosystems,
+        solana: profile.ecosystems?.solana || { detected: false, marks: [] },
+        evm: profile.ecosystems?.evm || { detected: false, kinds: [], tooling: [], sourceFiles: 0, contracts: false },
+      },
+    },
     catalog,
     health: {
       errors: [],
@@ -507,13 +522,13 @@ test('HTML report stack coverage preserves npm/pytest/cargo suites and near-work
   }, []);
   const nearRowOf = (html) => (html.match(/<tr><td><b>NEAR<\/b>[\s\S]*?<\/tr>/) || [''])[0];
 
-  // 1. Full-stack repo (nearRust = true + unrelated root Express npm suite + Node near-api-js npm suite + Python nearai pytest suite + unrelated Solana cargo failure).
+  // 1. Full-stack repo (nearRust = true + unrelated root Express npm suite + Node near-api-js npm suite + Python nearai pytest suite + unrelated Rust cargo failure).
   const fullstackNear = tree(t, {
     'package.json': JSON.stringify({ scripts: { test: 'vitest root' }, dependencies: { express: '^4.19.0' } }),
     'contracts/vault/Cargo.toml': '[package]\nname = "vault"\n[lib]\ncrate-type = ["cdylib"]\n[dependencies]\nnear-sdk = "5.6.0"\n',
     'contracts/vault/src/lib.rs': 'pub fn init() {}\n',
-    'programs/sol/Cargo.toml': '[package]\nname = "sol"\n[dependencies]\nanchor-lang = "0.30.1"\n',
-    'programs/sol/src/lib.rs': 'pub fn sol() {}\n',
+    'services/indexer/Cargo.toml': '[package]\nname = "indexer"\nversion = "0.1.0"\n[dependencies]\ntokio = "1"\n',
+    'services/indexer/src/lib.rs': 'pub fn index() {}\n',
     'web/package.json': JSON.stringify({ scripts: { test: 'vitest' }, dependencies: { 'near-api-js': '^5.0.0' } }),
     'web/src/app.ts': "import 'near-api-js';\n",
     'agent/requirements.txt': 'nearai-cloud-verifier==0.2.0\n',
@@ -537,16 +552,16 @@ test('HTML report stack coverage preserves npm/pytest/cargo suites and near-work
     fsProfile,
     fsCatalog,
     fsCatalog.tests.map((s) => ({ id: s.id, state: s.kind === 'cargo' ? 'failed_or_unverified' : 'passed' })),
-    ['cargo existing tests in programs/sol: Exit 2; failed.', ...fsCatalog.coverageGaps],
+    ['cargo existing tests in services/indexer: Exit 2; failed.', ...fsCatalog.coverageGaps],
   );
-  assert.match(fsHtml, /Python · Node · Solana · NEAR · EVM/);
+  assert.match(fsHtml, /Coverage by stack/);
   const fsNearRow = nearRowOf(fsHtml);
   assert.match(fsNearRow, /cargo test not run: local near-sandbox or testnet/);
   assert.match(fsNearRow, /NEAR WASM build .* in contracts\/vault: passed/);
   assert.match(fsNearRow, /npm existing tests in web: passed/);
   assert.doesNotMatch(fsNearRow, /npm existing tests in \.:/, 'Unrelated root web2 npm suite must not leak into NEAR row');
   assert.match(fsNearRow, /pytest existing tests in agent: passed/);
-  assert.doesNotMatch(fsNearRow, /programs\/sol/, 'Solana cargo failure must not leak into NEAR row');
+  assert.doesNotMatch(fsNearRow, /services\/indexer/, 'Unrelated Rust cargo failure must not leak into NEAR row');
 
   // 2. Python NEAR AI repo (nearRust = false): preserves pytest suite.
   const pyOnly = tree(t, {

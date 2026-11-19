@@ -77,8 +77,7 @@ function walkArtifacts(dir, rel, visit, depth) {
   }
 }
 
-// A sandbox work volume keeps cargo output under target/. A solana-verify
-// directory is already the target dir (deploy/ at its root). Package-local
+// A sandbox work volume keeps cargo output under target/. Package-local
 // target/ dirs under src/ are included. The cargo registry is not walked.
 function exportRoots(root) {
   const roots = [];

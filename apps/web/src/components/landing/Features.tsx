@@ -14,7 +14,7 @@ export function Features() {
         <header className="land-head">
           <p className="land-kicker"><i>01</i><span className="eyebrow">Features</span></p>
           <h2 id="features-title" className="h2">What the swarm actually does</h2>
-          <p className="lede">Six constraints. They are the product, not a coat of paint on a single model.</p>
+          <p className="lede">Six constraints on a NEAR review. They are the product, not a coat of paint on a single model.</p>
         </header>
         <div className="feature-grid">
           {FEATURES.map((feature) => (

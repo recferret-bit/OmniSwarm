@@ -29,7 +29,7 @@ const failing = suite({
   failedTests: ['tests/test_cash.py::test_start', 'tests/test_cash.py::test_claim'], failedTestsTotal: 461,
   notes: ['2 process(es) the suite left running were ended after it.'],
 });
-const tests = block([suite({ kind: 'cargo', cwd: 'contracts', description: 'cargo existing tests in contracts', counts: { passed: 145, failed: 0, skipped: 0 }, result: 'Exit 0; 145 passed, 0 failed or errored, 0 skipped.' }), failing], ['EVM contract tests in evm (foundry) are not run: forge is not in the sandbox image.']);
+const tests = block([suite({ kind: 'cargo', cwd: 'contracts', description: 'cargo existing tests in contracts', counts: { passed: 145, failed: 0, skipped: 0 }, result: 'Exit 0; 145 passed, 0 failed or errored, 0 skipped.' }), failing], ['NEAR contract tests in contracts are a local-sandbox coverage gap. cargo test can start near-sandbox or deploy to testnet and is not run offline.']);
 const tools = toolsBlock({
   scanners: [
     { tool: 'gitleaks', state: 'findings', findings: 44, scopes: ['.'], detail: null },
@@ -48,7 +48,7 @@ test('the Tests block names every suite with its result, counts, causes and the 
   assert.match(text, /- pytest existing tests in backend: failed\. Exit 1; 11768 passed, 466 failed or errored, 500 skipped\./);
   assert.match(text, /328x AssertionError: bigint: Failed to load bindings/);
   assert.match(text, /skipped 412x: Requires COMMAND_CENTER_POSTGRES_URL/);
-  assert.match(text, /- EVM contract tests in evm \(foundry\) are not run/);
+  assert.match(text, /- NEAR contract tests in contracts are a local-sandbox coverage gap/);
 
   const md = testsMarkdown(tests).join('\n');
   assert.match(md, /^\n## Tests\n\n> These are the target project's own tests\./);
@@ -57,7 +57,7 @@ test('the Tests block names every suite with its result, counts, causes and the 
   assert.match(md, /- \*\*Failure causes\*\* \(61 in all, the 2 most frequent listed\):\n {2}- 328x `AssertionError: bigint: Failed to load bindings`/);
   assert.match(md, /- \*\*Skip reasons\*\* \(most frequent first\):\n {2}- 412x `Requires COMMAND_CENTER_POSTGRES_URL`/);
   assert.match(md, /- \*\*Failing tests\*\* \(461, first 2 listed\):\n {2}- `tests\/test_cash\.py::test_start`/);
-  assert.match(md, /### Suites that are not run\n\n- EVM contract tests/);
+  assert.match(md, /### Suites that are not run\n\n- NEAR contract tests/);
   assert.doesNotMatch(md, /### cargo existing tests in contracts/, 'a suite that passed needs no detail section');
 
   const html = testsHtml(tests);

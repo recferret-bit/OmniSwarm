@@ -1,23 +1,10 @@
-// The per-stack lead files (solana.md, near.md, evm.md, web.md, python.md, node.md, config.md). Regex leads only, not findings.
+// The per-stack lead files (near.md, web.md, python.md, node.md, config.md). Regex leads only, not findings.
 import path from 'node:path';
 import { cargoInfo, isNearCargo, nearReleaseEvidence } from './cargo-manifest.mjs';
 import { isProductionPath } from './stack-detect.mjs';
 import { PER_PATTERN, walk, rel, readText, cookieLeads, collect, section } from './harness-walk.mjs';
-import { SOLANA_PATTERNS, NEAR_CONTRACT_PATTERNS, NEAR_CLIENT_PATTERNS, EVM_CONTRACT_PATTERNS, EVM_CLIENT_PATTERNS } from './harness-patterns-chain.mjs';
+import { NEAR_CONTRACT_PATTERNS, NEAR_CLIENT_PATTERNS } from './harness-patterns-chain.mjs';
 import { WEB_PATTERNS, PY_PATTERNS, NODE_PATTERNS, CONFIG_PATTERNS, WEB_EXT } from './harness-patterns-app.mjs';
-
-export function solanaStack(root) {
-  const marks = [];
-  walk(root, (file) => {
-    const base = path.basename(file);
-    if (base === 'Anchor.toml') marks.push(rel(root, file));
-    else if (base === 'Cargo.toml') {
-      const text = readText(file);
-      if (text && /anchor-lang|solana-program|solana-sdk|pinocchio/.test(text)) marks.push(rel(root, file));
-    }
-  });
-  return marks.slice(0, 20);
-}
 
 // Infra layer files: CI and compose YAML, Dockerfiles, proxy configuration, Terraform and committed environment files.
 function configFile(file) {
@@ -42,29 +29,6 @@ export function writeConfig(root) {
     body,
   ];
   return { leads: total, files, body: header.join('\n') };
-}
-// Versions in use and release-profile hardening. Latest-version comparison needs the network and is left to the reviewer.
-function solanaVersions(root, marks) {
-  const deps = new Map();
-  let overflow = false, profile = false;
-  const manifests = new Set(marks.filter((m) => m.endsWith('Cargo.toml')));
-  walk(root, (file) => { if (path.basename(file) === 'Cargo.toml' && /^\s*\[workspace\]/m.test(readText(file) || '')) manifests.add(rel(root, file)); });
-  for (const mark of manifests) {
-    const text = readText(path.join(root, mark)) || '';
-    for (const m of text.matchAll(/^\s*(anchor-lang|anchor-spl|solana-program|solana-sdk|pinocchio|spl-token(?:-2022)?)\s*=\s*(?:"([^"]+)"|\{[^}]*?version\s*=\s*"([^"]+)")/gm)) deps.set(m[1], m[2] || m[3]);
-    if (/^\s*\[profile\.release\]/m.test(text)) profile = true;
-    if (/overflow-checks\s*=\s*true/.test(text)) overflow = true;
-  }
-  const anchors = [];
-  walk(root, (file) => {
-    if (path.basename(file) !== 'Anchor.toml') return;
-    const text = readText(file) || '';
-    for (const key of ['anchor_version', 'solana_version']) { const m = text.match(new RegExp(`${key}\\s*=\\s*"([^"]+)"`)); if (m) anchors.push(`${key} ${m[1]}`); }
-  });
-  return [
-    `Versions in use: ${[...[...deps].map(([k, v]) => `${k} ${v}`), ...anchors].join(', ') || 'none declared'}. Compare against current releases when judging known-bug exposure.`,
-    overflow ? 'Release profile sets overflow-checks = true.' : `LEAD: no manifest sets overflow-checks = true${profile ? ' ([profile.release] present without it)' : ' (no [profile.release])'}. Release builds then wrap on overflow unless every operation is checked_*.`,
-  ];
 }
 
 function nearVersions(root, contract) {
@@ -133,56 +97,6 @@ export function writeNear(root, eco) {
     `Files scanned: ${files}. Leads listed: ${total} (capped at ${PER_PATTERN} per pattern).`,
     '',
     parts.join('\n'),
-  ];
-  return { leads: total, files, body: header.join('\n') };
-}
-
-// evm.md: Solidity/Vyper contract leads and wallet/RPC client leads. Foundry dependencies under lib/, tests
-// (*.t.sol, test/) and scripts (*.s.sol, script/) are not scanned.
-export function writeEvm(root, eco) {
-  const absent = '# EVM leads\n\nNo production Solidity or Vyper source, no Foundry, Hardhat or Truffle project, and no production manifest for ethers, viem, wagmi or web3. EVM surface absent.\n';
-  if (eco && !eco.detected) return { leads: 0, files: 0, body: absent };
-  const vendored = (name) => /(?:^|\/)lib\//.test(name);
-  const contracts = collect(root, (file, ext) => (ext === '.sol' || ext === '.vy') && !/\.[ts]\.sol$/.test(file) && isProductionPath(rel(root, file)) && !vendored(rel(root, file)), EVM_CONTRACT_PATTERNS);
-  const nodeExt = new Set(['.js', '.mjs', '.cjs', '.ts', '.tsx', '.jsx', '.vue', '.svelte']);
-  const clients = collect(root, (file, ext) => nodeExt.has(ext) && !file.endsWith('.min.js') && isProductionPath(rel(root, file)), EVM_CLIENT_PATTERNS);
-  const contractSection = section(EVM_CONTRACT_PATTERNS, contracts.found);
-  const clientSection = section(EVM_CLIENT_PATTERNS, clients.found);
-  if (!eco && !contracts.files && !clientSection.total) return { leads: 0, files: 0, body: absent };
-  const total = contractSection.total + clientSection.total;
-  const header = [
-    '# EVM leads',
-    '',
-    'Regex leads only. Not findings. Contract leads follow the SWC registry and the OWASP Smart Contract Top 10.',
-    'Grep cannot close: a function with no access modifier, a state update after an external call, price-oracle and flash-loan exposure, storage-layout collisions in a proxy, or rounding in share math. Those are a source read.',
-    'Do not contact an RPC, a block explorer or a deployed contract, and do not send a transaction. forge, hardhat and solc are not in the sandbox image: contract tests are not run and stay a coverage gap.',
-    `Kinds: ${(eco?.kinds || []).join(', ') || 'unspecified'}. Tooling: ${(eco?.tooling || []).join(', ') || 'none found'}. Marks: ${(eco?.marks || []).slice(0, 8).join(', ') || 'none'}.`,
-    `Contract files scanned: ${contracts.files}. Client files scanned: ${clients.files}. Leads listed: ${total} (capped at ${PER_PATTERN} per pattern).`,
-    '',
-    contractSection.body,
-    clientSection.body,
-  ];
-  return { leads: total, files: contracts.files + clients.files, body: header.join('\n') };
-}
-
-export function writeSolana(root, marks) {
-  if (!marks.length) {
-    return { leads: 0, files: 0, body: '# Solana leads\n\nNo Anchor.toml and no Cargo.toml dependency on anchor-lang, solana-program, solana-sdk, or pinocchio. Solana surface absent.\n' };
-  }
-  const { files, found } = collect(root, (file, ext) => ext === '.rs' && isProductionPath(rel(root, file)), SOLANA_PATTERNS);
-  const { total, body } = section(SOLANA_PATTERNS, found);
-  const header = [
-    '# Solana leads',
-    '',
-    'Regex leads only. Not findings.',
-    'The OWASP Solana Programs Top 10 is unpublished (every row TBD). Do not invent S01–S10.',
-    'Classes: coral-xyz/sealevel-attacks, Trail of Bits instruction introspection, Ackee account-reload / PDA-privilege / init front-run, and escrow custody when the program holds value for later release. The map onto OWASP Smart Contract Top 10 2026 is in the security-audit skill.',
-    'Grep cannot close account-data matching, type cosplay, duplicate mutable accounts, PDA seed sharing, reload-after-CPI, or an escrow that pays the wrong party. Those are a source read.',
-    `Stack marks: ${marks.join(', ')}`,
-    ...solanaVersions(root, marks),
-    `Rust files scanned: ${files}. Leads listed: ${total} (capped at ${PER_PATTERN} per pattern).`,
-    '',
-    body,
   ];
   return { leads: total, files, body: header.join('\n') };
 }

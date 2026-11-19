@@ -1,5 +1,5 @@
-// The three review layers of a target: web2 (application code), web3 (contracts, programs and the code that
-// asks a wallet to sign) and infra (containers, CI, proxy and deploy configuration, environment files).
+// The three review layers of a target: web2 (application code), web3 (NEAR contracts and the code that
+// asks a NEAR wallet to sign) and infra (containers, CI, proxy and deploy configuration, environment files).
 // A file belongs to exactly one layer, decided from its path, the chain manifests and, for JS/TS, a chain SDK
 // import. The risk domains of audit-plans.mjs (http, databases, crypto, ...) are a different axis: they say what
 // to look for, a layer says which part of the system the file is. The intake's themes (apps/api/src/worker/themes.ts)
@@ -18,13 +18,11 @@ export const LAYER_TITLES = {
 
 const INFRA_FILE = /(?:^|\/)(?:Dockerfile[^/]*|[^/]+\.dockerfile|(?:docker-)?compose[^/]*\.ya?ml|[^/]+\.tf|[^/]+\.tfvars|[^/]*nginx[^/]*\.conf|Caddyfile|Procfile|Jenkinsfile|\.gitlab-ci\.yml|[^/]+\.service|\.env(?:\.[^/]+)?|[^/]+\.env)$/i;
 const INFRA_DIR = /(?:^|\/)(?:\.github|\.gitlab|\.circleci|infra|infrastructure|deploy|deployment|ops|devops|k8s|kubernetes|helm|charts|terraform|ansible|nginx)\//i;
-const CHAIN_SOURCE = /\.(?:sol|vy|move|cairo)$/i;
-const CHAIN_CRATES = new Set(['anchor-lang', 'solana-program', 'solana-sdk', 'pinocchio', 'near-sdk', 'near-crypto', 'near-primitives', 'near-api', 'near-jsonrpc-client', 'shade-attestation']);
-const CHAIN_MANIFEST = /\b(?:anchor-lang|solana-program|solana-sdk|pinocchio|near-sdk|near-crypto|near-primitives|near-api|near-jsonrpc-client|shade-attestation)\b/;
-const CHAIN_PROJECT_FILE = /^(?:Anchor\.toml|foundry\.toml|remappings\.txt|hardhat\.config\.[cm]?[jt]s|truffle-config\.js)$/;
-const CHAIN_PACKAGE = '(?:hardhat|@nomicfoundation/[^\'"]+|@openzeppelin/[^\'"]+|@wagmi/[^\'"]+|@rainbow-me/[^\'"]+|@metamask/[^\'"]+|@web3modal/[^\'"]+|near-sdk-js|near-api-js|@near-js/[^\'"]+|@near-wallet-selector/[^\'"]+|@hot-labs/near-connect|chainsig\\.js|near-kit|@fastnear/[^\'"]+|omni-bridge-sdk|near-ca|near-seed-phrase|@solana/[^\'"]+|@coral-xyz/[^\'"]+|@anchor-lang/[^\'"]+|@defuse-protocol/[^\'"]+|@near-intents-agent-api/sdk|@neardefi/shade-agent(?:-js|-cli)?|@nearai/[^\'"]+|nearai-cloud-verifier|near-ai-cloud|@phala/dstack-sdk|@tappd/sdk|ethers|viem|wagmi|web3)(?:/[^\'"]+)?';
-const CHAIN_IMPORT = new RegExp(`\\bfrom\\s+['"]${CHAIN_PACKAGE}['"]|\\b(?:require|import)\\s*\\(\\s*['"]${CHAIN_PACKAGE}['"]\\s*\\)|\\bimport\\s+['"]${CHAIN_PACKAGE}['"]|\\bwindow\\.(?:solana|ethereum|near)\\b`);
-const PY_CHAIN_IMPORT = /^\s*(?:from|import)\s+(?:py_near|near_api|nearai|nearai_cloud_verifier|dstack_sdk|tappd_sdk|solders|solana|anchorpy|web3|eth_account)\b/m;
+const CHAIN_CRATES = new Set(['near-sdk', 'near-crypto', 'near-primitives', 'near-api', 'near-jsonrpc-client', 'shade-attestation']);
+const CHAIN_MANIFEST = /\b(?:near-sdk|near-crypto|near-primitives|near-api|near-jsonrpc-client|shade-attestation)\b/;
+const CHAIN_PACKAGE = '(?:near-sdk-js|near-api-js|@near-js/[^\'"]+|@near-wallet-selector/[^\'"]+|@hot-labs/near-connect|chainsig\\.js|near-kit|@fastnear/[^\'"]+|omni-bridge-sdk|near-ca|near-seed-phrase|@defuse-protocol/[^\'"]+|@near-intents-agent-api/sdk|@neardefi/shade-agent(?:-js|-cli)?|@nearai/[^\'"]+|nearai-cloud-verifier|near-ai-cloud|@phala/dstack-sdk|@tappd/sdk)(?:/[^\'"]+)?';
+const CHAIN_IMPORT = new RegExp(`\\bfrom\\s+['"]${CHAIN_PACKAGE}['"]|\\b(?:require|import)\\s*\\(\\s*['"]${CHAIN_PACKAGE}['"]\\s*\\)|\\bimport\\s+['"]${CHAIN_PACKAGE}['"]|\\bwindow\\.near\\b`);
+const PY_CHAIN_IMPORT = /^\s*(?:from|import)\s+(?:py_near|near_api|nearai|nearai_cloud_verifier|dstack_sdk|tappd_sdk)\b/m;
 const JS_EXT = new Set(['.js', '.mjs', '.cjs', '.ts', '.tsx', '.jsx', '.vue', '.svelte']);
 const ROOT_CRATE_FILE = /^(?:src\/.*\.rs|build\.rs|Cargo\.(?:toml|lock))$/;
 const MAX_LISTED = 200;
@@ -38,7 +36,6 @@ function underRoot(rel, root) {
 export function layerOfPath(file, layers = null) {
   const rel = String(file || '').replace(/^\.?\//, '').replace(/:\d+(?:-\d+)?$/, '');
   if (INFRA_FILE.test(rel)) return 'infra';
-  if (CHAIN_SOURCE.test(rel) || CHAIN_PROJECT_FILE.test(path.posix.basename(rel))) return 'web3';
   if ((layers?.roots?.web3 || []).some((root) => underRoot(rel, root))) return 'web3';
   if (INFRA_DIR.test(rel)) return 'infra';
   if ((layers?.clientFiles || []).includes(rel)) return 'web3';
@@ -60,9 +57,6 @@ export function buildLayerMap(targetRoot) {
         ? CHAIN_MANIFEST.test(readText(file) || '')
         : info.dependencies.some((d) => CHAIN_CRATES.has(d.package));
       if (hasChainCrate) chainRoots.add(path.posix.dirname(rel));
-    } else if (base === 'foundry.toml' || /^hardhat\.config\./.test(base) || base === 'truffle-config.js') {
-      // An EVM project directory is on-chain code: its contracts, tests, scripts and vendored libraries.
-      if (path.posix.dirname(rel) !== '.') chainRoots.add(path.posix.dirname(rel));
     } else if (JS_EXT.has(path.extname(file).toLowerCase()) && !file.endsWith('.min.js')) {
       if (CHAIN_IMPORT.test(readText(file) || '')) clientFiles.push(rel);
     } else if (path.extname(file).toLowerCase() === '.py') {

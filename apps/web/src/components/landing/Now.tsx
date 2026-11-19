@@ -38,7 +38,7 @@ export function Now() {
     <section className="land-section" id="now" aria-labelledby="now-title">
       <div className="container-wide">
         <header className="land-head">
-          <p className="land-kicker"><i>04</i><span className="eyebrow">Current state</span></p>
+          <p className="land-kicker"><i>05</i><span className="eyebrow">Current state</span></p>
           <h2 id="now-title" className="h2">What you can run today</h2>
           <p className="lede">Hover a card. It flips.</p>
         </header>

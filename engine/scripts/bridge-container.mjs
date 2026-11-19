@@ -11,7 +11,7 @@ export const CONTAINER_ROOTS = [SEALED_SOURCE, '/out/harness', '/out/crosscheck'
 // R-01: the bridge's in-container programs run by absolute path under a PATH with no /work entry.
 export const NODE_BIN = '/usr/local/bin/node';
 export const BRIDGE_PATH = '/usr/local/cargo/bin:/usr/local/bin:/usr/bin:/bin';
-// Suites still need Anchor from /work/bin, but it comes last, so a planted file there can never shadow a system program.
+// A suite may see /work/bin last on PATH, so a planted file there cannot shadow a system program.
 export const SUITE_PATH = `${BRIDGE_PATH}:/work/bin`;
 
 // A refusal with a stable code at the front of the message, so a reviewer (and a test) can tell it from a malformed argument.

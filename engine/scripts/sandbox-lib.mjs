@@ -18,7 +18,6 @@ export const CHECKS = [
   ['build-sh', 'project build.sh'],
   ['cargo-test', 'cargo test'],
   ['test-sh', 'project test.sh'],
-  ['anchor-build', 'anchor build (Anchor CLI and platform-tools)'],
   ['npm-install', 'npm install'],
   ['pnpm-install', 'pnpm install'],
   ['yarn-install', 'yarn install'],
@@ -26,15 +25,14 @@ export const CHECKS = [
   ['cargo-audit', 'cargo audit'],
   ['osv-lock', 'osv-scanner lockfile scan'],
   ['osv-call', 'osv-scanner call analysis'],
-  ['solana-verify', 'solana-verify reproducible build'],
-  ['deployed-compare', 'deployed .so comparison'],
+  ['deployed-compare', 'deployed code comparison'],
   ['zap', 'OWASP ZAP'],
   ['live-probe', 'production host and RPC'],
 ];
 
 // These two are gaps by rule, on every run.
 const FIXED = {
-  'deployed-compare': 'Deployed program bytes were not compared. This pass does not contact an RPC.',
+  'deployed-compare': 'Deployed code was not compared. This pass does not contact an RPC.',
   'live-probe': 'No production host or RPC was contacted.',
 };
 
@@ -64,10 +62,6 @@ export function assess(tree) {
   checks.push(tree.testScripts.items.length
     ? pending('test-sh', tree.testScripts.items.join(', '))
     : impossible('test-sh', 'No test.sh at the repository root or one directory down.'));
-  const versioned = tree.anchors.filter((a) => a.anchorVersion);
-  if (!tree.anchors.length) checks.push(impossible('anchor-build', 'No Anchor.toml.'));
-  else if (!versioned.length) checks.push(impossible('anchor-build', 'Anchor.toml has no anchor_version and no anchor-lang version, so the Anchor CLI was not downloaded.'));
-  else checks.push(pending('anchor-build', versioned.map((a) => `${a.rel} @ ${a.anchorVersion}`).join(', ')));
   checks.push(tree.npmLocks.items.length
     ? pending('npm-install', tree.npmLocks.items.join(', '))
     : impossible('npm-install', tree.packageJsonNoLock.items.length
@@ -95,10 +89,6 @@ export function assess(tree) {
   checks.push(locks.length
     ? pending('osv-call', 'rust call analysis runs dependency build.rs inside the sandbox')
     : impossible('osv-call', 'No Cargo.lock. Call analysis was not run, so osv-scanner did not execute build.rs.'));
-  const pinned = tree.anchors.find((a) => a.solanaVersion && safeRel(a.rel));
-  checks.push(pinned
-    ? pending('solana-verify', `${pinned.rel} solana ${pinned.solanaVersion}`)
-    : impossible('solana-verify', 'No pinned Solana version (Anchor.toml solana_version or workspace.metadata.cli solana). The image tag is not guessed, and the Docker socket is not mounted.'));
   checks.push(impossible('deployed-compare', FIXED['deployed-compare']));
   checks.push(tree.webStart
     ? pending('zap', `local ${tree.webStart.script} in ${tree.webStart.rel}, then ZAP against 127.0.0.1 only`)
@@ -131,7 +121,7 @@ export function render(checks, note) {
   const lines = [
     '# Sandbox',
     '',
-    'Disposable container. Host home and the Docker socket are not mounted. Named secret files are excluded, but arbitrary source files may still contain secrets. Egress is an allowlist proxy for crates.io, registry.npmjs.org, registry.yarnpkg.com, pypi.org, files.pythonhosted.org, and GitHub; this limits destinations, not data leaving to allowed hosts. Target processes share writable result storage with the sandbox reporter, so rows are sandbox-reported, not authenticated evidence. OpenSSL build scripts use the image library. A Python test project gets a wheel-only environment (no sdist build, no target code) on the Python version it declares before the network is detached. PyPI, Go, and Maven databases are downloaded on the host when those lockfiles exist and mounted read-only. A pinned Solana version prefetches platform-tools on the host. Deployed bytes are compared only when --rpc is passed. The container and its network are removed at the end.',
+    'Disposable container. Host home and the Docker socket are not mounted. Named secret files are excluded, but arbitrary source files may still contain secrets. Egress is an allowlist proxy for crates.io, registry.npmjs.org, registry.yarnpkg.com, pypi.org, files.pythonhosted.org, and GitHub; this limits destinations, not data leaving to allowed hosts. Target processes share writable result storage with the sandbox reporter, so rows are sandbox-reported, not authenticated evidence. OpenSSL build scripts use the image library. A Python test project gets a wheel-only environment (no sdist build, no target code) on the Python version it declares before the network is detached. PyPI, Go, and Maven databases are downloaded on the host when those lockfiles exist and mounted read-only. Deployed bytes are compared only when --rpc is passed. The container and its network are removed at the end.',
     '',
     '`ran` means the command finished (a scanner exit 1 means it reported advisories). `failed` means the command was started and exited non-zero. `impossible` means it was not started. Logs are under `harness/sandbox-run/`. Built programs are copied to `files/` before the work volume is removed.',
     '',
@@ -180,12 +170,7 @@ async function main() {
   if (cmd === 'copy') copyTree(a, b);
   else if (cmd === 'plan') process.stdout.write(`${JSON.stringify(plan(a))}\n`);
   else if (cmd === 'assess') process.stdout.write(`${JSON.stringify(assess(readJson(a, {})))}\n`);
-  else if (cmd === 'solana') {
-    const tree = readJson(a, {});
-    const hit = (tree.anchors || []).find((x) => x.solanaVersion && safeRel(x.rel));
-    if (!hit) process.exit(2);
-    process.stdout.write(`${hit.solanaVersion}\t${safeRel(hit.rel)}\n`);
-  } else if (cmd === 'blocked') {
+  else if (cmd === 'blocked') {
     fs.mkdirSync(path.dirname(a), { recursive: true });
     fs.writeFileSync(a, `${JSON.stringify({ checks: blocked(b), note: b }, null, 2)}\n`);
   } else if (cmd === 'merge') {
@@ -206,7 +191,7 @@ async function main() {
   } else if (cmd === 'export') {
     process.stdout.write(`${exportArtifacts(a, b, c || '')}\n`);
   } else {
-    process.stderr.write('usage: sandbox-lib.mjs copy|plan|assess|solana|blocked|merge|render|rpc|osv-seed|compare|export ...\n');
+    process.stderr.write('usage: sandbox-lib.mjs copy|plan|assess|blocked|merge|render|rpc|osv-seed|compare|export ...\n');
     process.exit(2);
   }
 }
